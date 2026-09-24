@@ -4546,8 +4546,12 @@ async function weekInReview() {
     now, today: '2026-09-24', timezone: 'Asia/Manila',
     outcomes: [], answered: [], focus: [], commissions: [],
     queue: { count: 0, oldestDays: 0 }, sources: { total: 0, failing: 0 },
-    review: { avoidedTopic: null, deadTopic: null }, edge: null, bottleneck: null, runwayMonths: null, currency: '$',
+    decisions: [], edge: null, bottleneck: null, runwayMonths: null, currency: '$',
   };
+  const call = (for_date: string, o: Partial<ReviewInput['decisions'][number]> = {}): ReviewInput['decisions'][number] => ({
+    for_date, headline: 'Send 10 drafts', topic: 'send_queue', response: 'ignored',
+    verify: { metric: 'queue', baseline: 0, after: null, verifiedAt: null }, source_move_id: null, ...o,
+  });
 
   // 1. An empty week is said, never blank — invariant 13 in the one tab whose
   //    job is telling the truth about the record.
@@ -4597,20 +4601,36 @@ async function weekInReview() {
   assert.equal(weekReview({ ...base, answered: bins(MIN_BINNED - 1) }).waste.length, 0);
   assert.match(weekReview({ ...base, answered: bins(MIN_BINNED) }).waste[0].text, /^3 suggestions you binned/);
 
-  // Projects that bought nothing: called off, or finished and answered "worth nothing".
-  const dud = weekReview({ ...base, commissions: [
-    { id: 'c1', objective: 'Find jobs', status: 'stopped', closed_at: '2026-09-20T10:00:00Z', outcome: null },
-    { id: 'c2', objective: 'Price check', status: 'done', closed_at: '2026-09-21T10:00:00Z', outcome: 'Worth nothing. Stale listings.' },
-    { id: 'c3', objective: 'Shortlist', status: 'done', closed_at: '2026-09-21T10:00:00Z', outcome: 'Produced something usable.' },
-    { id: 'c4', objective: 'Old one', status: 'stopped', closed_at: '2026-08-01T10:00:00Z', outcome: null },
-  ] });
-  assert.equal(dud.waste[0].text, '2 projects closed with nothing to show — Find jobs +1');
+  // Projects that bought nothing: answered "worth nothing", or called off with
+  // no answer. The ledger row's kind decides first; the sentence closeCommission
+  // writes is only the fallback for a row the ledger could not take.
+  const dud = weekReview({
+    ...base,
+    outcomes: [
+      outcome({ id: 'w5', kind: 'delivered', commission_id: 'c5', opportunity_id: null, who: 'Called off, but useful' }),
+      outcome({ id: 'w6', kind: 'nothing', commission_id: 'c6', opportunity_id: null, who: 'Supplier search' }),
+    ],
+    commissions: [
+      { id: 'c1', objective: 'Find jobs', status: 'stopped', closed_at: '2026-09-20T10:00:00Z', outcome: null },
+      { id: 'c2', objective: 'Price check', status: 'done', closed_at: '2026-09-21T10:00:00Z', outcome: 'Worth nothing. Stale listings.' },
+      { id: 'c3', objective: 'Shortlist', status: 'done', closed_at: '2026-09-21T10:00:00Z', outcome: 'Produced something usable.' },
+      { id: 'c4', objective: 'Old one', status: 'stopped', closed_at: '2026-08-01T10:00:00Z', outcome: null },
+      // Called off with a real answer is not waste, whatever the button was.
+      { id: 'c5', objective: 'Called off, but useful', status: 'stopped', closed_at: '2026-09-22T10:00:00Z', outcome: 'Produced something usable.' },
+      // No sentence at all, and the ledger says nothing: counted from the row.
+      { id: 'c6', objective: 'Supplier search', status: 'done', closed_at: '2026-09-22T10:00:00Z', outcome: null },
+    ],
+  });
+  assert.equal(dud.waste[0].text, '3 projects closed with nothing to show — Find jobs +2');
 
-  // The call record's two verdicts, said as waste rather than as a log.
-  const record = weekReview({ ...base, review: { avoidedTopic: { topic: 'send_queue', count: 3 }, deadTopic: null } });
+  // The call record's two verdicts, said as waste rather than as a log — and
+  // only this week's calls, under a heading that says "This week".
+  const record = weekReview({ ...base, decisions: [call('2026-09-22'), call('2026-09-23'), call('2026-09-24')] });
   // A job key is the database talking; the screen says it the way a person would.
   assert.match(record.waste[0].text, /^3 calls about sending the drafts and not one of them done/);
   assert.doesNotMatch(record.waste[0].text, /send_queue/);
+  const stale3 = weekReview({ ...base, decisions: [call('2026-09-01'), call('2026-09-02'), call('2026-09-03')] });
+  assert.equal(stale3.waste.length, 0, 'three ignored calls from three weeks ago are not this week\'s waste');
 
   // 5. What has to change: the growth edge first, then the bottleneck's own
   //    action, then runway — and nothing when nothing measured points anywhere.
@@ -4622,15 +4642,26 @@ async function weekInReview() {
   assert.match(weekReview({ ...base, runwayMonths: 2.4 }).change?.head ?? '', /^2.4 months of runway/);
   assert.equal(weekReview({ ...base, runwayMonths: 6 }).change, null);
 
-  // 6. Deep work and done Moves are value; the day labels are the person's days.
+  // 6. What "you did" means. A call answered "I did it" is the reliable yes; a
+  //    done Move is too, except a kept feed find (Keep and Did it both write
+  //    done) and a handed-over proposal (delegated, not done). The Move behind
+  //    a call counts once.
   const busy = weekReview({
     ...base,
     focus: [{ id: '1', minutes: 120, on: '2026-09-24', note: null, at: '2026-09-24T09:00:00Z' }, { id: '2', minutes: 90, on: '2026-09-21', note: null, at: '2026-09-21T09:00:00Z' }],
-    answered: [{ id: 'm', job: 'watch', kind: 'earn', headline: 'Apply to the AI Automation role', status: 'done', acted_at: '2026-09-24T02:00:00Z' }],
+    decisions: [call('2026-09-24', { headline: 'Apply to the Maintenance Coordinator role', topic: 'watch', response: 'did', source_move_id: 'mv-call' })],
+    answered: [
+      { id: 'mv-call', job: 'watch', kind: 'earn', headline: 'Apply to the Maintenance Coordinator role', status: 'done', acted_at: '2026-09-24T02:00:00Z' },
+      { id: 'kept', job: 'watch', kind: 'earn', headline: 'A gig post somebody only kept', status: 'done', acted_at: '2026-09-24T02:00:00Z' },
+      { id: 'handed', job: 'propose', kind: 'build', headline: 'Shortlist ten property managers', status: 'done', acted_at: '2026-09-24T02:00:00Z' },
+      { id: 'goal', job: 'goal_gap', kind: 'decide', headline: 'Reset the revenue target', status: 'done', acted_at: '2026-09-23T02:00:00Z' },
+    ],
   });
-  assert.equal(busy.value[0].text, 'You did 1 thing it found — Apply to the AI Automation role');
+  assert.equal(busy.value[0].text, 'You did 2 things it put in front of you — Apply to the Maintenance Coordinator role +1');
   assert.equal(busy.value[0].when, 'today');
   assert.equal(busy.value[1].text, '3.5h of deep work over 2 days');
+  const onlyKept = weekReview({ ...base, answered: [{ id: 'kept', job: 'watch', kind: 'earn', headline: 'A gig post', status: 'done', acted_at: '2026-09-24T02:00:00Z' }] });
+  assert.equal(onlyKept.value.length, 0, 'keeping a find is not doing it');
   assert.equal(localDay('2026-09-23T20:00:00Z', 'Asia/Manila'), '2026-09-24', 'late UTC evening is the next morning in Manila');
   assert.equal(whenLabel('2026-09-21', '2026-09-24'), 'Mon');
 
@@ -4674,12 +4705,14 @@ function moveV2(m: Partial<MoveV2>): MoveV2 {
 
 async function todayTab() {
   const now = new Date('2026-09-24T10:00:00Z');
-  const base: DoneInput = { now, lastCronRun: '2026-09-24T05:02:00Z', jobsRun: null, matchCreated: [], motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] };
+  const base: DoneInput = { now, lastCronRun: '2026-09-24T05:02:00Z', jobsRun: null, matchCreated: [], matchesWaiting: 0, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] };
 
   // 1. What arrived in the last day, counted from the rows it arrived as.
   const done = doneForYou({
     ...base,
     matchCreated: ['2026-09-24T05:00:00Z', '2026-09-24T05:01:00Z', '2026-09-20T05:00:00Z'],
+    // One of last night's two was already drafted: found and waiting are different numbers.
+    matchesWaiting: 1,
     motion: [{ kind: 'watched', label: '8 of 12 sources read', detail: 'Forum, Freelancer +2 failed — open Sources to see why' }],
     sourcesFailing: 4,
     outcomes: [
@@ -4696,9 +4729,11 @@ async function todayTab() {
   assert.equal(done.nightlyAt, '2026-09-24T05:02:00Z');
   assert.deepEqual(done.rows.map((r) => r.key), ['matches', 'replies', 'sources', 'p:c1', 'moves']);
   assert.equal(done.rows[0].label, '2 new matches found', 'last week\'s is not last night\'s');
+  assert.equal(done.rows[0].detail, 'Real listings, deduped — 1 still waiting on Matches', 'Today and Matches must not disagree about the count');
   assert.equal(done.rows[1].label, '1 reply came in');
   assert.match(done.rows[1].detail, /^X Out Pest/);
   assert.equal(done.rows[2].target, 'sources', 'a failed read leads to where it can be fixed');
+  assert.equal(done.rows[2].tone, 'warn', 'a failure never wears the tick');
   // Decided from the rows, not from the wording: the same sentence with nothing
   // failing leads to the finds.
   assert.equal(doneForYou({ ...base, motion: [{ kind: 'watched', label: '8 sources read', detail: '3 worth keeping — Forum' }] }).rows[0].target, 'matches');
@@ -4713,10 +4748,14 @@ async function todayTab() {
   // And a sensor that broke is carried through, never dropped into a count.
   assert.deepEqual(doneForYou({ ...base, jobsRun: { at: '', ran: 9, produced: 3, written: 1, quiet: [], broke: ['watch: timeout'] } }).broke, ['watch: timeout']);
 
-  // A finished project reports what its owner closed it with.
-  const fin = doneForYou({ ...base, commissions: [threadV2({ status: 'done', closed_at: '2026-09-24T06:00:00Z', outcome: 'Produced something usable. Three quotes.' })] });
+  // A project the WORKER finished is done for you; one the owner closed by hand
+  // is their act, not the app's. The worker's finish stamps last_run_at and
+  // closed_at in one write; a close by hand leaves last_run_at behind.
+  const fin = doneForYou({ ...base, commissions: [threadV2({ status: 'done', last_run_at: '2026-09-24T06:00:00Z', closed_at: '2026-09-24T06:00:00Z', outcome: 'Three quotes, cheapest delivered is Signworks.' })] });
   assert.equal(fin.rows[0].label, 'Finished: Step by step plan to exit Philippines');
   assert.match(fin.rows[0].detail, /Three quotes/);
+  const byHand = doneForYou({ ...base, commissions: [threadV2({ status: 'done', last_run_at: '2026-09-23T05:00:00Z', closed_at: '2026-09-24T06:00:00Z', outcome: 'Produced something usable.' })] });
+  assert.equal(byHand.rows.length, 0, 'the owner closing it is not the app doing it');
 
   // 3. Needs you, in the order to clear it — and a breakage is never a question.
   const asks = needsYou({
@@ -4755,7 +4794,7 @@ async function todayTab() {
   assert.equal(wd.shown.length, MAX_WORTH_DOING);
   assert.equal(wd.more, 1);
 
-  assert.equal(todayStatus(done, asks), '5 done for you · 5 need you');
+  assert.equal(todayStatus(done, asks), '4 done for you · 5 need you', 'the failed read is listed, never counted as done');
   assert.equal(todayStatus({ ...done, rows: [] }, []), null, 'nothing true to say beats filler');
   console.log('copilot-core: today tab checks passed');
 }

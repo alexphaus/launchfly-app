@@ -721,7 +721,12 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     latestExecutionByOpportunity(profileId, pipelineIds),
     untitled.length
       ? db.from('copilot_opportunities').select('id, title').eq('profile_id', profileId).in('id', untitled)
-        .then((r) => { for (const row of (r.data ?? []) as Array<{ id: string; title: string }>) titleOf.set(row.id, row.title); })
+        .then((r) => {
+          // Said, not swallowed: without it every line about those businesses
+          // loses its name and nothing on the screen says why.
+          if (r.error) { recentRows.unreadable.push('business names'); return; }
+          for (const row of (r.data ?? []) as Array<{ id: string; title: string }>) titleOf.set(row.id, row.title);
+        })
       : null,
   ]);
   const objectiveOf = new Map(commissionRows.map((c) => [c.id, c.objective]));
@@ -1949,7 +1954,7 @@ export async function loadRecentRows(profileId: string, now = new Date()): Promi
     // commission_id ships in 20260921, which this code does not wait for.
     let r = await read(`${RECENT_OUTCOME_COLS}, commission_id`);
     if (r.error) r = await read(RECENT_OUTCOME_COLS);
-    if (r.error) { unreadable.push('outcomes'); return []; }
+    if (r.error) { unreadable.push('logged outcomes'); return []; }
     return ((r.data ?? []) as unknown as Array<Omit<RecentOutcome, 'who' | 'commission_id'> & { commission_id?: string | null }>)
       .map((o) => ({ ...o, commission_id: o.commission_id ?? null, who: null }));
   })();
@@ -1958,7 +1963,7 @@ export async function loadRecentRows(profileId: string, now = new Date()): Promi
     const r = await db.from('copilot_moves').select('id, job, kind, headline, status, acted_at')
       .eq('profile_id', profileId).in('status', ['done', 'dismissed']).gte('acted_at', since)
       .order('acted_at', { ascending: false }).limit(60);
-    if (r.error) { unreadable.push('moves'); return []; }
+    if (r.error) { unreadable.push('answered suggestions'); return []; }
     return (r.data ?? []) as AnsweredMove[];
   })();
 
@@ -1966,7 +1971,7 @@ export async function loadRecentRows(profileId: string, now = new Date()): Promi
     const r = await db.from('copilot_events').select('id, payload, created_at')
       .eq('profile_id', profileId).eq('event_type', FOCUS_EVENT).gte('created_at', since)
       .order('created_at', { ascending: false }).limit(200);
-    if (r.error) { unreadable.push('deep work'); return []; }
+    if (r.error) { unreadable.push('deep-work log'); return []; }
     return focusFromEvents((r.data ?? []) as Array<{ id: number; payload: unknown; created_at: string }>);
   })();
 

@@ -22,13 +22,15 @@
 //
 // Pure: no DB import. store.ts loads the ledger; the tab renders this.
 
-import type { DecisionReview } from './decision';
+import { decisionReview, type Decision } from './decision';
 import type { Finding, GrowthEdge } from './diagnose';
 import type { FocusLog } from './focus';
-import { focusWeek, hoursLabel } from './focus';
+import { focusWeek, hoursLabel, shiftDay } from './focus';
 import type { MoveKind } from './moves';
 import { phraseFor } from './phrase';
+import { PROPOSE_JOB } from './propose';
 import type { OutcomeKind } from './types';
+import { WORTH_KINDS, worthSentence, type WorthKind } from './worth';
 
 /** What loadHome reads back, in days. Twice the review, so a week that starts
  *  on a Wednesday still has its Monday. */
@@ -123,7 +125,12 @@ export interface ReviewInput {
   commissions: Array<{ id: string; objective: string; status: string; closed_at: string | null; outcome: string | null }>;
   queue: { count: number; oldestDays: number };
   sources: { total: number; failing: number };
-  review: Pick<DecisionReview, 'avoidedTopic' | 'deadTopic'>;
+  /**
+   * The call record. Filtered to this week here, not by the caller: the tab is
+   * headed "This week", and three ignored calls from last month are not this
+   * week's waste.
+   */
+  decisions: Array<Pick<Decision, 'for_date' | 'headline' | 'topic' | 'response' | 'verify' | 'source_move_id'>>;
   edge: GrowthEdge | null;
   bottleneck: Finding | null;
   runwayMonths: number | null;
@@ -175,6 +182,8 @@ export function weekReview(input: ReviewInput): WeekReview {
   const since = input.now.getTime() - REVIEW_DAYS * DAY_MS;
   const inWeek = (iso: string | null | undefined) => !!iso && Date.parse(iso) >= since && Date.parse(iso) <= input.now.getTime() + DAY_MS;
   const outcomes = input.outcomes.filter((o) => inWeek(o.occurred_at));
+  const firstDay = shiftDay(input.today, -(REVIEW_DAYS - 1));
+  const calls = input.decisions.filter((d) => d.for_date >= firstDay && d.for_date <= input.today);
 
   /* ── What created value ─────────────────────────────────────────────── */
   const value: ReviewLine[] = [];
@@ -226,13 +235,25 @@ export function weekReview(input: ReviewInput): WeekReview {
     value.push({ text: `${what}${who ? ` — ${who}` : ''}`, when: latestWhen(meetings.map((m) => m.occurred_at), input), target: 'record' });
   }
 
-  // Things the app found that you went and did. Done, not merely read: a Move
-  // marked done is the one answer in this app that means somebody acted.
-  const done = input.answered.filter((a) => a.status === 'done' && inWeek(a.acted_at));
-  if (done.length) {
+  // Things it put in front of you that you went and did. A call answered "I did
+  // it" is the one reliable yes; a Move marked done usually is too, with two
+  // exceptions that are not doing anything. On a feed find, "Keep" and "Did it"
+  // both write done and cannot be told apart, so a kept gig post would count as
+  // work somebody did. On a proposal, done means handed over, and what that was
+  // worth is recorded when the mandate closes, not when it is delegated. The
+  // Move behind a call is counted once, as the call.
+  const didCalls = calls.filter((d) => d.response === 'did');
+  const viaCall = new Set(didCalls.map((d) => d.source_move_id).filter((id): id is string => !!id));
+  const didMoves = input.answered.filter((a) =>
+    a.status === 'done' && a.job !== 'watch' && a.job !== PROPOSE_JOB && !viaCall.has(a.id) && inWeek(a.acted_at));
+  const did = [
+    ...didCalls.map((d) => ({ headline: d.headline, day: d.for_date })),
+    ...didMoves.map((a) => ({ headline: a.headline, day: localDay(a.acted_at, input.timezone) })),
+  ].sort((a, b) => b.day.localeCompare(a.day));
+  if (did.length) {
     value.push({
-      text: `You did ${plural(done.length, 'thing')} it found — ${done[0].headline}${done.length > 1 ? ` +${done.length - 1}` : ''}`,
-      when: latestWhen(done.map((d) => d.acted_at), input),
+      text: `You did ${plural(did.length, 'thing')} it put in front of you — ${did[0].headline}${did.length > 1 ? ` +${did.length - 1}` : ''}`,
+      when: whenLabel(did[0].day, input.today),
       target: null,
     });
   }
@@ -259,7 +280,8 @@ export function weekReview(input: ReviewInput): WeekReview {
     });
   }
 
-  const avoided = input.review.avoidedTopic;
+  const record = decisionReview(calls);
+  const avoided = record.avoidedTopic;
   if (avoided) {
     waste.push({
       // The topic is a job key; the screen says it the way a person would.
@@ -268,7 +290,7 @@ export function weekReview(input: ReviewInput): WeekReview {
       target: null,
     });
   }
-  const dead = input.review.deadTopic;
+  const dead = record.deadTopic;
   if (dead) {
     waste.push({
       text: `${plural(dead.count, 'call')} about ${phraseFor(dead.topic)} carried out, and the number each one named never moved`,
@@ -277,11 +299,22 @@ export function weekReview(input: ReviewInput): WeekReview {
     });
   }
 
-  // Mandates closed with nothing to show. Called off, or finished and answered
-  // "worth nothing" — both are worker time that bought nothing, and the second
-  // is the answer this app most needs to hear.
-  const worthless = input.commissions.filter((c) =>
-    inWeek(c.closed_at) && (c.status === 'stopped' || (c.outcome ?? '').startsWith('Worth nothing')));
+  // Mandates closed with nothing to show: answered "worth nothing", or called off
+  // with no answer at all. The verdict is read off the ledger row first — its
+  // kind is structured — and off the sentence closeCommission writes only when
+  // the ledger could not take the row, matched against worthSentence itself so
+  // the two cannot drift. Called off with a real answer ("it produced
+  // something") is not waste, whatever the button was.
+  const verdict = new Map<string, WorthKind>();
+  for (const o of [...input.outcomes].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))) {
+    if (o.commission_id && (WORTH_KINDS as readonly string[]).includes(o.kind)) verdict.set(o.commission_id, o.kind as WorthKind);
+  }
+  const nothingSaid = worthSentence('nothing');
+  const worthless = input.commissions.filter((c) => {
+    if (!inWeek(c.closed_at)) return false;
+    const v = verdict.get(c.id) ?? ((c.outcome ?? '').startsWith(nothingSaid) ? 'nothing' : null);
+    return v === 'nothing' || (v == null && c.status === 'stopped');
+  });
   if (worthless.length) {
     waste.push({
       text: `${plural(worthless.length, 'project')} closed with nothing to show — ${worthless[0].objective}${worthless.length > 1 ? ` +${worthless.length - 1}` : ''}`,

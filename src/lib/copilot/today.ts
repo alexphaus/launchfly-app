@@ -36,6 +36,11 @@ export const STALE_NIGHT_HOURS = 36;
 export const MAX_WORTH_DOING = 3;
 /** Projects reported in done-for-you. The rest are one tap away on Work. */
 export const MAX_PROJECT_ROWS = 2;
+/**
+ * How close closed_at and last_run_at are when the worker itself finished a
+ * mandate — the same write stamps both. A close by hand is further apart.
+ */
+export const WORKER_CLOSE_MS = 60_000;
 
 const HOUR_MS = 3_600_000;
 
@@ -45,6 +50,13 @@ export interface DoneRow {
   key: string;
   label: string;
   detail: string;
+  /**
+   * 'warn' when the row is reporting a failure — a watcher night where sources
+   * failed. It is shown with a warning mark and is NOT counted as done: a
+   * breakage under a green tick, counted in "N done for you", is the calm screen
+   * over a failure that invariant 13 is written against.
+   */
+  tone: 'done' | 'warn';
   target: DoneTarget;
   /** The commission, for a project row. */
   id?: string;
@@ -68,6 +80,12 @@ export interface DoneInput {
   jobsRun: JobsRunSummary | null;
   /** created_at of every sourced match in hand. */
   matchCreated: string[];
+  /**
+   * Of those, how many are still waiting on the Matches tab — the new,
+   * undrafted, reachable ones. "Found" and "waiting" are different numbers, and
+   * a row that said 12 above a tab that says 5 would be the 61-over-51 bug again.
+   */
+  matchesWaiting: number;
   /** The motion rows loadHome already computed — the watched-sources row is reused, not recomputed. */
   motion: MotionRow[];
   /**
@@ -95,7 +113,16 @@ export function doneForYou(input: DoneInput): DoneReport {
   // Supply first: it is the one thing here that came from outside the account.
   const found = input.matchCreated.filter((c) => within(c, now, DONE_WINDOW_HOURS)).length;
   if (found > 0) {
-    rows.push({ key: 'matches', label: `${plural(found, 'new match', 'new matches')} found`, detail: 'Real listings, deduped against the ones you had — on Matches', target: 'matches' });
+    const waiting = Math.min(input.matchesWaiting, found);
+    rows.push({
+      key: 'matches',
+      label: `${plural(found, 'new match', 'new matches')} found`,
+      detail: waiting === found ? 'Real listings, deduped — all waiting on Matches'
+        : waiting > 0 ? `Real listings, deduped — ${waiting} still waiting on Matches`
+        : 'Real listings, deduped — all already drafted or answered',
+      tone: 'done',
+      target: 'matches',
+    });
   }
 
   // Replies the app matched to messages you sent. Only 'system' rows: a reply
@@ -106,6 +133,7 @@ export function doneForYou(input: DoneInput): DoneReport {
     const who = [...new Set(replies.map((r) => r.who).filter((w): w is string => !!w))];
     rows.push({
       key: 'replies',
+      tone: 'done',
       label: `${plural(replies.length, 'reply', 'replies')} came in`,
       detail: who.length ? `${who.slice(0, 2).join(', ')}${who.length > 2 ? ` +${who.length - 2}` : ''} — matched to what you sent` : 'Matched to messages you sent',
       target: 'replies',
@@ -115,15 +143,26 @@ export function doneForYou(input: DoneInput): DoneReport {
   // The watcher, as motion already worded it — including a failure, which
   // leads that row whenever there is one.
   const watched = input.motion.find((m) => m.kind === 'watched');
-  if (watched) rows.push({ key: 'sources', label: watched.label, detail: watched.detail, target: input.sourcesFailing > 0 ? 'sources' : 'matches' });
+  if (watched) {
+    const failing = input.sourcesFailing > 0;
+    rows.push({ key: 'sources', label: watched.label, detail: watched.detail, tone: failing ? 'warn' : 'done', target: failing ? 'sources' : 'matches' });
+  }
 
   // Handed-over work that moved. Progress is the plan's own count, never the
   // worker's say-so; a finished one reports what its owner closed it with.
   const projects: DoneRow[] = [];
   for (const t of input.commissions) {
     const c = t.commission;
-    if (c.status === 'done' && within(c.closed_at, now, DONE_WINDOW_HOURS)) {
-      projects.push({ key: `p:${c.id}`, label: `Finished: ${c.objective}`, detail: c.outcome?.slice(0, 140) || 'Open it to see what came back', target: 'project', id: c.id });
+    if (c.status === 'done') {
+      // Only a finish the WORKER posted. closeCommission sets the same status
+      // and closed_at when the owner closes it by hand, and their own verdict is
+      // not something the app did for them. recordCommissionWork stamps
+      // last_run_at and closed_at in the same write; a close by hand leaves
+      // last_run_at where the last run left it.
+      const byWorker = !!c.closed_at && !!c.last_run_at && Math.abs(Date.parse(c.closed_at) - Date.parse(c.last_run_at)) < WORKER_CLOSE_MS;
+      if (byWorker && within(c.closed_at, now, DONE_WINDOW_HOURS)) {
+        projects.push({ key: `p:${c.id}`, label: `Finished: ${c.objective}`, detail: c.outcome?.slice(0, 140) || 'Open it to see what came back', tone: 'done', target: 'project', id: c.id });
+      }
       continue;
     }
     if (c.status !== 'active' && c.status !== 'blocked') continue;
@@ -132,6 +171,7 @@ export function doneForYou(input: DoneInput): DoneReport {
     const { done, total } = t.report.progress;
     projects.push({
       key: `p:${c.id}`,
+      tone: 'done',
       label: c.objective,
       detail: `${total ? `${done} of ${total} steps done — ` : ''}${latest.summary}`,
       target: 'project',
@@ -147,7 +187,7 @@ export function doneForYou(input: DoneInput): DoneReport {
   // and not a feed find, which is counted in the sources row above.
   const worked = input.moves.filter((m) => m.job !== 'commission' && m.job !== 'watch' && within(m.created_at, now, DONE_WINDOW_HOURS)).length;
   if (worked > 0) {
-    rows.push({ key: 'moves', label: `${plural(worked, 'move')} worked out from your rows`, detail: 'Weighed against each other for today’s call', target: 'moves' });
+    rows.push({ key: 'moves', label: `${plural(worked, 'move')} worked out from your rows`, detail: 'Weighed against each other for today’s call', tone: 'done', target: 'moves' });
   }
 
   return {
@@ -249,8 +289,10 @@ export function worthDoing(moves: Move[], max = MAX_WORTH_DOING): { shown: Move[
 
 /** The line under the greeting on Today: two counts, and nothing when both are zero. */
 export function todayStatus(done: DoneReport, asks: AskRow[]): string | null {
+  // A warning row is not something done for you, however it is listed.
+  const doneCount = done.rows.filter((r) => r.tone === 'done').length;
   const parts = [
-    done.rows.length ? `${done.rows.length} done for you` : null,
+    doneCount ? `${doneCount} done for you` : null,
     asks.length ? `${asks.length} need${asks.length === 1 ? 's' : ''} you` : null,
   ].filter(Boolean);
   return parts.length ? parts.join(' · ') : null;

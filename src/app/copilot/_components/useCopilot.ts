@@ -457,7 +457,14 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
       try {
         const r = await post<{ home: HomeData }>(`/triage/${id}`, { action });
         setHome(r.home);
-        if (action === 'draft') say('Drafted. It is in the send queue.');
+        // "Yes" on a feed card keeps it — the route marks its Move done and
+        // writes nothing — so the toast is read off the queue the route returned
+        // rather than assumed. It said "Drafted" for both, and a kept gig post
+        // sent people to a queue with no draft in it.
+        if (action === 'draft') {
+          const drafted = r.home.queue.some((q) => q.opportunity_id === id || q.opp?.id === id);
+          say(drafted ? 'Drafted. It is in the send queue.' : 'Kept.');
+        }
         return true;
       } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
     },

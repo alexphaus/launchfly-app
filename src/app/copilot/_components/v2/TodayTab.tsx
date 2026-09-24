@@ -116,9 +116,10 @@ function DoneForYou({ home, d, actions }: { home: HomeData; d: Derived; actions:
           </div>
         )}
         {r.rows.map((row) => {
+          // A row reporting a failure wears the warning mark, never the tick.
           const body = (
             <>
-              <span className="cp2-mark done"><IconCheck /></span>
+              <span className={`cp2-mark ${row.tone === 'warn' ? 'warn' : 'done'}`}>{row.tone === 'warn' ? <IconAlert /> : <IconCheck />}</span>
               <span className="cp2-row-main">
                 <span className="t">{row.label}</span>
                 <span className="s">{row.detail}</span>
@@ -131,7 +132,8 @@ function DoneForYou({ home, d, actions }: { home: HomeData; d: Derived; actions:
             ? <div key={row.key} className="cp2-row">{body}</div>
             : <button key={row.key} className="cp2-row" onClick={() => go(row)}>{body}<IconChevron /></button>;
         })}
-        {!r.rows.length && !r.stale && (
+        {/* Not under a failure: a night where checks broke is not a quiet one. */}
+        {!r.rows.length && !r.stale && !r.broke.length && (
           <div className="cp2-row">
             <span className="cp2-mark"><IconCheck /></span>
             <span className="cp2-row-main">

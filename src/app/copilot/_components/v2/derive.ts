@@ -10,7 +10,6 @@
 // matches.ts, machine.ts and review.ts, where copilot-core.test.ts covers them.
 
 import { useMemo } from 'react';
-import { decisionReview } from '@/lib/copilot/decision';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster, businessMachine, workStatus } from '@/lib/copilot/machine';
 import { matchCounts, matchFeed, matchesStatus } from '@/lib/copilot/matches';
@@ -29,6 +28,10 @@ export function derive(home: HomeData) {
   const queueBacked = queueIsBacked(queueCount, oldestDays);
   const currency = home.profile.finance?.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '$';
 
+  /* Matches — first, because Today reports how many of last night's finds are still waiting there. */
+  const feed = matchFeed({ now, pipeline: home.pipeline, triage: home.triage, moves: home.moves, targetSegments: home.profile.target_segments });
+  const counts = matchCounts(feed);
+
   /* Today */
   const ownMoves = [...home.moves, ...(home.callMove ? [home.callMove] : [])].filter((m) => m.job !== 'watch');
   const done = doneForYou({
@@ -36,6 +39,7 @@ export function derive(home: HomeData) {
     lastCronRun: home.lastCronRun,
     jobsRun: home.jobsRun,
     matchCreated: home.pipeline.map((r) => r.opportunity.created_at),
+    matchesWaiting: feed.filter((i) => i.from === 'business' && i.fresh).length,
     motion: home.motion,
     sourcesFailing: home.watchSources.filter((s) => !!s.last_error).length,
     commissions: home.commissions,
@@ -53,10 +57,6 @@ export function derive(home: HomeData) {
   // A brand new account: nothing to call, nothing found, nothing handed over.
   // One card that says what is happening beats five empty sections.
   const nothingYet = !home.decision && !home.insight && !queueCount && !home.moves.length && !home.pipeline.length && !home.commissions.length;
-
-  /* Matches */
-  const feed = matchFeed({ now, pipeline: home.pipeline, triage: home.triage, moves: home.moves, targetSegments: home.profile.target_segments });
-  const counts = matchCounts(feed);
 
   /* Work */
   const d = home.diagnosis;
@@ -96,7 +96,6 @@ export function derive(home: HomeData) {
   const running = home.commissions.filter((t) => t.commission.status === 'active' || t.commission.status === 'blocked').length;
 
   /* You */
-  const record = decisionReview(home.decisionLog);
   const review = weekReview({
     now,
     today: home.recent.today,
@@ -107,7 +106,7 @@ export function derive(home: HomeData) {
     commissions: home.commissions.map((t) => t.commission),
     queue: { count: queueCount, oldestDays },
     sources: { total: home.watchSources.length, failing: home.watchSources.filter((s) => !!s.last_error).length },
-    review: record,
+    decisions: home.decisionLog,
     edge: home.edge,
     bottleneck: d.findings.find((f) => f.kind === 'bottleneck') ?? null,
     runwayMonths: home.metrics.runway_months,

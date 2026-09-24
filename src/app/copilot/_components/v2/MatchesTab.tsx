@@ -33,10 +33,17 @@ export default function MatchesTab({ home, d, actions, finding }: { home: HomeDa
   const [group, setGroup] = useState<'all' | MatchGroup>('all');
   const [shown, setShown] = useState(PAGE);
   const [confirmFind, setConfirmFind] = useState(false);
-  const items = group === 'all' ? d.feed : d.feed.filter((i) => i.group === group);
+  // A chip whose last item was just answered disappears from the row, so it
+  // cannot stay selected — that left an empty list under no active chip.
+  const active: 'all' | MatchGroup = group !== 'all' && d.counts.by[group] === 0 ? 'all' : group;
+  const items = active === 'all' ? d.feed : d.feed.filter((i) => i.group === active);
   const b = home.billing;
   const segments = home.profile.target_segments;
   const where = home.profile.target_area || home.profile.location;
+  // Targeting only drives businesses. Feed finds arrive without it, so a
+  // missing segment must not hide them — somebody watching job feeds with no
+  // businesses to pitch would otherwise have finds on Today and nowhere to open them.
+  const noTargeting = !segments.length || !where;
 
   const find = () => (d.queueBacked && !confirmFind ? setConfirmFind(true) : void actions.findMatches());
 
@@ -58,11 +65,11 @@ export default function MatchesTab({ home, d, actions, finding }: { home: HomeDa
 
       {d.feed.length > 0 && (
         <div className="cp2-chips" role="tablist" aria-label="Filter matches">
-          <button role="tab" aria-selected={group === 'all'} className={`cp-fchip ${group === 'all' ? 'active' : ''}`} onClick={() => { setGroup('all'); setShown(PAGE); }}>
+          <button role="tab" aria-selected={active === 'all'} className={`cp-fchip ${active === 'all' ? 'active' : ''}`} onClick={() => { setGroup('all'); setShown(PAGE); }}>
             All <span className="n">{d.counts.all}</span>
           </button>
           {MATCH_GROUPS.filter((g) => d.counts.by[g] > 0).map((g) => (
-            <button key={g} role="tab" aria-selected={group === g} className={`cp-fchip ${group === g ? 'active' : ''}`} onClick={() => { setGroup(g); setShown(PAGE); }}>
+            <button key={g} role="tab" aria-selected={active === g} className={`cp-fchip ${active === g ? 'active' : ''}`} onClick={() => { setGroup(g); setShown(PAGE); }}>
               {MATCH_GROUP_LABEL[g]} <span className="n">{d.counts.by[g]}</span>
             </button>
           ))}
@@ -74,33 +81,34 @@ export default function MatchesTab({ home, d, actions, finding }: { home: HomeDa
         <span className="count">{d.counts.fresh ? `${d.counts.fresh} new` : items.length ? `${items.length}` : ''}</span>
       </div>
 
-      {!segments.length || !where ? (
-        <div className="cp-card">
-          <div className="cp-eyebrow">Nothing to look for yet</div>
-          <p className="cp2-lede">Say which kinds of business you sell to, and where. It goes and finds real ones every night.</p>
-          <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'targeting' })}>Choose who to look for</button>
-        </div>
-      ) : items.length ? (
+      {items.length ? (
         <>
+          {noTargeting && (
+            <div className="cp-note">
+              No businesses are being searched for yet — these came from sources you watch.
+              {' '}<button className="cp-textlink" onClick={() => actions.openSheet({ kind: 'targeting' })}>Choose who to look for</button>
+            </div>
+          )}
           {items.slice(0, shown).map((i) => <MatchCard key={i.id} item={i} d={d} actions={actions} />)}
           {items.length > shown && (
             <button className="cp2-more" onClick={() => setShown((n) => n + PAGE)}>Show {Math.min(PAGE, items.length - shown)} more of {items.length}</button>
           )}
         </>
+      ) : noTargeting ? (
+        <div className="cp-card">
+          <div className="cp-eyebrow">Nothing to look for yet</div>
+          <p className="cp2-lede">Say which kinds of business you sell to, and where. It goes and finds real ones every night.</p>
+          <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'targeting' })}>Choose who to look for</button>
+        </div>
       ) : (
         <div className="cp-empty">
           {finding
             ? <><b>Looking now</b>{segments.slice(0, 3).join(', ')} in {where}. Real listings, not a sample — the first pass takes a minute.</>
-            : group === 'all'
-            ? <><b>Nothing new to judge</b>Everything it found has been answered. The next pass runs tonight, or look now.</>
-            : <><b>No {MATCH_GROUP_LABEL[group as MatchGroup].toLowerCase()} right now</b>{group === 'clients' ? 'Businesses come from your targeting.' : 'These come from the sources you watch.'}{' '}
-                <button className="cp-textlink" onClick={() => (group === 'clients' ? actions.openSheet({ kind: 'targeting' }) : actions.openSheet({ kind: 'watchlist' }))}>
-                  {group === 'clients' ? 'Change who it looks for' : 'Add a source'}
-                </button></>}
+            : <><b>Nothing new to judge</b>Everything it found has been answered. The next pass runs tonight, or look now.</>}
         </div>
       )}
 
-      {segments.length > 0 && where && (
+      {!noTargeting && (
         <div className="cp2-findrow">
           {confirmFind ? (
             <div className="cp-note">

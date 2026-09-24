@@ -293,7 +293,7 @@ somewhere sensible.
 A second layout over the same app: **Today**, **Matches**, **Work**, **You**.
 Written from its owner's own verdict on the two-tab version after living with it —
 "too many things, nothing that stands out, the purpose lost from the original
-mock-ups; Working? is a log" — and his brief for what each tab should be.
+mock-ups; Working? is a log" — and their brief for what each tab should be.
 
 It is a layout, not a fork. `useCopilot` (`_components/useCopilot.ts`) holds the
 state, the sheet stack and every action, and both `CopilotApp` and `CopilotApp2`
@@ -327,8 +327,16 @@ Every row is something the app produced in the last day and a row proves it: new
 matches, replies `reconcileReplies` matched (`source = 'system'` only — a reply
 typed in by hand is the user's work, and reporting it back as done *for* them is
 the screen taking credit), the watcher's row from `motion`, project progress by
-the plan's own count, Moves worked out. A nightly job that never ran replaces the
-list rather than sitting above it; a sensor that broke is said.
+the plan's own count, Moves worked out. The matches row says how many of the new
+finds are still waiting on Matches, from the same feed the tab renders — "found"
+and "waiting" are different numbers. A project is reported finished only when the
+worker finished it: `recordCommissionWork` stamps `closed_at` and `last_run_at`
+in one write (`WORKER_CLOSE_MS`), and a close by hand is the owner's own verdict,
+not something done for them. A row that reports a failure — the watcher on a
+night sources failed — has `tone: 'warn'`, wears the warning mark and is left
+out of "N done for you". A nightly job that never ran replaces the list rather
+than sitting above it; a sensor that broke is said, and a night with a broken
+check is never shown as a "Quiet night".
 
 **Matches is the deck laid flat, and it still learns.** Businesses are answered
 through the triage route, so "Draft opener" and "Not for me" feed the same keep
@@ -338,7 +346,12 @@ the second is where drafts go to wait. The queue gate survives: with the queue
 backed up, the first tap on Draft states the trade-off and the second proceeds —
 the pattern "Find new" already used. No percentages: the fit score orders the
 list and is never printed, because a "92% match" badge is a guess dressed as a
-measurement (invariant 2).
+measurement (invariant 2). Targeting drives businesses only: with none set, feed
+finds still show, under a note that says no businesses are being searched for —
+otherwise someone who watches job feeds would see finds counted on Today and
+have nowhere to open them. "Keep" on a feed find toasts "Kept.", read off the
+queue the route returns; it used to say "Drafted" over a queue with nothing new
+in it.
 
 **Work is an illustration with one rule: every part is drawn from rows.** Four
 stages — find, reach, convert, get paid — from the funnel's own counts, with who
@@ -356,7 +369,14 @@ is what DIRECTION.md already decided.
 what has to change — and answers each from rows (`weekReview`). Money is never
 summed across currencies; a queue is waste only once it has sat
 (`STALE_DRAFT_DAYS`); a job key is never printed (`phrase.ts`, which also fixed
-"calls about send_queue" on the old Working tab's export path). An empty block
+"calls about send_queue" on the old Working tab's export path). The call record
+is cut to the week here, not by the caller, because the section is headed "This
+week". "You did N things it put in front of you" counts calls answered "I did it"
+and Moves marked done, but not a feed find (Keep and Did it both write done and
+cannot be told apart) or a proposal (done there means handed over). A mandate
+counts as closed with nothing to show when its ledger row says `nothing`, or when
+it was stopped with no verdict at all; the sentence `closeCommission` writes is
+read only when the ledger row is missing, matched against `worthSentence` itself. An empty block
 says why it is empty, and `recent.unreadable` names any read that failed, so a
 broken read never renders as a quiet week (invariant 13). The funnel, openings
 and segments left the tab; the funnel is still one tap away as the path to money

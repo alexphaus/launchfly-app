@@ -16,6 +16,7 @@ import type { SourceYield } from './watch/yield';
 import type { WorkingEntry } from './working';
 import type { Commission, CommissionReport } from './commission';
 import type { PlanKey, PlanStatus } from './plans';
+import type { RecentLedger } from './review';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
 export type OpportunityType = 'client' | 'people' | 'service' | 'community' | 'signal';
@@ -461,6 +462,21 @@ export interface HomeData {
    */
   lastCronRun: string | null;
   metrics: Metrics;
+  /**
+   * The last fortnight read back: outcomes logged, Moves answered, deep work
+   * logged. What the You tab's review is counted from, and the only place the
+   * app can say "you did this on Tuesday" from rows rather than recollection.
+   * `unreadable` names any read that failed, so a broken read is never shown
+   * as a quiet week.
+   */
+  recent: RecentLedger;
+  /**
+   * When this read was made. Anything on screen that depends on "now" — what
+   * arrived in the last day, how long ago an agent ran — is computed from this
+   * rather than from the clock, so the server render and the hydrating client
+   * agree to the second instead of disagreeing across an hour boundary.
+   */
+  generatedAt: string;
   supplyLastRun: string | null;
   account: { email: string | null; verified: boolean };
   push: { publicKey: string | null; enabled: boolean };

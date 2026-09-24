@@ -15,6 +15,9 @@ import { WORTH, WORTH_KINDS, WORTH_NOTE_MAX, type WorthKind } from '@/lib/copilo
 import type { AskAnswer } from '@/lib/copilot/ask';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
+import { CaptureCard, MoveCard } from './views/NowView';
+import { FOCUS_NOTE_MAX, FOCUS_PRESETS, dayLetter, focusWeek, hoursLabel } from '@/lib/copilot/focus';
+import { whenLabel } from '@/lib/copilot/review';
 import { useShell } from './shell';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
@@ -39,7 +42,129 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'handover': return <HandoverSheet home={home} actions={actions} />;
     case 'working': return <WorkingSheet home={home} actions={actions} />;
     case 'ask': return <AskSheet actions={actions} />;
+    case 'move': return <MoveSheet home={home} id={sheet.id} actions={actions} />;
+    case 'capture': return <CaptureSheet home={home} actions={actions} />;
+    case 'focus': return <FocusSheet home={home} actions={actions} />;
   }
+}
+
+/* ─── The four-tab shell's sheets ─────────────────────────────────────────── */
+
+/**
+ * One Move, whole. /copilot2 lists Moves as rows, and a row cannot carry the
+ * artifact — which is the entire difference between a Move and advice — so the
+ * row opens this. Snapshotted, like every sheet here, so answering it does not
+ * blank the sheet while it slides away.
+ */
+function MoveSheet({ home, id, actions }: { home: HomeData; id: string; actions: Actions }) {
+  const found = home.moves.find((m) => m.id === id) ?? (home.callMove?.id === id ? home.callMove : undefined);
+  const snap = useRef(found);
+  if (found) snap.current = found;
+  const m = snap.current;
+  if (!m) return <p className="desc">Already answered.</p>;
+  return <div className="cp-sheet-embed"><MoveCard move={m} actions={actions} onAnswered={actions.closeSheet} /></div>;
+}
+
+/** The confirm card, opened from a Needs-you row. */
+function CaptureSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  if (!home.capture) {
+    return (
+      <>
+        <h3>Nothing to confirm</h3>
+        <p className="desc">Every message it saw you open, and every reply it saw come in, has an ending on record.</p>
+        <div className="cp-btn-row"><button className="cp-btn" onClick={actions.closeSheet}>Back</button></div>
+      </>
+    );
+  }
+  return <div className="cp-sheet-embed"><CaptureCard home={home} actions={actions} onDone={actions.closeSheet} /></div>;
+}
+
+/**
+ * Deep work: log a block, and see the week. The seven columns are both the
+ * chart and the day picker — tapping a day selects it to read and to log for,
+ * which is one control instead of a chart beside a date field. The list under
+ * them is the table twin: every value the bars show, as text, removable.
+ */
+function FocusSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  const today = home.recent.today;
+  const week = focusWeek(home.recent.focus, today);
+  const [on, setOn] = useState(today);
+  const [minutes, setMinutes] = useState<number | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const peak = Math.max(...week.days.map((d) => d.minutes), 60);
+  const picked = week.days.find((d) => d.on === on) ?? week.days[week.days.length - 1];
+  const logs = home.recent.focus
+    .filter((l) => week.days.some((d) => d.on === l.on))
+    .sort((a, b) => b.on.localeCompare(a.on) || b.at.localeCompare(a.at));
+  // "today" reads as a label inside a sentence and as a word at the head of a row.
+  const day = (d: string) => { const w = whenLabel(d, today); return w.charAt(0).toUpperCase() + w.slice(1); };
+  const save = async () => {
+    if (!minutes) return;
+    setBusy(true);
+    const ok = await actions.logFocus({ minutes, on, note: note.trim() || undefined });
+    setBusy(false);
+    if (ok) { setMinutes(null); setNote(''); }
+  };
+
+  return (
+    <>
+      <h3>Deep work</h3>
+      <p className="desc">
+        Time on the thing that moves a goal — no messages, no calls. You log it, because nothing else can count it
+        honestly, and a guessed number here would be the most flattering one on the screen.
+      </p>
+
+      <div className="cp2-week">
+        {week.days.map((d) => (
+          <button
+            key={d.on}
+            className={`cp2-week-col${d.on === on ? ' sel' : ''}`}
+            onClick={() => setOn(d.on)}
+            aria-pressed={d.on === on}
+            aria-label={`${whenLabel(d.on, today)}: ${d.minutes ? hoursLabel(d.minutes) : 'nothing logged'}`}
+          >
+            <span className="bar">{d.minutes > 0 && <i style={{ height: `${Math.round((d.minutes / peak) * 100)}%` }} />}</span>
+            <span className="d">{dayLetter(d.on)}</span>
+          </button>
+        ))}
+      </div>
+      <p className="cp2-week-read">
+        <b>{day(picked.on)}</b>
+        {' · '}{picked.minutes ? hoursLabel(picked.minutes) : 'nothing logged'}
+        {' · '}{hoursLabel(week.total)} this week
+      </p>
+
+      <div className="cp-field">
+        <label className="cp-label">How long{on === today ? ' today' : `, ${whenLabel(on, today)}`}</label>
+        <div className="cp-chips">
+          {FOCUS_PRESETS.map((p) => (
+            <button key={p} className={`cp-fchip ${minutes === p ? 'active' : ''}`} onClick={() => setMinutes(minutes === p ? null : p)}>{hoursLabel(p)}</button>
+          ))}
+        </div>
+      </div>
+      <div className="cp-field">
+        <label className="cp-label" htmlFor="cp-focus-note">On what — optional</label>
+        <input id="cp-focus-note" className="cp-input sm" value={note} maxLength={FOCUS_NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="The booking demo for the resort" />
+      </div>
+      <div className="cp-btn-row">
+        <button className="cp-btn primary" disabled={busy || !minutes} onClick={() => void save()}>{busy ? 'Logging…' : minutes ? `Log ${hoursLabel(minutes)}` : 'Pick how long'}</button>
+        <button className="cp-btn" onClick={actions.closeSheet}>Done</button>
+      </div>
+
+      {logs.length > 0 && (
+        <>
+          <div className="cp-subhead">Logged this week</div>
+          {logs.map((l) => (
+            <div key={l.id} className="cp-kv">
+              <span>{day(l.on)}{l.note ? ` · ${l.note}` : ''}</span>
+              <b>{hoursLabel(l.minutes)}{' '}<button className="cp2-x" onClick={() => void actions.removeFocus(l.id)} aria-label={`Remove ${hoursLabel(l.minutes)} logged ${whenLabel(l.on, today)}`}>×</button></b>
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  );
 }
 
 function CapacitySheet({ current, onPick }: { current: Capacity; onPick: (c: Capacity) => void }) {

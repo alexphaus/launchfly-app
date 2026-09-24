@@ -1,0 +1,637 @@
+'use client';
+// Everything a shell needs to run the app: the home data, the sheet stack, the
+// toast, the tab, and every action against /api/copilot.
+//
+// Two component trees render the same app — the two-tab one at /copilot and
+// /lifeos, the four-tab one at /copilot2 — and they must not disagree about
+// what sending, closing a mandate or answering the call actually does. This is
+// where the Actions object lives so there is exactly one of it. It was a
+// closure inside CopilotApp, which would have meant a second shell copying four
+// hundred lines of it and the two copies drifting the first time either changed.
+//
+// Optimistic where it is safe to be.
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ActionStatus, Capacity, Channel, Goal, HomeData, Offer, OpportunityStatus, SourceKey } from '@/lib/copilot/types';
+import type { Discovered } from '@/lib/copilot/watch/discover';
+import type { AskAnswer } from '@/lib/copilot/ask';
+import { api, del, get, post } from './api';
+import { urlBase64ToUint8Array } from './format';
+import { useShell } from './shell';
+import type { Actions, OutcomeInput, SheetState, Tab, Tab2 } from './shared';
+
+export interface CopilotConfig<T extends Tab | Tab2> {
+  /** Where the app opens. */
+  initialTab: T;
+  /**
+   * Every name a deep link or another screen may use, mapped onto this shell's
+   * tabs. Installed shells and already-delivered pushes carry old names, and a
+   * tab name that maps to nothing is ignored rather than rendering a blank tab.
+   */
+  alias: Record<string, T>;
+  /**
+   * Where a freshly drafted message should be opened from. v1 jumps to Now,
+   * because that is where its queue lives; v2 leaves you on the tab you drafted
+   * from, because the Matches list is where the next one is.
+   */
+  afterDraft?: T;
+}
+
+/** The sheet body stays mounted while it slides out, so each target needs its own
+ * identity or one goal's form state would be saved onto the next goal opened. */
+export function sheetKey(s: SheetState): string {
+  const id = 'id' in s && s.id ? s.id : 'oppId' in s ? s.oppId : 'term' in s ? s.term : 'new';
+  return `${s.kind}:${id}`;
+}
+
+export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: CopilotConfig<T>) {
+  const shell = useShell();
+  const [home, setHome] = useState<HomeData>(initial);
+  const [tab, setTabState] = useState<T>(cfg.initialTab);
+  // Sheets stack: Goal opened from You returns to You on close. The last one
+  // shown stays mounted while the sheet slides out, so the content does not
+  // blank mid-animation.
+  const [stack, setStack] = useState<SheetState[]>([]);
+  const lastSheet = useRef<SheetState | null>(null);
+  const top = stack[stack.length - 1] ?? null;
+  if (top) lastSheet.current = top;
+  const sheet = top ?? lastSheet.current;
+  const sheetOpen = stack.length > 0;
+  const [briefing, setBriefing] = useState(false);
+  const [finding, setFinding] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const briefStarted = useRef(false);
+  // One scroll container serves all tabs, so without this a tab opens wherever
+  // the last one was scrolled to.
+  const mainRef = useRef<HTMLElement | null>(null);
+  useEffect(() => { if (mainRef.current) mainRef.current.scrollTop = 0; }, [tab]);
+
+  // The alias lives in the caller and is a constant there, so reading it through
+  // a ref keeps setTab stable without asking every caller to memoise it.
+  const aliasRef = useRef(cfg.alias);
+  aliasRef.current = cfg.alias;
+  const setTab = useCallback((t: Tab | Tab2) => {
+    const resolved = aliasRef.current[t];
+    if (resolved) setTabState(resolved);
+  }, []);
+
+  const say = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2800);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const data = await get<HomeData>('/home');
+    setHome(data);
+  }, []);
+
+  const runBrief = useCallback(async (reason = 'manual') => {
+    setBriefing(true);
+    try {
+      const r = await post<{ home: HomeData; agent: string; fellBack: boolean }>('/brief', { reason });
+      setHome(r.home);
+      if (r.fellBack) say('Agent unavailable, showed a starter brief');
+      else if (reason === 'manual') say('Brief refreshed');
+    } catch (e) {
+      say(e instanceof Error ? e.message : 'Could not refresh');
+    } finally {
+      setBriefing(false);
+    }
+  }, [say]);
+
+  const findMatches = useCallback(async (first = false) => {
+    setFinding(true);
+    try {
+      const r = await post<{ home: HomeData; result: { supply: { inserted?: number; found?: number; partial?: boolean } | null } }>('/supply');
+      setHome(r.home);
+      const supply = r.result?.supply && 'inserted' in r.result.supply ? r.result.supply : null;
+      const n = supply?.inserted ?? 0;
+      // A run can stop early on purpose: scraping every segment takes minutes
+      // and the request has to come back before the proxy gives up. Saying so
+      // is better than looking like there was nothing left to find.
+      say(supply?.partial
+        ? `${n} found so far — there was not time for every segment. Tap again for more.`
+        : first
+        ? (n ? `${n} business${n === 1 ? '' : 'es'} found. Openers are drafted below.` : 'Nothing found for those segments yet. Try widening the area.')
+        : n ? `${n} new real match${n === 1 ? '' : 'es'} found and ranked`
+        : 'No new matches. Try wider targeting.');
+    } catch (e) { say(e instanceof Error ? e.message : 'Could not find matches'); }
+    finally { setFinding(false); }
+  }, [say]);
+
+  // First open. A brand new account has nothing to look at, so the first thing
+  // the app does is go and find some — the supply route runs the brief too, so
+  // this replaces the daily brief rather than racing it. One or the other,
+  // never both, and only once per mount.
+  useEffect(() => {
+    if (briefStarted.current) return;
+    if (initial.needsFirstSupply) {
+      briefStarted.current = true;
+      void findMatches(true);
+    } else if (initial.needsBrief) {
+      briefStarted.current = true;
+      void runBrief('daily');
+    }
+  }, [initial.needsFirstSupply, initial.needsBrief, findMatches, runBrief]);
+
+  // Back from Stripe. The webhook that flips the plan and the redirect race each
+  // other, so confirm the payment immediately and re-read once the webhook has
+  // had a moment — otherwise someone who just paid lands on a page still
+  // showing the free plan and reasonably assumes it failed.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const upgraded = params.get('upgraded');
+    // A push can deep-link to a tab.
+    const wanted = params.get('tab');
+    const resolved = wanted ? aliasRef.current[wanted] : undefined;
+    if (resolved) setTabState(resolved);
+    if (!upgraded && !wanted) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!upgraded) return;
+    say('Payment received. Your new allowance is live.');
+    const t = setTimeout(() => { void refresh(); }, 2500);
+    return () => clearTimeout(t);
+  }, [say, refresh]);
+
+  const openSheet = (s: SheetState) => setStack((st) => [...st, s]);
+  const closeSheet = () => setStack((st) => st.slice(0, -1));
+  /** Overlay tap or Escape: everything goes, not just the top. */
+  const dismissSheets = useCallback(() => setStack([]), []);
+  const fail = (e: unknown, fallback: string) => say(e instanceof Error ? e.message : fallback);
+
+  const actions: Actions = {
+    openSheet,
+    closeSheet,
+    setTab,
+    runBrief,
+    async addNote(content, regenerate) {
+      try {
+        if (regenerate) setBriefing(true);
+        await post('/context', { content, regenerate });
+        await refresh();
+        say(regenerate ? 'Added and re-planned' : 'Added to your context');
+        return true;
+      } catch (e) {
+        fail(e, 'Could not save');
+        return false;
+      } finally {
+        setBriefing(false);
+      }
+    },
+    async setOppStatus(id: string, status: OpportunityStatus) {
+      setHome((h) => ({
+        ...h,
+        opportunities: status === 'dismissed' || status === 'acted'
+          ? h.opportunities.filter((o) => o.id !== id)
+          : h.opportunities.map((o) => (o.id === id ? { ...o, status } : o)),
+      }));
+      closeSheet();
+      try {
+        await post(`/opportunities/${id}`, { status });
+        say(status === 'saved' ? 'Saved. More like this next time.' : status === 'dismissed' ? 'Skipped. Fewer like this.' : status === 'acted' ? 'Logged.' : 'Back to new');
+      } catch (e) { fail(e, 'Could not update'); void refresh(); }
+    },
+    async setActionStatus(id: string, status: ActionStatus) {
+      setHome((h) => ({
+        ...h,
+        plan: h.plan.map((a) => (a.id === id ? { ...a, status } : a)).filter((a) => a.status !== 'dismissed'),
+        queue: h.queue.filter((q) => q.id !== id || status === 'open'),
+      }));
+      closeSheet();
+      try { await post(`/actions/${id}`, { status }); } catch (e) { fail(e, 'Could not update'); void refresh(); }
+    },
+    async requestSource(key: SourceKey) {
+      setHome((h) => ({ ...h, sources: h.sources.map((s) => (s.source_key === key ? { ...s, status: 'requested' } : s)) }));
+      try { await post(`/sources/${key}`); say('Noted. Connectors land here once built.'); } catch (e) { fail(e, 'Could not update'); }
+    },
+    async saveGoal(patch: Partial<Goal> & { id?: string; title?: string }) {
+      try { await post('/goals', patch); closeSheet(); await refresh(); say('Goal saved'); } catch (e) { fail(e, 'Could not save goal'); }
+    },
+    async setCapacity(c: Capacity) {
+      setHome((h) => ({ ...h, profile: { ...h.profile, capacity: c } }));
+      closeSheet();
+      try { const r = await post<{ home: HomeData }>('/capacity', { capacity: c }); setHome(r.home); } catch (e) { fail(e, 'Could not update'); }
+    },
+    async resetDevice() {
+      await del('/session');
+      window.location.reload();
+    },
+
+    // — closed loop —
+    async sendAction(id, overrides) {
+      try {
+        const r = await post<{ ok: boolean; home: HomeData; execution: { error?: string | null } }>(`/actions/${id}/send`, overrides ?? {});
+        setHome(r.home);
+        say('Sent. Follow-up drafted for day 3.');
+        closeSheet();
+        return true;
+      } catch (e) {
+        fail(e, 'Send failed');
+        void refresh();
+        return false;
+      }
+    },
+    async answerMove(id, status) {
+      try {
+        const r = await post<{ home: HomeData }>(`/moves/${id}`, { status });
+        setHome(r.home);
+        say(status === 'done' ? 'Done. Recorded.' : 'Not this one. Recorded.');
+        return true;
+      } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
+    },
+    async handOverMove(id) {
+      try {
+        const r = await post<{ home: HomeData }>(`/moves/${id}`, { status: 'handover' });
+        setHome(r.home);
+        // Says what will actually happen next, not that a row was written. The
+        // worker picks it up on the nightly pass, and somebody who taps this and
+        // sees "Done" will come back in ten minutes looking for a result. Names
+        // no tab: both layouts use this, and they report it in different places.
+        say('Handed over. It starts tonight and reports back here as it goes.');
+        return { ok: true };
+      } catch (e) {
+        void refresh();
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
+      }
+    },
+    async addWatchSource(input) {
+      try {
+        const r = await post<{ home: HomeData; note?: string | null }>('/watch/sources', input);
+        setHome(r.home);
+        // The note is what the normaliser DID — "added .rss", "turned the
+        // channel into its video feed". Swallowing it means the saved URL and
+        // the typed one silently differ, which is how somebody ends up
+        // reporting a source that "does not work" against a URL they never saw.
+        say(r.note ?? 'Watching it. Anything new gets read tonight.');
+        return { ok: true, note: r.note ?? null };
+      } catch (e) {
+        const error = e instanceof Error ? e.message : 'Could not add that';
+        return { ok: false, error };
+      }
+    },
+    async discoverSources() {
+      try {
+        const r = await post<{ found: Discovered[]; searched: string[]; checked?: number; note?: string | null }>('/watch/discover', {});
+        // No say() here. The results ARE the feedback, and a toast over a list
+        // somebody is about to read is just something in the way.
+        return { ok: true, found: r.found, searched: r.searched, checked: r.checked, note: r.note ?? null };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not search for sources' };
+      }
+    },
+    async addDiscovered(d) {
+      try {
+        // Posted back to the discover route, not to /watch/sources: that one
+        // re-normalises, and d.url is already the feed that parsed. Running it
+        // through the normaliser again would rewrite a verified URL.
+        const r = await post<{ home: HomeData }>('/watch/discover', { url: d.url, label: d.label, intent: d.intent });
+        setHome(r.home);
+        say(`Watching ${d.label}. It gets read tonight.`);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not add that source' };
+      }
+    },
+    async saveWorking(input) {
+      try {
+        const r = await post<{ home: HomeData }>('/working', input);
+        setHome(r.home);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };
+      }
+    },
+    async settleWorking(id, status) {
+      try {
+        const r = await post<{ home: HomeData }>('/working', { id, status });
+        setHome(r.home);
+        // Only on a yes. Saying "noted" when somebody declines something is the
+        // app thanking them for disagreeing with it.
+        if (status === 'live') say('Noted. It goes into everything from now on.');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not do that' };
+      }
+    },
+    async removeWorking(id) {
+      try {
+        const r = await del<{ home: HomeData }>(`/working?id=${encodeURIComponent(id)}`);
+        setHome(r.home);
+      } catch (e) { fail(e, 'Could not remove that'); }
+    },
+    async createCommission(input) {
+      try {
+        const r = await post<{ home: HomeData }>('/commissions', input);
+        setHome(r.home);
+        // Says what happens next, because what happens next is nothing until
+        // they approve it — and a commission that silently sits in draft looks
+        // exactly like one the app ignored.
+        say('Written. Read it and approve it to start.');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
+      }
+    },
+    async commissionAction(id, action, worth, answer) {
+      try {
+        const r = await post<{ home?: HomeData; note?: string | null }>(`/commissions/${encodeURIComponent(id)}`, { action, answer, ...(worth ?? {}) });
+        // 'seen' deliberately returns no home: rewriting the screen under
+        // somebody who just opened the sheet moves the card out from under them.
+        if (r.home) setHome(r.home);
+        if (action === 'approve') say('Approved. It runs tonight.');
+        // Two different things happened, and which one decides whether the
+        // worker stops asking. Saying "carrying on" for both would hide it.
+        if (action === 'unblock') say(answer?.trim() ? 'Sent. It gets your answer on the next run.' : 'Carrying on. It picks up tonight.');
+        // The toast reports whether the verdict LANDED, not merely that the
+        // mandate closed. A worth answer that did not reach the ledger changes
+        // nothing about what gets suggested next, and saying "noted" either way
+        // is how a broken feature looks like a working one.
+        if (action === 'stop' || action === 'done') {
+          say(r.note ? 'Closed, but the verdict did not save.' : worth ? 'Closed, and noted.' : 'Closed.');
+        }
+        return { ok: true, note: r.note ?? null };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not update that' };
+      }
+    },
+    async runCommissionsNow() {
+      try {
+        const r = await post<{ home: HomeData; asked: number; handed: number; skipped: string | null; error: string | null }>('/commissions/run', {});
+        setHome(r.home);
+        // Error first. "Handed over" used to be said even when the dispatch threw
+        // and was swallowed, so a mistyped webhook URL read exactly like a worker
+        // taking its time — and the only way to tell was the server log.
+        say(r.error
+          ? r.error
+          : r.asked > 0
+            ? `${r.asked} thing${r.asked === 1 ? '' : 's'} came back needing you.`
+            : r.skipped
+              ? r.skipped
+              : 'Handed over. Nothing back yet — the worker reports when it is done.');
+        return { ok: !r.error, asked: r.asked, error: r.error ?? undefined };
+      } catch (e) {
+        const error = e instanceof Error ? e.message : 'Could not run it';
+        say(error);
+        return { ok: false, error };
+      }
+    },
+    async deleteAccount(confirm) {
+      try {
+        await del('/account', { body: JSON.stringify({ confirm }) });
+        // Straight to the front door. Re-rendering the app against a profile
+        // that no longer exists would 401 every request and read as a crash at
+        // the exact moment somebody needs to see that it worked.
+        window.location.href = shell;
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not delete the account' };
+      }
+    },
+    async readSourcesNow() {
+      try {
+        const r = await post<{ home: HomeData; found: number }>('/watch/run', {});
+        setHome(r.home);
+        say(r.found > 0
+          ? `${r.found} worth keeping, waiting for you to judge.`
+          : 'Read. Nothing in them worth your morning — tap again for the next two.');
+        return { ok: true, found: r.found };
+      } catch (e) { fail(e, 'Could not read your sources'); return { ok: false }; }
+    },
+    markOpened(actionId) {
+      // sendBeacon, not fetch: this fires as the tab goes to the background to
+      // hand off to WhatsApp, and a normal request is cancelled at exactly that
+      // moment — which is how the tap went unrecorded in the first place.
+      const url = `/api/copilot/actions/${encodeURIComponent(actionId)}/opened`;
+      try {
+        if (navigator.sendBeacon?.(url, new Blob([], { type: 'application/json' }))) return;
+      } catch { /* fall through */ }
+      // keepalive is the same guarantee for browsers without sendBeacon.
+      void fetch(url, { method: 'POST', keepalive: true }).catch(() => {});
+    },
+    async confirmOpened(ids, sent) {
+      try {
+        // One request per draft, but one GESTURE — which is the whole point.
+        // The alternative was leaving the app and coming back N times.
+        for (const id of ids) {
+          if (sent) await post(`/actions/${id}/sent`, {});
+          else await del(`/actions/${id}/opened`).catch(() => {});
+        }
+        await refresh();
+        say(sent
+          ? `Logged. ${ids.length === 1 ? 'That one counts' : `All ${ids.length} count`} now.`
+          : 'Left them in the queue.');
+      } catch (e) { fail(e, 'Could not record that'); void refresh(); }
+    },
+    async saveObligation(patch) {
+      try {
+        const r = await post<{ home: HomeData }>('/obligations', patch);
+        setHome(r.home);
+        say(patch.status === 'settled' ? 'Settled. The forecast just moved.' : 'Saved.');
+        return true;
+      } catch (e) { fail(e, 'Could not save that'); return false; }
+    },
+    async removeObligation(id) {
+      try {
+        const r = await del<{ home: HomeData }>(`/obligations?id=${encodeURIComponent(id)}`);
+        setHome(r.home);
+        say('Removed.');
+      } catch (e) { fail(e, 'Could not remove'); void refresh(); }
+    },
+    async removeWatchSource(id) {
+      try {
+        const r = await del<{ home: HomeData }>(`/watch/sources?id=${encodeURIComponent(id)}`);
+        setHome(r.home);
+        say('Removed.');
+      } catch (e) { fail(e, 'Could not remove'); void refresh(); }
+    },
+    async setWatchSourceStatus(id, status) {
+      try {
+        const r = await post<{ home: HomeData }>('/watch/sources', { id, status });
+        setHome(r.home);
+        say(status === 'paused' ? 'Paused. It stays on the list.' : 'Back on. It gets read tonight.');
+      } catch (e) { fail(e, 'Could not update'); void refresh(); }
+    },
+    async triage(id, action) {
+      try {
+        const r = await post<{ home: HomeData }>(`/triage/${id}`, { action });
+        setHome(r.home);
+        // "Yes" on a feed card keeps it — the route marks its Move done and
+        // writes nothing — so the toast is read off the queue the route returned
+        // rather than assumed. It said "Drafted" for both, and a kept gig post
+        // sent people to a queue with no draft in it.
+        if (action === 'draft') {
+          const drafted = r.home.queue.some((q) => q.opportunity_id === id || q.opp?.id === id);
+          say(drafted ? 'Drafted. It is in the send queue.' : 'Kept.');
+        }
+        return true;
+      } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
+    },
+    async markSent(id, overrides) {
+      try {
+        const r = await post<{ home: HomeData }>(`/actions/${id}/sent`, overrides ?? {});
+        setHome(r.home);
+        say('Logged as sent. Follow-up drafted for day 3.');
+        closeSheet();
+        return true;
+      } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
+    },
+    async saveOffer(offer: Offer) {
+      try {
+        const r = await post<{ home: HomeData; rewritten?: number }>('/offer', offer);
+        setHome(r.home); closeSheet();
+        say(r.rewritten ? `Saved. ${r.rewritten} waiting draft${r.rewritten === 1 ? '' : 's'} rewritten in your words.` : 'Saved. Drafts will use your words now.');
+        return true;
+      }
+      catch (e) { fail(e, 'Could not save'); return false; }
+    },
+    async cancelDraft(id) {
+      try { await api(`/actions/${id}/send`, { method: 'DELETE' }); await refresh(); closeSheet(); say('Draft cancelled'); } catch (e) { fail(e, 'Could not cancel'); }
+    },
+    async recordOutcome(input: OutcomeInput) {
+      try {
+        const r = await post<{ home: HomeData }>('/outcomes', input);
+        setHome(r.home);
+        closeSheet();
+        say(input.kind === 'won' ? 'Logged. Goal updated.' : input.kind === 'reply' ? 'Reply logged. Ranking learns from this.' : 'Logged.');
+        return true;
+      } catch (e) { fail(e, 'Could not record'); return false; }
+    },
+    async draftFor(oppId, channel?: Channel) {
+      try {
+        const r = await post<{ home: HomeData; actionId: string; execution: unknown | null; existing?: boolean }>(`/opportunities/${oppId}/draft`, { channel });
+        setHome(r.home);
+        if (cfg.afterDraft) setTabState(cfg.afterDraft);
+        // The draft replaces whatever sheet asked for it; closing it should
+        // land on the tab the shell names, not back on the business.
+        setStack([{ kind: 'action', id: r.actionId }]);
+        // Drafting twice opens the message already waiting rather than writing a second one.
+        say(r.existing ? 'Already drafted — here it is.' : r.execution ? 'Drafted. Review and approve to send.' : 'Drafted. No contact on that channel, copy it manually.');
+        return true;
+      } catch (e) { fail(e, 'Could not draft'); return false; }
+    },
+    findMatches,
+    async saveFinance(f) {
+      try { const r = await post<{ home: HomeData }>('/finance', f); setHome(r.home); closeSheet(); say('Runway updated'); return true; } catch (e) { fail(e, 'Could not save'); return false; }
+    },
+    async openBilling() {
+      try {
+        const r = await post<{ url: string }>('/billing/portal', { shell });
+        window.location.href = r.url;
+      } catch (e) { fail(e, 'Could not open billing'); }
+    },
+    async saveTargeting(t) {
+      try {
+        const r = await post<{ home: HomeData; dropped?: number }>('/targeting', t);
+        setHome(r.home);
+        say(r.dropped ? `Targeting saved. ${r.dropped} ${r.dropped === 1 ? 'business' : 'businesses'} from dropped segments set aside.` : 'Targeting saved');
+        return true;
+      } catch (e) { fail(e, 'Could not save'); return false; }
+    },
+    async dropSegment(segment) {
+      const key = segment.trim().toLowerCase();
+      const target_segments = home.profile.target_segments.filter((s) => s.trim().toLowerCase() !== key);
+      try {
+        const r = await post<{ home: HomeData; dropped?: number }>('/targeting', { target_segments, target_area: home.profile.target_area ?? home.profile.location ?? '' });
+        setHome(r.home);
+        closeSheet();
+        say(r.dropped ? `Stopped matching ${segment}. ${r.dropped} ${r.dropped === 1 ? 'business' : 'businesses'} and their drafts set aside.` : `Stopped matching ${segment}.`);
+        return true;
+      } catch (e) { fail(e, 'Could not update targeting'); return false; }
+    },
+    async answerCall(response, permanent) {
+      try {
+        const r = await post<{ home: HomeData; stoodDown?: string }>('/decision', { response, permanent });
+        setHome(r.home);
+        say(r.stoodDown
+          ? 'Noted for good. It is in your working file under what you will not do — remove it there to undo.'
+          : 'Recorded');
+        return true;
+      } catch (e) { fail(e, 'Could not record that'); return false; }
+    },
+    async clearQueue() {
+      try {
+        const r = await post<{ home: HomeData; cancelled: number }>('/queue', { action: 'clear' });
+        setHome(r.home);
+        say(`${r.cancelled} draft${r.cancelled === 1 ? '' : 's'} cleared. They are recorded as written and not sent.`);
+        return { ok: true, cancelled: r.cancelled };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not clear the queue' };
+      }
+    },
+    async askRows() {
+      try {
+        const r = await get<{ answers: AskAnswer[] }>('/ask');
+        return { ok: true, answers: r.answers };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not count that' };
+      }
+    },
+    async handoff() {
+      try {
+        const r = await get<{ text: string; chars: number }>('/handoff');
+        return { ok: true, text: r.text, chars: r.chars };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not gather your context' };
+      }
+    },
+    async requestLoginLink(email) {
+      try { await post('/auth/magic-link', { email, shell }); return { ok: true }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Could not send' }; }
+    },
+    async setPush(enabled) {
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('This browser does not support push');
+        const reg = await navigator.serviceWorker.ready;
+        if (enabled) {
+          if (!home.push.publicKey) throw new Error('Push is not configured on the server');
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') throw new Error('Notifications were not allowed');
+          const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(home.push.publicKey) });
+          await post('/push/subscribe', sub.toJSON());
+        } else {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) { await api('/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
+        }
+        setHome((h) => ({ ...h, push: { ...h.push, enabled } }));
+        say(enabled ? 'Nudges will reach this device.' : 'Nudges off on this device.');
+        return true;
+      } catch (e) { fail(e, 'Could not change notifications'); return false; }
+    },
+
+    // — the four-tab shell —
+    async draftFromMatch(oppId) {
+      try {
+        const r = await post<{ home: HomeData }>(`/triage/${oppId}`, { action: 'draft' });
+        setHome(r.home);
+        // Straight to the message. A match you chose to contact and a draft you
+        // then have to go and find in a queue of fifty are two decisions, and
+        // the second is where drafts go to wait — 61 of 70 in the live account.
+        const q = r.home.queue.find((x) => x.opportunity_id === oppId || x.opp?.id === oppId);
+        if (q) setStack([{ kind: 'action', id: q.id }]);
+        say(q ? 'Drafted. Read it, then send it from your own app.' : 'Drafted. It is in the send queue.');
+        return true;
+      } catch (e) { fail(e, 'Could not draft'); void refresh(); return false; }
+    },
+    async logFocus(input) {
+      try {
+        const r = await post<{ home: HomeData }>('/focus', input);
+        setHome(r.home);
+        say('Logged.');
+        return true;
+      } catch (e) { fail(e, 'Could not log that'); return false; }
+    },
+    async removeFocus(id) {
+      try {
+        const r = await del<{ home: HomeData }>(`/focus?id=${encodeURIComponent(id)}`);
+        setHome(r.home);
+      } catch (e) { fail(e, 'Could not remove that'); void refresh(); }
+    },
+  };
+
+  return {
+    home, setHome, tab, setTab, actions,
+    sheet, sheetOpen, dismissSheets,
+    briefing, finding, toast, mainRef,
+  };
+}

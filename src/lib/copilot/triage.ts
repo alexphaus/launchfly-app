@@ -65,6 +65,12 @@ export interface TriageCard {
   score: number;
   contact: { whatsapp: boolean; email: boolean };
   url: string | null;
+  /**
+   * When it arrived. The deck never needed it; the Matches list does, because
+   * "what came in overnight" is the first thing somebody opening it asks.
+   * Optional so a card built anywhere else still type-checks.
+   */
+  created_at?: string;
 }
 
 export type TriageAction = 'draft' | 'skip';

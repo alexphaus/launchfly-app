@@ -151,39 +151,7 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
           upstream of the reply rate, the funnel, verdictOf and the whole starter
           ladder, and it was collected by hoping somebody came back and pressed a
           tertiary button. One gesture for N messages, not N round trips. */}
-      {home.capture && (
-        <div className="cp-card cp-capture">
-          <div className="cp-eyebrow">Confirm</div>
-          <h2 className="cp-call-head">{home.capture.headline}</h2>
-          <p className="cp-stack-reason">{home.capture.because}</p>
-          {home.capture.kind === 'opened' ? (
-            <>
-              <div className="cp-capture-list">
-                {home.opened.map((o) => <div key={o.id} className="cp-capture-row">{o.who}<span>{relTime(o.openedAt)}</span></div>)}
-              </div>
-              <div className="cp-btn-row">
-                <button className="cp-btn primary" onClick={() => void actions.confirmOpened(home.opened.map((o) => o.id), true)}>
-                  {home.opened.length === 1 ? 'It went' : 'They all went'}
-                </button>
-                <button className="cp-btn" onClick={() => void actions.confirmOpened(home.opened.map((o) => o.id), false)}>
-                  Not yet
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="cp-capture-list">
-                {home.unresolved.map((r) => (
-                  <button key={r.opportunityId} className="cp-capture-row tap" onClick={() => actions.openSheet({ kind: 'won', oppId: r.opportunityId })}>
-                    {r.who}<span>replied {relTime(r.repliedAt)}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="cp-note" style={{ margin: '8px 0 0' }}>Tap one to record where it got to. Won, lost, or still talking.</div>
-            </>
-          )}
-        </div>
-      )}
+      {home.capture && <CaptureCard home={home} actions={actions} />}
 
       {/* A job waiting on an answer, a fix, or your approval. It used to sit
           with the running ones under "Working on", which put a question you had
@@ -383,6 +351,50 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
 }
 
 /**
+ * The confirm card: what the app saw and was never told the end of.
+ *
+ * Its own component because two layouts render it — inline on Now, and as a
+ * sheet opened from a Needs-you row on /copilot2. One card, so the two cannot
+ * disagree about what "It went" records.
+ */
+export function CaptureCard({ home, actions, onDone }: { home: HomeData; actions: Actions; onDone?: () => void }) {
+  if (!home.capture) return null;
+  return (
+    <div className="cp-card cp-capture">
+      <div className="cp-eyebrow">Confirm</div>
+      <h2 className="cp-call-head">{home.capture.headline}</h2>
+      <p className="cp-stack-reason">{home.capture.because}</p>
+      {home.capture.kind === 'opened' ? (
+        <>
+          <div className="cp-capture-list">
+            {home.opened.map((o) => <div key={o.id} className="cp-capture-row">{o.who}<span>{relTime(o.openedAt)}</span></div>)}
+          </div>
+          <div className="cp-btn-row">
+            <button className="cp-btn primary" onClick={async () => { await actions.confirmOpened(home.opened.map((o) => o.id), true); onDone?.(); }}>
+              {home.opened.length === 1 ? 'It went' : 'They all went'}
+            </button>
+            <button className="cp-btn" onClick={async () => { await actions.confirmOpened(home.opened.map((o) => o.id), false); onDone?.(); }}>
+              Not yet
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="cp-capture-list">
+            {home.unresolved.map((r) => (
+              <button key={r.opportunityId} className="cp-capture-row tap" onClick={() => actions.openSheet({ kind: 'won', oppId: r.opportunityId })}>
+                {r.who}<span>replied {relTime(r.repliedAt)}</span>
+              </button>
+            ))}
+          </div>
+          <div className="cp-note" style={{ margin: '8px 0 0' }}>Tap one to record where it got to. Won, lost, or still talking.</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * "I am not sending these."
  *
  * A queue you have decided against is not a backlog, it is a dead asset that
@@ -396,7 +408,7 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
  * move to `cancelled` with a reason, so "written and never sent" stays in the
  * funnel, which is the most informative number this account has produced.
  */
-function QueueClear({ home, actions }: { home: HomeData; actions: Actions }) {
+export function QueueClear({ home, actions }: { home: HomeData; actions: Actions }) {
   const [arming, setArming] = useState(false);
   const [busy, setBusy] = useState(false);
   const total = home.queueTotal || home.queue.length;
@@ -444,7 +456,7 @@ function QueueClear({ home, actions }: { home: HomeData; actions: Actions }) {
  * The three buttons are the only place the app finds out whether it was right —
  * so "Wrong call" is offered as plainly as "I did it".
  */
-function CallCard({ decision, home, actions, noOffer }: { decision: Decision; home: HomeData; actions: Actions; noOffer: boolean }) {
+export function CallCard({ decision, home, actions, noOffer }: { decision: Decision; home: HomeData; actions: Actions; noOffer: boolean }) {
   const [busy, setBusy] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
   const [showArtifact, setShowArtifact] = useState(false);
@@ -654,7 +666,7 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
  * what somebody seeing the product for the first time actually judges. One card
  * that says what is happening and offers the one action is the whole fix.
  */
-function FirstRun({ home, actions, finding }: { home: HomeData; actions: Actions; finding: boolean }) {
+export function FirstRun({ home, actions, finding }: { home: HomeData; actions: Actions; finding: boolean }) {
   const segments = home.profile.target_segments;
   const where = home.profile.target_area || home.profile.location;
   const what = segments.slice(0, 3).join(', ');
@@ -710,7 +722,7 @@ function FirstRun({ home, actions, finding }: { home: HomeData; actions: Actions
  * carrying the drafted message, opened in the user's own mail app, is work that
  * was done while they slept.
  */
-function MoveCard({ move, actions }: { move: Move; actions: Actions }) {
+export function MoveCard({ move, actions, onAnswered }: { move: Move; actions: Actions; onAnswered?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -722,7 +734,9 @@ function MoveCard({ move, actions }: { move: Move; actions: Actions }) {
   const proposal = a.kind === 'plan';
   const answer = async (status: 'done' | 'dismissed') => {
     setBusy(true);
-    try { await actions.answerMove(move.id, status); } finally { setBusy(false); }
+    let ok = false;
+    try { ok = await actions.answerMove(move.id, status); } finally { setBusy(false); }
+    if (ok) onAnswered?.();
   };
   const handOver = async () => {
     setBusy(true); setError(null);
@@ -732,6 +746,7 @@ function MoveCard({ move, actions }: { move: Move; actions: Actions }) {
     // running, a plan that did not survive — so it is said on the card rather
     // than in a toast that is gone before they finish reading it.
     if (!r.ok) setError(r.error ?? 'Could not hand that over');
+    else onAnswered?.();
   };
 
   return (

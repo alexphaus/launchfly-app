@@ -19,6 +19,16 @@ import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, O
  */
 export type Tab = 'now' | 'working';
 
+/**
+ * The four tabs of the shell at /copilot2, one question each: what do I do
+ * today, who is worth contacting, what am I building, and how am I doing.
+ *
+ * Its own type rather than a widening of Tab, because the two shells are two
+ * layouts over one app — a v1 screen that could be told to open `work` would
+ * have nothing to render.
+ */
+export type Tab2 = 'today' | 'matches' | 'work' | 'you';
+
 export type SheetState =
   | { kind: 'capacity' }
   | { kind: 'action'; id: string }
@@ -50,7 +60,17 @@ export type SheetState =
    * Questions about your own rows, each answered by counting — plus the one
    * escape hatch for everything the list cannot answer. See lib/copilot/ask.ts.
    */
-  | { kind: 'ask' };
+  | { kind: 'ask' }
+  /**
+   * One Move, whole: the reasons, the artifact and the two answers. v2 lists
+   * Moves as rows, and a row is not enough to act on — the artifact is the
+   * point of a Move, and it does not fit in one line.
+   */
+  | { kind: 'move'; id: string }
+  /** The confirm card — opened drafts, or replies with no ending — as a sheet. */
+  | { kind: 'capture' }
+  /** Log deep work. The one number on You that nothing else can supply. */
+  | { kind: 'focus' };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -66,7 +86,8 @@ export interface Actions {
   openSheet(s: SheetState): void;
   /** Pop the top sheet. */
   closeSheet(): void;
-  setTab(t: Tab): void;
+  /** Each shell maps the names it knows onto its own tabs and ignores the rest. */
+  setTab(t: Tab | Tab2): void;
   runBrief(reason?: string): Promise<void>;
   /** Resolves false when the save failed, so callers can keep the user's text. */
   addNote(content: string, regenerate: boolean): Promise<boolean>;
@@ -185,4 +206,16 @@ export interface Actions {
   handoff(): Promise<{ ok: boolean; text?: string; chars?: number; error?: string }>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
+  /**
+   * Draft an opener for a match and open the draft straight away.
+   *
+   * Goes through the triage route rather than the plain draft route, so the
+   * keep-rate still learns which segments get drafted — the Matches list is the
+   * deck laid flat, and a deck that stopped recording its answers would stop
+   * ordering itself.
+   */
+  draftFromMatch(oppId: string): Promise<boolean>;
+  /** Record a block of deep work. Resolves false when it did not save. */
+  logFocus(input: { minutes: number; on?: string; note?: string }): Promise<boolean>;
+  removeFocus(id: string): Promise<void>;
 }

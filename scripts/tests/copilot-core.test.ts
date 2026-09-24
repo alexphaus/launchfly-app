@@ -789,12 +789,19 @@ async function shells() {
   assert.equal(shellOf(null), DEFAULT_SHELL);
   assert.equal(shellOf(undefined), DEFAULT_SHELL);
   assert.equal(shellOf('/'), DEFAULT_SHELL);
+  // The four-tab layout. '/copilot' is a prefix of it, so the boundary is what
+  // decides: a link built on /copilot2 must stay there, and nothing that merely
+  // starts with the same characters may claim it.
+  assert.equal(shellOf('/copilot2'), '/copilot2');
+  assert.equal(shellOf('/copilot2/pricing'), '/copilot2');
+  assert.equal(shellOf('/copilot20'), DEFAULT_SHELL);
+  assert.equal(shellOf('/copilot/2'), DEFAULT_SHELL);
 
   // 2. toShell guards a redirect target. The Stripe success_url is built by
   //    concatenating this onto the app origin, so anything not on the list has to
   //    collapse to the default rather than travel through.
   for (const s of SHELLS) assert.equal(toShell(s), s);
-  for (const hostile of ['https://evil.example', '//evil.example', '/lifeos/../../evil', 'lifeos', '/lifeosX', '', ' /lifeos', null, undefined, 7, {}, ['/lifeos']]) {
+  for (const hostile of ['https://evil.example', '//evil.example', '/lifeos/../../evil', 'lifeos', '/lifeosX', '', ' /lifeos', '/copilot2/../evil', '/copilot2 ', null, undefined, 7, {}, ['/lifeos']]) {
     assert.equal(toShell(hostile), DEFAULT_SHELL, `toShell should refuse ${JSON.stringify(hostile)}`);
   }
 
@@ -4444,3 +4451,491 @@ async function proposals() {
 }
 
 proposals().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The four-tab shell at /copilot2: deep work
+//
+// The You tab was asked for "money, runway, deep work hours", and the third had
+// no sensor. Invariant 2 decides what happens then: the number is logged by the
+// person who did it, or it is not shown. These checks are the ways a focus log
+// could quietly become a flattering one.
+// ---------------------------------------------------------------------------
+import {
+  FOCUS_BACK_DAYS, FOCUS_MAX_MINUTES, FOCUS_MIN_MINUTES, dayLetter, focusFromEvents, focusWeek, hoursLabel,
+  isIsoDay, normalizeFocus, shiftDay, type FocusLog as FocusLogV2,
+} from '../../src/lib/copilot/focus';
+
+async function focusLog() {
+  const today = '2026-09-24';
+
+  // 1. What may be written. A block logged for tomorrow is a plan, and a plan
+  //    counted as focus is exactly the number this exists not to produce.
+  assert.deepEqual(normalizeFocus({ minutes: 90 }, today), { ok: true, value: { minutes: 90, on: today, note: null } }, 'no day means today');
+  assert.deepEqual(normalizeFocus({ minutes: '120', on: '2026-09-22', note: '  booking demo  ' }, today), { ok: true, value: { minutes: 120, on: '2026-09-22', note: 'booking demo' } });
+  assert.equal(normalizeFocus({ minutes: FOCUS_MIN_MINUTES - 1 }, today).ok, false, 'a break between two things is not a block');
+  assert.equal(normalizeFocus({ minutes: FOCUS_MAX_MINUTES + 1 }, today).ok, false);
+  assert.equal(normalizeFocus({ minutes: 'lots' }, today).ok, false);
+  assert.equal(normalizeFocus({ minutes: 60, on: '2026-09-25' }, today).ok, false, 'the future is refused, not clamped');
+  assert.equal(normalizeFocus({ minutes: 60, on: shiftDay(today, -FOCUS_BACK_DAYS) }, today).ok, true, 'the oldest day on the tile can still be filled in');
+  assert.equal(normalizeFocus({ minutes: 60, on: shiftDay(today, -FOCUS_BACK_DAYS - 1) }, today).ok, false, 'older than the week is a guess');
+  assert.equal(normalizeFocus({ minutes: 60, on: '2026-02-30' }, today).ok, false, 'not a day');
+  assert.equal(isIsoDay('2026-02-28'), true);
+  assert.equal(isIsoDay('2026-2-28'), false);
+
+  // 2. Day arithmetic stays on days. A DST boundary or a month end must not move a log.
+  assert.equal(shiftDay('2026-03-01', -1), '2026-02-28');
+  assert.equal(shiftDay('2026-12-31', 1), '2027-01-01');
+  assert.equal(dayLetter('2026-09-24'), 'T', 'a Thursday');
+
+  // 3. Rows are trusted no further than their shape. A payload that does not
+  //    parse is dropped, never counted as zero — zero would be a number.
+  const logs = focusFromEvents([
+    { id: 7, payload: { minutes: 120, on: '2026-09-24', note: 'demo' }, created_at: '2026-09-24T09:00:00Z' },
+    { id: 8, payload: { minutes: 30, on: '2026-09-24' }, created_at: '2026-09-24T15:00:00Z' },
+    { id: 9, payload: { minutes: 90, on: '2026-09-20' }, created_at: '2026-09-20T15:00:00Z' },
+    { id: 10, payload: { minutes: 60, on: '2026-09-10' }, created_at: '2026-09-10T15:00:00Z' },
+    { id: 11, payload: { on: '2026-09-23' }, created_at: '2026-09-23T15:00:00Z' },
+    { id: 12, payload: 'garbage', created_at: '2026-09-23T15:00:00Z' },
+    { id: 13, payload: { minutes: 45, on: 'yesterday' }, created_at: '2026-09-23T15:00:00Z' },
+  ]);
+  assert.deepEqual(logs.map((l) => l.id), ['7', '8', '9', '10'], 'ids cross the wire as strings; unparseable rows are gone');
+
+  // 4. The week. Two blocks on one day add up; a log outside the seven days is
+  //    not in this week's number however recent its row is.
+  const week = focusWeek(logs, today);
+  assert.equal(week.days.length, FOCUS_BACK_DAYS + 1);
+  assert.equal(week.days[0].on, '2026-09-18', 'oldest first');
+  assert.equal(week.days[6].on, today);
+  assert.equal(week.today, 150);
+  assert.equal(week.total, 240);
+  assert.equal(week.loggedDays, 2, 'a day with nothing logged is not a logged day');
+  assert.equal(focusWeek([], today).total, 0);
+
+  // 5. Hours to one decimal. Nobody logs focus to the minute.
+  assert.equal(hoursLabel(0), '0h');
+  assert.equal(hoursLabel(45), '45m');
+  assert.equal(hoursLabel(60), '1h');
+  assert.equal(hoursLabel(90), '1.5h');
+  assert.equal(hoursLabel(240), '4h');
+
+  const typed: FocusLogV2 = logs[0];
+  assert.equal(typed.note, 'demo');
+  console.log('copilot-core: deep work checks passed');
+}
+
+focusLog().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The four-tab shell: the week, read back
+//
+// What created value, what was wasted, what has to change. The Working? tab
+// had every one of these facts and read as a log; the questions were what was
+// missing. The checks here are the ways a review goes wrong: summing across
+// currencies, calling a fresh queue waste, a blank block, a binned suggestion
+// counted as the user's failure when it was the app's.
+// ---------------------------------------------------------------------------
+import { MIN_BINNED, STALE_DRAFT_DAYS, localDay, weekReview, whenLabel, type ReviewInput, type RecentOutcome as RecentOutcomeV2 } from '../../src/lib/copilot/review';
+
+async function weekInReview() {
+  const now = new Date('2026-09-24T10:00:00Z');
+  const outcome = (o: Partial<RecentOutcomeV2>): RecentOutcomeV2 => ({
+    id: 'o', kind: 'reply', amount: null, currency: null, note: null, source: 'manual',
+    occurred_at: '2026-09-23T10:00:00Z', opportunity_id: 'b1', commission_id: null, who: 'Tubero Plumbing', ...o,
+  });
+  const base: ReviewInput = {
+    now, today: '2026-09-24', timezone: 'Asia/Manila',
+    outcomes: [], answered: [], focus: [], commissions: [],
+    queue: { count: 0, oldestDays: 0 }, sources: { total: 0, failing: 0 },
+    review: { avoidedTopic: null, deadTopic: null }, edge: null, bottleneck: null, runwayMonths: null, currency: '$',
+  };
+
+  // 1. An empty week is said, never blank — invariant 13 in the one tab whose
+  //    job is telling the truth about the record.
+  const empty = weekReview(base);
+  assert.deepEqual(empty.value, []);
+  assert.deepEqual(empty.waste, []);
+  assert.equal(empty.change, null);
+  assert.match(empty.valueEmpty, /Nothing logged as value/);
+
+  // 2. Money is never summed across currencies. "₱100 + $2" is two numbers.
+  const mixed = weekReview({ ...base, outcomes: [
+    outcome({ id: 'w1', kind: 'won', amount: 2, currency: '$', who: 'Tubero Plumbing' }),
+    outcome({ id: 'w2', kind: 'won', amount: 1500, currency: '₱', who: 'X Out Pest' }),
+    outcome({ id: 'r1', kind: 'reply', who: 'Great Eastern' }),
+    outcome({ id: 'r2', kind: 'reply', who: 'Great Eastern' }),
+    // Last month's win is not this week's value.
+    outcome({ id: 'w3', kind: 'won', amount: 900, currency: '$', occurred_at: '2026-09-01T10:00:00Z' }),
+  ] });
+  const win = mixed.value[0].text;
+  assert.match(win, /\$2/);
+  assert.match(win, /₱1,500/);
+  assert.doesNotMatch(win, /1,502|902/, 'no invented total');
+  assert.match(win, /across 2 deals/);
+  assert.equal(mixed.value[1].text, '2 replies — Great Eastern', 'one business replying twice is named once');
+  assert.equal(mixed.value[0].when, 'yesterday');
+
+  // 3. A mandate's worth is the owner's answer, in the owner's category.
+  const worth = weekReview({ ...base, outcomes: [
+    outcome({ id: 'm1', kind: 'saved', amount: 80, currency: '$', commission_id: 'c1', who: 'Find a good deal on marketplace' }),
+    outcome({ id: 'm2', kind: 'delivered', commission_id: 'c2', who: 'Shortlist of suppliers' }),
+  ] });
+  assert.equal(worth.value[0].text, '"Find a good deal on marketplace" — saved you $80');
+  assert.equal(worth.value[1].text, '"Shortlist of suppliers" — produced something you can use');
+
+  // 4. Waste. A queue is waste only once it has sat; drafts written this morning
+  //    are this morning's work.
+  assert.equal(weekReview({ ...base, queue: { count: 51, oldestDays: STALE_DRAFT_DAYS - 1 } }).waste.length, 0);
+  const stale = weekReview({ ...base, queue: { count: 51, oldestDays: 14 } });
+  assert.equal(stale.waste[0].text, '51 drafts written and never sent — the oldest 14 days');
+  assert.equal(stale.waste[0].target, 'queue');
+
+  const failing = weekReview({ ...base, sources: { total: 12, failing: 4 } });
+  assert.match(failing.waste[0].text, /^4 of 12 sources failed/);
+
+  // A handful of binned suggestions is taste; it only becomes a line past the floor.
+  const bins = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `d${i}`, job: 'watch', kind: 'learn' as const, headline: 'h', status: 'dismissed' as const, acted_at: '2026-09-22T10:00:00Z' }));
+  assert.equal(weekReview({ ...base, answered: bins(MIN_BINNED - 1) }).waste.length, 0);
+  assert.match(weekReview({ ...base, answered: bins(MIN_BINNED) }).waste[0].text, /^3 suggestions you binned/);
+
+  // Projects that bought nothing: called off, or finished and answered "worth nothing".
+  const dud = weekReview({ ...base, commissions: [
+    { id: 'c1', objective: 'Find jobs', status: 'stopped', closed_at: '2026-09-20T10:00:00Z', outcome: null },
+    { id: 'c2', objective: 'Price check', status: 'done', closed_at: '2026-09-21T10:00:00Z', outcome: 'Worth nothing. Stale listings.' },
+    { id: 'c3', objective: 'Shortlist', status: 'done', closed_at: '2026-09-21T10:00:00Z', outcome: 'Produced something usable.' },
+    { id: 'c4', objective: 'Old one', status: 'stopped', closed_at: '2026-08-01T10:00:00Z', outcome: null },
+  ] });
+  assert.equal(dud.waste[0].text, '2 projects closed with nothing to show — Find jobs +1');
+
+  // The call record's two verdicts, said as waste rather than as a log.
+  const record = weekReview({ ...base, review: { avoidedTopic: { topic: 'send_queue', count: 3 }, deadTopic: null } });
+  // A job key is the database talking; the screen says it the way a person would.
+  assert.match(record.waste[0].text, /^3 calls about sending the drafts and not one of them done/);
+  assert.doesNotMatch(record.waste[0].text, /send_queue/);
+
+  // 5. What has to change: the growth edge first, then the bottleneck's own
+  //    action, then runway — and nothing when nothing measured points anywhere.
+  const edge = { capability: 'sending what you have already written', because: ['61 of 70 stopped at drafted.'], experiment: 'Send five before you open anything else.', source: 'funnel' as const };
+  const withEdge = weekReview({ ...base, edge, bottleneck: { kind: 'bottleneck', headline: 'Drafted → Sent is where you lose most', detail: '', action: 'Send them' } });
+  assert.deepEqual(withEdge.change, { head: 'Sending what you have already written', because: '61 of 70 stopped at drafted.', body: 'Send five before you open anything else.', target: 'queue' });
+  const noEdge = weekReview({ ...base, bottleneck: { kind: 'bottleneck', headline: 'Sent → Replied is where you lose most', detail: '', action: 'Change the first line' } });
+  assert.equal(noEdge.change?.body, 'Change the first line');
+  assert.match(weekReview({ ...base, runwayMonths: 2.4 }).change?.head ?? '', /^2.4 months of runway/);
+  assert.equal(weekReview({ ...base, runwayMonths: 6 }).change, null);
+
+  // 6. Deep work and done Moves are value; the day labels are the person's days.
+  const busy = weekReview({
+    ...base,
+    focus: [{ id: '1', minutes: 120, on: '2026-09-24', note: null, at: '2026-09-24T09:00:00Z' }, { id: '2', minutes: 90, on: '2026-09-21', note: null, at: '2026-09-21T09:00:00Z' }],
+    answered: [{ id: 'm', job: 'watch', kind: 'earn', headline: 'Apply to the AI Automation role', status: 'done', acted_at: '2026-09-24T02:00:00Z' }],
+  });
+  assert.equal(busy.value[0].text, 'You did 1 thing it found — Apply to the AI Automation role');
+  assert.equal(busy.value[0].when, 'today');
+  assert.equal(busy.value[1].text, '3.5h of deep work over 2 days');
+  assert.equal(localDay('2026-09-23T20:00:00Z', 'Asia/Manila'), '2026-09-24', 'late UTC evening is the next morning in Manila');
+  assert.equal(whenLabel('2026-09-21', '2026-09-24'), 'Mon');
+
+  console.log('copilot-core: week-in-review checks passed');
+}
+
+weekInReview().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The four-tab shell: Today
+//
+// "Done for you" is the part the old Now never had: the promise is an app that
+// works while you sleep, and nothing on the screen said what it had done. The
+// checks here keep it honest — it may not take credit for what the user did,
+// and it may not report calm over a nightly job that never ran.
+// ---------------------------------------------------------------------------
+import { reportOf as reportOfV2 } from '../../src/lib/copilot/commission';
+import type { Commission as CommissionV2, CommissionEvent as CommissionEventV2 } from '../../src/lib/copilot/commission';
+import { ASK_LABEL, MAX_WORTH_DOING, doneForYou, needsYou, todayStatus, worthDoing, type DoneInput } from '../../src/lib/copilot/today';
+import type { CommissionThread as ThreadV2, Move as MoveV2 } from '../../src/lib/copilot/types';
+
+function threadV2(c: Partial<CommissionV2>, events: Array<Partial<CommissionEventV2>> = []): ThreadV2 {
+  const commission: CommissionV2 = {
+    id: 'c1', goal_id: null, objective: 'Step by step plan to exit Philippines', why: null,
+    authority: 'read', budget_minutes: 60, status: 'active',
+    plan: [{ n: 1, do: 'a', state: 'done' }, { n: 2, do: 'b', state: 'done' }, { n: 3, do: 'c', state: 'todo' }, { n: 4, do: 'd', state: 'todo' }],
+    created_at: '2026-09-15T00:00:00Z', approved_at: '2026-09-15T00:00:00Z', last_run_at: null,
+    closed_at: null, outcome: null, seen_at: null, ...c,
+  };
+  const evs = events.map((e, i) => ({ id: `e${i}`, commission_id: commission.id, kind: 'worked' as const, step: null, summary: 's', artifact: null, at: '2026-09-24T05:00:00Z', ...e }));
+  return { commission, report: reportOfV2(commission, evs), line: '' };
+}
+
+function moveV2(m: Partial<MoveV2>): MoveV2 {
+  return {
+    id: 'm', job: 'goal_gap', kind: 'decide', headline: 'h', why: ['w'],
+    artifact: { kind: 'text', label: 'Read it', value: 'v' }, cost_label: null, status: 'open',
+    created_at: '2026-09-24T05:00:00Z', ...m,
+  };
+}
+
+async function todayTab() {
+  const now = new Date('2026-09-24T10:00:00Z');
+  const base: DoneInput = { now, lastCronRun: '2026-09-24T05:02:00Z', jobsRun: null, matchCreated: [], motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] };
+
+  // 1. What arrived in the last day, counted from the rows it arrived as.
+  const done = doneForYou({
+    ...base,
+    matchCreated: ['2026-09-24T05:00:00Z', '2026-09-24T05:01:00Z', '2026-09-20T05:00:00Z'],
+    motion: [{ kind: 'watched', label: '8 of 12 sources read', detail: 'Forum, Freelancer +2 failed — open Sources to see why' }],
+    sourcesFailing: 4,
+    outcomes: [
+      { id: 'o1', kind: 'reply', amount: null, currency: null, note: null, source: 'system', occurred_at: '2026-09-24T03:00:00Z', opportunity_id: 'b', commission_id: null, who: 'X Out Pest' },
+      // Typed in by hand: the user's work, not the app's. Reporting it back to
+      // them as something done FOR them is the screen taking credit.
+      { id: 'o2', kind: 'reply', amount: null, currency: null, note: null, source: 'manual', occurred_at: '2026-09-24T04:00:00Z', opportunity_id: 'c', commission_id: null, who: 'Tubero' },
+    ],
+    commissions: [threadV2({}, [{ kind: 'worked', summary: 'BI requires ECC-A for stays of six months or more' }])],
+    // A mandate's blocked question is an ask, not a Move worked out: it is not counted.
+    moves: [{ job: 'goal_gap', created_at: '2026-09-24T05:00:00Z' }, { job: 'runway_guard', created_at: '2026-09-18T05:00:00Z' }, { job: 'commission', created_at: '2026-09-24T05:00:00Z' }],
+  });
+  assert.equal(done.stale, false);
+  assert.equal(done.nightlyAt, '2026-09-24T05:02:00Z');
+  assert.deepEqual(done.rows.map((r) => r.key), ['matches', 'replies', 'sources', 'p:c1', 'moves']);
+  assert.equal(done.rows[0].label, '2 new matches found', 'last week\'s is not last night\'s');
+  assert.equal(done.rows[1].label, '1 reply came in');
+  assert.match(done.rows[1].detail, /^X Out Pest/);
+  assert.equal(done.rows[2].target, 'sources', 'a failed read leads to where it can be fixed');
+  // Decided from the rows, not from the wording: the same sentence with nothing
+  // failing leads to the finds.
+  assert.equal(doneForYou({ ...base, motion: [{ kind: 'watched', label: '8 sources read', detail: '3 worth keeping — Forum' }] }).rows[0].target, 'matches');
+  assert.equal(done.rows[3].detail, '2 of 4 steps done — BI requires ECC-A for stays of six months or more', 'progress is the plan\'s count, never the worker\'s say-so');
+  assert.equal(done.rows[4].label, '1 move worked out from your rows');
+
+  // 2. A job that never ran is said out loud. With no nightly run every morning
+  //    is computed by the person opening the app, and that must not look like a quiet night.
+  assert.equal(doneForYou({ ...base, lastCronRun: null }).stale, true);
+  assert.equal(doneForYou({ ...base, lastCronRun: '2026-09-22T05:00:00Z' }).stale, true);
+  assert.equal(doneForYou({ ...base, lastCronRun: '2026-09-22T05:00:00Z' }).nightlyAt, null);
+  // And a sensor that broke is carried through, never dropped into a count.
+  assert.deepEqual(doneForYou({ ...base, jobsRun: { at: '', ran: 9, produced: 3, written: 1, quiet: [], broke: ['watch: timeout'] } }).broke, ['watch: timeout']);
+
+  // A finished project reports what its owner closed it with.
+  const fin = doneForYou({ ...base, commissions: [threadV2({ status: 'done', closed_at: '2026-09-24T06:00:00Z', outcome: 'Produced something usable. Three quotes.' })] });
+  assert.equal(fin.rows[0].label, 'Finished: Step by step plan to exit Philippines');
+  assert.match(fin.rows[0].detail, /Three quotes/);
+
+  // 3. Needs you, in the order to clear it — and a breakage is never a question.
+  const asks = needsYou({
+    commissions: [
+      threadV2({ id: 'draft', status: 'draft', objective: 'Compare three suppliers' }),
+      threadV2({ id: 'broke', status: 'blocked', objective: 'Find jobs' }, [{ kind: 'failed', summary: 'search tool returned 500' }]),
+      threadV2({ id: 'ask', status: 'blocked' }, [{ kind: 'needs_you', summary: 'Will you email BI’s Tourist Visa Section?' }]),
+    ],
+    capture: { kind: 'outcome', headline: '3 replies are still open', because: 'b' },
+    queue: { count: 51, oldestDays: 14 },
+    queueIsCall: false,
+    noOffer: false,
+  });
+  assert.deepEqual(asks.map((a) => a.kind), ['question', 'fix', 'confirm', 'approve', 'send']);
+  assert.equal(asks[0].title, 'Will you email BI’s Tourist Visa Section?');
+  assert.equal(asks[1].title, 'Find jobs');
+  assert.doesNotMatch(asks[1].detail, /answer|reply/i, 'nobody can answer a 500');
+  assert.equal(asks[4].title, '51 drafts ready to send');
+  assert.equal(ASK_LABEL.fix, 'Needs a fix');
+  // The queue is never said twice: not when it is the call, not when the offer is blank.
+  const q = { commissions: [], capture: null, queue: { count: 51, oldestDays: 14 } };
+  assert.equal(needsYou({ ...q, queueIsCall: true, noOffer: false }).length, 0);
+  assert.equal(needsYou({ ...q, queueIsCall: false, noOffer: true }).length, 0, 'invariant 1: with a blank offer the next step is the offer');
+
+  // 4. Worth doing: each Move lives in exactly one place.
+  const moves = [
+    moveV2({ id: 'feed', job: 'watch', kind: 'earn' }),
+    moveV2({ id: 'queue', job: 'send_queue', kind: 'earn' }),
+    moveV2({ id: 'ask', job: 'commission', kind: 'decide' }),
+    moveV2({ id: 'plan', job: 'propose', artifact: { kind: 'plan', label: 'Hand it over', value: 'v', steps: ['a'] } }),
+    moveV2({ id: 'a', job: 'goal_gap' }), moveV2({ id: 'b', job: 'runway_guard' }),
+    moveV2({ id: 'c', job: 'opening_gap' }), moveV2({ id: 'd', job: 'silence' }),
+  ];
+  const wd = worthDoing(moves);
+  assert.deepEqual(wd.shown.map((m) => m.id), ['a', 'b', 'c']);
+  assert.equal(wd.shown.length, MAX_WORTH_DOING);
+  assert.equal(wd.more, 1);
+
+  assert.equal(todayStatus(done, asks), '5 done for you · 5 need you');
+  assert.equal(todayStatus({ ...done, rows: [] }, []), null, 'nothing true to say beats filler');
+  console.log('copilot-core: today tab checks passed');
+}
+
+todayTab().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The four-tab shell: Matches
+//
+// Everything found outside the account, laid out. Two sources that are
+// answered differently, one list, chips by what kind of thing it is. The
+// checks: nothing appears twice, what was found overnight leads, a listing
+// nobody can reach is not offered, and no guess is printed as a percentage.
+// ---------------------------------------------------------------------------
+import { MATCH_GROUP_LABEL, groupOfKind, groupOfType, matchCounts, matchFeed, matchesStatus } from '../../src/lib/copilot/matches';
+import type { Opportunity as OpportunityV2, PipelineRow as PipelineRowV2 } from '../../src/lib/copilot/types';
+import type { TriageCard as TriageCardV2 } from '../../src/lib/copilot/triage';
+
+function bizV2(o: Partial<OpportunityV2>, stage: PipelineRowV2['stage'] = 'not_drafted'): PipelineRowV2 {
+  const opportunity: OpportunityV2 = {
+    id: 'b', type: 'client', title: 'X Out Pest Services', reason: 'Few reviews · running Facebook ads',
+    value_label: null, value_amount: null, currency: null, effort: 'light', fit_score: 60, score: 60,
+    source: 'google_maps', url: null, status: 'new', data: { segment: 'Pest control' }, external_id: 'x',
+    source_kind: 'sourced', contact: { whatsapp: '+639170000000' }, scored_at: null, created_at: '2026-09-20T05:00:00Z', ...o,
+  };
+  return { opportunity, execution: null, stage };
+}
+
+async function matchesTab() {
+  const now = new Date('2026-09-24T10:00:00Z');
+  const feed = matchFeed({
+    now,
+    targetSegments: ['Pest control', 'Plumbing'],
+    pipeline: [
+      bizV2({ id: 'old-high', score: 90 }),
+      bizV2({ id: 'old-low', score: 40 }),
+      bizV2({ id: 'new', score: 50, created_at: '2026-09-24T05:00:00Z' }),
+      bizV2({ id: 'drafted' }, 'to_send'),
+      bizV2({ id: 'sent' }, 'sent'),
+      bizV2({ id: 'nowhere', contact: {}, url: null }),
+      bizV2({ id: 'gone', status: 'dismissed' }),
+      bizV2({ id: 'person', type: 'people', contact: {}, url: 'https://example.com/p' }),
+    ],
+    // The deck's learned order: old-low is a segment this person keeps.
+    triage: [
+      { id: 'old-low', source: 'opportunity', title: 't', segment: 'pest control', reason: '', score: 40, contact: { whatsapp: true, email: false }, url: null },
+      { id: 'gig', source: 'move', title: 'Reply to the Tampa HVAC owner', segment: 'earn', reason: 'They describe what you build', score: 0, contact: { whatsapp: false, email: false }, url: 'https://forum.example/t/1', created_at: '2026-09-24T04:00:00Z' },
+    ] as TriageCardV2[],
+    moves: [
+      moveV2({ id: 'gig', job: 'watch', kind: 'earn' }),
+      moveV2({ id: 'read', job: 'watch', kind: 'learn', headline: 'AU trades want voice intake', artifact: { kind: 'link', label: 'Read it', value: 'v', href: 'https://news.example/a' }, created_at: '2026-09-21T00:00:00Z' }),
+      moveV2({ id: 'mine', job: 'goal_gap' }),
+    ],
+  });
+
+  // 1. Only what can be acted on, and nothing twice. Drafted is the queue and
+  //    sent is the pipeline; a listing with no contact and no link is a row you
+  //    can only scroll past; the deck's copy of a find and the Move behind it
+  //    are one item.
+  const ids = feed.map((i) => i.id);
+  for (const gone of ['drafted', 'sent', 'nowhere', 'gone', 'mine']) assert.ok(!ids.includes(gone), `${gone} should not be in Matches`);
+  assert.equal(ids.filter((i) => i === 'gig').length, 1);
+
+  // 2. What came in overnight leads; then the deck's learned order; then score.
+  assert.deepEqual(ids.slice(0, 2).sort(), ['gig', 'new']);
+  assert.equal(ids.indexOf('old-low') < ids.indexOf('old-high'), true, 'what you keep drafting comes up first');
+
+  // 3. Groups, and how each is answered.
+  const by = Object.fromEntries(feed.map((i) => [i.id, i]));
+  assert.equal(by.new.group, 'clients');
+  assert.equal(by.new.channel, 'whatsapp');
+  assert.equal(by.new.tag, 'pest control', 'the grouping key, as segmentOf normalises it; the eyebrow sets the case');
+  assert.equal(by.person.group, 'people');
+  assert.equal(by.person.channel, null);
+  assert.equal(by.gig.group, 'work', 'a paid post from a feed is a gig, not a client');
+  assert.equal(by.gig.answer, 'triage', 'a deck card keeps teaching the keep-rate');
+  assert.equal(by.read.group, 'signals');
+  assert.equal(by.read.answer, 'move');
+  assert.equal(groupOfType('signal'), 'signals');
+  assert.equal(groupOfKind('meet'), 'people');
+
+  // 4. No percentages. The order uses the fit score; the screen never prints it.
+  for (const item of feed) assert.ok(!('score' in item), 'a guess is not shown as a measurement');
+
+  const counts = matchCounts(feed);
+  assert.equal(counts.all, feed.length);
+  assert.equal(counts.fresh, 2);
+  assert.equal(counts.by.clients, 3);
+  assert.equal(matchesStatus(counts, 51), '2 new since yesterday · 51 to send');
+  assert.equal(matchesStatus(matchCounts([]), 0), null);
+  assert.equal(MATCH_GROUP_LABEL.work, 'Gigs & jobs');
+  console.log('copilot-core: matches tab checks passed');
+}
+
+matchesTab().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The four-tab shell: Work
+//
+// The business as a machine, and the agents that run parts of it. An
+// illustration with one rule: every stage and every agent is drawn from rows.
+// The checks are the ways an illustration lies — a Researcher looking busy with
+// no worker connected, a Writer "ready" on a blank offer, a failed read shown
+// as a working one, a bottleneck on the wrong part of the business.
+// ---------------------------------------------------------------------------
+import { AGENT_STATE_LABEL, agentRoster, agoLabel, businessMachine, workStatus, type RosterInput } from '../../src/lib/copilot/machine';
+
+async function workTab() {
+  const now = new Date('2026-09-24T10:00:00Z');
+  const stages = [
+    { key: 'matched' as const, label: 'Matched', count: 243, rate: null },
+    { key: 'drafted' as const, label: 'Drafted', count: 70, rate: 0.29 },
+    { key: 'sent' as const, label: 'Sent', count: 9, rate: 0.13 },
+    { key: 'replied' as const, label: 'Replied', count: 2, rate: 0.22 },
+    { key: 'meeting' as const, label: 'Meeting', count: 6, rate: null, exceedsPrevious: true },
+    { key: 'won' as const, label: 'Won', count: 2, rate: 0.33 },
+  ];
+
+  // 1. The path to money, from the funnel's own counts.
+  const m = businessMachine({
+    stages, bottleneck: stages[2], outsideFunnel: 8, segments: ['Staycation & resorts', 'Pest control', 'Plumbing'], area: 'Manila',
+    queueCount: 51, wonAmount: 2, currency: '$', goal: { title: 'Revenue', target: 3000, current: 2 },
+  });
+  assert.deepEqual(m.map((s) => s.key), ['find', 'reach', 'convert', 'paid']);
+  assert.deepEqual(m.map((s) => s.count), [243, 9, 2, 2]);
+  assert.equal(m[0].detail, 'Staycation & resorts, Pest control +1 in Manila');
+  assert.equal(m[0].owner, 'ai');
+  assert.equal(m[1].owner, 'both', 'the Writer drafts; only you send — invariant 4');
+  assert.equal(m[1].detail, '70 drafts written · 51 waiting on you');
+  // "Sent" being worst means most stopped at drafted: a reach problem, said with its count.
+  assert.equal(m[1].weak, '61 of 70 stopped at drafted — most is lost here');
+  assert.equal(m.filter((s) => s.weak).length, 1, 'one weak link, not a stage per complaint');
+  assert.equal(m[2].detail, '6 meetings · 8 logged outside the app');
+  assert.equal(m[3].detail, '$2 in the last 30 days · Revenue: $2 of $3,000');
+  assert.equal(businessMachine({ stages, bottleneck: null, outsideFunnel: 0, segments: [], area: null, queueCount: 0, wonAmount: 0, currency: '$', goal: null }).some((s) => s.weak), false);
+
+  // 2. The team. States come from when each last ran and what it produced.
+  const base: RosterInput = {
+    now, supplyLastRun: '2026-09-24T03:00:00Z', sourced: 243, hasTargeting: true, matchesLeft: 1973,
+    sources: [
+      { lastCheckedAt: '2026-09-24T05:00:00Z', error: null, status: 'active' },
+      { lastCheckedAt: '2026-09-24T05:00:00Z', error: '429', status: 'active' },
+    ],
+    finds: 3, offerEmpty: false, queueCount: 51, drafted: 70, workerConnected: true,
+    commissions: [threadV2({ status: 'blocked' }, [{ kind: 'needs_you', summary: 'Which one?' }])],
+    lastCronRun: '2026-09-24T05:02:00Z', lastRun: { status: 'ok' }, jobsRan: 9, broke: [],
+  };
+  const team = agentRoster(base);
+  assert.deepEqual(team.map((a) => a.key), ['scout', 'watcher', 'writer', 'researcher', 'planner']);
+  assert.deepEqual(team.map((a) => a.state), ['working', 'working', 'ready', 'working', 'working']);
+  assert.equal(team[0].line, '243 found so far · last looked 7h ago');
+  assert.equal(team[1].line, '2 sources · 3 worth a look · 1 failing');
+  assert.equal(team[3].line, '1 project running · 1 waiting on you');
+  assert.equal(team[4].line, 'Ran 5h ago · 9 checks');
+  for (const a of team) assert.ok(AGENT_STATE_LABEL[a.state], 'a coloured dot alone is not a status');
+
+  const by = (i: RosterInput) => Object.fromEntries(agentRoster(i).map((a) => [a.key, a]));
+  // No worker connected: needs setup, however many mandates were written.
+  assert.equal(by({ ...base, workerConnected: false }).researcher.state, 'setup');
+  // A breakage is the worker's, and says so — never "running".
+  assert.equal(by({ ...base, commissions: [threadV2({ status: 'blocked' }, [{ kind: 'failed', summary: '500' }])] }).researcher.state, 'failed');
+  // Invariant 1: a blank offer is not idleness, it is what the Writer waits on.
+  assert.equal(by({ ...base, offerEmpty: true }).writer.state, 'setup');
+  // A night where every read failed is a failed watcher, not a working one.
+  assert.equal(by({ ...base, sources: [{ lastCheckedAt: '2026-09-24T05:00:00Z', error: 'timeout', status: 'active' }] }).watcher.state, 'failed');
+  assert.equal(by({ ...base, sources: [] }).watcher.state, 'setup');
+  assert.equal(by({ ...base, hasTargeting: false }).scout.state, 'setup');
+  assert.equal(by({ ...base, matchesLeft: 0 }).scout.state, 'idle');
+  // No cron: the Planner only plans when the app is opened, and says so.
+  assert.equal(by({ ...base, lastCronRun: null }).planner.state, 'idle');
+  assert.match(by({ ...base, lastCronRun: null }).planner.line, /only plans when you open the app/);
+  // A broken sensor lands on the agent it belongs to.
+  const broke = by({ ...base, broke: ['watch: timeout', 'goal_gap: boom'] });
+  assert.equal(broke.watcher.state, 'failed');
+  assert.equal(broke.planner.state, 'failed');
+  assert.match(broke.planner.line, /goal_gap: boom/);
+
+  assert.equal(agoLabel('2026-09-21T10:00:00Z', now), '3d ago');
+  assert.equal(workStatus(team, 1), '4 of 5 agents working · 1 project');
+  console.log('copilot-core: work tab checks passed');
+}
+
+workTab().catch((e) => { console.error(e); process.exit(1); });

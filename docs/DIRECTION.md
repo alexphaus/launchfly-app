@@ -178,6 +178,11 @@ two actions (add to offer, stop matching) and a weekly push.
 two personas can be tested without forking the app.
 **Then** — the decision layer: every brief now ends in one call with a trade-off
 and a metric, and the record grades itself against the ledger.
+**Then** — `/copilot2`, four tabs (Today / Matches / Work / You), from its
+owner's own verdict that the two-tab app had too many things and no single reason
+to open it. Built as a second layout over the same data rather than a rework, so
+the two can be compared by living with them. It adds one sensor — deep work,
+logged by hand — and no new ranking. See COPILOT.md → **Four tabs**.
 
 ---
 

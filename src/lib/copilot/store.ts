@@ -4,7 +4,9 @@
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
 import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, trimMessage, type PackReply, type PackSentExample } from './conversations';
-import { addDays, copilotDb, todayIso } from './db';
+import { addDays, copilotDb, describeDbError, todayIso } from './db';
+import { FOCUS_EVENT, focusFromEvents, type FocusInput } from './focus';
+import { RECENT_DAYS, type AnsweredMove, type RecentLedger, type RecentOutcome } from './review';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
 import { cancelOpenDrafts, channelsConfigured, countOpenDrafts, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
@@ -136,6 +138,7 @@ export async function loadTriage(
     score: o.score ?? 0,
     contact: { whatsapp: !!o.contact?.whatsapp, email: !!o.contact?.email },
     url: o.url ?? null,
+    created_at: o.created_at,
   }));
 
   // Approach-shaped finds from watched feeds. They are candidates, not finished
@@ -156,6 +159,7 @@ export async function loadTriage(
     score: 0,
     contact: { whatsapp: false, email: false },
     url: m.artifact?.href ?? null,
+    created_at: m.created_at,
   }));
 
   const cards = [...fromOpportunities, ...fromWatch].filter(canTriage);
@@ -661,7 +665,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -698,7 +702,15 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadObligations(profileId),
     loadWorking(profileId),
     loadCommissions(profileId),
+    loadRecentRows(profileId),
   ]);
+
+  // Who each recent outcome was about. Most are businesses already in hand; a
+  // win closes its opportunity and a dismissed one leaves the pipeline, so the
+  // few that are not get one small read rather than rendering as "someone".
+  const titleOf = new Map<string, string>();
+  for (const o of [...pipelineRows, ...oppRows]) titleOf.set(o.id, o.title);
+  const untitled = [...new Set(recentRows.outcomes.map((o) => o.opportunity_id).filter((id): id is string => !!id && !titleOf.has(id)))].slice(0, 60);
 
   // Join send-ready drafts onto today's plan, the latest outcome onto each
   // match, and the latest execution onto each pipeline row.
@@ -707,7 +719,22 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     executionsForActions(profileId, planRows.map((a) => a.id)),
     lastOutcomeByOpportunity(profileId, [...new Set([...oppRows.map((o) => o.id), ...pipelineIds])]),
     latestExecutionByOpportunity(profileId, pipelineIds),
+    untitled.length
+      ? db.from('copilot_opportunities').select('id, title').eq('profile_id', profileId).in('id', untitled)
+        .then((r) => { for (const row of (r.data ?? []) as Array<{ id: string; title: string }>) titleOf.set(row.id, row.title); })
+      : null,
   ]);
+  const objectiveOf = new Map(commissionRows.map((c) => [c.id, c.objective]));
+  const recent: RecentLedger = {
+    today,
+    outcomes: recentRows.outcomes.map((o) => ({
+      ...o,
+      who: (o.commission_id ? objectiveOf.get(o.commission_id) : null) ?? (o.opportunity_id ? titleOf.get(o.opportunity_id) : null) ?? null,
+    })),
+    answered: recentRows.answered,
+    focus: recentRows.focus,
+    unreadable: recentRows.unreadable,
+  };
   const pipeline: PipelineRow[] = pipelineRows.map((o) => {
     const opportunity = { ...o, last_outcome: outcomeMap[o.id] ?? null };
     const execution = latestExecByOpp[o.id] ?? null;
@@ -911,6 +938,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     lastRun,
     lastCronRun,
     metrics,
+    recent,
+    generatedAt: nowTs.toISOString(),
     supplyLastRun: supplyRun,
     account: { email: profile.email, verified: !!profile.email_verified_at },
     push: { publicKey: vapidPublicKey(), enabled: pushEnabled },
@@ -1890,4 +1919,80 @@ export async function recordCommissionWork(
   // What it IS now, not what it was when the caller loaded it. The dispatcher
   // reads this to decide whether to raise the ask in the same pass.
   return { status, events: written };
+}
+
+// — the recent record: what the You tab's review is counted from —
+
+const RECENT_OUTCOME_COLS = 'id, kind, amount, currency, note, source, occurred_at, opportunity_id';
+
+/**
+ * The last RECENT_DAYS of outcomes, answered Moves and logged deep work.
+ *
+ * Each of the three degrades on its own and says so in `unreadable`. The
+ * degrading is required — code and schema deploy separately here, and a You tab
+ * that went blank over a missing column would be worse than one missing a line.
+ * The saying so is invariant 13: an empty list is also exactly what a quiet week
+ * looks like, so a read that failed and a week where nothing happened would
+ * otherwise render the same calm screen.
+ *
+ * `who` is filled in by loadHome, which already holds the titles.
+ */
+export async function loadRecentRows(profileId: string, now = new Date()): Promise<Omit<RecentLedger, 'today'>> {
+  const db = copilotDb();
+  const since = new Date(now.getTime() - RECENT_DAYS * 86_400_000).toISOString();
+  const unreadable: string[] = [];
+
+  const outcomes = (async (): Promise<RecentOutcome[]> => {
+    const read = (cols: string) => db.from('copilot_outcomes').select(cols)
+      .eq('profile_id', profileId).gte('occurred_at', since)
+      .order('occurred_at', { ascending: false }).limit(80);
+    // commission_id ships in 20260921, which this code does not wait for.
+    let r = await read(`${RECENT_OUTCOME_COLS}, commission_id`);
+    if (r.error) r = await read(RECENT_OUTCOME_COLS);
+    if (r.error) { unreadable.push('outcomes'); return []; }
+    return ((r.data ?? []) as unknown as Array<Omit<RecentOutcome, 'who' | 'commission_id'> & { commission_id?: string | null }>)
+      .map((o) => ({ ...o, commission_id: o.commission_id ?? null, who: null }));
+  })();
+
+  const answered = (async (): Promise<AnsweredMove[]> => {
+    const r = await db.from('copilot_moves').select('id, job, kind, headline, status, acted_at')
+      .eq('profile_id', profileId).in('status', ['done', 'dismissed']).gte('acted_at', since)
+      .order('acted_at', { ascending: false }).limit(60);
+    if (r.error) { unreadable.push('moves'); return []; }
+    return (r.data ?? []) as AnsweredMove[];
+  })();
+
+  const focus = (async () => {
+    const r = await db.from('copilot_events').select('id, payload, created_at')
+      .eq('profile_id', profileId).eq('event_type', FOCUS_EVENT).gte('created_at', since)
+      .order('created_at', { ascending: false }).limit(200);
+    if (r.error) { unreadable.push('deep work'); return []; }
+    return focusFromEvents((r.data ?? []) as Array<{ id: number; payload: unknown; created_at: string }>);
+  })();
+
+  const [o, a, f] = await Promise.all([outcomes, answered, focus]);
+  return { outcomes: o, answered: a, focus: f, unreadable };
+}
+
+/**
+ * Log one block of deep work. Throws on failure, deliberately: logEvent swallows
+ * its error, and a focus log that did not save while the tile said "Logged" is
+ * the calm screen over a failure that invariant 13 is written against.
+ */
+export async function insertFocus(profileId: string, f: FocusInput): Promise<void> {
+  const { error } = await copilotDb().from('copilot_events').insert({
+    profile_id: profileId,
+    event_type: FOCUS_EVENT,
+    payload: { minutes: f.minutes, on: f.on, note: f.note },
+  });
+  if (error) throw new Error(describeDbError(error, 'Could not log that.'));
+}
+
+/** Remove one block. Only a focus row, only this profile's — the events table holds everything else too. */
+export async function deleteFocus(profileId: string, id: string): Promise<void> {
+  const n = Number(id);
+  if (!Number.isSafeInteger(n) || n <= 0) throw new Error('Not a logged block.');
+  const { error } = await copilotDb().from('copilot_events').delete()
+    .eq('profile_id', profileId).eq('event_type', FOCUS_EVENT).eq('id', n);
+  if (error) throw new Error(describeDbError(error, 'Could not remove that.'));
 }

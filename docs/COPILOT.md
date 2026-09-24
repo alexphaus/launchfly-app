@@ -17,7 +17,7 @@ but none of the business logic. Everything is under:
 
 | Layer | Path |
 | --- | --- |
-| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) |
+| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — four tabs, calm |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
@@ -199,6 +199,11 @@ contains only a layout and four thin pages, all of which render the entries in
 Both install separately, so both can be lived with for a week and one of them
 chosen. Switch between them under the header avatar → Copilot → **Look**.
 
+A third shell, `/copilot2`, is a different *layout* rather than a different
+theme — four tabs, calm only — over the same data and actions. See **Four tabs**
+below. Its settings link back to `/lifeos`, and `shellOf` keeps every in-app link
+inside it (`/copilot` is a prefix of it, so the boundary is tested).
+
 The theme is one additive block at the end of `src/app/copilot/copilot.css`,
 where every rule is scoped to `.cp-root[data-theme="soft"]` — the bold theme
 cannot regress from anything the calm one adds, and a test in
@@ -282,6 +287,91 @@ that now carries the same fact plus the way to act on it.
 Old deep links still work: `TAB_ALIAS` maps `today`/`pipeline` → `now` and
 `signals` → `working`, so an installed shell and the weekly push keep landing
 somewhere sensible.
+
+## Four tabs (`/copilot2`)
+
+A second layout over the same app: **Today**, **Matches**, **Work**, **You**.
+Written from its owner's own verdict on the two-tab version after living with it —
+"too many things, nothing that stands out, the purpose lost from the original
+mock-ups; Working? is a log" — and his brief for what each tab should be.
+
+It is a layout, not a fork. `useCopilot` (`_components/useCopilot.ts`) holds the
+state, the sheet stack and every action, and both `CopilotApp` and `CopilotApp2`
+render over it, so sending, closing a mandate or answering the call cannot
+behave differently between them. Every sheet is shared. `/copilot` and `/lifeos`
+are untouched, so the two can be installed side by side and the one that gets
+opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
+
+| Tab | The question | What is on it | Pure module |
+| --- | --- | --- | --- |
+| Today | what do I do, and what did it do while I was away | the call (`CallCard`, unchanged) · done for you · needs you · worth doing (≤ 3) · the composer | `today.ts` |
+| Matches | who is worth contacting | the queue as one strip · chips (Clients, Gigs & jobs, People, Signals) · every find, newest first | `matches.ts` |
+| Work | what am I building | the offer · the path to money · the agents · projects handed over · the brief for Claude | `machine.ts` |
+| You | how is it going | money, runway, deep work, replies · the week read back · goals · settings | `review.ts`, `focus.ts` |
+
+`derive.ts` computes all of it once per `HomeData`, from `generatedAt` rather
+than the clock, so the header's status line and the tab under it cannot disagree
+(the old header said 61 over a card saying 51) and the server render and the
+hydrating client agree across an hour boundary.
+
+**Each Move lives in exactly one place.** Below the call, Today renders rows,
+not cards — only the call gets a card, which is how nine blocks became four.
+`worthDoing` keeps a Move out of Today when it belongs somewhere else: a watched
+feed's find is on Matches, the send queue is its own row in Needs you, a
+mandate's blocked question is its row in Needs you too, and a plan the app offers
+to carry out is a project on Work. A test asserts the split.
+
+**Done for you** is the part the old Now never had. The product's promise is an
+app that works while you sleep, and nothing on the screen said what it had done.
+Every row is something the app produced in the last day and a row proves it: new
+matches, replies `reconcileReplies` matched (`source = 'system'` only — a reply
+typed in by hand is the user's work, and reporting it back as done *for* them is
+the screen taking credit), the watcher's row from `motion`, project progress by
+the plan's own count, Moves worked out. A nightly job that never ran replaces the
+list rather than sitting above it; a sensor that broke is said.
+
+**Matches is the deck laid flat, and it still learns.** Businesses are answered
+through the triage route, so "Draft opener" and "Not for me" feed the same keep
+rate; `draftFromMatch` opens the new draft straight away, because a match you
+chose and a draft you then have to find in a queue of fifty are two decisions and
+the second is where drafts go to wait. The queue gate survives: with the queue
+backed up, the first tap on Draft states the trade-off and the second proceeds —
+the pattern "Find new" already used. No percentages: the fit score orders the
+list and is never printed, because a "92% match" badge is a guess dressed as a
+measurement (invariant 2).
+
+**Work is an illustration with one rule: every part is drawn from rows.** Four
+stages — find, reach, convert, get paid — from the funnel's own counts, with who
+runs each and the one weak link placed on the part of the business it belongs to.
+Five agents — Scout, Watcher, Writer, Researcher, Planner — whose state is when
+they last actually ran and what they last produced, always with its word
+(`AGENT_STATE_LABEL`), never a coloured dot alone. A Researcher with no worker
+connected says "needs setup" rather than looking busy; a Writer on a blank offer
+is setup, not idle (invariant 1). Handed-over work finally has a home here.
+"Build with Claude" is the handoff route's text with one task line on top: the
+app exports what it knows instead of competing with a model on building, which
+is what DIRECTION.md already decided.
+
+**You asks three questions of the week** — what created value, what was wasted,
+what has to change — and answers each from rows (`weekReview`). Money is never
+summed across currencies; a queue is waste only once it has sat
+(`STALE_DRAFT_DAYS`); a job key is never printed (`phrase.ts`, which also fixed
+"calls about send_queue" on the old Working tab's export path). An empty block
+says why it is empty, and `recent.unreadable` names any read that failed, so a
+broken read never renders as a quiet week (invariant 13). The funnel, openings
+and segments left the tab; the funnel is still one tap away as the path to money
+on Work, and "Ask your own record" still answers by counting.
+
+**Deep work is the one new sensor.** It was asked for and nothing could supply
+it, so it is logged by hand (`POST /api/copilot/focus`) and stored as
+`copilot_events` rows of type `focus_logged` — no migration. Not a context item,
+deliberately: those are read into the brief newest-first under a cap, and a log
+line a day would push the user's own notes out of it. Future days are refused
+rather than clamped, and nothing older than the week the tile shows can be
+logged. Not yet read by the ranker.
+
+`HomeData` gained two fields for this: `recent` (the last fortnight of outcomes,
+answered Moves and deep work, from `loadRecentRows`) and `generatedAt`.
 
 ## The loop
 
@@ -1331,6 +1421,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/moves/:id` | `{ status: done \| dismissed \| handover }` — `handover` turns a proposed Move into a live mandate |
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
+| POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |
 
 All copilot API responses are `Cache-Control: private, no-store` (rule in `next.config.ts`).
 

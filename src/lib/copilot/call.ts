@@ -21,6 +21,7 @@ import { CAPACITY_META, type Metrics, type Move, type Profile } from './types';
 import type { DecisionDraft } from './decision';
 import { loadWorthLedger } from './outcomes';
 import { loadDecisions, loadMoves, loadStandingRefusals } from './store';
+import { JOB_PHRASE, phraseFor } from './phrase';
 import type { WorthRecord } from './worth';
 
 /** How many open Moves arbitration considers. Past this it is not a shortlist. */
@@ -38,21 +39,9 @@ export function scorable(m: Move) {
   return { id: m.id, kind: m.kind, job: m.job, stake: m.stake ?? null, costMinutes: costMinutesOf(m.cost_label) };
 }
 
-/** Job key → the sentence a person would use for it. */
-export const JOB_PHRASE: Record<string, string> = {
-  send_queue: 'sending the drafts',
-  client_delivery: 'chasing delivery',
-  repeat_customer: 'reconnecting with past customers',
-  runway_guard: 'the runway question',
-  goal_gap: 'the goal you set',
-  opening_gap: 'changing the offer',
-  capability_gap: 'the thing to get better at',
-  watch: 'what your feeds turned up',
-  silence: 'reading the openers that got no reply',
-  propose: 'work it offers to take off you',
-  commission: 'the jobs you handed over',
-};
-export const phraseFor = (job: string) => JOB_PHRASE[job] ?? job.replace(/_/g, ' ');
+/** Job key → the sentence a person would use for it. Pure, so it lives in
+ *  phrase.ts where a screen can import it; re-exported for the routes. */
+export { JOB_PHRASE, phraseFor };
 
 /**
  * Turn the winning Move into the day's call.

@@ -5,7 +5,7 @@ Two products share this repository and almost nothing else.
 | | Where | What |
 | --- | --- | --- |
 | **Launchfly** | `src/app/*` (except below), `src/lib/*` (except below) | The original product: AI website/store generation, WhatsApp sales agents, prospect pipeline. |
-| **The Copilot** | `src/app/copilot/`, `src/app/lifeos/`, `src/app/api/copilot/`, `src/lib/copilot/`, `scripts/tests/copilot-core.test.ts` | A mobile-first installable PWA for local outbound. Shares the Supabase project, the Next runtime, the WhatsApp provider, Resend and the Apify Maps scraper — **none of the business logic**. |
+| **The Copilot** | `src/app/copilot/`, `src/app/lifeos/`, `src/app/copilot2/`, `src/app/api/copilot/`, `src/lib/copilot/`, `scripts/tests/copilot-core.test.ts` | A mobile-first installable PWA for local outbound. Shares the Supabase project, the Next runtime, the WhatsApp provider, Resend and the Apify Maps scraper — **none of the business logic**. |
 
 Almost all recent work is the copilot. Two docs carry the context this file
 deliberately does not repeat:
@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 32 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 40 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -42,8 +42,10 @@ static check. Do not report that lint passed; there is nothing to run.
 
 **Verify UI in a browser, not by reading JSX.** Chromium is at
 `/opt/pw-browsers/chromium`; shoot at 390×844. The pattern that works: a
-throwaway `src/app/copilot/zz-preview/page.tsx` rendering `<CopilotApp initial={fixture}/>`,
-screenshot it, then **delete it and confirm `git status` before committing**.
+throwaway `src/app/copilot/zz-preview/page.tsx` rendering `<CopilotApp initial={fixture}/>`
+(or `src/app/copilot2/zz-preview/page.tsx` rendering `<CopilotApp2 …/>` for the
+four-tab layout, so it picks up the calm theme from that layout), screenshot it,
+then **delete it and confirm `git status` before committing**.
 Never verify inside a `/tmp` worktree — Turbopack rejects a symlinked
 `node_modules` with "Symlink node_modules is invalid, it points out of the
 filesystem root". Work in the main checkout.
@@ -56,8 +58,8 @@ with its label stacked on top. Two rounds of theorising missed it; one
 collision is inside `.cp-root` — pick class names that are distinctive in a
 900-line file, not merely prefixed.
 
-To kill a dev server, find it **by port** (`ss -lptn 'sport = :3000'`), not by
-name. `pkill -f "next dev"` matches your own shell's command line and kills the
+To kill a dev server, find it **by port** (`ss -lptn 'sport = :3000'`, or
+`lsof -iTCP:3000 -sTCP:LISTEN` where `ss` is not installed), not by name. `pkill -f "next dev"` matches your own shell's command line and kills the
 session (exit code 144) — this has happened twice. A PID file alone is not
 enough either: stale servers survive under PIDs it lost track of, and the symptom
 is `EADDRINUSE` with a 500 from a half-built `.next`. A production build and a

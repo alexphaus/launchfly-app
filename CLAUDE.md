@@ -125,7 +125,9 @@ separately here and will be out of order.
   so a stacked PR merges into the wrong branch and the work silently never
   reaches `v2.7.1`. (This has been got wrong once, and cost two phases.)
 - Commit messages explain *why*, in prose. Look at recent history for the voice.
-- Do not create a PR unless asked.
+- Open a PR against `v2.7.1` for every change you push, without waiting to be
+  asked and without only offering one: the owner reviews and merges from PRs,
+  so a pushed branch with no PR is work nobody is looking at.
 
 ---
 

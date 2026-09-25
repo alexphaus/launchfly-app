@@ -15,6 +15,8 @@ import { availableJobs } from './jobs';
 import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
 import { stageOf } from './pipeline';
 import { isSearchableSegment } from './matches';
+import { EMPTY_YIELD, MAX_HUNTS, huntYield, sameHunt, type Hunt, type HuntInput, type HuntYield } from './hunts';
+import { exaConfigured } from './watch/exa';
 import { inMotion } from './motion';
 import { captureAsk, openedAwaitingAnswer, repliesAwaitingOutcome } from './capture';
 import { forecast } from './obligations';
@@ -666,7 +668,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -704,6 +706,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadWorking(profileId),
     loadCommissions(profileId),
     loadRecentRows(profileId),
+    loadHunting(profileId),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -945,6 +948,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     lastCronRun,
     metrics,
     recent,
+    hunting,
     generatedAt: nowTs.toISOString(),
     supplyLastRun: supplyRun,
     account: { email: profile.email, verified: !!profile.email_verified_at },
@@ -2011,4 +2015,121 @@ export async function deleteFocus(profileId: string, id: string): Promise<void> 
   const { error } = await copilotDb().from('copilot_events').delete()
     .eq('profile_id', profileId).eq('event_type', FOCUS_EVENT).eq('id', n);
   if (error) throw new Error(describeDbError(error, 'Could not remove that.'));
+}
+
+// — hunts: what the user asked it to look for, beyond Maps and feeds —
+
+const HUNT_COLS = 'id, kind, query, area, label, status, origin, commission_id, last_run_at, last_found, last_dropped, last_error, created_at';
+
+/**
+ * Every hunt this profile has, oldest first — the order they were asked for.
+ *
+ * Degrades on its own and says why. The table ships in 20260925, and a hunts
+ * sheet that rendered empty over a missing table would read exactly like an
+ * account that never added one — which is the calm screen over a failure that
+ * invariant 13 is written against. So the reason travels with the empty list.
+ */
+export async function loadHunts(profileId: string): Promise<{ hunts: Hunt[]; unreadable: string | null }> {
+  const { data, error } = await copilotDb().from('copilot_hunts').select(HUNT_COLS)
+    .eq('profile_id', profileId).order('created_at', { ascending: true }).limit(20);
+  if (error) {
+    const missing = error.code === '42P01' || error.code === 'PGRST205';
+    return { hunts: [], unreadable: missing ? 'Hunts are not set up in this database yet — apply 20260925_copilot_hunts.sql.' : describeDbError(error, 'Could not read your hunts.') };
+  }
+  return { hunts: (data ?? []) as unknown as Hunt[], unreadable: null };
+}
+
+/** The hunts with what each has put in the pool, for the sheet and the chips. */
+export async function loadHunting(profileId: string): Promise<HomeData['hunting']> {
+  const { hunts, unreadable } = await loadHunts(profileId);
+  if (!hunts.length) return { hunts: [], webReady: exaConfigured(), unreadable };
+  const yields = await loadHuntYield(profileId, hunts.map((h) => h.id)).catch(() => null);
+  return {
+    hunts: hunts.map((h) => ({ ...h, yield: yields?.[h.id] ?? { ...EMPTY_YIELD } })),
+    webReady: exaConfigured(),
+    // A yield that would not read is said, not rendered as "0 found".
+    unreadable: unreadable ?? (yields ? null : 'Could not count what your hunts have found.'),
+  };
+}
+
+/**
+ * Counted from the rows each hunt put in the pool, never from the finder's own
+ * report of what it found — a finder that says "ten" and a pool that holds two
+ * are two different numbers, and only the second is the user's.
+ */
+async function loadHuntYield(profileId: string, huntIds: string[]): Promise<Record<string, HuntYield>> {
+  const { data, error } = await copilotDb().from('copilot_opportunities')
+    .select('id, status, hunt_id:data->>hunt_id')
+    .eq('profile_id', profileId).in('data->>hunt_id', huntIds).limit(1000);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as unknown as Array<{ id: string; status: string; hunt_id: string }>;
+  const exec = await latestExecutionByOpportunity(profileId, rows.map((r) => r.id));
+  return huntYield(rows.map((r) => ({ hunt_id: r.hunt_id, status: r.status, drafted: !!exec[r.id] && exec[r.id].approval_state !== 'cancelled' })));
+}
+
+export async function insertHunt(profileId: string, input: HuntInput & { origin?: 'user' | 'suggested' }): Promise<Hunt> {
+  const { hunts, unreadable } = await loadHunts(profileId);
+  if (unreadable) throw new Error(unreadable);
+  if (hunts.length >= MAX_HUNTS) throw new Error(`You have ${hunts.length} hunts. Remove one before adding another — past ${MAX_HUNTS} the chips stop being a filter.`);
+  if (hunts.some((h) => sameHunt(h.query, input.query) && h.kind === input.kind)) throw new Error('You already have that hunt.');
+  const { data, error } = await copilotDb().from('copilot_hunts').insert({
+    profile_id: profileId, kind: input.kind, query: input.query, area: input.area, label: input.label,
+    origin: input.origin ?? 'user', status: 'active',
+  }).select(HUNT_COLS).single();
+  if (error || !data) throw new Error(describeDbError(error, 'Could not save that hunt.'));
+  await logEvent(profileId, 'hunt_added', { kind: input.kind, origin: input.origin ?? 'user' });
+  return data as unknown as Hunt;
+}
+
+export async function updateHunt(profileId: string, id: string, patch: Partial<Pick<Hunt, 'status' | 'commission_id' | 'last_run_at' | 'last_found' | 'last_dropped' | 'last_error'>>): Promise<void> {
+  const { error } = await copilotDb().from('copilot_hunts').update(patch).eq('profile_id', profileId).eq('id', id);
+  if (error) throw new Error(describeDbError(error, 'Could not update that hunt.'));
+}
+
+/** What a run did, on the hunt itself: the next run clears an error, a failure never looks quiet. */
+export async function recordHuntRun(profileId: string, id: string, run: { found: number; error: string | null }): Promise<void> {
+  await copilotDb().from('copilot_hunts')
+    .update({ last_run_at: new Date().toISOString(), last_found: run.found, last_error: run.error?.slice(0, 200) ?? null })
+    .eq('profile_id', profileId).eq('id', id)
+    .then(({ error }) => { if (error) console.error('[copilot/hunts] could not record a run:', error.message); });
+}
+
+/**
+ * Stop looking for this. Like dropping a segment: what it found and nobody has
+ * answered is set aside (status only, reversible in SQL) and its unsent drafts
+ * are retired, so Matches stops showing work the user just said they do not
+ * want. Anything already sent, replied to or won is history and stays.
+ */
+export async function deleteHunt(profileId: string, id: string): Promise<{ dropped: number }> {
+  const db = copilotDb();
+  const { data: rows } = await db.from('copilot_opportunities').select('id')
+    .eq('profile_id', profileId).eq('data->>hunt_id', id).in('status', ['new', 'saved']);
+  const ids = ((rows ?? []) as Array<{ id: string }>).map((r) => r.id);
+  if (ids.length) {
+    await cancelOpenDrafts(profileId, { reason: 'hunt_removed', opportunityIds: ids });
+    await db.from('copilot_opportunities').update({ status: 'dismissed' }).eq('profile_id', profileId).in('id', ids);
+  }
+  const { error } = await db.from('copilot_hunts').delete().eq('profile_id', profileId).eq('id', id);
+  if (error) throw new Error(describeDbError(error, 'Could not remove that hunt.'));
+  await logEvent(profileId, 'hunt_removed', { hunt_id: id, set_aside: ids.length });
+  return { dropped: ids.length };
+}
+
+/**
+ * A mandate that was never granted, removed outright. Only a draft: once
+ * approved, a commission is closed through closeCommission, which asks what it
+ * was worth — a removal is not a verdict.
+ */
+export async function deleteDraftCommission(profileId: string, id: string): Promise<void> {
+  const { error } = await copilotDb().from('copilot_commissions').delete()
+    .eq('profile_id', profileId).eq('id', id).eq('status', 'draft');
+  if (error) throw new Error(describeDbError(error, 'Could not withdraw that draft.'));
+}
+
+/** The hunt a mandate was written for, if it was written for one. */
+export async function huntForCommission(profileId: string, commissionId: string): Promise<Hunt | null> {
+  const { data, error } = await copilotDb().from('copilot_hunts').select(HUNT_COLS)
+    .eq('profile_id', profileId).eq('commission_id', commissionId).maybeSingle();
+  if (error) return null;
+  return (data as unknown as Hunt) ?? null;
 }

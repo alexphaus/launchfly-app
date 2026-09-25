@@ -137,6 +137,12 @@ new.
   autonomous execution without approval. Months of work; changes no decision
   this quarter.
 - **New supply adapters** until the send side has a pulse. Supply is the surplus.
+  *Reopened in September 2026 with a reason that is new:* that was about volume
+  on the owner's own account. A second persona showed the problem is relevance —
+  sixty matches from the wrong Toledo, for someone who does not sell to local
+  trades at all. The answer taken was not more adapters but **hunts**: the search
+  itself became the user's words, run by Exa or the research worker, every find
+  held to a real link. See COPILOT.md → **Hunts**.
 - **`emailApi` as a sold feature.** `setSendMode()` has no route calling it. A
   test fails if the pricing page advertises it again.
 - **Competing with Claude Code on building.** The app should *export* what it
@@ -183,6 +189,10 @@ owner's own verdict that the two-tab app had too many things and no single reaso
 to open it. Built as a second layout over the same data rather than a rework, so
 the two can be compared by living with them. It adds one sensor — deep work,
 logged by hand — and no new ranking. See COPILOT.md → **Four tabs**.
+**Then** — hunts: what to look for, in the user's words, beyond "segment in area"
+on Maps — companies and people through a web search, and an agent brief handed to
+the research worker as a draft mandate. Every find must carry a link the app
+itself opened or a search index returned. See COPILOT.md → **Hunts**.
 
 ---
 

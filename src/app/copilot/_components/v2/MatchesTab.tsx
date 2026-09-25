@@ -28,7 +28,7 @@
 // the first tap states the trade-off, the second proceeds anyway.
 import { useState } from 'react';
 import {
-  MATCH_GROUPS, MATCH_GROUP_LABEL, MATCH_STAGES, MATCH_STAGE_LABEL, tintOf,
+  MATCH_STAGES, MATCH_STAGE_LABEL, tintOf,
   type MatchGroup, type MatchItem, type MatchStage, type StageCard,
 } from '@/lib/copilot/matches';
 import { PLANS } from '@/lib/copilot/plans';
@@ -75,23 +75,27 @@ export default function MatchesTab({ home, d, actions, finding }: { home: HomeDa
 
 function NewMatches({ home, d, actions, finding, onSendFirst }: { home: HomeData; d: Derived; actions: Actions; finding: boolean; onSendFirst: () => void }) {
   const shell = useShell();
-  const [group, setGroup] = useState<'all' | MatchGroup>('all');
+  const [lens, setLens] = useState<string>('all');
   const [shown, setShown] = useState(PAGE);
   const [showPoor, setShowPoor] = useState(false);
   const [confirmFind, setConfirmFind] = useState(false);
   // A chip whose last item was just answered disappears from the row, so it
   // cannot stay selected — that left an empty list under no active chip.
-  const active: 'all' | MatchGroup = group !== 'all' && d.counts.by[group] === 0 ? 'all' : group;
-  const items = active === 'all' ? d.good : d.good.filter((i) => i.group === active);
-  // One kind of thing is not a filter: "All 60 · Clients 60" was two chips
-  // saying the same number.
-  const groups = MATCH_GROUPS.filter((g) => d.counts.by[g] > 0);
+  const active = lens !== 'all' && !d.lenses.some((l) => l.key === lens) ? 'all' : lens;
+  const items = active === 'all' ? d.good : d.good.filter((i) => i.lens.key === active);
   const b = home.billing;
   const { what, where } = d.looking;
-  // Targeting only drives businesses. Feed finds arrive without it, so a
-  // missing segment must not hide them — somebody watching job feeds with no
-  // businesses to pitch would otherwise have finds on Today and nowhere to open them.
-  const noTargeting = !what || !where;
+  // Nothing searching for businesses or people: no Maps targeting and no hunt.
+  // Feed finds arrive without either, so this must not hide them — somebody
+  // watching job feeds would otherwise have finds on Today and nowhere to open them.
+  const noTargeting = !d.searching;
+  const openHunts = () => actions.openSheet({ kind: 'hunts' });
+  const sources = home.watchSources.length;
+  // After the Maps search, the rest of what runs at night, counted.
+  const summary = [
+    d.liveHunts ? `${d.liveHunts} hunt${d.liveHunts === 1 ? '' : 's'}` : null,
+    sources ? `${sources} source${sources === 1 ? '' : 's'}` : null,
+  ].filter(Boolean).join(' · ');
 
   const find = () => (d.queueBacked && !confirmFind ? setConfirmFind(true) : void actions.findMatches());
 
@@ -101,21 +105,26 @@ function NewMatches({ home, d, actions, finding, onSendFirst }: { home: HomeData
           everything under it, and it was invisible: a segment of "m" searched
           nightly and the only trace on screen was a letter on every card. */}
       {!noTargeting && (
-        <button className="cp2-lookfor" onClick={() => actions.openSheet({ kind: 'targeting' })}>
+        <button className="cp2-lookfor" onClick={openHunts}>
           <span className="cp2-lookfor-l">Looking for</span>
-          <span className="cp2-lookfor-v"><b>{what}</b> in <b>{where}</b></span>
+          <span className="cp2-lookfor-v">
+            {what && where ? <><b>{what}</b> in <b>{where}</b>{summary ? ' · ' : ''}</> : null}
+            {summary}
+          </span>
           <span className="cp2-lookfor-c">Change</span>
         </button>
       )}
 
-      {groups.length > 1 && (
+      {/* One chip per search that brought something in. One search is not a
+          filter: "All 60 · Clients 60" was two chips saying the same number. */}
+      {d.lenses.length > 1 && (
         <div className="cp2-chips" role="tablist" aria-label="Filter matches">
-          <button role="tab" aria-selected={active === 'all'} className={`cp-fchip ${active === 'all' ? 'active' : ''}`} onClick={() => { setGroup('all'); setShown(PAGE); }}>
+          <button role="tab" aria-selected={active === 'all'} className={`cp-fchip ${active === 'all' ? 'active' : ''}`} onClick={() => { setLens('all'); setShown(PAGE); }}>
             All <span className="n">{d.counts.all}</span>
           </button>
-          {groups.map((g) => (
-            <button key={g} role="tab" aria-selected={active === g} className={`cp-fchip ${active === g ? 'active' : ''}`} onClick={() => { setGroup(g); setShown(PAGE); }}>
-              {MATCH_GROUP_LABEL[g]} <span className="n">{d.counts.by[g]}</span>
+          {d.lenses.map((l) => (
+            <button key={l.key} role="tab" aria-selected={active === l.key} className={`cp-fchip ${active === l.key ? 'active' : ''}`} onClick={() => { setLens(l.key); setShown(PAGE); }}>
+              {l.label} <span className="n">{l.count}</span>
             </button>
           ))}
         </div>
@@ -131,7 +140,7 @@ function NewMatches({ home, d, actions, finding, onSendFirst }: { home: HomeData
             It judged {d.fit.weak} of {d.fit.judged} a poor fit for what you sell. That is usually the search, not the market
             {what && where ? <> — right now it looks for <b>{what}</b> in <b>{where}</b>.</> : '.'}
           </p>
-          <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'targeting' })}>Change what it looks for</button>
+          <button className="cp-btn primary block" onClick={openHunts}>Change what it looks for</button>
         </div>
       )}
 
@@ -148,8 +157,8 @@ function NewMatches({ home, d, actions, finding, onSendFirst }: { home: HomeData
         <>
           {noTargeting && (
             <div className="cp-note">
-              No businesses are being searched for yet — these came from sources you watch.
-              {' '}<button className="cp-textlink" onClick={() => actions.openSheet({ kind: 'targeting' })}>Choose who to look for</button>
+              No businesses or people are being searched for yet — these came from sources you watch.
+              {' '}<button className="cp-textlink" onClick={openHunts}>Choose who to look for</button>
             </div>
           )}
           {items.slice(0, shown).map((i) => <MatchCard key={i.id} item={i} d={d} actions={actions} onSendFirst={onSendFirst} />)}
@@ -160,13 +169,13 @@ function NewMatches({ home, d, actions, finding, onSendFirst }: { home: HomeData
       ) : noTargeting && !d.poor.length ? (
         <div className="cp-card">
           <div className="cp-eyebrow">Nothing to look for yet</div>
-          <p className="cp2-lede">Say which kinds of business you sell to, and where. It goes and finds real ones every night.</p>
-          <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'targeting' })}>Choose who to look for</button>
+          <p className="cp2-lede">Say who you want to reach, in your own words — shops on Maps, companies, a few key people. It goes and finds real ones every night.</p>
+          <button className="cp-btn primary block cp-call-do" onClick={openHunts}>Choose who to look for</button>
         </div>
       ) : d.fit.majority ? null : (
         <div className="cp-empty">
           {finding
-            ? <><b>Looking now</b>{what} in {where}. Real listings, not a sample — the first pass takes a minute.</>
+            ? <><b>Looking now</b>Real listings and real pages, not a sample — the first pass takes a minute.</>
             : d.poor.length
             ? <><b>Nothing that fits yet</b>What it found, it judged a poor fit for what you sell. They are folded below.</>
             : <><b>Nothing new to judge</b>Everything it found has been answered. The next pass runs tonight, or look now.</>}

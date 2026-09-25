@@ -7,7 +7,7 @@
 -- does not have — a table, a column, or one of the shapes below that are
 -- neither — with the file that adds it.
 --
--- Keep this file level with supabase/migrations — currently through 20260921.
+-- Keep this file level with supabase/migrations — currently through 20260925.
 -- It stopped at 20260909 for ten releases, which meant it returned no rows for
 -- the entire commission layer and the entire working file: exactly the two
 -- features whose read paths degrade to an empty list on purpose, and therefore
@@ -60,7 +60,9 @@ with expected(kind, table_name, column_name, migration) as (values
   ('table',  'copilot_working',        null,                        '20260917_copilot_working.sql'),
   ('column', 'copilot_working',        'observed_key',              '20260917_copilot_working.sql'),
   ('column', 'copilot_outcomes',       'move_id',                   '20260921_copilot_outcome_worth.sql'),
-  ('column', 'copilot_outcomes',       'commission_id',             '20260921_copilot_outcome_worth.sql')
+  ('column', 'copilot_outcomes',       'commission_id',             '20260921_copilot_outcome_worth.sql'),
+  ('table',  'copilot_hunts',          null,                        '20260925_copilot_hunts.sql'),
+  ('column', 'copilot_hunts',          'commission_id',             '20260925_copilot_hunts.sql')
 ),
 
 missing as (

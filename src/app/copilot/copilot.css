@@ -1097,6 +1097,14 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-mthumb.t5 { background: rgba(96, 110, 140, 0.14); color: #465069; }
 
 .cp-root[data-theme="soft"] .cp2-stagehead { margin: 12px 20px 16px; }
+
+/* The hunts sheet. A kind is a label, not a status, so it wears the neutral tint;
+   a warning line wears --warn, with its words, never the colour alone. */
+.cp-root[data-theme="soft"] .cp2-huntkind { display: inline-block; margin-right: 7px; padding: 2px 7px; border-radius: 999px; background: var(--tint); color: var(--blue); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: 1px; }
+.cp-root[data-theme="soft"] .cp2-huntkind.agent { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-huntarea { font-weight: 500; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-src .cs.warn { color: var(--warn, #93650F); }
+.cp-root[data-theme="soft"] .cp2-huntform .cp-field:last-of-type { margin-bottom: 4px; }
 .cp-root[data-theme="soft"] .cp2-stagehead .cp2-lede { margin: 0 4px 14px; }
 .cp-root[data-theme="soft"] .cp2-stagenote { margin: 14px 24px 14px; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-stagefoot { margin: 4px 24px 0; }

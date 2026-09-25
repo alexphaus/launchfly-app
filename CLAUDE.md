@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 41 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 42 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -91,6 +91,10 @@ To find out what is actually missing rather than guessing, paste
 it returns is a column or table the code expects and the database lacks, with
 the file that adds it. No rows and a `PGRST204` still showing means the cache is
 stale, not the schema — `notify pgrst, 'reload schema';`.
+
+Hunts (`copilot_hunts`, 20260925) need `EXA_API_KEY` for Companies and People
+and the research worker (`COPILOT_JOBS_URL`) for Agent hunts. Without them the
+hunts sheet says which is missing; nothing else changes.
 
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —

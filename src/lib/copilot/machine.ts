@@ -54,6 +54,8 @@ export interface MachineInput {
   currency: string;
   /** The primary currency goal, when there is one. */
   goal: { title: string; target: number | null; current: number | null } | null;
+  /** Hunts that are on. Find is not only Maps any more, and the stage says so. */
+  hunts?: number;
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -101,7 +103,10 @@ export function businessMachine(input: MachineInput): MachineStage[] {
     stage({
       key: 'find', label: 'Find', owner: 'ai', who: 'Scout',
       count: matched, countLabel: `${matched} found`,
-      detail: `${segs}${input.area ? ` in ${input.area}` : ''}`,
+      detail: [
+        input.segments.length || !input.hunts ? `${segs}${input.area ? ` in ${input.area}` : ''}` : null,
+        input.hunts ? plural(input.hunts, 'hunt') : null,
+      ].filter(Boolean).join(' · '),
     }),
     stage({
       key: 'reach', label: 'Reach', owner: 'both', who: 'Writer drafts, you send',
@@ -201,7 +206,7 @@ export function agentRoster(input: RosterInput): Agent[] {
 
   // Scout — supply.
   const scout: Agent = !input.hasTargeting
-    ? { key: 'scout', name: 'Scout', role: 'Finds businesses that match who you sell to', state: 'setup', line: 'Tell it who you sell to and where' }
+    ? { key: 'scout', name: 'Scout', role: 'Finds businesses that match who you sell to', state: 'setup', line: 'Tell it who to look for — on Maps, or as a hunt' }
     : input.matchesLeft <= 0
     ? { key: 'scout', name: 'Scout', role: 'Finds businesses that match who you sell to', state: 'idle', line: `Out of matches this month · ${input.sourced} found so far` }
     : {

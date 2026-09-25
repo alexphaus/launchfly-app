@@ -12,7 +12,7 @@
 import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster, businessMachine, workStatus } from '@/lib/copilot/machine';
-import { lookingFor, matchCounts, matchFeed, matchesStatus, poorFitMajority, stageCards } from '@/lib/copilot/matches';
+import { lookingFor, matchCounts, matchFeed, matchLenses, matchesStatus, poorFitMajority, stageCards } from '@/lib/copilot/matches';
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { weekReview } from '@/lib/copilot/review';
 import { doneForYou, needsYou, todayStatus, worthDoing } from '@/lib/copilot/today';
@@ -41,6 +41,13 @@ export function derive(home: HomeData) {
   // (invariant 1) — the offer comes first, and Today's call says so.
   const stages = noOffer ? { ...staged, to_send: [] } : staged;
   const looking = lookingFor(home.profile.target_segments, home.profile.target_area || home.profile.location);
+  // The chips: one per search that brought something in — the user's hunts,
+  // their Maps segments, then the kinds of feed find.
+  const lenses = matchLenses(good);
+  // Anything at all searching for businesses or people on this account: Maps
+  // targeting, or a hunt that is on. Feed finds arrive without either.
+  const liveHunts = (home.hunting?.hunts ?? []).filter((h) => h.status === 'active').length;
+  const searching = !!(looking.what && looking.where) || liveHunts > 0;
 
   /* Today */
   const ownMoves = [...home.moves, ...(home.callMove ? [home.callMove] : [])].filter((m) => m.job !== 'watch');
@@ -85,12 +92,14 @@ export function derive(home: HomeData) {
     wonAmount: home.metrics.won_amount,
     currency: goal?.unit || currency,
     goal: goal ? { title: goal.title, target: goal.target_value, current: goal.current_value } : null,
+    hunts: liveHunts,
   });
   const team = agentRoster({
     now,
     supplyLastRun: home.supplyLastRun,
     sourced: home.metrics.pipeline.sourced,
-    hasTargeting: home.profile.target_segments.length > 0 && !!(home.profile.target_area || home.profile.location),
+    // Maps targeting or a live hunt: either is the Scout with something to do.
+    hasTargeting: searching,
     matchesLeft: home.billing.matches.remaining,
     sources: home.watchSources.map((s) => ({ lastCheckedAt: s.last_checked_at, error: s.last_error, status: s.status })),
     finds: feed.filter((i) => i.from === 'feed').length,
@@ -135,7 +144,7 @@ export function derive(home: HomeData) {
   return {
     now, noOffer, queueCount, oldestDays, queueBacked, currency,
     done, asks, worth, nothingYet,
-    feed, good, poor, counts, fit, stages, looking,
+    feed, good, poor, counts, fit, stages, looking, lenses, liveHunts, searching,
     machine, team, running,
     review, week,
     status,

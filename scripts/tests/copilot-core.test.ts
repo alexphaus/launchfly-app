@@ -676,7 +676,9 @@ async function billing() {
   const { ADAPTERS } = await import('../../src/lib/copilot/supply');
   const billable = ADAPTERS.filter((a) => a.billable).map((a) => a.key);
   const free = ADAPTERS.filter((a) => !a.billable).map((a) => a.key);
-  assert.deepEqual(billable, ['google_maps'], 'scraping credits are the only per-match cost');
+  // The user's web hunts are paid per search (Exa), so they are metered like
+  // Maps. What invariant 6 guards is the other half: nothing free is.
+  assert.deepEqual(billable.sort(), ['google_maps', 'web'], 'paid searches and scraping credits are the only per-match cost');
   assert.deepEqual(free.sort(), ['hunter', 'remote'], 'the shared pipeline and public listings are free to serve');
 
   // 9. Nothing is advertised that cannot be switched on. send_mode has no route
@@ -5113,3 +5115,185 @@ async function matchesStaged() {
 }
 
 matchesStaged().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// Hunts: what to look for, in the user's words, and who goes and looks
+//
+// Supply was one query shape for everybody — every segment on Maps as "segment
+// in area" — and on a live account it returned sixty businesses from the wrong
+// Toledo. Hunts make the search the user's own. The checks are the ways that
+// could go wrong: a hunt that is a typo, a directory listed as a company, a
+// model's guess at a URL admitted as a find, a link that opens the server's own
+// network, a date read as a phone number, and a hunt that has stopped earning
+// its place shown as though it were fine.
+// ---------------------------------------------------------------------------
+import {
+  HUNT_BIN_FLAG, MAX_SUGGESTIONS, agentObjective, candidatesFromHits, companyFromTitle, contactFromHtml, contactPageLink,
+  exaCategoryFor, exaQueryFor, findsFromEvents, huntLine, huntYield, isPublicHttpUrl, labelFor, normalizeHuntInput,
+  parseSuggestions, personFromTitle, phoneIn, sameHunt, suggestionsFromOffer, urlKey, withPageContact,
+} from '../../src/lib/copilot/hunts';
+import { OBJECTIVE_MAX as OBJECTIVE_MAX_H, WHY_MAX as WHY_MAX_H } from '../../src/lib/copilot/commission';
+import { matchFeed as matchFeedH, matchLenses } from '../../src/lib/copilot/matches';
+
+async function huntsCore() {
+  // 1. What a hunt may be.
+  const ok = normalizeHuntInput({ kind: 'companies', query: '  shops in Spain   that stock handmade jewellery ', area: ' Toledo, Spain ' });
+  assert.ok(!('error' in ok));
+  if (!('error' in ok)) {
+    assert.equal(ok.query, 'shops in Spain that stock handmade jewellery');
+    assert.equal(ok.area, 'Toledo, Spain');
+    assert.equal(ok.label, 'Shops in Spain that stock…', 'whole words, never mid-word');
+  }
+  assert.ok('error' in normalizeHuntInput({ kind: 'companies', query: 'm' }), 'a one-letter hunt is a typo, searched as typed');
+  assert.ok('error' in normalizeHuntInput({ kind: 'maps', query: 'jewellery shops' }), 'only the three kinds');
+  assert.equal(labelFor('gift shops'), 'Gift shops');
+  assert.ok(sameHunt('Gift shops!', 'gift  shops'), 'the same search in other punctuation is the same search');
+
+  // 2. The query as the search gets it.
+  assert.equal(exaCategoryFor('companies'), 'company');
+  assert.equal(exaCategoryFor('people'), 'people');
+  assert.equal(exaCategoryFor('agent'), null, 'the agent is not a search call');
+  assert.equal(exaQueryFor({ query: 'museum shops', area: 'Castilla-La Mancha, Spain' }), 'museum shops in Castilla-La Mancha, Spain');
+  assert.equal(exaQueryFor({ query: 'gift shops in Toledo', area: 'Toledo' }), 'gift shops in Toledo', 'the place is not written twice');
+
+  // 3. Search hits into candidates: the company, never the directory it is listed in.
+  const hunt = { id: 'h1', kind: 'companies' as const, query: 'shops that stock handmade jewellery', label: 'Jewellery stockists' };
+  const cands = candidatesFromHits([
+    { title: 'Joyería El Greco | Joyas artesanales en Toledo', url: 'https://www.joyeriaelgreco.es/', summary: 'Family jeweller in Toledo selling handmade silver.' },
+    { title: 'Joyería El Greco', url: 'https://joyeriaelgreco.es', summary: 'Duplicate of the same site.' },
+    { title: 'Home', url: 'https://plata-y-oro.es/tienda' },
+    { title: 'Best jewellers in Toledo - Tripadvisor', url: 'https://www.tripadvisor.com/Attractions-Toledo' },
+    { title: 'Facebook page', url: 'https://facebook.com/joyeria' },
+    { title: 'Bad', url: 'javascript:alert(1)' },
+  ], hunt);
+  assert.deepEqual(cands.map((c) => c.title), ['Joyería El Greco', 'Plata Y Oro'], 'deduped, directories and social pages dropped, "Home" named by its domain');
+  assert.equal(cands[0].external_id, 'joyeriaelgreco.es', 'www and the trailing slash are not a second company');
+  assert.equal(cands[0].source, 'web');
+  assert.equal(cands[0].type, 'client');
+  assert.equal(cands[0].contact.website, 'https://www.joyeriaelgreco.es/');
+  assert.deepEqual([cands[0].data.hunt_id, cands[0].data.hunt_label, cands[0].data.segment, cands[0].data.host], ['h1', 'Jewellery stockists', 'shops that stock handmade jewellery', 'joyeriaelgreco.es']);
+  assert.equal(urlKey('https://www.a.es/b/?utm=1#x'), 'a.es/b');
+  assert.equal(companyFromTitle('Inicio', 'casa-lopez.com'), 'Casa Lopez');
+
+  const people = candidatesFromHits([{ title: 'Carmen López - Compradora - El Corte Inglés | LinkedIn', url: 'https://es.linkedin.com/in/carmen-lopez' }], { ...hunt, kind: 'people' as const });
+  assert.equal(people.length, 1, 'a profile is exactly what a people hunt is for');
+  assert.equal(people[0].type, 'people');
+  assert.equal(people[0].title, 'Carmen López');
+  assert.equal(people[0].data.role, 'Compradora · El Corte Inglés');
+  assert.equal(people[0].contact.name, 'Carmen López');
+  assert.deepEqual(personFromTitle('Ana Ruiz'), { name: 'Ana Ruiz', role: null });
+
+  // 4. The page, read for a way to reach them — deterministically.
+  const page = `<a href="mailto:info&#64;joyeriaelgreco.es">Mail</a> <img src="logo@2x.png"> <a href="https://wa.me/34600111222">WhatsApp</a>
+    <a href="https://instagram.com/joyeriaelgreco/">IG</a> <a href="/contacto">Contacto</a> <a href="https://other.es/contact">x</a>`;
+  assert.deepEqual(contactFromHtml(page), { email: 'info@joyeriaelgreco.es', whatsapp: '34600111222', instagram: 'https://instagram.com/joyeriaelgreco' });
+  assert.equal(contactFromHtml('<p>Write to ventas@plata.es or noreply@plata.es</p><a href="tel:+34 925 11 22 33">call</a>').email, 'ventas@plata.es');
+  assert.equal(contactFromHtml('<a href="tel:+34 925 11 22 33">call</a>').whatsapp, '34925112233', 'a listed phone is taken the way the Maps adapter takes one');
+  assert.equal(contactFromHtml('<script>x="a@sentry.io"</script><p>no address here</p>').email, undefined, 'script text is not the page');
+  assert.equal(contactPageLink(page, 'https://joyeriaelgreco.es/'), 'https://joyeriaelgreco.es/contacto', 'same host only');
+  const merged = withPageContact(cands[0], { email: 'info@joyeriaelgreco.es', instagram: 'https://instagram.com/x' });
+  assert.equal(merged.contact.email, 'info@joyeriaelgreco.es');
+  assert.equal(merged.contact.website, 'https://www.joyeriaelgreco.es/', 'nothing the page did not show is added or replaced');
+  assert.equal(merged.data.instagram, 'https://instagram.com/x');
+
+  // 5. What this app will open. The link came from outside, so a hostile one must not reach inside.
+  for (const good of ['https://joyeriaelgreco.es/', 'http://172.40.1.1/x', 'https://es.linkedin.com/in/a']) assert.equal(isPublicHttpUrl(good), true, good);
+  for (const bad of ['http://localhost:3000', 'http://127.0.0.1/', 'http://2130706433/', 'http://[::1]/', 'http://169.254.169.254/latest/meta-data', 'http://10.0.0.5/', 'http://172.20.1.1/', 'http://192.168.1.1/', 'ftp://a.es/', 'http://intranet/', 'http://user:pw@a.es/', 'http://printer.local/', 'http://100.64.0.1/']) {
+    assert.equal(isPublicHttpUrl(bad), false, bad);
+  }
+
+  // 6. What the agent found. Only a `found` with a link; a phone only when it reads as one.
+  const finds = findsFromEvents([
+    { kind: 'found', summary: 'Mercado Medieval de Toledo — the city fair, organised by the council. Tel: 925 33 00 00. Dates 2026-10-12.', artifact: { kind: 'link', label: 'Website', value: 'Contact: feria@toledo.es', href: 'https://mercadomedievaltoledo.es/' } },
+    { kind: 'found', summary: 'Same fair again', artifact: { kind: 'link', label: 'Open', value: 'x', href: 'https://www.mercadomedievaltoledo.es' } },
+    { kind: 'found', summary: 'Ana Ruiz, buyer at the museum shop', artifact: { kind: 'link', label: 'Ana Ruiz', value: 'Posted 2026-09-20', href: 'https://www.linkedin.com/in/ana-ruiz' } },
+    { kind: 'found', summary: 'An internal page', artifact: { kind: 'link', label: 'x', value: 'x', href: 'http://10.0.0.8/admin' } },
+    { kind: 'found', summary: 'No link at all', artifact: null },
+    { kind: 'worked', summary: 'Searched three directories', artifact: { kind: 'link', label: 'x', value: 'x', href: 'https://dir.es' } },
+  ], { id: 'h2', kind: 'agent', query: 'organisers of medieval fairs', label: 'Fair organisers' });
+  assert.deepEqual(finds.map((f) => f.candidate.title), ['Mercado Medieval de Toledo', 'Ana Ruiz']);
+  assert.equal(finds[0].candidate.contact.email, 'feria@toledo.es');
+  assert.equal(finds[0].candidate.contact.whatsapp, '925330000', 'after "Tel:" it is a phone');
+  assert.equal(finds[1].candidate.contact.whatsapp, undefined, 'a date is not a phone number');
+  assert.equal(finds[1].candidate.type, 'people', 'a /in/ profile is a person');
+  assert.equal(finds[0].candidate.source, 'agent');
+  assert.equal(finds[0].candidate.data.found_via, 'agent');
+  assert.equal(phoneIn('Call +34 600 111 222 today'), '34600111222');
+  assert.equal(phoneIn('Order 20260925 shipped'), null);
+
+  const ask = agentObjective({ query: 'organisers of medieval fairs', area: 'Spain' });
+  assert.ok(ask.objective.length <= OBJECTIVE_MAX_H && ask.why.length <= WHY_MAX_H, 'fits the columns it is written to');
+  assert.ok(ask.objective.includes('organisers of medieval fairs in Spain'));
+  assert.ok(ask.why.includes('artifact.href'), 'the delivery contract travels with the mandate');
+
+  // 7. How each hunt is doing, counted from the rows it put in the pool.
+  const y = huntYield([
+    { hunt_id: 'h1', status: 'new', drafted: false },
+    { hunt_id: 'h1', status: 'new', drafted: true },
+    { hunt_id: 'h1', status: 'dismissed', drafted: false },
+    { hunt_id: 'h1', status: 'acted', drafted: false },
+    { hunt_id: 'h2', status: 'new', drafted: false },
+  ]);
+  assert.deepEqual(y.h1, { found: 4, waiting: 1, drafted: 2, binned: 1 });
+  const ctx = { webReady: true, workerReady: true, commission: null };
+  const base = { kind: 'companies' as const, status: 'active' as const, last_run_at: '2026-09-25T03:00:00Z', last_found: 10, last_error: null };
+  assert.equal(huntLine(base, y.h1, ctx).text, '4 found · 2 drafted · 1 waiting');
+  assert.equal(huntLine({ ...base, last_error: 'Exa 401: invalid key' }, y.h1, ctx).text, 'Last run failed: Exa 401: invalid key', 'a failure leads — it and a quiet hunt must not read alike');
+  assert.equal(huntLine({ ...base, last_error: 'x' }, y.h1, ctx).tone, 'warn');
+  assert.equal(huntLine(base, y.h1, { ...ctx, webReady: false }).tone, 'warn', 'a hunt that cannot run says so');
+  assert.equal(huntLine({ ...base, status: 'paused' }, y.h1, ctx).text, 'Paused');
+  assert.equal(huntLine({ ...base, last_run_at: null }, { found: 0, waiting: 0, drafted: 0, binned: 0 }, ctx).text, 'Runs on the next pass');
+  assert.equal(huntLine({ ...base, last_found: 0 }, { found: 0, waiting: 0, drafted: 0, binned: 0 }, ctx).text, 'Found nothing last run — try other words');
+  assert.equal(huntLine(base, { found: 9, waiting: 1, drafted: 0, binned: HUNT_BIN_FLAG }, ctx).text, `${HUNT_BIN_FLAG} of ${HUNT_BIN_FLAG} set aside, none drafted — change the words or drop it`);
+  const agent = { ...base, kind: 'agent' as const };
+  assert.equal(huntLine(agent, { found: 0, waiting: 0, drafted: 0, binned: 0 }, { ...ctx, commission: { status: 'draft' } }).text, 'Waiting for your go-ahead', 'approving the mandate is the second, deliberate act');
+  assert.equal(huntLine(agent, { found: 0, waiting: 0, drafted: 0, binned: 0 }, { ...ctx, commission: { status: 'active' } }).text, 'With the worker — finds land here as they come');
+  assert.equal(huntLine(agent, { found: 0, waiting: 0, drafted: 0, binned: 0 }, { ...ctx, workerReady: false, commission: { status: 'draft' } }).tone, 'warn');
+
+  // 8. Suggestions: malformed, duplicated or already-hunted ones are dropped.
+  const parsed = parseSuggestions({ hunts: [
+    { kind: 'companies', query: 'museum shops in Spain', area: null, label: 'Museum shops', why: 'You said museum shops.' },
+    { kind: 'companies', query: 'Museum shops in Spain!', why: 'dup' },
+    { kind: 'maps', query: 'x shops' },
+    { kind: 'people', query: 'gift shops' },
+    { kind: 'people', query: 'organisers of medieval fairs', area: 'Spain', label: 'Fair organisers', why: 'Where you sell in summer.' },
+    { kind: 'agent', query: 'exhibitor lists of craft fairs in Spain' },
+    { kind: 'companies', query: 'bridal boutiques in Madrid' },
+    { kind: 'companies', query: 'tourist boutiques in Toledo' },
+  ] }, ['Gift shops']);
+  assert.deepEqual(parsed.map((p) => p.query), ['museum shops in Spain', 'organisers of medieval fairs', 'exhibitor lists of craft fairs in Spain', 'bridal boutiques in Madrid']);
+  assert.equal(parsed.length, MAX_SUGGESTIONS);
+  const fromOffer = suggestionsFromOffer({ sells: 'Handmade silver jewellery', for_who: 'Medieval fairs, museum shops and tourist boutiques' }, 'Toledo, Spain', []);
+  assert.deepEqual(fromOffer.map((s) => `${s.kind}:${s.query}`), ['companies:Medieval fairs', 'companies:museum shops', 'companies:tourist boutiques', 'people:owners and buyers at Medieval fairs']);
+  assert.ok(fromOffer.every((s) => s.area === 'Toledo, Spain'));
+
+  // 9. Matches files each find under the search that brought it in.
+  const now = new Date('2026-09-25T10:00:00Z');
+  const row = (id: string, data: Record<string, unknown>, o: Partial<OpportunityV2> = {}) => bizV2({ id, title: id, data, created_at: '2026-09-25T03:00:00Z', ...o });
+  const feed = matchFeedH({
+    now, targetSegments: ['pest control', 'm'], triage: [], moves: [moveV2({ id: 'gig', job: 'watch', kind: 'earn' })],
+    pipeline: [
+      row('w1', { hunt_id: 'h1', hunt_label: 'Jewellery stockists', segment: 'shops that stock handmade jewellery', host: 'a.es' }, { contact: { email: 'x@a.es' }, source: 'web' }),
+      row('w2', { hunt_id: 'h1', hunt_label: 'Jewellery stockists', segment: 'shops that stock handmade jewellery', host: 'b.es' }, { source: 'web', url: 'https://b.es' }),
+      row('p1', { hunt_id: 'h3', hunt_label: 'Museum buyers', role: 'Buyer · Museo del Greco', host: 'linkedin.com' }, { type: 'people', contact: {}, url: 'https://linkedin.com/in/p1', source: 'web' }),
+      row('m1', { segment: 'pest control', city: 'Manila' }),
+      row('junk', { segment: 'm', city: 'Toledo' }),
+    ],
+  });
+  const lensOfId = Object.fromEntries(feed.map((i) => [i.id, i.lens.key]));
+  assert.deepEqual([lensOfId.w1, lensOfId.p1, lensOfId.m1, lensOfId.junk], ['hunt:h1', 'hunt:h3', 'seg:pest control', 'clients']);
+  assert.deepEqual(matchLenses(feed).map((l) => `${l.label} ${l.count}`), ['Jewellery stockists 2', 'Museum buyers 1', 'Pest control 1', 'Clients 1', 'Gigs & jobs 1'], 'hunts, then segments, then kinds');
+  const byId = Object.fromEntries(feed.map((i) => [i.id, i]));
+  assert.equal(byId.w1.sub, 'Jewellery stockists · a.es', "the hunt's short name and the site, not the sentence the user typed");
+  assert.equal(byId.p1.sub, 'Buyer · Museo del Greco · linkedin.com');
+  assert.equal(byId.p1.facts, 'Public profile');
+  // 10. Work's path to money says the Scout is not only Maps any more.
+  const { businessMachine: bm } = await import('../../src/lib/copilot/machine');
+  const flat = { stages: [], bottleneck: null, outsideFunnel: 0, queueCount: 0, wonAmount: 0, currency: '$', goal: null };
+  assert.equal(bm({ ...flat, segments: ['gift shops'], area: 'Toledo, Spain', hunts: 2 })[0].detail, 'gift shops in Toledo, Spain · 2 hunts');
+  assert.equal(bm({ ...flat, segments: [], area: null, hunts: 1 })[0].detail, '1 hunt', 'no "No segments set" when a hunt is doing the finding');
+  assert.equal(bm({ ...flat, segments: [], area: null })[0].detail, 'No segments set');
+  console.log('copilot-core: hunts checks passed');
+}
+
+huntsCore().catch((e) => { console.error(e); process.exit(1); });

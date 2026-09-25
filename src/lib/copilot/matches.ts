@@ -123,7 +123,15 @@ export interface MatchItem {
   judged: boolean;
   /** Judged, and judged a poor fit. Folded out of the list, never dropped. */
   weak: boolean;
+  /**
+   * Which search found it, as the chip it files under: a hunt, a Maps segment,
+   * or the kind of a feed find. The chips are the user's own searches, so the
+   * filter answers "what did THIS one bring in" rather than a fixed taxonomy.
+   */
+  lens: MatchLens;
 }
+
+export interface MatchLens { key: string; label: string }
 
 export interface MatchFeedInput {
   now: Date;
@@ -159,16 +167,17 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
     // scroll past. Same floor canTriage applies to the deck.
     if (!channel && !url) continue;
     const tag = whatOf(o, input.targetSegments);
+    const group = groupOfType(o.type);
     businesses.push({
       id: o.id,
       from: 'business',
       answer: 'triage',
-      group: groupOfType(o.type),
+      group,
       title: o.title,
       reason: o.reason ?? '',
       tag,
       sub: join([tag ? capital(tag) : null, placeOf(o.data)]),
-      facts: join([ratingOf(o.data), channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : 'Link only']),
+      facts: join([ratingOf(o.data), channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : o.type === 'people' ? 'Public profile' : 'Link only']),
       image: imageOf(o.data),
       initials: monogramOf(o.title),
       channel,
@@ -179,6 +188,7 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
       costLabel: null,
       judged: !!o.scored_at,
       weak: isWeak(o),
+      lens: lensOf(o, group, input.targetSegments),
     });
     scoreOf.set(o.id, o.score ?? 0);
   }
@@ -209,6 +219,7 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
       costLabel: null,
       judged: false,
       weak: false,
+      lens: { key: groupOfKind(kind), label: MATCH_GROUP_LABEL[groupOfKind(kind)] },
     });
   }
   for (const m of input.moves) {
@@ -233,6 +244,7 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
       costLabel: m.cost_label,
       judged: false,
       weak: false,
+      lens: { key: groupOfKind(m.kind), label: MATCH_GROUP_LABEL[groupOfKind(m.kind)] },
     });
   }
 
@@ -250,6 +262,22 @@ export interface MatchCounts {
   all: number;
   fresh: number;
   by: Record<MatchGroup, number>;
+}
+
+/**
+ * The chips: every search that brought something in, with its count. The
+ * user's hunts first, then their Maps segments, then the kinds of feed find —
+ * the order a person would name them in, most specific first.
+ */
+export function matchLenses(items: MatchItem[]): Array<MatchLens & { count: number }> {
+  const by = new Map<string, MatchLens & { count: number }>();
+  for (const i of items) {
+    const l = by.get(i.lens.key) ?? { ...i.lens, count: 0 };
+    l.count += 1;
+    by.set(i.lens.key, l);
+  }
+  const rank = (k: string) => (k.startsWith('hunt:') ? 0 : k.startsWith('seg:') ? 1 : 2 + Math.max(0, (MATCH_GROUPS as readonly string[]).indexOf(k)));
+  return [...by.values()].sort((a, b) => rank(a.key) - rank(b.key) || (rank(a.key) < 2 ? b.count - a.count : 0));
 }
 
 export function matchCounts(items: MatchItem[]): MatchCounts {
@@ -411,6 +439,13 @@ const str = (d: Record<string, unknown> | null | undefined, k: string) => {
  * a typo rather than a market.
  */
 function whatOf(o: Pick<Opportunity, 'id' | 'status' | 'source' | 'source_kind' | 'data' | 'reason' | 'title'>, targetSegments: string[]): string | null {
+  // A person found by a hunt is best described by their role; a company found
+  // by one, by the hunt's own short name — its segment is the whole sentence
+  // the user typed, which is the chip's job, not the card's.
+  const role = str(o.data, 'role');
+  if (role) return role;
+  const hunt = str(o.data, 'hunt_label');
+  if (hunt) return hunt;
   const category = str(o.data, 'category');
   if (category && category.length >= 3) return category;
   const seg = segmentOf({ id: o.id, status: o.status, source: o.source, source_kind: o.source_kind, data: o.data, reason: o.reason, title: o.title }, targetSegments);
@@ -445,7 +480,16 @@ export function placeOf(d: Record<string, unknown> | null | undefined): string |
       if (tail.length) return tail.join(', ');
     }
   }
-  return city ?? str(d, 'area');
+  // A company found on the web has no address on file — its site is where it is.
+  return city ?? str(d, 'area') ?? str(d, 'host');
+}
+
+function lensOf(o: Pick<Opportunity, 'id' | 'status' | 'source' | 'source_kind' | 'data' | 'reason' | 'title'>, group: MatchGroup, targetSegments: string[]): MatchLens {
+  const hunt = str(o.data, 'hunt_id');
+  if (hunt) return { key: `hunt:${hunt}`, label: str(o.data, 'hunt_label') ?? 'Hunt' };
+  const seg = segmentOf({ id: o.id, status: o.status, source: o.source, source_kind: o.source_kind, data: o.data, reason: o.reason, title: o.title }, targetSegments);
+  if (seg && isSearchableSegment(seg)) return { key: `seg:${seg}`, label: capital(seg) };
+  return { key: group, label: MATCH_GROUP_LABEL[group] };
 }
 
 /** "4.6★ (31)", one decimal as Maps prints it. Nothing when there is no rating: no reviews is not a zero. */

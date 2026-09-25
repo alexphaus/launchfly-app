@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { ASK_LABEL, worthDoing, type AskRow, type DoneRow } from '@/lib/copilot/today';
 import { agoLabel } from '@/lib/copilot/machine';
+import type { MatchStage } from '@/lib/copilot/matches';
 import { KIND_LABEL } from '@/lib/copilot/moves';
 import type { HomeData, Move } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
@@ -18,7 +19,7 @@ import { CallCard, FirstRun } from '../views/NowView';
 import type { Derived } from './derive';
 import { IconAlert, IconCheck, IconChevron } from './icons2';
 
-export default function TodayTab({ home, d, actions, briefing, finding }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean; finding: boolean }) {
+export default function TodayTab({ home, d, actions, briefing, finding, openMatches }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean; finding: boolean; openMatches: (s: MatchStage) => void }) {
   return (
     <>
       {home.decision
@@ -27,13 +28,13 @@ export default function TodayTab({ home, d, actions, briefing, finding }: { home
         ? <FirstRun home={home} actions={actions} finding={finding} />
         : <NoCallYet home={home} actions={actions} briefing={briefing} />}
 
-      <DoneForYou home={home} d={d} actions={actions} />
+      <DoneForYou home={home} d={d} actions={actions} openMatches={openMatches} />
 
       {d.asks.length > 0 && (
         <>
           <div className="cp-section"><span className="lead">Needs you</span><span className="count">{d.asks.length}</span></div>
           <div className="cp-list cp2-rows">
-            {d.asks.map((a) => <AskLine key={a.key} ask={a} actions={actions} />)}
+            {d.asks.map((a) => <AskLine key={a.key} ask={a} actions={actions} openMatches={openMatches} />)}
           </div>
         </>
       )}
@@ -75,15 +76,16 @@ function NoCallYet({ home, actions, briefing }: { home: HomeData; actions: Actio
  * list rather than above it: with no nightly run, everything below was worked
  * out the moment the app opened, and that must not look like a quiet night.
  */
-function DoneForYou({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+function DoneForYou({ home, d, actions, openMatches }: { home: HomeData; d: Derived; actions: Actions; openMatches: (s: MatchStage) => void }) {
   const r = d.done;
   const tz = home.profile.timezone;
   const at = r.nightlyAt ? clock(r.nightlyAt, tz) : null;
   const go = (row: DoneRow) => {
-    if (row.target === 'matches') actions.setTab('matches');
+    if (row.target === 'matches') openMatches('new');
     else if (row.target === 'sources') actions.openSheet({ kind: 'watchlist' });
     else if (row.target === 'project' && row.id) actions.openSheet({ kind: 'commission', id: row.id });
-    else if (row.target === 'replies') actions.openSheet({ kind: 'stage', stage: 'replied' });
+    // Replies are answered where they live — Matches → Replied — not in a list sheet.
+    else if (row.target === 'replies') openMatches('replied');
   };
 
   return (
@@ -148,10 +150,11 @@ function DoneForYou({ home, d, actions }: { home: HomeData; d: Derived; actions:
 }
 
 /** One ask. The chip says what kind of answer it wants before the words do. */
-function AskLine({ ask, actions }: { ask: AskRow; actions: Actions }) {
+function AskLine({ ask, actions, openMatches }: { ask: AskRow; actions: Actions; openMatches: (s: MatchStage) => void }) {
   const open = () => {
     if (ask.kind === 'confirm') actions.openSheet({ kind: 'capture' });
-    else if (ask.kind === 'send') actions.openSheet({ kind: 'queue' });
+    // The drafts are sent where they live, one tap each on Matches → To send.
+    else if (ask.kind === 'send') openMatches('to_send');
     else if (ask.id) actions.openSheet({ kind: 'commission', id: ask.id });
   };
   return (

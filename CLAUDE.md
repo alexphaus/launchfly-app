@@ -92,9 +92,9 @@ it returns is a column or table the code expects and the database lacks, with
 the file that adds it. No rows and a `PGRST204` still showing means the cache is
 stale, not the schema — `notify pgrst, 'reload schema';`.
 
-Hunts (`copilot_hunts`, 20260925) need `EXA_API_KEY` for Companies and People
-and the research worker (`COPILOT_JOBS_URL`) for Agent hunts. Without them the
-hunts sheet says which is missing; nothing else changes.
+The app's own web searches (`copilot_hunts`, 20260925) need `EXA_API_KEY` and
+that migration. Without either, Maps and feeds run as before and the Scout on
+Work says what is missing — there is no screen of searches to check instead.
 
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —
@@ -125,7 +125,9 @@ separately here and will be out of order.
   so a stacked PR merges into the wrong branch and the work silently never
   reaches `v2.7.1`. (This has been got wrong once, and cost two phases.)
 - Commit messages explain *why*, in prose. Look at recent history for the voice.
-- Do not create a PR unless asked.
+- Open a PR against `v2.7.1` for every change you push, without waiting to be
+  asked and without only offering one: the owner reviews and merges from PRs,
+  so a pushed branch with no PR is work nobody is looking at.
 
 ---
 

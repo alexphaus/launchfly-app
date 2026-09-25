@@ -1,14 +1,18 @@
 // src/lib/copilot/supply/web.ts
-// The hunts that are web searches: Companies and People, one Exa search each.
+// The web searches the app plans for itself: companies and people, one Exa
+// search each.
 //
-// A hunt is the user's own words (lib/copilot/hunts.ts), so this adapter does
-// not decide what to look for — it runs what was asked, in the category the
-// kind names, and turns what came back into candidates the pool already knows
-// how to dedupe, rank and meter. Then, for companies only, it opens each site
-// and reads it for an email or a WhatsApp link, because a company with no way to
-// reach it is a row you can only scroll past. People are contacted by hand from
-// their profile, which is also why their profile is never opened: LinkedIn
-// refuses scripts, and the search index already says the page exists.
+// What to search for is not asked of anybody. planHunts (hunting.ts) works it
+// out from the offer, the working file, the goals and where the user is, keeps
+// the searches that bring in people worth writing to, and replaces the ones that
+// do not — at the start of every run, so the first run with an offer already
+// searches. This adapter runs what was planned, in the category the kind names,
+// and turns what came back into candidates the pool already knows how to dedupe,
+// rank and meter. Then, for companies only, it opens each site and reads it for
+// an email or a WhatsApp link, because a company with no way to reach it is a
+// row you can only scroll past. People are contacted by hand from their profile,
+// which is also why their profile is never opened: LinkedIn refuses scripts, and
+// the search index already says the page exists.
 //
 // Billable: Exa charges per search. Metered against the monthly allowance like
 // Maps (invariant 6 says a FREE adapter must not spend it; this one is not free).
@@ -17,8 +21,10 @@
 // hunt that broke never reads as one that found nothing (invariant 13). One
 // hunt failing does not stop the others.
 
-import { candidatesFromHits, contactFromHtml, contactPageLink, exaCategoryFor, exaQueryFor, HUNT_RESULTS, withPageContact } from '../hunts';
-import { loadHunts, recordHuntRun } from '../store';
+import { planHunts } from '../hunting';
+import { candidatesFromHits, contactFromHtml, contactPageLink, exaCategoryFor, exaQueryFor, HUNT_RESULTS, withPageContact, type Hunt } from '../hunts';
+import { offerIsEmpty } from '../offer';
+import { recordHuntRun } from '../store';
 import { exaConfigured, exaFind } from '../watch/exa';
 import { openPage } from './page';
 import type { SupplyAdapter, SupplyCandidate } from './types';
@@ -27,19 +33,23 @@ import type { SupplyAdapter, SupplyCandidate } from './types';
 const MIN_HUNT_MS = 6_000;
 /** Sites read at once. Enough to finish a hunt's ten inside the budget; few enough to be polite. */
 const PAGE_CONCURRENCY = 5;
+const OUT_OF_TIME = 'Out of time on this run — it goes first next time';
+/** Never run, or cut off by the clock, sorts first; then whichever ran longest ago. */
+const waited = (h: Hunt) => (!h.last_run_at || h.last_error === OUT_OF_TIME ? '' : h.last_run_at);
 
 export const webAdapter: SupplyAdapter = {
   key: 'web',
-  label: 'Your hunts (web)',
+  label: 'Web search',
   billable: true,
-  async available(profile) {
-    if (!exaConfigured()) return false;
-    const { hunts } = await loadHunts(profile.id);
-    return hunts.some((h) => h.status === 'active' && exaCategoryFor(h.kind));
-  },
+  // The plan needs an offer to be read from; that is the whole of the setup.
+  available: (profile) => exaConfigured() && !offerIsEmpty(profile.offer),
   async discover(profile, { limit, deadline }) {
-    const { hunts } = await loadHunts(profile.id);
-    const live = hunts.filter((h) => h.status === 'active' && exaCategoryFor(h.kind));
+    // Throws when the plan cannot be read, made or saved; runSupply keeps it on
+    // this adapter's entry and the Scout on Work reads it back (loadHunting).
+    // Never an empty list over a failure.
+    // Longest-waiting first, so a search the clock cut off really does go first next run.
+    const live = (await planHunts(profile, { deadline })).filter((h) => exaCategoryFor(h.kind))
+      .sort((a, b) => waited(a).localeCompare(waited(b)));
     if (!live.length) return [];
     // The allowance is shared across hunts rather than spent by the first one:
     // each gets at least a few, and none asks the index for more than a page.
@@ -48,7 +58,7 @@ export const webAdapter: SupplyAdapter = {
     for (const h of live) {
       if (out.length >= limit) break;
       if (deadline && deadline - Date.now() < MIN_HUNT_MS) {
-        await recordHuntRun(profile.id, h.id, { found: 0, error: 'Out of time on this run — it goes first next time' });
+        await recordHuntRun(profile.id, h.id, { found: 0, error: OUT_OF_TIME });
         continue;
       }
       try {

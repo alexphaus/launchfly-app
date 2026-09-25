@@ -4,7 +4,6 @@ import type { WorkingSection } from '@/lib/copilot/working';
 import type { Authority } from '@/lib/copilot/commission';
 import type { WorthKind } from '@/lib/copilot/worth';
 import type { AskAnswer } from '@/lib/copilot/ask';
-import type { HuntKind, HuntSuggestion } from '@/lib/copilot/hunts';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -71,9 +70,7 @@ export type SheetState =
   /** The confirm card — opened drafts, or replies with no ending — as a sheet. */
   | { kind: 'capture' }
   /** Log deep work. The one number on You that nothing else can supply. */
-  | { kind: 'focus' }
-  /** What it looks for: places, hunts, posts — one list, each editable. */
-  | { kind: 'hunts' };
+  | { kind: 'focus' };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -221,10 +218,4 @@ export interface Actions {
   /** Record a block of deep work. Resolves false when it did not save. */
   logFocus(input: { minutes: number; on?: string; note?: string }): Promise<boolean>;
   removeFocus(id: string): Promise<void>;
-  /** Add a hunt. An agent hunt comes back with its draft mandate open, to grant. */
-  saveHunt(input: { kind: HuntKind; query: string; area: string | null; label?: string; origin?: 'user' | 'suggested' }): Promise<{ ok: boolean; error?: string }>;
-  setHuntStatus(id: string, status: 'active' | 'paused'): Promise<void>;
-  rerunHunt(id: string): Promise<void>;
-  removeHunt(id: string): Promise<void>;
-  suggestHunts(): Promise<{ ok: boolean; suggestions?: HuntSuggestion[]; from?: 'model' | 'offer'; note?: string | null; error?: string }>;
 }

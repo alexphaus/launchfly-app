@@ -1,36 +1,28 @@
 'use client';
-// Matches: who is worth contacting, from the night it is found to the reply.
+// Matches: what the app found for you, already judged, one tap from done.
 //
-// The morning this tab is for: you wake up, it went looking overnight, and here
-// is who it found — businesses to pitch, gigs and roles to answer, people worth
-// meeting, signals worth reading. See lib/copilot/matches.ts for what is kept
-// out, and why a poor fit is folded rather than listed.
+// The morning this tab is for: it went looking overnight, and here is who is
+// worth writing to — businesses to pitch, gigs and roles to answer, people
+// worth meeting, signals worth reading — and nothing else. What to look for is
+// the app's to work out (hunting.ts plans its searches from the offer), and
+// what to show is the app's to judge (matches.ts shows only what clears the
+// bar). An earlier version put both on the screen — a "looking for" card, a
+// sheet of searches to manage, a card explaining poor fits and a fold holding
+// them — and its owner's verdict was the whole design brief for this one:
+// serve, not configure.
 //
-// Four stages across the top — New, To send, Waiting, Replied — and one shown at
-// a time. The send queue used to be a card above the list: the largest thing on
-// the screen whatever it held, so one draft outweighed sixty matches. As a stage
-// it is one tap away and sized by what is in it. The bar is hidden until there is
-// a second stage to show, so a new account sees a list, not an empty pipeline.
+// Four stages as pills — New, To send, Waiting, Replied — one shown at a time.
+// A draft is sent from its own card, in the user's own app, in one tap, and
+// the card asks "did it go?" right there; the one-at-a-time queue sheet was a
+// second place to do the same thing, out of context.
 //
-// Every card leads with a tile — the listing's photo when it came with one,
-// initials otherwise — and a line saying what it is and where, because a list is
-// scanned before it is read, and "Dental laboratory · Toledo, OH" says in one
-// glance what sixty cards labelled "M" never did.
-//
-// The deck is laid flat here, and it still learns. Every business is answered
-// through the triage route, so "Draft opener" and "Not for me" feed the same
-// keep-rate the swipe did and the next morning's order still follows what this
-// person actually drafts.
-//
-// The queue gate survives the move. With forty drafts written and the oldest
-// days old, another draft is avoidance, not progress — but a hard block on your
-// own data gets routed around, so it is the pattern "Find new" already used:
-// the first tap states the trade-off, the second proceeds anyway.
+// The deck is laid flat here, and it still learns: every business is answered
+// through the triage route, so "Draft" and "Not for me" feed the keep-rate the
+// ranker orders by. The queue gate survives too — with forty drafts written and
+// the oldest days old, the first tap on Draft states the trade-off and the
+// second proceeds, the pattern "Find new" already used.
 import { useState } from 'react';
-import {
-  MATCH_STAGES, MATCH_STAGE_LABEL, tintOf,
-  type MatchGroup, type MatchItem, type MatchStage, type StageCard,
-} from '@/lib/copilot/matches';
+import { MATCH_STAGES, MATCH_STAGE_LABEL, tintOf, type MatchGroup, type MatchItem, type MatchStage, type StageCard } from '@/lib/copilot/matches';
 import { PLANS } from '@/lib/copilot/plans';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
@@ -42,8 +34,9 @@ import { IconChevron, IconExternal, MatchGlyph } from './icons2';
 /** Past this the list folds. Twenty is a morning's worth; two hundred is a database. */
 const PAGE = 20;
 
-export default function MatchesTab({ home, d, actions, finding }: { home: HomeData; d: Derived; actions: Actions; finding: boolean }) {
-  const [picked, setPicked] = useState<MatchStage>('new');
+export default function MatchesTab({ home, d, actions, finding, stage: picked, onStage }: {
+  home: HomeData; d: Derived; actions: Actions; finding: boolean; stage: MatchStage; onStage: (s: MatchStage) => void;
+}) {
   const count: Record<MatchStage, number> = {
     new: d.counts.all,
     to_send: d.stages.to_send.length,
@@ -51,173 +44,71 @@ export default function MatchesTab({ home, d, actions, finding }: { home: HomeDa
     replied: d.stages.replied.length,
   };
   // A stage emptied by the last answer — the last draft sent — falls back to
-  // New, rather than leaving an empty list under a tab that has left the bar.
+  // New, rather than leaving an empty list under a pill that has gone.
   const stage: MatchStage = picked !== 'new' && count[picked] === 0 ? 'new' : picked;
-  const bar = MATCH_STAGES.filter((s) => s === 'new' || count[s] > 0);
+  const pills = MATCH_STAGES.filter((s) => s === 'new' || count[s] > 0);
 
   return (
     <>
-      {bar.length > 1 && (
-        <div className="cp2-stagebar" role="tablist" aria-label="Where they are">
-          {bar.map((s) => (
-            <button key={s} role="tab" aria-selected={stage === s} className={stage === s ? 'on' : ''} onClick={() => setPicked(s)}>
+      {pills.length > 1 && (
+        <div className="cp2-chips" role="tablist" aria-label="Where they are">
+          {pills.map((s) => (
+            <button key={s} role="tab" aria-selected={stage === s} className={`cp-fchip ${stage === s ? 'active' : ''}`} onClick={() => onStage(s)}>
               {MATCH_STAGE_LABEL[s]} <span className="n">{count[s]}</span>
             </button>
           ))}
         </div>
       )}
-      {stage === 'new'
-        ? <NewMatches home={home} d={d} actions={actions} finding={finding} onSendFirst={() => setPicked('to_send')} />
-        : <StageList stage={stage} home={home} d={d} actions={actions} />}
+      <div className="cp2-matchlist">
+        {stage === 'new'
+          ? <NewMatches home={home} d={d} actions={actions} finding={finding} onSendFirst={() => onStage('to_send')} />
+          : <StageList stage={stage} home={home} d={d} actions={actions} />}
+      </div>
     </>
   );
 }
 
 function NewMatches({ home, d, actions, finding, onSendFirst }: { home: HomeData; d: Derived; actions: Actions; finding: boolean; onSendFirst: () => void }) {
   const shell = useShell();
-  const [lens, setLens] = useState<string>('all');
   const [shown, setShown] = useState(PAGE);
-  const [showPoor, setShowPoor] = useState(false);
-  const [confirmFind, setConfirmFind] = useState(false);
-  // A chip whose last item was just answered disappears from the row, so it
-  // cannot stay selected — that left an empty list under no active chip.
-  const active = lens !== 'all' && !d.lenses.some((l) => l.key === lens) ? 'all' : lens;
-  const items = active === 'all' ? d.good : d.good.filter((i) => i.lens.key === active);
+  const items = d.good;
   const b = home.billing;
-  const { what, where } = d.looking;
-  // Nothing searching for businesses or people: no Maps targeting and no hunt.
-  // Feed finds arrive without either, so this must not hide them — somebody
-  // watching job feeds would otherwise have finds on Today and nowhere to open them.
-  const noTargeting = !d.searching;
-  const openHunts = () => actions.openSheet({ kind: 'hunts' });
-  const sources = home.watchSources.length;
-  // After the Maps search, the rest of what runs at night, counted.
-  const summary = [
-    d.liveHunts ? `${d.liveHunts} hunt${d.liveHunts === 1 ? '' : 's'}` : null,
-    sources ? `${sources} source${sources === 1 ? '' : 's'}` : null,
-  ].filter(Boolean).join(' · ');
-
-  const find = () => (d.queueBacked && !confirmFind ? setConfirmFind(true) : void actions.findMatches());
+  const setAside = d.feed.filter((i) => i.below).length;
+  // Not under "say what you sell": with no offer there is nothing to draft from,
+  // so a fresh look would only fill a list nobody can act on.
+  const canLook = d.searching && !d.noOffer && !finding && b.matches.remaining > 0;
 
   return (
     <>
-      {/* The search, always in view. It is the one input on this tab that decides
-          everything under it, and it was invisible: a segment of "m" searched
-          nightly and the only trace on screen was a letter on every card. */}
-      {!noTargeting && (
-        <button className="cp2-lookfor" onClick={openHunts}>
-          <span className="cp2-lookfor-l">Looking for</span>
-          <span className="cp2-lookfor-v">
-            {what && where ? <><b>{what}</b> in <b>{where}</b>{summary ? ' · ' : ''}</> : null}
-            {summary}
-          </span>
-          <span className="cp2-lookfor-c">Change</span>
-        </button>
-      )}
-
-      {/* One chip per search that brought something in. One search is not a
-          filter: "All 60 · Clients 60" was two chips saying the same number. */}
-      {d.lenses.length > 1 && (
-        <div className="cp2-chips" role="tablist" aria-label="Filter matches">
-          <button role="tab" aria-selected={active === 'all'} className={`cp-fchip ${active === 'all' ? 'active' : ''}`} onClick={() => { setLens('all'); setShown(PAGE); }}>
-            All <span className="n">{d.counts.all}</span>
-          </button>
-          {d.lenses.map((l) => (
-            <button key={l.key} role="tab" aria-selected={active === l.key} className={`cp-fchip ${active === l.key ? 'active' : ''}`} onClick={() => { setLens(l.key); setShown(PAGE); }}>
-              {l.label} <span className="n">{l.count}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* The ranker already says so in each card's reason; this says it once, at
-          the top, with the cause and the fix. Sixty poor fits under "Matched for
-          you" is a search pointed at the wrong world, not a busy night. */}
-      {d.fit.majority && (
-        <div className="cp-card cp2-poorfit">
-          <div className="cp-eyebrow">Mostly poor fits</div>
-          <p className="cp2-lede">
-            It judged {d.fit.weak} of {d.fit.judged} a poor fit for what you sell. That is usually the search, not the market
-            {what && where ? <> — right now it looks for <b>{what}</b> in <b>{where}</b>.</> : '.'}
-          </p>
-          <button className="cp-btn primary block" onClick={openHunts}>Change what it looks for</button>
-        </div>
-      )}
-
-      {/* No heading over nothing: with every find folded as a poor fit, the card
-          above has already said what there is. */}
-      {(items.length > 0 || !d.fit.majority) && (
-        <div className="cp-section">
-          <span className="lead">Matched for you</span>
-          <span className="count">{d.counts.fresh ? `${d.counts.fresh} new` : ''}</span>
-        </div>
-      )}
-
       {items.length ? (
         <>
-          {noTargeting && (
-            <div className="cp-note">
-              No businesses or people are being searched for yet — these came from sources you watch.
-              {' '}<button className="cp-textlink" onClick={openHunts}>Choose who to look for</button>
-            </div>
-          )}
           {items.slice(0, shown).map((i) => <MatchCard key={i.id} item={i} d={d} actions={actions} onSendFirst={onSendFirst} />)}
           {items.length > shown && (
-            <button className="cp2-more" onClick={() => setShown((n) => n + PAGE)}>Show {Math.min(PAGE, items.length - shown)} more of {items.length}</button>
+            <button className="cp2-more" onClick={() => setShown((n) => n + PAGE)}>Show {Math.min(PAGE, items.length - shown)} more</button>
           )}
         </>
-      ) : noTargeting && !d.poor.length ? (
+      ) : d.noOffer ? (
+        // The one thing it cannot work out: what the user sells. Everything it
+        // searches for and every opener it writes is read from this.
         <div className="cp-card">
-          <div className="cp-eyebrow">Nothing to look for yet</div>
-          <p className="cp2-lede">Say who you want to reach, in your own words — shops on Maps, companies, a few key people. It goes and finds real ones every night.</p>
-          <button className="cp-btn primary block cp-call-do" onClick={openHunts}>Choose who to look for</button>
+          <div className="cp-eyebrow">One thing first</div>
+          <p className="cp2-lede">Say what you sell, in a sentence. It works out who would buy it, goes and finds them, and brings back only the ones worth your time.</p>
+          <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'offer' })}>Say what you sell</button>
         </div>
-      ) : d.fit.majority ? null : (
+      ) : (
         <div className="cp-empty">
           {finding
             ? <><b>Looking now</b>Real listings and real pages, not a sample — the first pass takes a minute.</>
-            : d.poor.length
-            ? <><b>Nothing that fits yet</b>What it found, it judged a poor fit for what you sell. They are folded below.</>
-            : <><b>Nothing new to judge</b>Everything it found has been answered. The next pass runs tonight, or look now.</>}
+            : !d.searching
+            // Said rather than shown as a quiet morning: nothing on this server
+            // can search yet, and the Scout on Work names what is missing.
+            ? <><b>Nothing can look for you yet</b>Web search is not set up on this server. The Scout on Work says what is missing.</>
+            // "Every night" only while the nightly job is running; Today says when it is not.
+            : <><b>Nothing worth your time yet</b>{setAside ? `It went through ${setAside} and none were worth a message. ` : ''}{d.done.stale ? '' : 'It keeps looking every night.'}</>}
         </div>
       )}
 
-      {/* Folded, never dropped: a ranker can be wrong, and the reason on each card
-          says why it thought so. Under "All" only — a chip filters the list. */}
-      {d.poor.length > 0 && active === 'all' && (
-        showPoor ? (
-          <>
-            <div className="cp-section">
-              <span className="lead">Poor fits</span>
-              <span className="count">{d.poor.length}</span>
-            </div>
-            {d.poor.slice(0, PAGE).map((i) => <MatchCard key={i.id} item={i} d={d} actions={actions} onSendFirst={onSendFirst} />)}
-            {d.poor.length > PAGE && <div className="cp-note">Showing {PAGE} of {d.poor.length}. Change what it looks for rather than scrolling these.</div>}
-          </>
-        ) : (
-          <button className="cp2-more" onClick={() => setShowPoor(true)}>
-            Show {d.poor.length} poor fit{d.poor.length === 1 ? '' : 's'}
-          </button>
-        )
-      )}
-
-      {!noTargeting && (
-        <div className="cp2-findrow">
-          {confirmFind ? (
-            <div className="cp-note">
-              {d.queueCount} drafts are still waiting, the oldest {d.oldestDays} days. New matches will not change what happens to those.
-              {' '}<button className="cp-textlink" onClick={() => { setConfirmFind(false); void actions.findMatches(); }}>Find more anyway</button>
-            </div>
-          ) : (
-            <button className="cp-btn block" disabled={finding || b.matches.remaining === 0} onClick={find}>
-              {finding ? 'Looking…' : b.matches.remaining === 0 ? 'No matches left this month' : 'Find more now'}
-            </button>
-          )}
-          <p className="cp-help">
-            {b.matches.remaining.toLocaleString()} match{b.matches.remaining === 1 ? '' : 'es'} left this month.
-          </p>
-        </div>
-      )}
+      {canLook && <button className="cp2-lookmore" onClick={() => void actions.findMatches()}>Look again now</button>}
 
       {b.matches.remaining === 0 && b.effective !== 'operator' && (
         <div className="cp-card cp-wall">
@@ -236,46 +127,30 @@ function NewMatches({ home, d, actions, finding, onSendFirst }: { home: HomeData
 function StageList({ stage, home, d, actions }: { stage: Exclude<MatchStage, 'new'>; home: HomeData; d: Derived; actions: Actions }) {
   const [shown, setShown] = useState(PAGE);
   const cards = d.stages[stage];
-  const n = cards.length;
   return (
     <>
-      {stage === 'to_send' ? (
-        <div className="cp2-stagehead">
-          <p className="cp2-lede">
-            {n} written and not sent{d.oldestDays > 0 ? `, the oldest ${d.oldestDays} day${d.oldestDays === 1 ? '' : 's'}` : ''}.
-            {' '}Each one goes from your own WhatsApp or email, so it comes from you.
-          </p>
-          <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'queue' })}>
-            {n === 1 ? 'Open it and send' : 'Send them, one at a time'}
-          </button>
-        </div>
-      ) : (
-        <p className="cp2-stagenote">
-          {stage === 'waiting'
-            ? 'Sent, and nothing back yet. Oldest first — the one closest to going cold.'
-            : 'They answered. Log what happened next, so the record can count it.'}
-        </p>
-      )}
-
-      {cards.slice(0, shown).map((c) => <StageCardView key={c.key} card={c} actions={actions} />)}
-      {n > shown && <button className="cp2-more" onClick={() => setShown((x) => x + PAGE)}>Show {Math.min(PAGE, n - shown)} more of {n}</button>}
-
+      {cards.slice(0, shown).map((c) => <StageCardView key={c.key} card={c} home={home} actions={actions} />)}
+      {cards.length > shown && <button className="cp2-more" onClick={() => setShown((x) => x + PAGE)}>Show {Math.min(PAGE, cards.length - shown)} more</button>}
       {stage === 'to_send' && <div className="cp2-stagefoot"><QueueClear home={home} actions={actions} /></div>}
     </>
   );
 }
 
-function StageCardView({ card, actions }: { card: StageCard; actions: Actions }) {
+function StageCardView({ card, home, actions }: { card: StageCard; home: HomeData; actions: Actions }) {
   const [busy, setBusy] = useState(false);
+  // Set when the draft was opened in WhatsApp or mail. Only the user knows
+  // whether it went, so the card asks — once, in place, the moment they are back.
+  const [opened, setOpened] = useState(false);
   const open = () => {
     if (card.draftId) actions.openSheet({ kind: 'action', id: card.draftId });
     else if (card.oppId) actions.openSheet({ kind: 'opp', id: card.oppId });
   };
-  const replied = async () => {
-    if (!card.oppId) return;
-    setBusy(true);
-    try { await actions.recordOutcome({ kind: 'reply', opportunity_id: card.oppId }); } finally { setBusy(false); }
-  };
+  const run = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
+  // Server sending only when this copilot owns the identity it would go out
+  // under (invariant 4); otherwise the draft's own deep link, in their own app.
+  const owned = !!card.channel && home.channels[card.channel];
+  const via = card.channel === 'email' ? 'email' : 'WhatsApp';
+
   return (
     <div className="cp-card cp2-match">
       <div className="cp2-match-head">
@@ -286,22 +161,40 @@ function StageCardView({ card, actions }: { card: StageCard; actions: Actions })
           <span className={`cp2-match-status ${card.stage}`}>{card.status}</span>
         </button>
       </div>
-      {/* The clamp is on the inner span: on the padded box itself a third line
-          shows through the bottom padding. */}
       {card.preview && <p className="cp2-match-draft"><span>{card.preview}</span></p>}
       <div className="cp2-match-acts">
-        {card.stage === 'to_send' && <button className="cp-btn primary" onClick={open}>Open and send</button>}
-        {card.stage === 'waiting' && <button className="cp-btn" disabled={busy} onClick={() => void replied()}>{busy ? 'Logging…' : 'They replied'}</button>}
+        {card.stage === 'to_send' && card.draftId && (
+          opened ? (
+            <>
+              <span className="cp2-didit">Did it go?</span>
+              <button className="cp-btn primary" disabled={busy} onClick={() => void run(() => actions.markSent(card.draftId!))}>{busy ? 'Saving…' : 'Sent'}</button>
+              <button className="cp-btn ghost" disabled={busy} onClick={() => setOpened(false)}>Not yet</button>
+            </>
+          ) : owned ? (
+            <button className="cp-btn primary" disabled={busy} onClick={() => void run(() => actions.sendAction(card.draftId!))}>{busy ? 'Sending…' : 'Send'}</button>
+          ) : card.link ? (
+            <a className="cp-btn primary" href={card.link} target="_blank" rel="noreferrer" onClick={() => { actions.markOpened(card.draftId!); setOpened(true); }}>
+              Send on {via}
+            </a>
+          ) : (
+            <button className="cp-btn primary" onClick={open}>Open the draft</button>
+          )
+        )}
+        {card.stage === 'waiting' && (
+          <button className="cp-btn" disabled={busy} onClick={() => void run(() => actions.recordOutcome({ kind: 'reply', opportunity_id: card.oppId! }))}>
+            {busy ? 'Saving…' : 'They replied'}
+          </button>
+        )}
         {card.stage === 'replied' && <button className="cp-btn primary" onClick={open}>What happened?</button>}
-        <button className="cp2-more-info" onClick={open} aria-label={`More about ${card.title}`}><IconChevron /></button>
+        {!opened && <button className="cp2-more-info" onClick={open} aria-label={`More about ${card.title}`}><IconChevron /></button>}
       </div>
     </div>
   );
 }
 
 /**
- * One match. What it is, why it is here, and the one or two things to do about
- * it — in the card, so the answer leaves with the thing it was about.
+ * One match: what it is, why it is worth your time, and the one thing to do
+ * about it — in the card, so the answer leaves with the thing it was about.
  */
 function MatchCard({ item, d, actions, onSendFirst }: { item: MatchItem; d: Derived; actions: Actions; onSendFirst: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -325,7 +218,6 @@ function MatchCard({ item, d, actions, onSendFirst }: { item: MatchItem; d: Deri
     <>
       <span className="cp2-match-title">{item.title}</span>
       {item.sub && <span className="cp2-match-sub">{item.sub}</span>}
-      {item.facts && <span className="cp2-match-facts">{item.facts}</span>}
     </>
   );
 
@@ -334,7 +226,7 @@ function MatchCard({ item, d, actions, onSendFirst }: { item: MatchItem; d: Deri
       <div className="cp2-match-head">
         <MatchThumb image={item.image} initials={item.initials} title={item.title} group={item.group} />
         {openable ? <button className="cp2-match-id" onClick={open}>{id}</button> : <div className="cp2-match-id">{id}</div>}
-        {(item.fresh || item.saved) && <span className={`cp2-new ${item.saved && !item.fresh ? 'saved' : ''}`}>{item.fresh ? 'New' : 'Saved'}</span>}
+        {item.fresh && <span className="cp2-new">New</span>}
       </div>
       {item.reason && <p className="cp2-match-reason">{item.reason}</p>}
 
@@ -349,7 +241,7 @@ function MatchCard({ item, d, actions, onSendFirst }: { item: MatchItem; d: Deri
       <div className="cp2-match-acts">
         {item.from === 'business' ? (
           item.channel
-            ? <button className="cp-btn primary" disabled={busy} onClick={draft}>{d.noOffer ? 'Set your offer first' : busy ? 'Drafting…' : 'Draft opener'}</button>
+            ? <button className="cp-btn primary" disabled={busy} onClick={draft}>{d.noOffer ? 'Say what you sell first' : busy ? 'Drafting…' : `Draft ${item.channel === 'email' ? 'an email' : 'a WhatsApp'}`}</button>
             : item.url && <a className="cp-btn primary" href={item.url} target="_blank" rel="noreferrer">Look them up <IconExternal /></a>
         ) : (
           <>

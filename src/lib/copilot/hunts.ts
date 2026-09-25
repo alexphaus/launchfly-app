@@ -1,110 +1,103 @@
 // src/lib/copilot/hunts.ts
-// What to look for, in the user's own words, and which finder goes and looks.
+// What the app searches the web for, worked out by the app.
 //
-// Until this file, supply was one query shape for everybody: every segment, as
-// typed, searched on Google Maps as "segment in area". That is the right search
-// for somebody who sells to shops and trades down the road, and the wrong world
-// for everyone else — a live account selling medieval-market jewellery in Toledo
-// got sixty businesses from Toledo, Ohio, and the ranker's own reasons said so
-// ("a dental lab cannot buy medieval-market jewelry"). The market was never the
-// problem. The search was, and nobody could change its shape.
+// Supply was one query shape for everybody: every segment, as typed, on Google
+// Maps as "segment in area". Right for somebody who sells to the shops and
+// trades down the road, and the wrong world for everyone else — a live account
+// selling medieval-market jewellery in Toledo got sixty businesses from Toledo,
+// Ohio. The first answer was a sheet of "hunts" the user wrote and managed. It
+// was the wrong answer: it made finding people the user's job again, which is
+// the exact job this app exists to take off them. Serve, not configure.
 //
-// A hunt is one line the user wrote — "shops in Spain that stock handmade
-// jewellery", "organisers of medieval fairs" — and a kind that says who runs it:
+// So a hunt is now the app's own search. It is planned from what the user has
+// already told it — the offer, the working file, the goals, where they are —
+// and kept or replaced by what it brings in:
 //
-//   companies   a web search over company sites (Exa, category "company"); the
+//   companies   a web search over company sites (Exa, category "company"); each
 //               site is then read for an email or a WhatsApp link
 //   people      a web search over public profiles (Exa, category "people") —
 //               a named buyer, organiser or owner, contacted by hand
-//   agent       a standing brief for the research worker, for a search that
-//               needs judgement across pages. Handed over as a DRAFT mandate,
-//               approved like any other, and its finds come back into Matches
 //
-// Places stay where they were (target_segments × target_area, on Maps) and posts
-// stay the watcher's. The hunts sheet shows all of them as one list, because to
-// the person reading it they are one question: what is it looking for.
+// Nobody sees a hunt. They see what it found, judged against the same offer,
+// and only what clears the bar (matches.ts). A search that keeps bringing in
+// what nobody drafts is retired and replaced; one that finds nothing is too.
 //
-// One rule holds the whole thing to the rest of the product: a find counts only
-// with a real link. A search index's result is a link somebody else crawled; an
-// agent's claimed link is opened by this app before it is admitted, and one that
-// will not open is dropped and counted, never shown. A model's guess at a URL is
-// exactly what INFERRED_SCORE_CAP was written against (invariant 3).
+// One rule holds it to the rest of the product: a find counts only with a real
+// link — a result some search index crawled, never a URL a model wrote
+// (invariant 3). And nothing is planned from a blank offer (invariant 1): a
+// search worked out from nothing is not the user's.
 //
-// Pure: no DB import, no fetch. store.ts reads and writes the rows, supply/web.ts
-// runs the searches, hunting.ts delivers what the agent found.
+// Pure: no DB import, no fetch. store.ts holds the rows, hunting.ts plans them,
+// supply/web.ts runs them.
 
-import { OBJECTIVE_MAX, SAFE_HREF, WHY_MAX, type CommissionEvent } from './commission';
+import { SAFE_HREF } from './commission';
 import { isSearchableSegment } from './matches';
 import { normalizePhone, type SupplyCandidate } from './supply/types';
 import type { Contact, Offer, OpportunityType } from './types';
 
+/**
+ * 'agent' is a kind the table still allows — rows written when hunts had a
+ * sheet — and nothing plans or runs one now. Research that needs a person's
+ * judgement across pages is proposed as a Move instead (propose.ts), where one
+ * tap hands it over.
+ */
 export const HUNT_KINDS = ['companies', 'people', 'agent'] as const;
 export type HuntKind = (typeof HUNT_KINDS)[number];
-
-export const HUNT_KIND_LABEL: Record<HuntKind, string> = { companies: 'Companies', people: 'People', agent: 'Agent' };
-/** What each kind does, in the words the add form shows under the picker. */
-export const HUNT_KIND_BLURB: Record<HuntKind, string> = {
-  companies: 'Businesses found on the web — buyers, stockists, partners. Their site is read for an email or WhatsApp.',
-  people: 'Named people with a public profile — a buyer, an organiser, an owner. You write to them yourself.',
-  agent: 'A search that needs judgement across several pages. The research worker does it, once you approve it.',
-};
+/** What the planner may write. */
+export const PLAN_KINDS = ['companies', 'people'] as const;
+export type PlanKind = (typeof PLAN_KINDS)[number];
 
 export type HuntStatus = 'active' | 'paused';
 
 export interface Hunt {
   id: string;
   kind: HuntKind;
-  /** The user's own words. Searched as written. */
+  /** The search, as the index gets it. */
   query: string;
   area: string | null;
-  /** A short name for the chip. */
+  /** A short name, for the log and the Work tab. */
   label: string;
+  /** Paused is also retired: the row stays so the planner does not suggest it again. */
   status: HuntStatus;
+  /** 'suggested' is the app's own plan; 'user' is a row from when hunts had a sheet. */
   origin: 'user' | 'suggested';
-  /** The mandate behind an agent hunt — the latest one, if it has been re-run. */
   commission_id: string | null;
   last_run_at: string | null;
   /** How many the last run returned, before dedupe. Null until it has run. */
   last_found: number | null;
-  /** An agent hunt's finds whose link would not open, at the last delivery. */
   last_dropped: number | null;
-  /** Why the last run failed, in the finder's words. Cleared by the next good run. */
+  /** Why the last run failed, or why it was retired. Cleared by the next good run. */
   last_error: string | null;
   created_at: string;
 }
 
-/** A hunt as the sheet shows it: the row, and what it has put in the pool. */
-export type HuntView = Hunt & { yield: HuntYield };
-
-/** Live hunts per account. Past five, the chips stop being a filter and become a list. */
-export const MAX_HUNTS = 5;
+/** Searches the app keeps running at once. Three is breadth; more is the same money for noise. */
+export const AUTO_HUNTS = 3;
 export const HUNT_QUERY_MAX = 120;
 export const HUNT_LABEL_MAX = 28;
 export const HUNT_AREA_MAX = 80;
 /** Results asked of the search per hunt per run. It is also the page it bills for. */
 export const HUNT_RESULTS = 10;
-/** Suggestions offered at once. */
-export const MAX_SUGGESTIONS = 4;
 
-export interface HuntInput { kind: HuntKind; query: string; area: string | null; label: string }
+export interface HuntInput { kind: PlanKind; query: string; area: string | null; label: string }
 
 /**
- * What a hunt may be. The same floor as a segment — a one-letter query is a
- * typo, searched exactly as typed — plus a length a search engine can use and a
- * chip can show.
+ * What a planned search may be: a web kind, words a search engine can use (the
+ * same floor as a segment — one letter is a typo, searched exactly as typed),
+ * and a length a log line can show.
  */
 export function normalizeHuntInput(raw: unknown): HuntInput | { error: string } {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const kind = (HUNT_KINDS as readonly string[]).includes(r.kind as string) ? (r.kind as HuntKind) : null;
-  if (!kind) return { error: 'Pick what kind of hunt it is.' };
+  const kind = (PLAN_KINDS as readonly string[]).includes(r.kind as string) ? (r.kind as PlanKind) : null;
+  if (!kind) return { error: 'not a web search' };
   const query = typeof r.query === 'string' ? r.query.replace(/\s+/g, ' ').trim().slice(0, HUNT_QUERY_MAX) : '';
-  if (!isSearchableSegment(query) || query.length < 3) return { error: 'Say who to look for, in a few words.' };
+  if (!isSearchableSegment(query) || query.length < 3) return { error: 'no words to search for' };
   const area = typeof r.area === 'string' && r.area.trim() ? r.area.replace(/\s+/g, ' ').trim().slice(0, HUNT_AREA_MAX) : null;
   const given = typeof r.label === 'string' ? r.label.replace(/\s+/g, ' ').trim() : '';
   return { kind, query, area, label: given ? given.slice(0, HUNT_LABEL_MAX) : labelFor(query) };
 }
 
-/** A chip-length name from the words: whole words, up to the limit, never mid-word. */
+/** A short name from the words: whole words, up to the limit, never mid-word. */
 export function labelFor(query: string, max = HUNT_LABEL_MAX): string {
   const q = query.replace(/\s+/g, ' ').trim();
   if (q.length <= max) return capital(q);
@@ -116,7 +109,7 @@ export function labelFor(query: string, max = HUNT_LABEL_MAX): string {
   return capital(out || q.slice(0, max - 1)) + '…';
 }
 
-/** True when two hunts, or a hunt and a segment, ask for the same thing. */
+/** True when two searches, or a search and a segment, ask for the same thing. */
 export function sameHunt(a: string, b: string): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   return norm(a) === norm(b);
@@ -300,173 +293,140 @@ export function withPageContact(c: SupplyCandidate, found: PageContact): SupplyC
   return { ...c, contact, data: { ...c.data, ...(found.instagram ? { instagram: found.instagram } : {}) } };
 }
 
-/* ── What the agent found ─────────────────────────────────────────────── */
+/* ── What each search has brought in ──────────────────────────────────── */
 
-/**
- * The mandate an agent hunt hands over. The objective is the search; the why is
- * the delivery contract, because it is the one field the worker reads that can
- * say how a find has to come back for this app to take it.
- */
-export function agentObjective(h: Pick<Hunt, 'query' | 'area'>): { objective: string; why: string } {
-  const objective = `Find up to 10 ${exaQueryFor(h)} worth contacting, with a working link for each`.slice(0, OBJECTIVE_MAX);
-  const why = ('Each find goes straight to Matches. Post each as its own `found` event: who and why in the summary, their website or a public page '
-    + 'in artifact.href, any email or phone in artifact.value. A link that will not open is dropped, and LinkedIn cannot be checked.').slice(0, WHY_MAX);
-  return { objective, why };
-}
-
-export interface AgentFind { candidate: SupplyCandidate; href: string }
-
-/**
- * The worker's `found` events into candidates, before anything is opened. Only
- * events with an http(s) link: a find the app cannot open is a claim, and the
- * delivery step drops what does not open. Contact details are read from what
- * the worker wrote, deterministically — never asked of a model.
- */
-export function findsFromEvents(events: Array<Pick<CommissionEvent, 'kind' | 'summary' | 'artifact'>>, hunt: Pick<Hunt, 'id' | 'kind' | 'query' | 'label'>): AgentFind[] {
-  const out: AgentFind[] = [];
-  const seen = new Set<string>();
-  for (const e of events) {
-    if (e.kind !== 'found') continue;
-    const href = e.artifact?.href ?? null;
-    if (!href || !SAFE_HREF.test(href) || !isPublicHttpUrl(href)) continue;
-    const key = urlKey(href);
-    const host = hostOf(href);
-    if (!key || !host || seen.has(key)) continue;
-    seen.add(key);
-    const text = `${e.summary} ${e.artifact?.value ?? ''}`;
-    const email = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.exec(text)?.[0]?.toLowerCase();
-    const phone = phoneIn(text);
-    const label = e.artifact?.label && !/^(open|link|view|website|site|profile)( it)?$/i.test(e.artifact.label) ? e.artifact.label : null;
-    out.push({
-      href,
-      candidate: {
-        source: 'agent',
-        external_id: key,
-        type: /linkedin\.com\/in\//i.test(href) ? 'people' : 'client',
-        title: (label ?? companyFromTitle(e.summary.split(/[.—–:]/)[0] ?? '', host)).slice(0, 120),
-        summary: e.summary.slice(0, 400),
-        url: href,
-        contact: { website: href, ...(email && !JUNK_EMAIL.test(email) ? { email } : {}), ...(phone ? { whatsapp: phone } : {}) },
-        data: { hunt_id: hunt.id, hunt_label: hunt.label, segment: hunt.query, host, found_via: 'agent' },
-        effort: 'medium',
-      },
-    });
-  }
-  return out;
-}
-
-/**
- * A phone number the worker wrote, only when it reads as one: in international
- * form, or right after a word that says it is a phone. A bare run of digits is
- * as likely to be a date, a price or an order number, and a WhatsApp draft to
- * "20260925" is a message to nobody.
- */
-export function phoneIn(text: string): string | null {
-  const m = /(?:(\+\d[\d\s().-]{6,16}\d)|(?:phone|tel|tlf|whatsapp|m[oó]vil|mobile|tel[eé]fono|contact)\s*[:.]?\s*(\d[\d\s().-]{6,16}\d))/i.exec(text);
-  const raw = m?.[1] ?? m?.[2];
-  return raw ? normalizePhone(raw) : null;
-}
-
-/* ── How each hunt is doing ───────────────────────────────────────────── */
-
-export interface HuntYield { found: number; waiting: number; drafted: number; binned: number }
-export const EMPTY_YIELD: HuntYield = { found: 0, waiting: 0, drafted: 0, binned: 0 };
+export interface HuntYield { found: number; waiting: number; drafted: number; binned: number; below: number }
+export const EMPTY_YIELD: HuntYield = { found: 0, waiting: 0, drafted: 0, binned: 0, below: 0 };
 
 /** Counted from the rows each hunt put in the pool — never from what the finder said it found. */
-export function huntYield(rows: Array<{ hunt_id: string; status: string; drafted: boolean }>): Record<string, HuntYield> {
+export function huntYield(rows: Array<{ hunt_id: string; status: string; drafted: boolean; below?: boolean }>): Record<string, HuntYield> {
   const out: Record<string, HuntYield> = {};
   for (const r of rows) {
     const y = (out[r.hunt_id] ??= { ...EMPTY_YIELD });
     y.found += 1;
     if (r.status === 'dismissed') y.binned += 1;
     else if (r.drafted || r.status === 'acted') y.drafted += 1;
+    // Judged below the bar: never shown, so never answered — and exactly as
+    // unwanted as a find somebody set aside.
+    else if (r.below) y.below += 1;
     else y.waiting += 1;
   }
   return out;
 }
 
-/** Set aside this many with nothing drafted and a hunt has said what it is worth. */
-export const HUNT_BIN_FLAG = 8;
-
-export interface HuntLine { text: string; tone: 'ok' | 'warn' | 'quiet' }
+/* ── Keeping the plan honest ──────────────────────────────────────────── */
 
 /**
- * One line per hunt, and the order is the point: a failure first (a hunt that
- * broke and a hunt that found nothing read the same without it — invariant 13),
- * then what it has produced, then a hunt that is not earning its place.
+ * Set aside or judged below the bar this many, with nothing drafted, and a
+ * search has said what it is worth.
  */
-export function huntLine(h: Pick<Hunt, 'kind' | 'status' | 'last_run_at' | 'last_found' | 'last_error'> & { last_dropped?: number | null }, y: HuntYield, ctx: { webReady: boolean; workerReady: boolean; commission: { status: string } | null }): HuntLine {
-  if (h.status === 'paused') return { text: 'Paused', tone: 'quiet' };
-  if (h.kind !== 'agent' && !ctx.webReady) return { text: 'Web search is not set up on this server, so this cannot run yet', tone: 'warn' };
-  if (h.kind === 'agent' && !ctx.workerReady) return { text: 'No research worker is connected, so nobody can take this', tone: 'warn' };
-  if (h.last_error) return { text: `Last run failed: ${h.last_error}`.slice(0, 140), tone: 'warn' };
-  const answered = y.binned + y.drafted;
-  if (y.binned >= HUNT_BIN_FLAG && y.drafted === 0) {
-    return { text: `${y.binned} of ${answered} set aside, none drafted — change the words or drop it`, tone: 'warn' };
+export const HUNT_BIN_FLAG = 8;
+/** A search that has found nothing at all is given this long before it is replaced. */
+export const HUNT_GRACE_DAYS = 3;
+
+/**
+ * Which searches to retire — the app's own, and the rows the user wrote back
+ * when hunts had a sheet. Those were their words, but nothing on screen can stop
+ * one any more, and a web search is billable: one bringing in what nobody wants
+ * would spend their allowance every night with no way to call it off.
+ *
+ *   brings in what nobody wants   set aside or below the bar, repeatedly, and
+ *                                 nothing ever drafted
+ *   brings in nothing              found nothing, and has had a few nights
+ *
+ * Retired is paused, not deleted, so the planner remembers not to suggest the
+ * same words tomorrow.
+ */
+export function spentHunts(hunts: Hunt[], yields: Record<string, HuntYield>, now: Date): Array<{ id: string; why: string }> {
+  const out: Array<{ id: string; why: string }> = [];
+  for (const h of hunts) {
+    if (h.status !== 'active') continue;
+    const y = yields[h.id] ?? EMPTY_YIELD;
+    const unwanted = y.binned + y.below;
+    if (unwanted >= HUNT_BIN_FLAG && y.drafted === 0) {
+      out.push({ id: h.id, why: `Retired: ${unwanted} found, none worth drafting` });
+      continue;
+    }
+    const age = now.getTime() - Date.parse(h.created_at);
+    if (h.last_run_at && h.last_found === 0 && y.found === 0 && age > HUNT_GRACE_DAYS * 86_400_000) {
+      out.push({ id: h.id, why: 'Retired: found nothing' });
+    }
   }
-  if (h.kind === 'agent') {
-    const s = ctx.commission?.status;
-    // The gap between what the worker reported and what arrived, said: the
-    // project log will show seven finds, and Matches five.
-    const dropped = h.last_dropped ? ` · ${h.last_dropped} link${h.last_dropped === 1 ? '' : 's'} would not open` : '';
-    if (s === 'draft') return { text: 'Waiting for your go-ahead', tone: 'warn' };
-    if (s === 'active' || s === 'blocked') return { text: y.found ? `${y.found} delivered so far${dropped}` : `With the worker — finds land here as they come${dropped}`, tone: 'ok' };
-    if (y.found || s === 'done' || s === 'stopped') return { text: `${y.found} delivered${y.drafted ? ` · ${y.drafted} drafted` : ''}${dropped} — finished`, tone: 'quiet' };
-  }
-  if (!h.last_run_at) return { text: 'Runs on the next pass', tone: 'quiet' };
-  if (h.last_found === 0 && !y.found) return { text: 'Found nothing last run — try other words', tone: 'warn' };
-  return { text: [`${y.found} found`, y.drafted ? `${y.drafted} drafted` : null, y.waiting ? `${y.waiting} waiting` : null].filter(Boolean).join(' · '), tone: 'ok' };
+  return out;
 }
 
-/* ── Suggestions ──────────────────────────────────────────────────────── */
+/** How many new searches to plan: the empty slots, of the web kinds that run. */
+export function huntsNeeded(hunts: Array<Pick<Hunt, 'kind' | 'status'>>, want = AUTO_HUNTS): number {
+  const live = hunts.filter((h) => h.status === 'active' && h.kind !== 'agent').length;
+  return Math.max(0, want - live);
+}
 
-export interface HuntSuggestion { kind: HuntKind; query: string; area: string | null; label: string; why: string }
+/* ── The plan ──────────────────────────────────────────────────────────── */
 
-export const SUGGEST_SYSTEM = `You propose where to look for one person's buyers. You are given what they sell, who they say buys it, where they are, and what they are already searching for.
+export interface HuntPlanItem { kind: PlanKind; query: string; area: string | null; label: string }
 
-Return JSON only: {"hunts":[{"kind","query","area","label","why"}]}, at most ${MAX_SUGGESTIONS}.
+export const PLAN_SYSTEM = `You decide where to look for one person's next buyers. You are given what they sell, who buys it, where they are, their goals, and what is already being searched.
+
+Return JSON only: {"hunts":[{"kind","query","area","label"}]}, at most ${AUTO_HUNTS}.
 
 kind is one of:
-- "companies": businesses found by a web search over company sites — stockists, retailers, B2B buyers, partners, suppliers
-- "people": named individuals with a public profile — a buyer, an organiser, an owner, a decision maker
-- "agent": a search that needs judgement across several pages, done by a research assistant — lists to assemble, events to check, directories to read
+- "companies": a web search over company websites — businesses that would pay for what they sell: stockists, clients, B2B buyers, partners
+- "people": a web search over public profiles — a named buyer, owner, organiser or decision maker at the kind of business that buys
 
 Rules:
-- query is what a search engine would be typed, in plain words, 3 to 12 words, specific to what they sell and who buys it. Never generic ("small businesses", "potential clients").
-- area only when place matters to the buyer; a city with its country ("Toledo, Spain"), else null.
-- label is 2 to 4 words for a filter chip.
-- why is one sentence saying which part of what they told you this follows from.
-- Do not repeat anything they already search for. Do not invent facts about their business.`;
+- Write each query the way you would describe the page you want to find, in plain words: "a family-run resort in Palawan that takes bookings by Facebook message", not "Palawan resort booking automation buyer". 6 to 16 words. Never generic ("small businesses", "potential clients").
+- Pick buyers who can say yes at their price, where they can actually be reached from where the person is.
+- area only when place matters; a city or region with its country, else null.
+- label is 2 to 4 words.
+- Do not repeat anything already searched. Do not invent facts about their business.`;
 
-/** Model output into suggestions. Anything malformed, duplicated or already hunted is dropped. */
-export function parseSuggestions(raw: unknown, existing: string[]): HuntSuggestion[] {
+/** Model output into a plan. Anything malformed, not a web kind, or already searched is dropped. */
+export function parsePlan(raw: unknown, existing: string[], max = AUTO_HUNTS): HuntPlanItem[] {
   const list = Array.isArray((raw as { hunts?: unknown })?.hunts) ? (raw as { hunts: unknown[] }).hunts : Array.isArray(raw) ? raw : [];
-  const out: HuntSuggestion[] = [];
+  const out: HuntPlanItem[] = [];
   for (const item of list) {
     const n = normalizeHuntInput(item);
     if ('error' in n) continue;
     if ([...existing, ...out.map((o) => o.query)].some((q) => sameHunt(q, n.query))) continue;
-    const r = item as Record<string, unknown>;
-    const why = typeof r.why === 'string' ? r.why.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
-    out.push({ ...n, why });
-    if (out.length >= MAX_SUGGESTIONS) break;
+    out.push(n);
+    if (out.length >= max) break;
   }
   return out;
 }
 
 /**
- * Suggestions with no model: the buyers the user named, each as a company hunt,
- * and the first of them as people to reach. Read straight off their own words —
- * nothing here is a view about their business (invariant 12).
+ * A plan with no model: the buyers the user named, each as a company search in
+ * their area, and the people who decide at the first of them. Read straight off
+ * their own words — nothing here is a view about their business (invariant 12).
  */
-export function suggestionsFromOffer(offer: Offer, area: string | null, existing: string[]): HuntSuggestion[] {
-  const buyers = (offer.for_who ?? '').split(/[,;/]|\s+and\s+|\s+y\s+/i).map((s) => s.trim()).filter((s) => s.length >= 3);
-  const drafts: Array<Omit<HuntSuggestion, 'label'>> = buyers.slice(0, 3).map((b) => ({ kind: 'companies' as const, query: b, area, why: `You said you sell to ${b}.` }));
-  if (buyers[0]) drafts.push({ kind: 'people', query: `owners and buyers at ${buyers[0]}`, area, why: `The people who decide at ${buyers[0]}.` });
-  return parseSuggestions(drafts, existing);
+export function planFromOffer(offer: Offer, area: string | null, existing: string[], max = AUTO_HUNTS): HuntPlanItem[] {
+  const buyers = buyersOf(offer);
+  const drafts: Array<Omit<HuntPlanItem, 'label'>> = buyers.slice(0, max).map((b) => ({ kind: 'companies' as const, query: b, area }));
+  if (buyers[0]) drafts.push({ kind: 'people', query: `owners and buyers at ${buyers[0]}`, area });
+  return parsePlan(drafts, existing, max);
 }
 
-export function suggestPrompt(input: { offer: Offer; area: string | null; working: string; goals: string[]; existing: string[] }): string {
+/** The buyers the user named, split the way people list them: "cafés, gyms and salons". */
+export function buyersOf(offer: Offer): string[] {
+  return (offer.for_who ?? '').split(/[,;/]|\s+and\s+|\s+y\s+/i).map((s) => s.trim()).filter((s) => s.length >= 3);
+}
+
+/**
+ * Why there is nothing to search, when nothing is live and nothing new could be
+ * planned. Thrown rather than returned as an empty run, because an empty run
+ * reads as a quiet night (invariant 13). Worded to follow "Web search failed
+ * last run:" on the Scout and "Could not search the web:" in the toast, and as
+ * the thing to change where the user can change it. A model that failed, or
+ * could not be asked in time, comes first: one that answered would have planned.
+ */
+export function noPlanReason(offer: Offer, modelError?: string | null): string {
+  if (modelError) return `could not work out what to look for (${modelError.slice(0, 50)})`;
+  return buyersOf(offer).length
+    ? 'every search it could think of was tried, and none brought in anybody worth writing to'
+    : 'nothing to look for — your offer does not say who buys it';
+}
+
+export function planPrompt(input: { offer: Offer; area: string | null; working: string; goals: string[]; existing: string[] }): string {
   const o = input.offer;
   return [
     `They sell: ${o.sells ?? '(not said)'}`,
@@ -476,7 +436,7 @@ export function suggestPrompt(input: { offer: Offer; area: string | null; workin
     `Where they are: ${input.area ?? '(not said)'}`,
     input.goals.length ? `Their goals: ${input.goals.join('; ')}` : null,
     input.working ? `What they have written about the business:\n${input.working}` : null,
-    input.existing.length ? `Already searching for (do not repeat): ${input.existing.join('; ')}` : 'Already searching for: nothing yet',
+    input.existing.length ? `Already searched (do not repeat): ${input.existing.join('; ')}` : 'Already searched: nothing yet',
   ].filter(Boolean).join('\n');
 }
 

@@ -97,10 +97,6 @@ export const commissionJob: Job = {
         // what stops the same mandate being handed out twice in one night.
         reached += 1;
         const recorded = await recordCommissionWork(ctx.profile.id, c, result);
-        // A hunt's finds, into Matches. Imported here rather than at the top:
-        // store.ts imports the jobs registry, and hunting.ts imports store.ts.
-        const { deliverHuntFinds } = await import('../hunting');
-        await deliverHuntFinds(ctx.profile.id, c, recorded.events);
         // The status the write produced, not the one loaded before it. The first
         // version read c.status from the pre-dispatch snapshot, so a mandate
         // blocked by THIS run was skipped by the loop below and its ask reached

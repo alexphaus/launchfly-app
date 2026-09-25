@@ -54,8 +54,8 @@ export interface MachineInput {
   currency: string;
   /** The primary currency goal, when there is one. */
   goal: { title: string; target: number | null; current: number | null } | null;
-  /** Hunts that are on. Find is not only Maps any more, and the stage says so. */
-  hunts?: number;
+  /** The web is searched too, from the offer. Find is not only Maps, and the stage says so. */
+  web?: boolean;
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -104,8 +104,9 @@ export function businessMachine(input: MachineInput): MachineStage[] {
       key: 'find', label: 'Find', owner: 'ai', who: 'Scout',
       count: matched, countLabel: `${matched} found`,
       detail: [
-        input.segments.length || !input.hunts ? `${segs}${input.area ? ` in ${input.area}` : ''}` : null,
-        input.hunts ? plural(input.hunts, 'hunt') : null,
+        input.segments.length ? `${segs}${input.area ? ` in ${input.area}` : ''}` : null,
+        input.web ? (input.segments.length ? 'and the web' : 'The web, from what you sell') : null,
+        !input.segments.length && !input.web ? 'Nothing to search yet' : null,
       ].filter(Boolean).join(' · '),
     }),
     stage({
@@ -167,6 +168,12 @@ export interface RosterInput {
   lastRun: { status: string } | null;
   jobsRan: number | null;
   broke: string[];
+  /**
+   * Why the web search cannot run or failed last time — the table missing, the
+   * index refusing — or null. The searches are the app's own and have no screen
+   * of their own, so this row is the one place a broken search can be seen.
+   */
+  searchProblem?: string | null;
 }
 
 /** A night, give or take: past this an agent that should run nightly has not. */
@@ -205,8 +212,10 @@ export function agentRoster(input: RosterInput): Agent[] {
   const broken = brokeBy(input.broke);
 
   // Scout — supply.
-  const scout: Agent = !input.hasTargeting
-    ? { key: 'scout', name: 'Scout', role: 'Finds businesses that match who you sell to', state: 'setup', line: 'Tell it who to look for — on Maps, or as a hunt' }
+  const scout: Agent = input.searchProblem
+    ? { key: 'scout', name: 'Scout', role: 'Finds businesses that match who you sell to', state: 'failed', line: input.searchProblem.slice(0, 120) }
+    : !input.hasTargeting
+    ? { key: 'scout', name: 'Scout', role: 'Finds businesses that match who you sell to', state: 'setup', line: 'Say what you sell and it works out who to look for' }
     : input.matchesLeft <= 0
     ? { key: 'scout', name: 'Scout', role: 'Finds businesses that match who you sell to', state: 'idle', line: `Out of matches this month · ${input.sourced} found so far` }
     : {

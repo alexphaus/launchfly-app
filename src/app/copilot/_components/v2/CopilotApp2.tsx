@@ -15,6 +15,8 @@
 // would throw away the only comparison worth having. So the data, the routes,
 // the sheets and every action are shared — useCopilot — and only the arrangement
 // is new. Both can be installed and lived with; the one that gets opened wins.
+import { useState } from 'react';
+import type { MatchStage } from '@/lib/copilot/matches';
 import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { greeting } from '../format';
 import Sheet from '../Sheet';
@@ -47,6 +49,10 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     useCopilot<Tab2>(initial, { initialTab: 'today', alias: ALIAS });
   const d = useDerived(home);
   const status = d.status[tab];
+  // Which pill Matches shows. Held here so Today can open it on the right one:
+  // "send the drafts" lands on To send, in context, rather than in a sheet.
+  const [matchStage, setMatchStage] = useState<MatchStage>('new');
+  const openMatches = (s: MatchStage) => { setMatchStage(s); setTab('matches'); };
 
   return (
     <div className="cp-frame cp2-frame">
@@ -65,8 +71,8 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
 
       <main className="cp-content" ref={mainRef}>
         {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
-        {tab === 'today' && <TodayTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} />}
-        {tab === 'matches' && <MatchesTab home={home} d={d} actions={actions} finding={finding} />}
+        {tab === 'today' && <TodayTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
+        {tab === 'matches' && <MatchesTab home={home} d={d} actions={actions} finding={finding} stage={matchStage} onStage={setMatchStage} />}
         {tab === 'work' && <WorkTab home={home} d={d} actions={actions} briefing={briefing} />}
         {tab === 'you' && <YouTab home={home} d={d} actions={actions} briefing={briefing} />}
       </main>

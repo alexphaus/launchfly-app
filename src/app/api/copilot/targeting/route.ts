@@ -12,6 +12,6 @@ export async function POST(req: Request) {
   const b = await readJson(req);
   const segments = Array.isArray(b.target_segments) ? (b.target_segments as unknown[]).filter((x): x is string => typeof x === 'string')
     : typeof b.target_segments === 'string' ? b.target_segments.split(',') : undefined;
-  const { dropped } = await setTargeting(auth.pid, { target_segments: segments?.map((x) => x.slice(0, 40)), target_area: typeof b.target_area === 'string' ? b.target_area.slice(0, 80) : undefined });
-  return json({ ok: true, dropped, home: await loadHome(auth.pid) });
+  const { dropped, ignored } = await setTargeting(auth.pid, { target_segments: segments?.map((x) => x.slice(0, 40)), target_area: typeof b.target_area === 'string' ? b.target_area.slice(0, 80) : undefined });
+  return json({ ok: true, dropped, ignored, home: await loadHome(auth.pid) });
 }

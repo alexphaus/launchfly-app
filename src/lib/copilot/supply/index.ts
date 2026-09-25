@@ -11,8 +11,39 @@ import { googleMapsAdapter } from './google-maps';
 import { hunterAdapter } from './hunter';
 import { remoteAdapter } from './remote';
 import { heuristicFit, type SupplyAdapter, type SupplyCandidate } from './types';
+import { webAdapter } from './web';
+import type { Profile } from '../types';
 
-export const ADAPTERS: SupplyAdapter[] = [hunterAdapter, googleMapsAdapter, remoteAdapter];
+/**
+ * Order is budget order. The user's own hunts run before Maps: they are what
+ * was asked for in their words, they take seconds where a Maps segment can take
+ * ninety, and on an interactive run the deadline cuts whatever comes last.
+ */
+export const ADAPTERS: SupplyAdapter[] = [hunterAdapter, webAdapter, googleMapsAdapter, remoteAdapter];
+
+/**
+ * Candidates as opportunity rows: the heuristic fit, the blended score, and
+ * source_kind 'sourced'. Shared with the agent hunt's delivery, so a find the
+ * worker made and a find a search made are ranked by the same formula — the
+ * ranker then re-scores both against the offer, as it does every candidate.
+ */
+export function candidateRows(
+  profile: Profile,
+  candidates: SupplyCandidate[],
+  ctx: { affinity: Record<string, number>; runId: string | null; now: Date },
+) {
+  return candidates.map((c) => {
+    const fit_score = heuristicFit(profile, c);
+    const created_at = ctx.now.toISOString();
+    return {
+      profile_id: profile.id, type: c.type, title: c.title.slice(0, 200), reason: c.summary.slice(0, 400),
+      value_label: c.value_label ?? null, effort: c.effort ?? 'medium', fit_score,
+      score: scoreOpportunity({ type: c.type, effort: c.effort ?? 'medium', fit_score, created_at, source_kind: 'sourced' }, { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: ctx.affinity, now: ctx.now }),
+      source: c.source, source_kind: 'sourced', external_id: c.external_id, url: c.url ?? null, contact: c.contact, data: c.data,
+      agent_run_id: ctx.runId, expires_at: null,
+    };
+  });
+}
 
 export interface SupplyResult {
   runId: string;
@@ -75,18 +106,7 @@ export async function runSupply(profileId: string, opts: { limit?: number; only?
       result.found += candidates.length;
       if (!candidates.length) continue;
 
-      const now = new Date();
-      const rows = candidates.map((c: SupplyCandidate) => {
-        const fit_score = heuristicFit(profile, c);
-        const created_at = now.toISOString();
-        return {
-          profile_id: profileId, type: c.type, title: c.title.slice(0, 200), reason: c.summary.slice(0, 400),
-          value_label: c.value_label ?? null, effort: c.effort ?? 'medium', fit_score,
-          score: scoreOpportunity({ type: c.type, effort: c.effort ?? 'medium', fit_score, created_at, source_kind: 'sourced' }, { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: affinity, now }),
-          source: c.source, source_kind: 'sourced', external_id: c.external_id, url: c.url ?? null, contact: c.contact, data: c.data,
-          agent_run_id: runId, expires_at: null,
-        };
-      });
+      const rows = candidateRows(profile, candidates, { affinity, runId, now: new Date() });
       // ON CONFLICT (profile_id, source, external_id) DO NOTHING — existing rows keep their status and agent score.
       const { data: inserted, error } = await db.from('copilot_opportunities')
         .upsert(rows, { onConflict: 'profile_id,source,external_id', ignoreDuplicates: true })

@@ -39,20 +39,28 @@ export const googleMapsAdapter: SupplyAdapter = {
         if ((l.reviewsCount ?? 0) < 10) pains.push('few_reviews');
         if ((l.rating ?? 5) < 4) pains.push('low_rating');
         const phone = normalizePhone(l.phone);
+        // The region goes in the summary as well as the data: the ranker reads
+        // the summary, and a Toledo with no state is two cities an ocean apart.
+        const place = [l.city || location, l.state].filter(Boolean).join(', ');
         out.push({
           source: 'google_maps',
           external_id: l.placeId,
           type: 'client',
           title: l.title,
           summary: [
-            `${l.categoryName || segment} in ${l.city || location}.`,
+            `${l.categoryName || segment} in ${place}.`,
             l.rating ? `${l.rating}★ from ${l.reviewsCount ?? 0} reviews.` : 'No reviews yet.',
             pains.length ? `Pain: ${pains.map((p) => p.replace(/_/g, ' ')).join(', ')}.` : null,
             phone ? null : 'No phone listed.',
           ].filter(Boolean).join(' '),
           url: `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(l.placeId)}`,
           contact: { whatsapp: phone ?? undefined, website: l.website || undefined },
-          data: { segment, rating: l.rating, reviews_count: l.reviewsCount, address: l.address, city: l.city, category: l.categoryName, pain_signals: pains },
+          // image_url, state and country_code are what the Matches card shows at
+          // a glance: a photo, and a region that makes a wrong city obvious.
+          data: {
+            segment, rating: l.rating, reviews_count: l.reviewsCount, address: l.address, city: l.city, category: l.categoryName, pain_signals: pains,
+            image_url: l.imageUrl, state: l.state, country_code: l.countryCode,
+          },
           effort: 'medium',
         });
       }

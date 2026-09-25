@@ -20,6 +20,7 @@
 
 import { blockedOn } from './commission';
 import type { CaptureAsk } from './capture';
+import { WEAK_NOTICE_MIN } from './matches';
 import type { MotionRow } from './motion';
 import type { RecentOutcome } from './review';
 import type { CommissionThread, JobsRunSummary, Move } from './types';
@@ -86,6 +87,12 @@ export interface DoneInput {
    * a row that said 12 above a tab that says 5 would be the 61-over-51 bug again.
    */
   matchesWaiting: number;
+  /**
+   * Of the waiting ones, how many the ranker judged a poor fit. A night that
+   * found twelve and judged all twelve wrong for this person is not "12 new
+   * matches" under a tick — it is a search pointed at the wrong world.
+   */
+  matchesPoor: number;
   /** The motion rows loadHome already computed — the watched-sources row is reused, not recomputed. */
   motion: MotionRow[];
   /**
@@ -114,7 +121,14 @@ export function doneForYou(input: DoneInput): DoneReport {
   const found = input.matchCreated.filter((c) => within(c, now, DONE_WINDOW_HOURS)).length;
   if (found > 0) {
     const waiting = Math.min(input.matchesWaiting, found);
-    rows.push({
+    const poor = Math.min(input.matchesPoor, waiting);
+    rows.push(poor >= WEAK_NOTICE_MIN && poor * 2 > waiting ? {
+      key: 'matches',
+      label: `${plural(found, 'new match', 'new matches')}, mostly poor fits`,
+      detail: `It judged ${poor} of ${waiting} a poor fit for what you sell — check what it searches for`,
+      tone: 'warn',
+      target: 'matches',
+    } : {
       key: 'matches',
       label: `${plural(found, 'new match', 'new matches')} found`,
       detail: waiting === found ? 'Real listings, deduped — all waiting on Matches'

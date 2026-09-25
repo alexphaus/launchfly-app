@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActionStatus, Capacity, Channel, Goal, HomeData, Offer, OpportunityStatus, SourceKey } from '@/lib/copilot/types';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { AskAnswer } from '@/lib/copilot/ask';
+import type { HuntSuggestion } from '@/lib/copilot/hunts';
 import { api, del, get, post } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
@@ -523,9 +524,14 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async saveTargeting(t) {
       try {
-        const r = await post<{ home: HomeData; dropped?: number }>('/targeting', t);
+        const r = await post<{ home: HomeData; dropped?: number; ignored?: string[] }>('/targeting', t);
         setHome(r.home);
-        say(r.dropped ? `Targeting saved. ${r.dropped} ${r.dropped === 1 ? 'business' : 'businesses'} from dropped segments set aside.` : 'Targeting saved');
+        // What the save refused is said, not swallowed: a segment that silently
+        // failed to save reads as one that is being searched.
+        const left = r.ignored?.length ? ` Left out ${r.ignored.map((x) => `"${x}"`).join(', ')} — one letter is not something to search for.` : '';
+        say(r.dropped
+          ? `Targeting saved. ${r.dropped} ${r.dropped === 1 ? 'business' : 'businesses'} from dropped segments set aside.${left}`
+          : `Targeting saved.${left}`);
         return true;
       } catch (e) { fail(e, 'Could not save'); return false; }
     },
@@ -626,6 +632,55 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         const r = await del<{ home: HomeData }>(`/focus?id=${encodeURIComponent(id)}`);
         setHome(r.home);
       } catch (e) { fail(e, 'Could not remove that'); void refresh(); }
+    },
+    async saveHunt(input) {
+      try {
+        const r = await post<{ home: HomeData; commissionId: string | null }>('/hunts', input);
+        setHome(r.home);
+        if (r.commissionId) {
+          // The mandate is a draft until it is granted — the second, deliberate
+          // act the commission layer is built on — so it opens straight away
+          // rather than waiting to be found on Work.
+          openSheet({ kind: 'commission', id: r.commissionId });
+          say('Written as a draft. Approve it and the worker starts on the next run.');
+        } else {
+          say('Added. It runs on the next pass — or tap Look now.');
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not add that hunt' };
+      }
+    },
+    async setHuntStatus(id, status) {
+      try {
+        const r = await api<{ home: HomeData }>('/hunts', { method: 'PATCH', body: JSON.stringify({ id, status }) });
+        setHome(r.home);
+        say(status === 'paused' ? 'Paused. It stays on the list.' : 'Back on. It runs on the next pass.');
+      } catch (e) { fail(e, 'Could not change that hunt'); void refresh(); }
+    },
+    async rerunHunt(id) {
+      try {
+        const r = await api<{ home: HomeData; commissionId: string }>('/hunts', { method: 'PATCH', body: JSON.stringify({ id, rerun: true }) });
+        setHome(r.home);
+        openSheet({ kind: 'commission', id: r.commissionId });
+        say('Written as a draft again. Approve it to send it back to the worker.');
+      } catch (e) { fail(e, 'Could not hand that over'); }
+    },
+    async removeHunt(id) {
+      try {
+        const r = await del<{ home: HomeData; dropped?: number }>(`/hunts?id=${encodeURIComponent(id)}`);
+        setHome(r.home);
+        say(r.dropped ? `Removed. ${r.dropped} unanswered find${r.dropped === 1 ? '' : 's'} set aside.` : 'Removed.');
+      } catch (e) { fail(e, 'Could not remove that hunt'); void refresh(); }
+    },
+    async suggestHunts() {
+      try {
+        const r = await post<{ suggestions: HuntSuggestion[]; from: 'model' | 'offer'; note: string | null }>('/hunts/suggest', {});
+        // No toast: the suggestions are the answer, and the note says where they came from.
+        return { ok: true, suggestions: r.suggestions, from: r.from, note: r.note };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not suggest hunts' };
+      }
     },
   };
 

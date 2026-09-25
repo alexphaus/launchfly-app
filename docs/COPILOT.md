@@ -305,7 +305,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | Tab | The question | What is on it | Pure module |
 | --- | --- | --- | --- |
 | Today | what do I do, and what did it do while I was away | the call (`CallCard`, unchanged) · done for you · needs you · worth doing (≤ 3) · the composer | `today.ts` |
-| Matches | who is worth contacting | the queue as one strip · chips (Clients, Gigs & jobs, People, Signals) · every find, newest first | `matches.ts` |
+| Matches | who is worth contacting, and where each one is | a stage bar (New · To send · Waiting · Replied) · what it searches for (opens the hunts sheet) · a chip per search that brought something in · a card per business with a photo or initials, what it is and where · poor fits folded | `matches.ts` |
 | Work | what am I building | the offer · the path to money · the agents · projects handed over · the brief for Claude | `machine.ts` |
 | You | how is it going | money, runway, deep work, replies · the week read back · goals · settings | `review.ts`, `focus.ts` |
 
@@ -353,6 +353,46 @@ have nowhere to open them. "Keep" on a feed find toasts "Kept.", read off the
 queue the route returns; it used to say "Drafted" over a queue with nothing new
 in it.
 
+**Four stages, one shown at a time.** The send queue was a card above the list —
+the biggest thing on the tab whatever it held, so "1 draft written and waiting"
+outweighed sixty matches. It is now a stage: New · To send · Waiting · Replied,
+from `stageCards` over the queue (in the queue's own order, so the cards and the
+one-at-a-time sheet walk the same drafts) and the pipeline's `sent`, `replied`
+and `meeting` rows. Each card does the one thing that moves it: a draft opens to
+be sent, a send can be marked replied, a reply opens to log what happened. Won
+and lost are over and are not on a list of people to chase. The bar hides until
+there is a second stage, and a stage emptied by the last answer falls back to New.
+
+**A card says what it is and where, at a glance.** A tile first — the listing's
+photo when Maps returned one (`image_url`, kept by the adapter since this
+change; older rows have none), initials on a per-title tint otherwise, a glyph
+for a feed find — then the listing's own category and its place with the region
+(`placeOf`), then rating and channel. The category replaced the segment as the
+label because the segment is the search term, and it can be wrong: on one live
+account it was the single letter "m", sixty unrelated businesses in Toledo, Ohio
+came back under it for someone selling jewellery in Toledo, Spain, and "M" was the
+only label on every card. With the region on the card, the wrong Toledo is
+visible in one glance.
+
+**What it searches for is always on screen**, with a Change button, because it is
+the one input on this tab that decides everything under it and it was invisible.
+A one-letter segment is refused at every write path (`isSearchableSegment`, in
+`setTargeting` and onboarding), named back in the toast rather than dropped
+quietly, and flagged in the targeting sheet as it is typed; a bare city name gets
+a line saying to add the country.
+
+**A poor fit is folded, not listed.** The ranker scores each candidate 0–100
+against the offer and goals, and says why in its reason — "a dental lab cannot
+buy medieval-market jewelry". Anything it judged under `WEAK_FIT` (40) is folded
+below the list behind a count; an unjudged listing is not weak, because the
+heuristic is not a verdict. When most of what was judged is poor
+(`poorFitMajority`, at least `WEAK_NOTICE_MIN`), a card says so with the search
+terms and a button to change them, and Today's matches row turns into a warning
+("12 new matches, mostly poor fits") that is left out of "N done for you". The
+header counts the list it sits over, so it says "60 found, all poor fits" instead
+of "60 to look at". The business sheet no longer prints the score as "% match"
+(invariant 2); it shows the place and the rating instead.
+
 **Work is an illustration with one rule: every part is drawn from rows.** Four
 stages — find, reach, convert, get paid — from the funnel's own counts, with who
 runs each and the one weak link placed on the part of the business it belongs to.
@@ -392,6 +432,90 @@ logged. Not yet read by the ranker.
 
 `HomeData` gained two fields for this: `recent` (the last fortnight of outcomes,
 answered Moves and deep work, from `loadRecentRows`) and `generatedAt`.
+
+## Hunts — what to look for, in the user's words
+
+Supply was one query shape for everybody: every target segment, as typed, on
+Google Maps as "segment in area". Right for somebody who sells to the shops and
+trades down the road; the wrong world for anyone else. A live account selling
+medieval-market jewellery in Toledo got sixty businesses from Toledo, Ohio, and
+the ranker's own reasons said so. B2B buyers, a few named people, a list
+somebody publishes — none of those are "segment in area", and there was nowhere
+to say what else to look for.
+
+A **hunt** is one line the user wrote and a kind saying who runs it
+(`lib/copilot/hunts.ts`, table `copilot_hunts`, 20260925):
+
+| Kind | Run by | What comes back |
+| --- | --- | --- |
+| `companies` | Exa, category `company` (`supply/web.ts`) | company sites; each site is opened and read for an email or a WhatsApp link (`contactFromHtml`, then its contact page) |
+| `people` | Exa, category `people` | public profiles — a named buyer, organiser, owner — contacted by hand; never opened, because LinkedIn refuses scripts and the index already vouches for the page |
+| `agent` | the research worker, through the commission layer | whatever needs judgement across pages; each `found` event with a link becomes a match once this app has opened the link |
+
+Places stay in `target_segments` × `target_area` on Maps, and posts stay the
+watcher's. The hunts sheet shows all three as one list, because to the person
+reading it they are one question: what is it looking for on my behalf.
+
+**A find counts only with a real link.** A search index's result is a link
+somebody else crawled, so it is sourced. An agent's claimed link is opened by
+`openPage` before the find is admitted; one that will not open is dropped and
+counted on the hunt (`last_dropped`), never shown — a model's guess at a URL is
+exactly what `INFERRED_SCORE_CAP` was written against (invariant 3). The worker
+is told this in the mandate's `why`, along with the delivery shape: one `found`
+event per find, the link in `artifact.href`, any email or phone in
+`artifact.value`. Contact details are read from that text deterministically
+(`phoneIn` takes a number only when it reads as one, so a date is not a
+WhatsApp number).
+
+**Every URL is hostile until shown otherwise.** `openPage` checks the name
+(`isPublicHttpUrl`: scheme, credentials, private and local ranges), then what the
+name resolves to, then every redirect hop again, and reads at most 400 KB.
+
+**An agent hunt is a commission and inherits that layer's rules.** Adding one
+writes the mandate as a draft (read ring, 60 minutes) and opens it, because
+granting it is the second, deliberate act `createCommission` insists on; it counts
+against `MAX_ACTIVE_COMMISSIONS`. `deliverHuntFinds` runs after
+`recordCommissionWork` at both places a report arrives — the result socket and
+the dispatcher's inline answer — and never throws: a delivery failure is written
+on the hunt, and the report stands. Removing an agent hunt withdraws a draft
+mandate with it, and refuses while the worker holds one: calling it off from its
+own sheet asks what it was worth, and a close with no verdict is what the week's
+review reads as a project that bought nothing.
+
+**Finds are ordinary opportunities.** They carry `data.hunt_id`, `hunt_label`
+and `segment` = the hunt's words, so the pool, the dedupe, the ranker, the
+keep-rate and the funnel work on them unchanged — the segment is the grouping key
+all of those already read. `candidateRows` (supply/index.ts) is shared, so a
+worker's find and a search's find are ranked by one formula. The web adapter runs
+before Maps: hunts are what was asked in the user's words, they take seconds
+where a Maps segment takes ninety, and an interactive run's deadline cuts
+whatever comes last. It is billable — Exa charges per search — and metered like
+Maps (invariant 6 protects the free adapters, and these are not free). Agent
+finds are not metered: the mandate's own budget and the three-mandate cap bound
+them.
+
+**On Matches** each find files under the search that brought it in
+(`MatchItem.lens`, `matchLenses`): the user's hunts, then their Maps segments,
+then the kinds of feed find. A company found by a hunt is described by the
+hunt's short name and its site; a person by their role. The "Looking for" line
+and the poor-fit card open the hunts sheet.
+
+**How each hunt is doing** is one line (`huntLine`), counted from the rows it put
+in the pool — never from the finder's own report — and ordered so a failure
+leads: not set up on this server, no worker connected, the last run's error, then
+a hunt with `HUNT_BIN_FLAG` set aside and nothing drafted ("change the words or
+drop it"), then its counts. A hunt that broke never reads like one that found
+nothing (invariant 13).
+
+**Suggestions** (`POST /hunts/suggest`) are read off the offer, the working file
+and the goals — the model when one is configured, otherwise the buyers the user
+named, and the response says which. They are refused on a blank offer
+(invariant 1), open in the add form rather than saving on tap, and become hunts
+only in the user's words.
+
+Setup: web hunts need `EXA_API_KEY`; agent hunts need the worker
+(`COPILOT_JOBS_URL`). The sheet says which is missing rather than offering a hunt
+that cannot run.
 
 ## The loop
 
@@ -1442,6 +1566,8 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
 | POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |
+| POST/PATCH/DELETE | `/api/copilot/hunts` | add a hunt `{ kind, query, area?, label?, origin? }` (an agent hunt also writes its mandate, as a draft) · `{ id, status }` pause/resume · `{ id, rerun: true }` hand an agent hunt over again · `?id=` remove, setting aside its unanswered finds |
+| POST | `/api/copilot/hunts/suggest` | up to four hunts read off the offer — the model when configured, else the buyers the user named; nothing is saved |
 
 All copilot API responses are `Cache-Control: private, no-store` (rule in `next.config.ts`).
 

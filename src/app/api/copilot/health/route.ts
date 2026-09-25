@@ -48,6 +48,9 @@ const PROBES: Array<{ table: string; column: string; migration: string }> = [
   // for as long as the deployment runs.
   { table: 'copilot_outcomes', column: 'move_id', migration: '20260921_copilot_outcome_worth.sql' },
   { table: 'copilot_outcomes', column: 'commission_id', migration: '20260921_copilot_outcome_worth.sql' },
+  // Hunts degrade to "not set up here" on the hunts sheet, which is honest but
+  // reads the same as an account that never added one. This says which it is.
+  { table: 'copilot_hunts', column: 'commission_id', migration: '20260925_copilot_hunts.sql' },
 ];
 
 /**

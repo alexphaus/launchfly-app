@@ -29,6 +29,7 @@
 
 import { copilotDb } from '@/lib/copilot/db';
 import { loadCommissions, recordCommissionWork } from '@/lib/copilot/store';
+import { deliverHuntFinds } from '@/lib/copilot/hunting';
 import { logEvent } from '@/lib/copilot/base';
 import { normalizeResult } from '@/lib/copilot/commission';
 import { fail, json, readJson } from '@/lib/copilot/http';
@@ -69,7 +70,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return json({ ok: true, accepted: 0, note: 'Nothing passed the floor: every event needs a known kind and a summary.' });
   }
 
-  await recordCommissionWork(profileId, commission, result);
+  const recorded = await recordCommissionWork(profileId, commission, result);
+  // A hunt's mandate delivers its finds into Matches, each link opened first.
+  // After the report is recorded, never instead of it: a delivery that fails is
+  // written on the hunt, and the report stands.
+  const delivered = await deliverHuntFinds(profileId, commission, recorded.events);
   await logEvent(profileId, 'commission_work', { commission_id: id, events: result.events.length });
-  return json({ ok: true, accepted: result.events.length, planned: !!result.plan });
+  return json({ ok: true, accepted: result.events.length, planned: !!result.plan, ...(delivered.accepted || delivered.dropped ? { delivered } : {}) });
 }

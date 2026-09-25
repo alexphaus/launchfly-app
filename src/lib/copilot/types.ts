@@ -17,6 +17,7 @@ import type { WorkingEntry } from './working';
 import type { Commission, CommissionReport } from './commission';
 import type { PlanKey, PlanStatus } from './plans';
 import type { RecentLedger } from './review';
+import type { HuntView } from './hunts';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
 export type OpportunityType = 'client' | 'people' | 'service' | 'community' | 'signal';
@@ -470,6 +471,14 @@ export interface HomeData {
    * as a quiet week.
    */
   recent: RecentLedger;
+  /**
+   * What the user asked it to look for beyond Maps and feeds, each hunt with
+   * what it has put in the pool. `webReady` is whether this server can run a web
+   * search at all, and `unreadable` why the hunts could not be read — both said
+   * on the sheet, so a hunt that cannot run never looks like one that found
+   * nothing.
+   */
+  hunting: { hunts: HuntView[]; webReady: boolean; unreadable: string | null };
   /**
    * When this read was made. Anything on screen that depends on "now" — what
    * arrived in the last day, how long ago an agent ran — is computed from this

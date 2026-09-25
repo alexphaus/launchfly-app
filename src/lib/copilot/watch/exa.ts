@@ -62,6 +62,28 @@ export function exaHits(json: unknown): ExaHit[] {
 }
 
 /**
+ * A search for the things themselves, for a hunt: company sites or public
+ * profiles, by Exa's own category. Same trust rule as exaSearch — what comes
+ * back is a list of URLs somebody else crawled, which is what lets a hunt's
+ * finds count as sourced; nothing a model wrote about a URL is taken as one.
+ * Throws with the status, so the hunt can say why it failed.
+ */
+export async function exaFind(query: string, category: 'company' | 'people', opts: { numResults?: number; budgetMs?: number } = {}): Promise<ExaHit[]> {
+  const key = process.env.EXA_API_KEY?.trim();
+  if (!key) throw new Error('EXA_API_KEY is not set.');
+  const res = await fetch(EXA_ENDPOINT, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': key },
+    // No date or domain filters: Exa refuses both on the company and people
+    // categories (the Launchfly agent learned this in src/lib/agent/tools.ts).
+    body: JSON.stringify({ query, type: 'auto', category, numResults: opts.numResults ?? 10, contents: { summary: true } }),
+    signal: AbortSignal.timeout(Math.max(1_000, opts.budgetMs ?? 15_000)),
+  });
+  if (!res.ok) throw new Error(`Exa ${res.status}: ${(await res.text().catch(() => '')).slice(0, 160)}`);
+  return exaHits(await res.json());
+}
+
+/**
  * One search. Throws on a bad key or a bad status so the route can say which —
  * a discovery that quietly returns nothing is indistinguishable from a world
  * with nothing in it, and those need different messages.

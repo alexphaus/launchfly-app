@@ -1041,23 +1041,76 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-chips .cp-fchip .n { margin-left: 3px; opacity: 0.62; font-weight: 600; }
 
 .cp-root[data-theme="soft"] .cp2-match { padding-top: 18px; padding-bottom: 16px; }
-.cp-root[data-theme="soft"] .cp2-match-top { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 7px; }
-.cp-root[data-theme="soft"] .cp2-match-top .cp-eyebrow { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-new { flex: none; font-size: 10px; font-weight: 700; color: #fff; background: var(--blue); border-radius: 999px; padding: 2px 8px; }
+.cp-root[data-theme="soft"] .cp2-new { flex: none; align-self: flex-start; margin-top: 3px; font-size: 10px; font-weight: 700; color: #fff; background: var(--blue); border-radius: 999px; padding: 2px 8px; }
 .cp-root[data-theme="soft"] .cp2-new.saved { background: var(--line); color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-via { margin-left: auto; flex: 0 1 auto; min-width: 0; font-size: 11.5px; font-weight: 500; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cp-root[data-theme="soft"] .cp2-match-body { display: flex; flex-direction: column; gap: 5px; width: 100%; text-align: left; }
 .cp-root[data-theme="soft"] .cp2-match-title { font-family: var(--display); font-size: 16.5px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-match-reason { font-size: 13px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-match-reason { margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cp-root[data-theme="soft"] .cp2-match-acts { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .cp-root[data-theme="soft"] .cp2-match-acts .cp-btn { padding: 10px 15px; text-decoration: none; }
 .cp-root[data-theme="soft"] .cp2-frame .cp-btn.ghost { background: transparent; box-shadow: none; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-more-info { margin-left: auto; flex: none; width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--line); }
 .cp-root[data-theme="soft"] .cp2-match .cp2-gate { padding: 12px 0 0; color: var(--muted); }
+/* ── Matches: stages, the search, and the tile that makes a list scannable ──
+   Names are cp2-stagebar / cp2-lookfor / cp2-mthumb rather than anything
+   shorter: .cp-stage and .cp-steps already exist in this file, and a collision
+   inside .cp-root is not caught by scoping (see CLAUDE.md). */
+.cp-root[data-theme="soft"] .cp2-stagebar { display: flex; gap: 3px; margin: 6px 20px 4px; padding: 4px; border-radius: 14px; background: rgba(31, 41, 68, 0.055); }
+.cp-root[data-theme="soft"] .cp2-stagebar button { flex: 1 1 0; min-width: 0; padding: 9px 2px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-stagebar button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(31, 41, 68, 0.1); }
+.cp-root[data-theme="soft"] .cp2-stagebar .n { margin-left: 3px; font-weight: 700; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-stagebar button.on .n { color: var(--blue); }
+
+.cp-root[data-theme="soft"] .cp2-lookfor { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; row-gap: 2px; width: calc(100% - 40px); margin: 12px 20px 0; padding: 12px 16px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); text-align: left; }
+.cp-root[data-theme="soft"] .cp2-lookfor-l { grid-column: 1; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lookfor-v { grid-column: 1; font-size: 13.5px; line-height: 1.4; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-lookfor-v b { color: var(--ink); font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-lookfor-c { grid-column: 2; grid-row: 1 / span 2; font-size: 12.5px; font-weight: 600; color: var(--blue); }
+
+.cp-root[data-theme="soft"] .cp2-poorfit { margin-top: 14px; }
+.cp-root[data-theme="soft"] .cp2-poorfit .cp-eyebrow { color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-poorfit .cp-btn.block { margin-top: 14px; }
+
+.cp-root[data-theme="soft"] .cp2-match-head { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-match-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; text-align: left; }
+/* Two lines, not one with an ellipsis: the end of this line is the region, and
+   the region is the fact that shows a search answered from the wrong city. */
+.cp-root[data-theme="soft"] .cp2-match-sub { font-size: 12.5px; line-height: 1.4; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-match-facts { font-size: 12px; line-height: 1.4; color: var(--muted); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-root[data-theme="soft"] .cp2-match-status { font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-match-status.to_send { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-match-status.replied { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-match-draft { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--line); font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-match-draft span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* A find's title is a sentence; past three lines it is the reason's job. */
+.cp-root[data-theme="soft"] .cp2-match-id .cp2-match-title { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* The tile: a photo, or initials on one of six tints picked per title so a card
+   keeps its colour between visits. Decoration, not data — the tint means
+   nothing, which is why it is never used for a status. */
+.cp-root[data-theme="soft"] .cp2-mthumb { flex: none; width: 46px; height: 46px; border-radius: 12px; object-fit: cover; display: inline-flex; align-items: center; justify-content: center; font-family: var(--display); font-size: 15px; font-weight: 700; letter-spacing: 0.02em; background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-mthumb svg { width: 20px; height: 20px; }
+.cp-root[data-theme="soft"] .cp2-mthumb.t0 { background: rgba(79, 99, 210, 0.12); color: #3A4BB0; }
+.cp-root[data-theme="soft"] .cp2-mthumb.t1 { background: rgba(61, 153, 133, 0.14); color: #2B7262; }
+.cp-root[data-theme="soft"] .cp2-mthumb.t2 { background: rgba(214, 158, 46, 0.18); color: #7F560B; }
+.cp-root[data-theme="soft"] .cp2-mthumb.t3 { background: rgba(201, 90, 120, 0.13); color: #973A56; }
+.cp-root[data-theme="soft"] .cp2-mthumb.t4 { background: rgba(132, 94, 194, 0.13); color: #613F9C; }
+.cp-root[data-theme="soft"] .cp2-mthumb.t5 { background: rgba(96, 110, 140, 0.14); color: #465069; }
+
+.cp-root[data-theme="soft"] .cp2-stagehead { margin: 12px 20px 16px; }
+
+/* The hunts sheet. A kind is a label, not a status, so it wears the neutral tint;
+   a warning line wears --warn, with its words, never the colour alone. */
+.cp-root[data-theme="soft"] .cp2-huntkind { display: inline-block; margin-right: 7px; padding: 2px 7px; border-radius: 999px; background: var(--tint); color: var(--blue); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: 1px; }
+.cp-root[data-theme="soft"] .cp2-huntkind.agent { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-huntarea { font-weight: 500; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-src .cs.warn { color: var(--warn, #93650F); }
+.cp-root[data-theme="soft"] .cp2-huntform .cp-field:last-of-type { margin-bottom: 4px; }
+.cp-root[data-theme="soft"] .cp2-stagehead .cp2-lede { margin: 0 4px 14px; }
+.cp-root[data-theme="soft"] .cp2-stagenote { margin: 14px 24px 14px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-stagefoot { margin: 4px 24px 0; }
 .cp-root[data-theme="soft"] .cp2-findrow { margin: 20px 22px 0; }
 .cp-root[data-theme="soft"] .cp2-findrow .cp-help { text-align: center; margin-top: 9px; }
 .cp-root[data-theme="soft"] .cp2-findrow .cp-note { padding-left: 4px; padding-right: 4px; }
-.cp-root[data-theme="soft"] .cp2-strip .cp-btn.block { margin-top: 2px; }
 
 /* ── Work: the product, the machine, the team ─────────────────────────── */
 .cp-root[data-theme="soft"] .cp2-product-name { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; margin: 2px 0 8px; }

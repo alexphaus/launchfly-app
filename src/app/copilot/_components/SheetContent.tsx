@@ -18,7 +18,9 @@ import YouView from './views/YouView';
 import { CaptureCard, MoveCard } from './views/NowView';
 import { FOCUS_NOTE_MAX, FOCUS_PRESETS, dayLetter, focusWeek, hoursLabel } from '@/lib/copilot/focus';
 import { whenLabel } from '@/lib/copilot/review';
+import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
+import HuntsSheet from './v2/HuntsSheet';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
@@ -45,6 +47,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'move': return <MoveSheet home={home} id={sheet.id} actions={actions} />;
     case 'capture': return <CaptureSheet home={home} actions={actions} />;
     case 'focus': return <FocusSheet home={home} actions={actions} />;
+    case 'hunts': return <HuntsSheet home={home} actions={actions} />;
   }
 }
 
@@ -316,11 +319,19 @@ function OppSheet({ home, id, actions }: { home: HomeData; id: string; actions: 
     <>
       <div className="meta">
         <span className={`cp-tag ${o.status === 'saved' ? 'saved' : ''}`}>{TYPE_LABEL[o.type]}</span>
-        <span className="cp-score">{o.score}% match</span>
+        {/* No "% match". The score is a heuristic blended with a model's guess,
+            and printed as a percentage it read as a measurement (invariant 2).
+            It orders lists; it is not shown. */}
         <span className={`cp-badge ${o.source_kind === 'sourced' ? 'real' : 'inferred'}`}>{o.source_kind === 'sourced' ? `Real · ${sourceLabel(o.source)}` : 'Inferred'}</span>
         {o.last_outcome && <span className={`cp-badge ${o.last_outcome === 'won' ? 'won' : 'outcome'}`}>{OUTCOME_LABEL[o.last_outcome]}</span>}
       </div>
       <h3>{o.title}</h3>
+      {/* Where it is, with its region: the fact that shows a search answered
+          from the wrong city. */}
+      {(placeOf(o.data) || ratingOf(o.data)) && <p className="cp-help" style={{ marginTop: -4, marginBottom: 8 }}>{[placeOf(o.data), ratingOf(o.data)].filter(Boolean).join(' · ')}</p>}
+      {/* Which of the user's own searches brought this in — the question a hunt
+          is judged by, answerable from the card that is being judged. */}
+      {typeof o.data?.hunt_label === 'string' && <p className="cp-help" style={{ marginTop: -4, marginBottom: 8 }}>Found by your hunt &ldquo;{o.data.hunt_label}&rdquo;{o.data.found_via === 'agent' ? ' — by the research worker, link checked' : ''}</p>}
       <p className="desc">{o.reason}</p>
       {o.value_label && <div className="cp-mvalue" style={{ marginBottom: 8 }}>{o.value_label}</div>}
 
@@ -332,7 +343,7 @@ function OppSheet({ home, id, actions }: { home: HomeData; id: string; actions: 
           {(c.website || o.url) && <div className="cp-kv"><span>Link</span><b><a href={c.website || o.url!} target="_blank" rel="noreferrer">Open</a></b></div>}
         </>
       )}
-      <p className="cp-help" style={{ marginTop: 8 }}>Fit {o.fit_score} · effort {o.effort}. Final score blends your goals, capacity and what has actually got replies.</p>
+      <p className="cp-help" style={{ marginTop: 8 }}>Ordered by how well it fits your offer and goals, your capacity, and what has actually got replies.</p>
 
       {(c.whatsapp || c.email) && (
         <>
@@ -725,9 +736,17 @@ function TargetingSheet({ home, actions }: { home: HomeData; actions: Actions })
   return (
     <>
       <h3>Who do you sell to?</h3>
-      <p className="desc">These two fields drive real supply. Segments are searched on Google Maps and matched against your prospect pipeline.</p>
+      <p className="desc">These two fields drive real supply. Each segment is searched on Google Maps as typed, as &ldquo;segment in area&rdquo; — so name the kind of business, and give the area its country.</p>
       <div className="cp-field"><label className="cp-label">Segments, comma separated</label><input className="cp-input sm" autoFocus value={segments} onChange={(e) => setSegments(e.target.value)} placeholder="pest control, aircon service, plumbing" /></div>
-      <div className="cp-field"><label className="cp-label">Area</label><input className="cp-input sm" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Puerto Princesa, Palawan" /></div>
+      {(() => {
+        const refused = segments.split(',').map((x) => x.trim()).filter((x) => x && !isSearchableSegment(x));
+        const one = refused.length === 1;
+        return refused.length > 0 && <p className="cp-help">{refused.map((x) => `\u201c${x}\u201d`).join(', ')} {one ? 'is one letter' : 'are one letter each'}, and each segment is searched exactly as typed — so {one ? 'it is' : 'they are'} left out. Name the kind of business instead.</p>;
+      })()}
+      <div className="cp-field"><label className="cp-label">Area, with the country</label><input className="cp-input sm" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Puerto Princesa, Philippines" /></div>
+      {/* Said before the search, not after sixty wrong results: a bare city
+          name is ambiguous to Maps, and it will not ask which one you meant. */}
+      {!!area.trim() && !area.includes(',') && <p className="cp-help">&ldquo;{area.trim()}&rdquo; alone can match a city of that name in another country. Add the country after a comma.</p>}
       <div className="cp-btn-row">
         <button className="cp-btn primary" disabled={busy || !segments.trim()} onClick={save}>Save</button>
         {saved

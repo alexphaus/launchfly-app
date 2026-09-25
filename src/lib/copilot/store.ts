@@ -14,8 +14,8 @@ import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
 import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
 import { stageOf } from './pipeline';
-import { isSearchableSegment } from './matches';
-import { EMPTY_YIELD, MAX_HUNTS, huntYield, sameHunt, type Hunt, type HuntInput, type HuntYield } from './hunts';
+import { belowBar, isSearchableSegment } from './matches';
+import { huntYield, type Hunt, type HuntPlanItem, type HuntYield } from './hunts';
 import { exaConfigured } from './watch/exa';
 import { inMotion } from './motion';
 import { captureAsk, openedAwaitingAnswer, repliesAwaitingOutcome } from './capture';
@@ -1072,6 +1072,10 @@ export async function setOffer(profileId: string, offer: Offer): Promise<{ offer
   if (before && offerChangedMaterially(before.offer, clean) && !offerIsEmpty(clean)) {
     const { opportunityIds } = await cancelOpenDrafts(profileId, { reason: 'offer_changed' });
     rewritten = await regenerateOpeners({ ...before, offer: clean }, opportunityIds);
+    // The web searches were planned from the old offer. Retired here, planned
+    // again from this one on the next run — the user changes what they sell,
+    // not what the app looks for.
+    await retireAutoHunts(profileId, 'Retired: the offer changed');
   }
   return { offer: clean, rewritten };
 }
@@ -2017,76 +2021,79 @@ export async function deleteFocus(profileId: string, id: string): Promise<void> 
   if (error) throw new Error(describeDbError(error, 'Could not remove that.'));
 }
 
-// — hunts: what the user asked it to look for, beyond Maps and feeds —
+// — hunts: the web searches the app plans for itself (hunts.ts, hunting.ts) —
 
 const HUNT_COLS = 'id, kind, query, area, label, status, origin, commission_id, last_run_at, last_found, last_dropped, last_error, created_at';
 
 /**
- * Every hunt this profile has, oldest first — the order they were asked for.
+ * Every search this profile has, oldest first, retired ones included — the
+ * planner reads those too, so it never plans the same words twice.
  *
- * Degrades on its own and says why. The table ships in 20260925, and a hunts
- * sheet that rendered empty over a missing table would read exactly like an
- * account that never added one — which is the calm screen over a failure that
- * invariant 13 is written against. So the reason travels with the empty list.
+ * Degrades on its own and says why. The table ships in 20260925, and without it
+ * the planner cannot keep a search: the Scout on Work says so, rather than the
+ * web quietly never being searched (invariant 13).
  */
 export async function loadHunts(profileId: string): Promise<{ hunts: Hunt[]; unreadable: string | null }> {
   const { data, error } = await copilotDb().from('copilot_hunts').select(HUNT_COLS)
-    .eq('profile_id', profileId).order('created_at', { ascending: true }).limit(20);
+    .eq('profile_id', profileId).order('created_at', { ascending: true }).limit(40);
   if (error) {
     const missing = error.code === '42P01' || error.code === 'PGRST205';
-    return { hunts: [], unreadable: missing ? 'Hunts are not set up in this database yet — apply 20260925_copilot_hunts.sql.' : describeDbError(error, 'Could not read your hunts.') };
+    return { hunts: [], unreadable: missing ? 'Its web searches cannot be saved yet — apply 20260925_copilot_hunts.sql.' : describeDbError(error, 'Could not read its web searches.') };
   }
   return { hunts: (data ?? []) as unknown as Hunt[], unreadable: null };
 }
 
-/** The hunts with what each has put in the pool, for the sheet and the chips. */
+/**
+ * What the screen needs of the searches: whether they can run, and whether they
+ * failed. A search that ran records its own failure on its row; a plan that
+ * could not be made or saved throws into the supply run, which keeps it on the
+ * run's web entry — and this is where the Scout reads it back, so it is not only
+ * in a log (invariant 13). The latest run that reached the web: a run that
+ * stopped before it says nothing about it either way.
+ */
 export async function loadHunting(profileId: string): Promise<HomeData['hunting']> {
-  const { hunts, unreadable } = await loadHunts(profileId);
-  if (!hunts.length) return { hunts: [], webReady: exaConfigured(), unreadable };
-  const yields = await loadHuntYield(profileId, hunts.map((h) => h.id)).catch(() => null);
-  return {
-    hunts: hunts.map((h) => ({ ...h, yield: yields?.[h.id] ?? { ...EMPTY_YIELD } })),
-    webReady: exaConfigured(),
-    // A yield that would not read is said, not rendered as "0 found".
-    unreadable: unreadable ?? (yields ? null : 'Could not count what your hunts have found.'),
-  };
+  const [{ hunts, unreadable }, web] = await Promise.all([
+    loadHunts(profileId),
+    copilotDb().from('copilot_agent_runs').select('web:output->perAdapter->web')
+      .eq('profile_id', profileId).eq('kind', 'supply').not('output->perAdapter->web', 'is', null)
+      .order('started_at', { ascending: false }).limit(1).maybeSingle()
+      .then((r) => ((r.data as { web?: { error?: string } | null } | null)?.web ?? null)),
+  ]);
+  return { hunts: hunts.filter((h) => h.status === 'active'), webReady: exaConfigured(), unreadable, lastError: web?.error ?? null };
 }
 
 /**
- * Counted from the rows each hunt put in the pool, never from the finder's own
- * report of what it found — a finder that says "ten" and a pool that holds two
- * are two different numbers, and only the second is the user's.
+ * Counted from the rows each search put in the pool, never from the finder's
+ * own report of what it found — a finder that says "ten" and a pool that holds
+ * two are two different numbers, and only the second is real. A find judged
+ * below the bar is never shown, so it is counted as unwanted, not waiting.
  */
-async function loadHuntYield(profileId: string, huntIds: string[]): Promise<Record<string, HuntYield>> {
+export async function loadHuntYield(profileId: string, huntIds: string[]): Promise<Record<string, HuntYield>> {
+  if (!huntIds.length) return {};
   const { data, error } = await copilotDb().from('copilot_opportunities')
-    .select('id, status, hunt_id:data->>hunt_id')
+    .select('id, status, fit_score, scored_at, hunt_id:data->>hunt_id')
     .eq('profile_id', profileId).in('data->>hunt_id', huntIds).limit(1000);
   if (error) throw new Error(error.message);
-  const rows = (data ?? []) as unknown as Array<{ id: string; status: string; hunt_id: string }>;
+  const rows = (data ?? []) as unknown as Array<{ id: string; status: string; fit_score: number; scored_at: string | null; hunt_id: string }>;
   const exec = await latestExecutionByOpportunity(profileId, rows.map((r) => r.id));
-  return huntYield(rows.map((r) => ({ hunt_id: r.hunt_id, status: r.status, drafted: !!exec[r.id] && exec[r.id].approval_state !== 'cancelled' })));
+  return huntYield(rows.map((r) => ({
+    hunt_id: r.hunt_id, status: r.status,
+    drafted: !!exec[r.id] && exec[r.id].approval_state !== 'cancelled',
+    below: belowBar(r),
+  })));
 }
 
-export async function insertHunt(profileId: string, input: HuntInput & { origin?: 'user' | 'suggested' }): Promise<Hunt> {
-  const { hunts, unreadable } = await loadHunts(profileId);
-  if (unreadable) throw new Error(unreadable);
-  if (hunts.length >= MAX_HUNTS) throw new Error(`You have ${hunts.length} hunts. Remove one before adding another — past ${MAX_HUNTS} the chips stop being a filter.`);
-  if (hunts.some((h) => sameHunt(h.query, input.query) && h.kind === input.kind)) throw new Error('You already have that hunt.');
-  const { data, error } = await copilotDb().from('copilot_hunts').insert({
-    profile_id: profileId, kind: input.kind, query: input.query, area: input.area, label: input.label,
-    origin: input.origin ?? 'user', status: 'active',
-  }).select(HUNT_COLS).single();
-  if (error || !data) throw new Error(describeDbError(error, 'Could not save that hunt.'));
-  await logEvent(profileId, 'hunt_added', { kind: input.kind, origin: input.origin ?? 'user' });
-  return data as unknown as Hunt;
+/** Save what the planner decided. Throws on a write that failed: a plan that did not save must not look like one that ran. */
+export async function insertPlannedHunts(profileId: string, items: HuntPlanItem[]): Promise<Hunt[]> {
+  if (!items.length) return [];
+  const { data, error } = await copilotDb().from('copilot_hunts').insert(items.map((i) => ({
+    profile_id: profileId, kind: i.kind, query: i.query, area: i.area, label: i.label, origin: 'suggested', status: 'active',
+  }))).select(HUNT_COLS);
+  if (error) throw new Error(describeDbError(error, 'Could not save its web searches.'));
+  return (data ?? []) as unknown as Hunt[];
 }
 
-export async function updateHunt(profileId: string, id: string, patch: Partial<Pick<Hunt, 'status' | 'commission_id' | 'last_run_at' | 'last_found' | 'last_dropped' | 'last_error'>>): Promise<void> {
-  const { error } = await copilotDb().from('copilot_hunts').update(patch).eq('profile_id', profileId).eq('id', id);
-  if (error) throw new Error(describeDbError(error, 'Could not update that hunt.'));
-}
-
-/** What a run did, on the hunt itself: the next run clears an error, a failure never looks quiet. */
+/** What a run did, on the search itself: the next run clears an error, a failure never looks quiet. */
 export async function recordHuntRun(profileId: string, id: string, run: { found: number; error: string | null }): Promise<void> {
   await copilotDb().from('copilot_hunts')
     .update({ last_run_at: new Date().toISOString(), last_found: run.found, last_error: run.error?.slice(0, 200) ?? null })
@@ -2095,41 +2102,32 @@ export async function recordHuntRun(profileId: string, id: string, run: { found:
 }
 
 /**
- * Stop looking for this. Like dropping a segment: what it found and nobody has
- * answered is set aside (status only, reversible in SQL) and its unsent drafts
- * are retired, so Matches stops showing work the user just said they do not
- * want. Anything already sent, replied to or won is history and stays.
+ * Retire searches that have said what they are worth. Paused, not deleted: the
+ * row is how the planner knows not to plan the same words again, and what they
+ * found stays in the pool, judged like anything else.
  */
-export async function deleteHunt(profileId: string, id: string): Promise<{ dropped: number }> {
-  const db = copilotDb();
-  const { data: rows } = await db.from('copilot_opportunities').select('id')
-    .eq('profile_id', profileId).eq('data->>hunt_id', id).in('status', ['new', 'saved']);
-  const ids = ((rows ?? []) as Array<{ id: string }>).map((r) => r.id);
-  if (ids.length) {
-    await cancelOpenDrafts(profileId, { reason: 'hunt_removed', opportunityIds: ids });
-    await db.from('copilot_opportunities').update({ status: 'dismissed' }).eq('profile_id', profileId).in('id', ids);
+export async function retireHunts(profileId: string, which: Array<{ id: string; why: string }>): Promise<void> {
+  for (const w of which) {
+    const { error } = await copilotDb().from('copilot_hunts')
+      .update({ status: 'paused', last_error: w.why.slice(0, 200) })
+      .eq('profile_id', profileId).eq('id', w.id);
+    if (error) throw new Error(describeDbError(error, 'Could not retire a web search.'));
   }
-  const { error } = await db.from('copilot_hunts').delete().eq('profile_id', profileId).eq('id', id);
-  if (error) throw new Error(describeDbError(error, 'Could not remove that hunt.'));
-  await logEvent(profileId, 'hunt_removed', { hunt_id: id, set_aside: ids.length });
-  return { dropped: ids.length };
+  if (which.length) await logEvent(profileId, 'hunts_retired', { ids: which.map((w) => w.id), why: which.map((w) => w.why) });
 }
 
 /**
- * A mandate that was never granted, removed outright. Only a draft: once
- * approved, a commission is closed through closeCommission, which asks what it
- * was worth — a removal is not a verdict.
+ * The offer changed, so every search planned from the old one is retired and
+ * the next run plans from the new one. Only the app's own: a row the user wrote
+ * when hunts had a sheet was never read off the offer, so a new offer does not
+ * make it wrong — spentHunts judges it on what it brings in. Never throws: the
+ * offer has already saved, and a search table that is not there yet must not
+ * be the reason it looks like it did not; the planner will find the same
+ * missing table and say so.
  */
-export async function deleteDraftCommission(profileId: string, id: string): Promise<void> {
-  const { error } = await copilotDb().from('copilot_commissions').delete()
-    .eq('profile_id', profileId).eq('id', id).eq('status', 'draft');
-  if (error) throw new Error(describeDbError(error, 'Could not withdraw that draft.'));
-}
-
-/** The hunt a mandate was written for, if it was written for one. */
-export async function huntForCommission(profileId: string, commissionId: string): Promise<Hunt | null> {
-  const { data, error } = await copilotDb().from('copilot_hunts').select(HUNT_COLS)
-    .eq('profile_id', profileId).eq('commission_id', commissionId).maybeSingle();
-  if (error) return null;
-  return (data as unknown as Hunt) ?? null;
+export async function retireAutoHunts(profileId: string, why: string): Promise<void> {
+  const { error } = await copilotDb().from('copilot_hunts')
+    .update({ status: 'paused', last_error: why.slice(0, 200) })
+    .eq('profile_id', profileId).eq('origin', 'suggested').eq('status', 'active');
+  if (error && error.code !== '42P01' && error.code !== 'PGRST205') console.error('[copilot/hunts] could not retire on offer change:', error.message);
 }

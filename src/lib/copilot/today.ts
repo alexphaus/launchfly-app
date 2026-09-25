@@ -20,7 +20,6 @@
 
 import { blockedOn } from './commission';
 import type { CaptureAsk } from './capture';
-import { WEAK_NOTICE_MIN } from './matches';
 import type { MotionRow } from './motion';
 import type { RecentOutcome } from './review';
 import type { CommissionThread, JobsRunSummary, Move } from './types';
@@ -88,11 +87,12 @@ export interface DoneInput {
    */
   matchesWaiting: number;
   /**
-   * Of the waiting ones, how many the ranker judged a poor fit. A night that
-   * found twelve and judged all twelve wrong for this person is not "12 new
-   * matches" under a tick — it is a search pointed at the wrong world.
+   * Of those found, how many the ranker judged not worth the user's time. They
+   * are not shown on Matches, so they are not "found for you" — but a night that
+   * looked at twelve and kept none still did the looking, and says so plainly
+   * rather than as a tick over nothing.
    */
-  matchesPoor: number;
+  matchesBelow: number;
   /** The motion rows loadHome already computed — the watched-sources row is reused, not recomputed. */
   motion: MotionRow[];
   /**
@@ -120,20 +120,23 @@ export function doneForYou(input: DoneInput): DoneReport {
   // Supply first: it is the one thing here that came from outside the account.
   const found = input.matchCreated.filter((c) => within(c, now, DONE_WINDOW_HOURS)).length;
   if (found > 0) {
+    // The count is what is worth a look, not what was fetched: the rest was
+    // judged and set aside, and a number that includes it would be the app
+    // counting its own homework.
     const waiting = Math.min(input.matchesWaiting, found);
-    const poor = Math.min(input.matchesPoor, waiting);
-    rows.push(poor >= WEAK_NOTICE_MIN && poor * 2 > waiting ? {
+    const below = Math.min(input.matchesBelow, found - waiting);
+    rows.push(waiting > 0 ? {
       key: 'matches',
-      label: `${plural(found, 'new match', 'new matches')}, mostly poor fits`,
-      detail: `It judged ${poor} of ${waiting} a poor fit for what you sell — check what it searches for`,
-      tone: 'warn',
+      label: `${plural(waiting, 'new match', 'new matches')} worth a look`,
+      // "Overnight" and "keeps looking" only while the nightly job is running:
+      // a manual look is not a night, and a job that never runs does not keep on.
+      detail: waiting === found ? 'Real listings, deduped — waiting on Matches' : `Out of ${found} it found${fresh ? ' overnight' : ''}`,
+      tone: 'done',
       target: 'matches',
     } : {
       key: 'matches',
-      label: `${plural(found, 'new match', 'new matches')} found`,
-      detail: waiting === found ? 'Real listings, deduped — all waiting on Matches'
-        : waiting > 0 ? `Real listings, deduped — ${waiting} still waiting on Matches`
-        : 'Real listings, deduped — all already drafted or answered',
+      label: `Looked at ${plural(found, 'new listing')}`,
+      detail: below > 0 ? `None worth your time${fresh ? ' — it keeps looking' : ''}` : 'All already drafted or answered',
       tone: 'done',
       target: 'matches',
     });

@@ -1,6 +1,6 @@
 // src/lib/copilot/matches.ts
-// The Matches tab: everything the app found outside the account that you might
-// go after, in one list, filtered by what kind of thing it is.
+// The Matches tab: what the app found outside the account that is worth your
+// time, in one list, already judged.
 //
 // Why this is a tab again. The pipeline tab was folded away because its parts
 // existed elsewhere — the queue on Now, the deck on Now, the stages on Working —
@@ -16,17 +16,17 @@
 //              person, a signal. The artifact is already attached; yes keeps it.
 //
 // The list is one stage of four — New, To send, Waiting, Replied — picked by a
-// bar across the top, so a business is somewhere on this tab from the night it
-// is found to the reply. The send queue used to be a card above the list, the
-// biggest thing on the screen whatever it held, and "1 draft written and
-// waiting" over sixty poor fits was the tab's headline. Only one stage shows at
-// a time, so this is still not the forty-row queue the product deleted once.
+// row of pills, so a business is somewhere on this tab from the night it is
+// found to the reply. Only one stage shows at a time, so this is still not the
+// forty-row queue the product deleted once.
 //
-// A poor fit is folded, not listed. The ranker says so in its own reason —
-// "a dental lab cannot buy medieval-market jewelry" — and the tab used to head
-// that card "Matched for you". Folded under a count, with the search terms
-// shown above it, because a list of poor fits almost always means the search
-// is wrong, and the search is the one thing here the user can change.
+// The app judges; the list shows the verdict. A listing the ranker scored under
+// SHOW_FIT is not shown at all — not folded behind a count, not explained with
+// a card. An earlier version did both, and its owner's verdict was that it made
+// judging the user's job again: "Serve, not configure." What was set aside is
+// still in the pool, still counted by the funnel, and still teaches the search
+// planner (hunts.ts) which searches to retire. The screen just does not ask
+// anybody to look at it.
 //
 // No percentages. A fit score is a heuristic or a model's guess, and a "92%
 // match" badge presents a guess as a measurement — invariant 2. The order uses
@@ -53,17 +53,18 @@ export const MATCH_GROUP_LABEL: Record<MatchGroup, string> = {
 export const FRESH_HOURS = 24;
 
 /**
- * Below this, a match the ranker has judged is a poor fit. The brief asks it
- * for 0-100 against this person's offer and goals (agent/schema.ts); a listing
- * nobody has judged yet is not weak, it is unjudged, and stays in the list.
+ * The bar a judged listing has to clear to be shown. The brief scores 0-100
+ * against this person's offer, goals and constraints (agent/schema.ts), and on
+ * the live account everything between 40 and 60 came with a reason not to —
+ * "Hyatt procurement won't move on $150 within your runway". A list of those
+ * is a list of the ranker's doubts; the bar is where it starts recommending.
+ * A listing nobody has judged yet is not below it — it is unjudged, and stays.
  */
-export const WEAK_FIT = 40;
-/** Fewer judged than this and "most are poor fits" is a small sample, not a finding. */
-export const WEAK_NOTICE_MIN = 3;
+export const SHOW_FIT = 60;
 
-/** True when the ranker looked at this listing and judged it a poor fit. */
-export function isWeak(o: Pick<Opportunity, 'scored_at' | 'fit_score'>): boolean {
-  return !!o.scored_at && o.fit_score < WEAK_FIT;
+/** True when the ranker looked at this listing and judged it not worth your time. */
+export function belowBar(o: Pick<Opportunity, 'scored_at' | 'fit_score'>): boolean {
+  return !!o.scored_at && o.fit_score < SHOW_FIT;
 }
 
 /** What a supplied listing is, by the type its adapter gave it. */
@@ -106,8 +107,6 @@ export interface MatchItem {
   tag: string | null;
   /** One line under the title: what it is and where. "Dental laboratory · Toledo, OH". */
   sub: string | null;
-  /** The facts a glance can use: rating and how to reach it, or what a find costs. */
-  facts: string | null;
   /** A photo of the place, when the listing came with one. */
   image: string | null;
   /** Initials for the tile when there is no photo. Empty for a find, which gets a glyph. */
@@ -121,17 +120,9 @@ export interface MatchItem {
   costLabel: string | null;
   /** The ranker has judged it. Only businesses are judged; a find never is. */
   judged: boolean;
-  /** Judged, and judged a poor fit. Folded out of the list, never dropped. */
-  weak: boolean;
-  /**
-   * Which search found it, as the chip it files under: a hunt, a Maps segment,
-   * or the kind of a feed find. The chips are the user's own searches, so the
-   * filter answers "what did THIS one bring in" rather than a fixed taxonomy.
-   */
-  lens: MatchLens;
+  /** Judged, and below the bar. Not shown; still in the pool. */
+  below: boolean;
 }
-
-export interface MatchLens { key: string; label: string }
 
 export interface MatchFeedInput {
   now: Date;
@@ -177,7 +168,6 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
       reason: o.reason ?? '',
       tag,
       sub: join([tag ? capital(tag) : null, placeOf(o.data)]),
-      facts: join([ratingOf(o.data), channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : o.type === 'people' ? 'Public profile' : 'Link only']),
       image: imageOf(o.data),
       initials: monogramOf(o.title),
       channel,
@@ -187,8 +177,7 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
       saved: o.status === 'saved',
       costLabel: null,
       judged: !!o.scored_at,
-      weak: isWeak(o),
-      lens: lensOf(o, group, input.targetSegments),
+      below: belowBar(o),
     });
     scoreOf.set(o.id, o.score ?? 0);
   }
@@ -208,7 +197,6 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
       reason: c.reason,
       tag: KIND_LABEL[kind] ?? null,
       sub: join([KIND_LABEL[kind] ?? null, hostOf(c.url)]),
-      facts: 'From a source you watch',
       image: null,
       initials: '',
       channel: null,
@@ -218,8 +206,7 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
       saved: false,
       costLabel: null,
       judged: false,
-      weak: false,
-      lens: { key: groupOfKind(kind), label: MATCH_GROUP_LABEL[groupOfKind(kind)] },
+      below: false,
     });
   }
   for (const m of input.moves) {
@@ -233,7 +220,6 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
       reason: m.why[0] ?? '',
       tag: KIND_LABEL[m.kind],
       sub: join([KIND_LABEL[m.kind], hostOf(m.artifact?.href ?? null)]),
-      facts: m.cost_label || 'From a source you watch',
       image: null,
       initials: '',
       channel: null,
@@ -243,8 +229,7 @@ export function matchFeed(input: MatchFeedInput): MatchItem[] {
       saved: false,
       costLabel: m.cost_label,
       judged: false,
-      weak: false,
-      lens: { key: groupOfKind(m.kind), label: MATCH_GROUP_LABEL[groupOfKind(m.kind)] },
+      below: false,
     });
   }
 
@@ -264,22 +249,6 @@ export interface MatchCounts {
   by: Record<MatchGroup, number>;
 }
 
-/**
- * The chips: every search that brought something in, with its count. The
- * user's hunts first, then their Maps segments, then the kinds of feed find —
- * the order a person would name them in, most specific first.
- */
-export function matchLenses(items: MatchItem[]): Array<MatchLens & { count: number }> {
-  const by = new Map<string, MatchLens & { count: number }>();
-  for (const i of items) {
-    const l = by.get(i.lens.key) ?? { ...i.lens, count: 0 };
-    l.count += 1;
-    by.set(i.lens.key, l);
-  }
-  const rank = (k: string) => (k.startsWith('hunt:') ? 0 : k.startsWith('seg:') ? 1 : 2 + Math.max(0, (MATCH_GROUPS as readonly string[]).indexOf(k)));
-  return [...by.values()].sort((a, b) => rank(a.key) - rank(b.key) || (rank(a.key) < 2 ? b.count - a.count : 0));
-}
-
 export function matchCounts(items: MatchItem[]): MatchCounts {
   const by = Object.fromEntries(MATCH_GROUPS.map((g) => [g, 0])) as Record<MatchGroup, number>;
   for (const i of items) by[i.group] += 1;
@@ -287,30 +256,15 @@ export function matchCounts(items: MatchItem[]): MatchCounts {
 }
 
 /**
- * The line under the greeting on Matches, counted over what the list shows —
- * poor fits are folded, so they are not "to look at". The queue is not here any
- * more: the stage bar right under this line carries it, and the same number
- * twice in one glance is how the header came to say 61 over a card saying 51.
+ * The line under the greeting on Matches, counted over what the list shows.
+ * The queue is not here: the pills right under this line carry it, and the same
+ * number twice in one glance is how the header came to say 61 over a card
+ * saying 51.
  */
-export function matchesStatus(counts: MatchCounts, poor = 0): string | null {
+export function matchesStatus(counts: MatchCounts): string | null {
   if (counts.fresh) return `${counts.fresh} new since yesterday`;
-  if (counts.all) return `${counts.all} to look at`;
-  // Found plenty, none worth a message: said, because an empty list under a
-  // calm header reads as a quiet night rather than a search pointed wrong.
-  if (poor) return `${poor} found, all poor fits`;
+  if (counts.all) return `${counts.all} worth a look`;
   return null;
-}
-
-/**
- * Whether the poor fits are the story. More than half of what the ranker judged,
- * past a minimum, and the tab says so above the list — with the search terms,
- * because that is almost always the cause and it is the one input here that is
- * the user's to change.
- */
-export function poorFitMajority(items: MatchItem[]): { judged: number; weak: number; majority: boolean } {
-  const judged = items.filter((i) => i.judged).length;
-  const weak = items.filter((i) => i.weak).length;
-  return { judged, weak, majority: judged >= WEAK_NOTICE_MIN && weak * 2 > judged };
 }
 
 /**
@@ -319,12 +273,6 @@ export function poorFitMajority(items: MatchItem[]): { judged: number; weak: num
  */
 export function isSearchableSegment(s: string): boolean {
   return Array.from(s.trim()).length > 1;
-}
-
-/** What it searches for, as a sentence's two halves. Null halves when unset. */
-export function lookingFor(segments: string[], area: string | null | undefined): { what: string | null; where: string | null } {
-  const what = segments.map((s) => s.trim()).filter(Boolean);
-  return { what: what.length ? what.join(', ') : null, where: area?.trim() || null };
 }
 
 /* ── The other three stages ─────────────────────────────────────────────── */
@@ -351,6 +299,11 @@ export interface StageCard {
   preview: string | null;
   /** The draft to open, on To send. */
   draftId: string | null;
+  /**
+   * The draft's own deep link — wa.me or mailto, pre-filled — so sending is one
+   * tap on the card, in the user's own app, without a sheet in between.
+   */
+  link: string | null;
   /** The business, on Waiting and Replied. */
   oppId: string | null;
   channel: Channel | null;
@@ -389,6 +342,7 @@ export function stageCards(input: StageInput): Record<Exclude<MatchStage, 'new'>
       status: `Written ${daysAgo(q.execution.created_at, input.now)}`,
       preview: firstLine(q.execution.body),
       draftId: q.id,
+      link: q.execution.deep_link ?? null,
       oppId,
       channel: q.execution.channel,
     };
@@ -405,6 +359,7 @@ export function stageCards(input: StageInput): Record<Exclude<MatchStage, 'new'>
     status,
     preview: null,
     draftId: null,
+    link: null,
     oppId: r.opportunity.id,
     channel: r.execution?.channel ?? null,
   });
@@ -482,14 +437,6 @@ export function placeOf(d: Record<string, unknown> | null | undefined): string |
   }
   // A company found on the web has no address on file — its site is where it is.
   return city ?? str(d, 'area') ?? str(d, 'host');
-}
-
-function lensOf(o: Pick<Opportunity, 'id' | 'status' | 'source' | 'source_kind' | 'data' | 'reason' | 'title'>, group: MatchGroup, targetSegments: string[]): MatchLens {
-  const hunt = str(o.data, 'hunt_id');
-  if (hunt) return { key: `hunt:${hunt}`, label: str(o.data, 'hunt_label') ?? 'Hunt' };
-  const seg = segmentOf({ id: o.id, status: o.status, source: o.source, source_kind: o.source_kind, data: o.data, reason: o.reason, title: o.title }, targetSegments);
-  if (seg && isSearchableSegment(seg)) return { key: `seg:${seg}`, label: capital(seg) };
-  return { key: group, label: MATCH_GROUP_LABEL[group] };
 }
 
 /** "4.6★ (31)", one decimal as Maps prints it. Nothing when there is no rating: no reviews is not a zero. */

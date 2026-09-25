@@ -15,7 +15,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActionStatus, Capacity, Channel, Goal, HomeData, Offer, OpportunityStatus, SourceKey } from '@/lib/copilot/types';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { AskAnswer } from '@/lib/copilot/ask';
-import type { HuntSuggestion } from '@/lib/copilot/hunts';
 import { api, del, get, post } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
@@ -44,6 +43,9 @@ export function sheetKey(s: SheetState): string {
   const id = 'id' in s && s.id ? s.id : 'oppId' in s ? s.oppId : 'term' in s ? s.term : 'new';
   return `${s.kind}:${id}`;
 }
+
+/** The paid finders by name, for a toast that says which one failed; the rest are feeds. */
+const FINDER_NAME: Record<string, string> = { web: 'the web', google_maps: 'Google Maps' };
 
 export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: CopilotConfig<T>) {
   const shell = useShell();
@@ -105,19 +107,27 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
   const findMatches = useCallback(async (first = false) => {
     setFinding(true);
     try {
-      const r = await post<{ home: HomeData; result: { supply: { inserted?: number; found?: number; partial?: boolean } | null } }>('/supply');
+      const r = await post<{ home: HomeData; result: { supply: { inserted?: number; found?: number; partial?: boolean; perAdapter?: Record<string, { error?: string }> } | null } }>('/supply');
       setHome(r.home);
       const supply = r.result?.supply && 'inserted' in r.result.supply ? r.result.supply : null;
       const n = supply?.inserted ?? 0;
+      // A finder that threw is caught per adapter so the others still run — which
+      // also means a run where everything failed returns like one that found
+      // nothing. With nothing new, the failure is the answer (invariant 13).
+      const broke = n ? undefined : Object.entries(supply?.perAdapter ?? {}).find(([, a]) => a.error);
+      const failed = broke ? `Could not search${FINDER_NAME[broke[0]] ? ` ${FINDER_NAME[broke[0]]}` : ''}: ${broke[1].error}` : null;
       // A run can stop early on purpose: scraping every segment takes minutes
       // and the request has to come back before the proxy gives up. Saying so
       // is better than looking like there was nothing left to find.
       say(supply?.partial
-        ? `${n} found so far — there was not time for every segment. Tap again for more.`
+        ? `${n} found so far — there was not time for every search. Tap again for more.`
+        : failed ? failed
         : first
-        ? (n ? `${n} business${n === 1 ? '' : 'es'} found. Openers are drafted below.` : 'Nothing found for those segments yet. Try widening the area.')
+        ? (n ? `${n} business${n === 1 ? '' : 'es'} found. Openers are drafted below.` : 'Nothing found yet.')
         : n ? `${n} new real match${n === 1 ? '' : 'es'} found and ranked`
-        : 'No new matches. Try wider targeting.');
+        // What happened, not a setting to go and change: the search is the app's to fix.
+        : supply?.found ? 'Nothing new — it had already seen everything it found.'
+        : 'Nothing new turned up.');
     } catch (e) { say(e instanceof Error ? e.message : 'Could not find matches'); }
     finally { setFinding(false); }
   }, [say]);
@@ -632,55 +642,6 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         const r = await del<{ home: HomeData }>(`/focus?id=${encodeURIComponent(id)}`);
         setHome(r.home);
       } catch (e) { fail(e, 'Could not remove that'); void refresh(); }
-    },
-    async saveHunt(input) {
-      try {
-        const r = await post<{ home: HomeData; commissionId: string | null }>('/hunts', input);
-        setHome(r.home);
-        if (r.commissionId) {
-          // The mandate is a draft until it is granted — the second, deliberate
-          // act the commission layer is built on — so it opens straight away
-          // rather than waiting to be found on Work.
-          openSheet({ kind: 'commission', id: r.commissionId });
-          say('Written as a draft. Approve it and the worker starts on the next run.');
-        } else {
-          say('Added. It runs on the next pass — or tap Look now.');
-        }
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : 'Could not add that hunt' };
-      }
-    },
-    async setHuntStatus(id, status) {
-      try {
-        const r = await api<{ home: HomeData }>('/hunts', { method: 'PATCH', body: JSON.stringify({ id, status }) });
-        setHome(r.home);
-        say(status === 'paused' ? 'Paused. It stays on the list.' : 'Back on. It runs on the next pass.');
-      } catch (e) { fail(e, 'Could not change that hunt'); void refresh(); }
-    },
-    async rerunHunt(id) {
-      try {
-        const r = await api<{ home: HomeData; commissionId: string }>('/hunts', { method: 'PATCH', body: JSON.stringify({ id, rerun: true }) });
-        setHome(r.home);
-        openSheet({ kind: 'commission', id: r.commissionId });
-        say('Written as a draft again. Approve it to send it back to the worker.');
-      } catch (e) { fail(e, 'Could not hand that over'); }
-    },
-    async removeHunt(id) {
-      try {
-        const r = await del<{ home: HomeData; dropped?: number }>(`/hunts?id=${encodeURIComponent(id)}`);
-        setHome(r.home);
-        say(r.dropped ? `Removed. ${r.dropped} unanswered find${r.dropped === 1 ? '' : 's'} set aside.` : 'Removed.');
-      } catch (e) { fail(e, 'Could not remove that hunt'); void refresh(); }
-    },
-    async suggestHunts() {
-      try {
-        const r = await post<{ suggestions: HuntSuggestion[]; from: 'model' | 'offer'; note: string | null }>('/hunts/suggest', {});
-        // No toast: the suggestions are the answer, and the note says where they came from.
-        return { ok: true, suggestions: r.suggestions, from: r.from, note: r.note };
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : 'Could not suggest hunts' };
-      }
     },
   };
 

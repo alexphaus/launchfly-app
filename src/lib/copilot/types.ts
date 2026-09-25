@@ -17,7 +17,7 @@ import type { WorkingEntry } from './working';
 import type { Commission, CommissionReport } from './commission';
 import type { PlanKey, PlanStatus } from './plans';
 import type { RecentLedger } from './review';
-import type { HuntView } from './hunts';
+import type { Hunt } from './hunts';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
 export type OpportunityType = 'client' | 'people' | 'service' | 'community' | 'signal';
@@ -472,13 +472,15 @@ export interface HomeData {
    */
   recent: RecentLedger;
   /**
-   * What the user asked it to look for beyond Maps and feeds, each hunt with
-   * what it has put in the pool. `webReady` is whether this server can run a web
-   * search at all, and `unreadable` why the hunts could not be read — both said
-   * on the sheet, so a hunt that cannot run never looks like one that found
-   * nothing.
+   * The web searches the app is running for itself — never shown as a list,
+   * only read for whether they can run: `webReady` is whether this server can
+   * search the web at all, `unreadable` why the searches could not be read,
+   * `lastError` why the last web run failed before any search did (the plan
+   * could not be made or saved), and a live one's last_error why that search
+   * failed. The Scout on Work says whichever is true, so a search that cannot
+   * run never looks like one that found nothing.
    */
-  hunting: { hunts: HuntView[]; webReady: boolean; unreadable: string | null };
+  hunting: { hunts: Hunt[]; webReady: boolean; unreadable: string | null; lastError: string | null };
   /**
    * When this read was made. Anything on screen that depends on "now" — what
    * arrived in the last day, how long ago an agent ran — is computed from this

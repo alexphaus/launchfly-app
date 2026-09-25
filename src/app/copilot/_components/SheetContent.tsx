@@ -20,7 +20,6 @@ import { FOCUS_NOTE_MAX, FOCUS_PRESETS, dayLetter, focusWeek, hoursLabel } from 
 import { whenLabel } from '@/lib/copilot/review';
 import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
-import HuntsSheet from './v2/HuntsSheet';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
@@ -47,7 +46,6 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'move': return <MoveSheet home={home} id={sheet.id} actions={actions} />;
     case 'capture': return <CaptureSheet home={home} actions={actions} />;
     case 'focus': return <FocusSheet home={home} actions={actions} />;
-    case 'hunts': return <HuntsSheet home={home} actions={actions} />;
   }
 }
 
@@ -329,9 +327,6 @@ function OppSheet({ home, id, actions }: { home: HomeData; id: string; actions: 
       {/* Where it is, with its region: the fact that shows a search answered
           from the wrong city. */}
       {(placeOf(o.data) || ratingOf(o.data)) && <p className="cp-help" style={{ marginTop: -4, marginBottom: 8 }}>{[placeOf(o.data), ratingOf(o.data)].filter(Boolean).join(' · ')}</p>}
-      {/* Which of the user's own searches brought this in — the question a hunt
-          is judged by, answerable from the card that is being judged. */}
-      {typeof o.data?.hunt_label === 'string' && <p className="cp-help" style={{ marginTop: -4, marginBottom: 8 }}>Found by your hunt &ldquo;{o.data.hunt_label}&rdquo;{o.data.found_via === 'agent' ? ' — by the research worker, link checked' : ''}</p>}
       <p className="desc">{o.reason}</p>
       {o.value_label && <div className="cp-mvalue" style={{ marginBottom: 8 }}>{o.value_label}</div>}
 

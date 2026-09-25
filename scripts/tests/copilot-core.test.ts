@@ -4707,7 +4707,7 @@ function moveV2(m: Partial<MoveV2>): MoveV2 {
 
 async function todayTab() {
   const now = new Date('2026-09-24T10:00:00Z');
-  const base: DoneInput = { now, lastCronRun: '2026-09-24T05:02:00Z', jobsRun: null, matchCreated: [], matchesWaiting: 0, matchesPoor: 0, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] };
+  const base: DoneInput = { now, lastCronRun: '2026-09-24T05:02:00Z', jobsRun: null, matchCreated: [], matchesWaiting: 0, matchesBelow: 0, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] };
 
   // 1. What arrived in the last day, counted from the rows it arrived as.
   const done = doneForYou({
@@ -4730,8 +4730,8 @@ async function todayTab() {
   assert.equal(done.stale, false);
   assert.equal(done.nightlyAt, '2026-09-24T05:02:00Z');
   assert.deepEqual(done.rows.map((r) => r.key), ['matches', 'replies', 'sources', 'p:c1', 'moves']);
-  assert.equal(done.rows[0].label, '2 new matches found', 'last week\'s is not last night\'s');
-  assert.equal(done.rows[0].detail, 'Real listings, deduped — 1 still waiting on Matches', 'Today and Matches must not disagree about the count');
+  assert.equal(done.rows[0].label, '1 new match worth a look', 'what is worth a look, not what was fetched — and last week\'s is not last night\'s');
+  assert.equal(done.rows[0].detail, 'Out of 2 it found overnight', 'Today and Matches must not disagree about the count');
   assert.equal(done.rows[1].label, '1 reply came in');
   assert.match(done.rows[1].detail, /^X Out Pest/);
   assert.equal(done.rows[2].target, 'sources', 'a failed read leads to where it can be fixed');
@@ -4885,8 +4885,8 @@ async function matchesTab() {
   assert.equal(counts.all, feed.length);
   assert.equal(counts.fresh, 2);
   assert.equal(counts.by.clients, 3);
-  assert.equal(matchesStatus(counts), '2 new since yesterday', 'the queue is on the stage bar, not repeated in the header');
-  assert.equal(matchesStatus(matchCounts([]), 0), null);
+  assert.equal(matchesStatus(counts), '2 new since yesterday', 'the queue is on the pills, not repeated in the header');
+  assert.equal(matchesStatus(matchCounts([])), null);
   assert.equal(MATCH_GROUP_LABEL.work, 'Gigs & jobs');
   console.log('copilot-core: matches tab checks passed');
 }
@@ -4991,8 +4991,8 @@ workTab().catch((e) => { console.error(e); process.exit(1); });
 // calm header, and a queue card that was the biggest thing on the screen.
 // ---------------------------------------------------------------------------
 import {
-  MATCH_STAGES, MATCH_STAGE_LABEL, WEAK_FIT, imageOf, isWeak, lookingFor, matchCounts as matchCountsS, matchFeed as matchFeedS,
-  isSearchableSegment, matchesStatus as matchesStatusS, monogramOf, placeOf, poorFitMajority, ratingOf, stageCards, tintOf,
+  MATCH_STAGES, MATCH_STAGE_LABEL, SHOW_FIT, belowBar, imageOf, matchCounts as matchCountsS, matchFeed as matchFeedS,
+  isSearchableSegment, matchesStatus as matchesStatusS, monogramOf, placeOf, ratingOf, stageCards, tintOf,
 } from '../../src/lib/copilot/matches';
 import { doneForYou as doneForYouS, todayStatus as todayStatusS } from '../../src/lib/copilot/today';
 import type { Execution as ExecutionS, QueueItem as QueueItemS } from '../../src/lib/copilot/types';
@@ -5022,10 +5022,11 @@ async function matchesStaged() {
   assert.equal(tintOf('Mountain Tops'), tintOf('Mountain Tops'), 'a card keeps its colour');
   assert.ok(tintOf('anything') >= 0 && tintOf('anything') < 6);
 
-  // 3. A poor fit is the ranker's judgement, and only a judged listing can be one.
-  assert.equal(isWeak({ scored_at: '2026-09-25T04:00:00Z', fit_score: WEAK_FIT - 1 }), true);
-  assert.equal(isWeak({ scored_at: '2026-09-25T04:00:00Z', fit_score: WEAK_FIT }), false);
-  assert.equal(isWeak({ scored_at: null, fit_score: 10 }), false, 'unjudged is not weak — the heuristic is not a verdict');
+  // 3. The bar is the ranker's judgement, and only a judged listing can fall below it.
+  assert.equal(belowBar({ scored_at: '2026-09-25T04:00:00Z', fit_score: SHOW_FIT - 1 }), true);
+  assert.equal(belowBar({ scored_at: '2026-09-25T04:00:00Z', fit_score: SHOW_FIT }), false);
+  assert.equal(belowBar({ scored_at: '2026-09-25T04:00:00Z', fit_score: 55 }), true, 'a middling score came with a reason not to — it is not shown');
+  assert.equal(belowBar({ scored_at: null, fit_score: 10 }), false, 'unjudged is not below the bar — the heuristic is not a verdict');
 
   const junk = (id: string, title: string, o: Partial<OpportunityV2> = {}) => bizV2({
     id, title, scored_at: '2026-09-25T04:00:00Z', fit_score: 20, created_at: '2026-09-25T03:00:00Z',
@@ -5043,22 +5044,17 @@ async function matchesStaged() {
   const by = Object.fromEntries(feed.map((i) => [i.id, i]));
   assert.equal(by.j1.tag, 'Dental laboratory', 'what the listing is, not the term it was found under');
   assert.equal(by.j1.sub, 'Dental laboratory · Toledo, OH');
-  assert.equal(by.j1.facts, '4.8★ (31) · WhatsApp');
   assert.equal(by.j2.tag, null, 'a one-letter segment is never a label');
   assert.equal(by.j2.sub, 'Toledo, Ohio');
   assert.equal(by.fit.image, 'https://lh5.googleusercontent.com/p/x');
   assert.equal(by.fit.initials, 'CP');
-  assert.deepEqual(feed.filter((i) => i.weak).map((i) => i.id).sort(), ['j1', 'j2', 'j3']);
-  assert.deepEqual(poorFitMajority(feed), { judged: 4, weak: 3, majority: true });
-  assert.equal(poorFitMajority(feed.slice(0, 2)).majority, false, 'two judged is a sample, not a finding');
+  assert.deepEqual(feed.filter((i) => i.below).map((i) => i.id).sort(), ['j1', 'j2', 'j3']);
 
-  // 4. The header counts the list it sits over. Poor fits are folded, so they are
-  //    not "to look at" — and when they are all there is, that is said.
-  const good = feed.filter((i) => !i.weak);
-  assert.equal(matchesStatusS(matchCountsS(good), 3), '1 new since yesterday');
-  assert.equal(matchesStatusS(matchCountsS([]), 60), '60 found, all poor fits');
-  assert.deepEqual(lookingFor(['m', ' '], 'Toledo'), { what: 'm', where: 'Toledo' }, 'the search terms, shown as they are — a wrong one has to be visible to be fixed');
-  assert.deepEqual(lookingFor([], null), { what: null, where: null });
+  // 4. The header counts the list it sits over — only what cleared the bar.
+  const good = feed.filter((i) => !i.below);
+  assert.equal(matchesStatusS(matchCountsS(good)), '1 new since yesterday');
+  assert.equal(matchesStatusS(matchCountsS(good.map((i) => ({ ...i, fresh: false })))), '1 worth a look');
+  assert.equal(matchesStatusS(matchCountsS([])), null, 'nothing true to say is nothing said');
   assert.equal(isSearchableSegment('m'), false, 'one letter is a typo, and it is searched exactly as typed');
   assert.equal(isSearchableSegment(' é '), false);
   assert.equal(isSearchableSegment('IT'), true, 'two letters can be a market');
@@ -5073,7 +5069,7 @@ async function matchesStaged() {
   const queue = [{
     id: 'a1', kind: 'plan', owner: 'ai', title: 'Opener to Casa de la Plata, ready to review', detail: null, ai_draft: null, urgency: 'normal',
     due_label: null, minutes: 5, status: 'open', opportunity_id: 'fit', for_date: '2026-09-11',
-    execution: exec({ action_id: 'a1', opportunity_id: 'fit' }),
+    execution: exec({ action_id: 'a1', opportunity_id: 'fit', deep_link: 'https://wa.me/63917?text=Hi%20Maria' }),
     opp: { id: 'fit', title: 'Casa de la Plata', name: 'Maria', segment: 'jewelry store', score: 72 },
   }] as unknown as QueueItemS[];
   const pipeline = [
@@ -5091,6 +5087,8 @@ async function matchesStaged() {
   assert.equal(st.to_send[0].status, 'Written 14 days ago');
   assert.equal(st.to_send[0].preview, 'Hi Maria —', 'the first line of what is about to go out');
   assert.equal(st.to_send[0].draftId, 'a1');
+  assert.equal(st.to_send[0].link, 'https://wa.me/63917?text=Hi%20Maria', 'sent from the card in one tap, in the user\'s own app');
+  assert.equal(st.waiting[0]?.link ?? null, null, 'only a draft has something to send');
   assert.deepEqual(st.waiting.map((c) => c.oppId), ['s-old', 's-new'], 'the one closest to going cold first');
   assert.equal(st.waiting[0].status, 'Sent 20 days ago · no reply yet');
   assert.deepEqual(st.replied.map((c) => c.oppId), ['m1', 'r1'], 'the warmest reply first');
@@ -5099,60 +5097,70 @@ async function matchesStaged() {
   assert.deepEqual([...MATCH_STAGES], ['new', 'to_send', 'waiting', 'replied']);
   assert.equal(MATCH_STAGE_LABEL.to_send, 'To send');
 
-  // 6. Today does not report a night of poor fits as work done.
-  const done = doneForYouS({
-    now, lastCronRun: '2026-09-25T05:00:00Z', jobsRun: null, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [],
-    matchCreated: ['2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z'],
-    matchesWaiting: 4, matchesPoor: 3,
-  });
-  assert.equal(done.rows[0].label, '4 new matches, mostly poor fits');
-  assert.equal(done.rows[0].detail, 'It judged 3 of 4 a poor fit for what you sell — check what it searches for');
-  assert.equal(done.rows[0].tone, 'warn');
-  assert.equal(todayStatusS(done, []), null, 'a warning is not something done for you');
-  const fine = doneForYouS({ ...{ now, lastCronRun: null, jobsRun: null, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] }, matchCreated: ['2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z'], matchesWaiting: 2, matchesPoor: 2 });
-  assert.equal(fine.rows[0].tone, 'done', 'two poor fits is under the minimum — not yet a finding');
+  // 6. Today counts what is worth a look, and says plainly when nothing was.
+  const night = { now, lastCronRun: '2026-09-25T05:00:00Z', jobsRun: null, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] };
+  const four = ['2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z'];
+  const one = doneForYouS({ ...night, matchCreated: four, matchesWaiting: 1, matchesBelow: 3 });
+  assert.equal(one.rows[0].label, '1 new match worth a look');
+  assert.equal(one.rows[0].detail, 'Out of 4 it found overnight');
+  assert.equal(one.rows[0].tone, 'done');
+  assert.equal(todayStatusS(one, []), '1 done for you');
+  const none = doneForYouS({ ...night, matchCreated: four, matchesWaiting: 0, matchesBelow: 4 });
+  assert.equal(none.rows[0].label, 'Looked at 4 new listings');
+  assert.equal(none.rows[0].detail, 'None worth your time — it keeps looking', 'no "poor fits", no card, no setting — the looking is still reported');
+  assert.ok(!/poor|search/i.test(`${none.rows[0].label} ${none.rows[0].detail}`), 'nothing asks the user to fix the search');
+  // With no nightly job, a find came from opening the app — not "overnight", and nothing "keeps looking".
+  const dark = { ...night, lastCronRun: null };
+  assert.equal(doneForYouS({ ...dark, matchCreated: four, matchesWaiting: 1, matchesBelow: 3 }).rows[0].detail, 'Out of 4 it found');
+  assert.equal(doneForYouS({ ...dark, matchCreated: four, matchesWaiting: 0, matchesBelow: 4 }).rows[0].detail, 'None worth your time');
+  const answered = doneForYouS({ ...night, matchCreated: four.slice(0, 2), matchesWaiting: 0, matchesBelow: 0 });
+  assert.equal(answered.rows[0].detail, 'All already drafted or answered');
   console.log('copilot-core: matches staged checks passed');
 }
 
 matchesStaged().catch((e) => { console.error(e); process.exit(1); });
 
 // ---------------------------------------------------------------------------
-// Hunts: what to look for, in the user's words, and who goes and looks
+// Hunts: the web searches the app plans for itself
 //
 // Supply was one query shape for everybody — every segment on Maps as "segment
 // in area" — and on a live account it returned sixty businesses from the wrong
-// Toledo. Hunts make the search the user's own. The checks are the ways that
-// could go wrong: a hunt that is a typo, a directory listed as a company, a
-// model's guess at a URL admitted as a find, a link that opens the server's own
-// network, a date read as a phone number, and a hunt that has stopped earning
-// its place shown as though it were fine.
+// Toledo. A sheet of searches the user wrote and managed fixed the shape and
+// made finding people the user's job again; its owner's answer was "serve, not
+// configure". So the app plans the searches from what it was told and keeps
+// them honest by what they bring in. The checks are the ways that could go
+// wrong: a plan read from nothing, the same words planned twice, a search that
+// only brings in what nobody drafts kept forever, the user's own row retired by
+// the app, a directory listed as a company, a link that opens the server's own
+// network.
 // ---------------------------------------------------------------------------
 import {
-  HUNT_BIN_FLAG, MAX_SUGGESTIONS, agentObjective, candidatesFromHits, companyFromTitle, contactFromHtml, contactPageLink,
-  exaCategoryFor, exaQueryFor, findsFromEvents, huntLine, huntYield, isPublicHttpUrl, labelFor, normalizeHuntInput,
-  parseSuggestions, personFromTitle, phoneIn, sameHunt, suggestionsFromOffer, urlKey, withPageContact,
+  AUTO_HUNTS, HUNT_BIN_FLAG, HUNT_GRACE_DAYS, PLAN_SYSTEM, candidatesFromHits, companyFromTitle, contactFromHtml, contactPageLink,
+  exaCategoryFor, exaQueryFor, huntYield, huntsNeeded, isPublicHttpUrl, labelFor, normalizeHuntInput, parsePlan, personFromTitle,
+  buyersOf, noPlanReason, planFromOffer, planPrompt, sameHunt, spentHunts, urlKey, withPageContact, type Hunt as HuntH,
 } from '../../src/lib/copilot/hunts';
-import { OBJECTIVE_MAX as OBJECTIVE_MAX_H, WHY_MAX as WHY_MAX_H } from '../../src/lib/copilot/commission';
-import { matchFeed as matchFeedH, matchLenses } from '../../src/lib/copilot/matches';
+import { matchFeed as matchFeedH } from '../../src/lib/copilot/matches';
 
 async function huntsCore() {
-  // 1. What a hunt may be.
-  const ok = normalizeHuntInput({ kind: 'companies', query: '  shops in Spain   that stock handmade jewellery ', area: ' Toledo, Spain ' });
+  const now = new Date('2026-09-25T10:00:00Z');
+
+  // 1. What a planned search may be: a web kind, and words a search can use.
+  const ok = normalizeHuntInput({ kind: 'companies', query: '  a family-run resort in Palawan   that takes bookings by message ', area: ' Palawan, Philippines ' });
   assert.ok(!('error' in ok));
   if (!('error' in ok)) {
-    assert.equal(ok.query, 'shops in Spain that stock handmade jewellery');
-    assert.equal(ok.area, 'Toledo, Spain');
-    assert.equal(ok.label, 'Shops in Spain that stock…', 'whole words, never mid-word');
+    assert.equal(ok.query, 'a family-run resort in Palawan that takes bookings by message');
+    assert.equal(ok.area, 'Palawan, Philippines');
+    assert.equal(ok.label, 'A family-run resort in…', 'whole words, never mid-word');
   }
-  assert.ok('error' in normalizeHuntInput({ kind: 'companies', query: 'm' }), 'a one-letter hunt is a typo, searched as typed');
-  assert.ok('error' in normalizeHuntInput({ kind: 'maps', query: 'jewellery shops' }), 'only the three kinds');
+  assert.ok('error' in normalizeHuntInput({ kind: 'companies', query: 'm' }), 'one letter is a typo, searched as typed');
+  assert.ok('error' in normalizeHuntInput({ kind: 'agent', query: 'organisers of medieval fairs' }), 'the planner never writes an agent search — that is a proposal, one tap from handed over');
   assert.equal(labelFor('gift shops'), 'Gift shops');
   assert.ok(sameHunt('Gift shops!', 'gift  shops'), 'the same search in other punctuation is the same search');
 
-  // 2. The query as the search gets it.
+  // 2. The query as the index gets it.
   assert.equal(exaCategoryFor('companies'), 'company');
   assert.equal(exaCategoryFor('people'), 'people');
-  assert.equal(exaCategoryFor('agent'), null, 'the agent is not a search call');
+  assert.equal(exaCategoryFor('agent'), null, 'an old agent row is not run');
   assert.equal(exaQueryFor({ query: 'museum shops', area: 'Castilla-La Mancha, Spain' }), 'museum shops in Castilla-La Mancha, Spain');
   assert.equal(exaQueryFor({ query: 'gift shops in Toledo', area: 'Toledo' }), 'gift shops in Toledo', 'the place is not written twice');
 
@@ -5170,31 +5178,25 @@ async function huntsCore() {
   assert.equal(cands[0].external_id, 'joyeriaelgreco.es', 'www and the trailing slash are not a second company');
   assert.equal(cands[0].source, 'web');
   assert.equal(cands[0].type, 'client');
-  assert.equal(cands[0].contact.website, 'https://www.joyeriaelgreco.es/');
   assert.deepEqual([cands[0].data.hunt_id, cands[0].data.hunt_label, cands[0].data.segment, cands[0].data.host], ['h1', 'Jewellery stockists', 'shops that stock handmade jewellery', 'joyeriaelgreco.es']);
   assert.equal(urlKey('https://www.a.es/b/?utm=1#x'), 'a.es/b');
   assert.equal(companyFromTitle('Inicio', 'casa-lopez.com'), 'Casa Lopez');
-
   const people = candidatesFromHits([{ title: 'Carmen López - Compradora - El Corte Inglés | LinkedIn', url: 'https://es.linkedin.com/in/carmen-lopez' }], { ...hunt, kind: 'people' as const });
-  assert.equal(people.length, 1, 'a profile is exactly what a people hunt is for');
   assert.equal(people[0].type, 'people');
   assert.equal(people[0].title, 'Carmen López');
   assert.equal(people[0].data.role, 'Compradora · El Corte Inglés');
-  assert.equal(people[0].contact.name, 'Carmen López');
   assert.deepEqual(personFromTitle('Ana Ruiz'), { name: 'Ana Ruiz', role: null });
 
   // 4. The page, read for a way to reach them — deterministically.
   const page = `<a href="mailto:info&#64;joyeriaelgreco.es">Mail</a> <img src="logo@2x.png"> <a href="https://wa.me/34600111222">WhatsApp</a>
     <a href="https://instagram.com/joyeriaelgreco/">IG</a> <a href="/contacto">Contacto</a> <a href="https://other.es/contact">x</a>`;
   assert.deepEqual(contactFromHtml(page), { email: 'info@joyeriaelgreco.es', whatsapp: '34600111222', instagram: 'https://instagram.com/joyeriaelgreco' });
-  assert.equal(contactFromHtml('<p>Write to ventas@plata.es or noreply@plata.es</p><a href="tel:+34 925 11 22 33">call</a>').email, 'ventas@plata.es');
-  assert.equal(contactFromHtml('<a href="tel:+34 925 11 22 33">call</a>').whatsapp, '34925112233', 'a listed phone is taken the way the Maps adapter takes one');
+  assert.equal(contactFromHtml('<p>Write to ventas@plata.es or noreply@plata.es</p>').email, 'ventas@plata.es');
   assert.equal(contactFromHtml('<script>x="a@sentry.io"</script><p>no address here</p>').email, undefined, 'script text is not the page');
   assert.equal(contactPageLink(page, 'https://joyeriaelgreco.es/'), 'https://joyeriaelgreco.es/contacto', 'same host only');
-  const merged = withPageContact(cands[0], { email: 'info@joyeriaelgreco.es', instagram: 'https://instagram.com/x' });
+  const merged = withPageContact(cands[0], { email: 'info@joyeriaelgreco.es' });
   assert.equal(merged.contact.email, 'info@joyeriaelgreco.es');
   assert.equal(merged.contact.website, 'https://www.joyeriaelgreco.es/', 'nothing the page did not show is added or replaced');
-  assert.equal(merged.data.instagram, 'https://instagram.com/x');
 
   // 5. What this app will open. The link came from outside, so a hostile one must not reach inside.
   for (const good of ['https://joyeriaelgreco.es/', 'http://172.40.1.1/x', 'https://es.linkedin.com/in/a']) assert.equal(isPublicHttpUrl(good), true, good);
@@ -5202,97 +5204,88 @@ async function huntsCore() {
     assert.equal(isPublicHttpUrl(bad), false, bad);
   }
 
-  // 6. What the agent found. Only a `found` with a link; a phone only when it reads as one.
-  const finds = findsFromEvents([
-    { kind: 'found', summary: 'Mercado Medieval de Toledo — the city fair, organised by the council. Tel: 925 33 00 00. Dates 2026-10-12.', artifact: { kind: 'link', label: 'Website', value: 'Contact: feria@toledo.es', href: 'https://mercadomedievaltoledo.es/' } },
-    { kind: 'found', summary: 'Same fair again', artifact: { kind: 'link', label: 'Open', value: 'x', href: 'https://www.mercadomedievaltoledo.es' } },
-    { kind: 'found', summary: 'Ana Ruiz, buyer at the museum shop', artifact: { kind: 'link', label: 'Ana Ruiz', value: 'Posted 2026-09-20', href: 'https://www.linkedin.com/in/ana-ruiz' } },
-    { kind: 'found', summary: 'An internal page', artifact: { kind: 'link', label: 'x', value: 'x', href: 'http://10.0.0.8/admin' } },
-    { kind: 'found', summary: 'No link at all', artifact: null },
-    { kind: 'worked', summary: 'Searched three directories', artifact: { kind: 'link', label: 'x', value: 'x', href: 'https://dir.es' } },
-  ], { id: 'h2', kind: 'agent', query: 'organisers of medieval fairs', label: 'Fair organisers' });
-  assert.deepEqual(finds.map((f) => f.candidate.title), ['Mercado Medieval de Toledo', 'Ana Ruiz']);
-  assert.equal(finds[0].candidate.contact.email, 'feria@toledo.es');
-  assert.equal(finds[0].candidate.contact.whatsapp, '925330000', 'after "Tel:" it is a phone');
-  assert.equal(finds[1].candidate.contact.whatsapp, undefined, 'a date is not a phone number');
-  assert.equal(finds[1].candidate.type, 'people', 'a /in/ profile is a person');
-  assert.equal(finds[0].candidate.source, 'agent');
-  assert.equal(finds[0].candidate.data.found_via, 'agent');
-  assert.equal(phoneIn('Call +34 600 111 222 today'), '34600111222');
-  assert.equal(phoneIn('Order 20260925 shipped'), null);
-
-  const ask = agentObjective({ query: 'organisers of medieval fairs', area: 'Spain' });
-  assert.ok(ask.objective.length <= OBJECTIVE_MAX_H && ask.why.length <= WHY_MAX_H, 'fits the columns it is written to');
-  assert.ok(ask.objective.includes('organisers of medieval fairs in Spain'));
-  assert.ok(ask.why.includes('artifact.href'), 'the delivery contract travels with the mandate');
-
-  // 7. How each hunt is doing, counted from the rows it put in the pool.
+  // 6. What each search has brought in, counted from the rows — below the bar counts as unwanted.
   const y = huntYield([
     { hunt_id: 'h1', status: 'new', drafted: false },
     { hunt_id: 'h1', status: 'new', drafted: true },
     { hunt_id: 'h1', status: 'dismissed', drafted: false },
+    { hunt_id: 'h1', status: 'new', drafted: false, below: true },
     { hunt_id: 'h1', status: 'acted', drafted: false },
-    { hunt_id: 'h2', status: 'new', drafted: false },
   ]);
-  assert.deepEqual(y.h1, { found: 4, waiting: 1, drafted: 2, binned: 1 });
-  const ctx = { webReady: true, workerReady: true, commission: null };
-  const base = { kind: 'companies' as const, status: 'active' as const, last_run_at: '2026-09-25T03:00:00Z', last_found: 10, last_error: null };
-  assert.equal(huntLine(base, y.h1, ctx).text, '4 found · 2 drafted · 1 waiting');
-  assert.equal(huntLine({ ...base, last_error: 'Exa 401: invalid key' }, y.h1, ctx).text, 'Last run failed: Exa 401: invalid key', 'a failure leads — it and a quiet hunt must not read alike');
-  assert.equal(huntLine({ ...base, last_error: 'x' }, y.h1, ctx).tone, 'warn');
-  assert.equal(huntLine(base, y.h1, { ...ctx, webReady: false }).tone, 'warn', 'a hunt that cannot run says so');
-  assert.equal(huntLine({ ...base, status: 'paused' }, y.h1, ctx).text, 'Paused');
-  assert.equal(huntLine({ ...base, last_run_at: null }, { found: 0, waiting: 0, drafted: 0, binned: 0 }, ctx).text, 'Runs on the next pass');
-  assert.equal(huntLine({ ...base, last_found: 0 }, { found: 0, waiting: 0, drafted: 0, binned: 0 }, ctx).text, 'Found nothing last run — try other words');
-  assert.equal(huntLine(base, { found: 9, waiting: 1, drafted: 0, binned: HUNT_BIN_FLAG }, ctx).text, `${HUNT_BIN_FLAG} of ${HUNT_BIN_FLAG} set aside, none drafted — change the words or drop it`);
-  const agent = { ...base, kind: 'agent' as const };
-  assert.equal(huntLine(agent, { found: 0, waiting: 0, drafted: 0, binned: 0 }, { ...ctx, commission: { status: 'draft' } }).text, 'Waiting for your go-ahead', 'approving the mandate is the second, deliberate act');
-  assert.equal(huntLine(agent, { found: 0, waiting: 0, drafted: 0, binned: 0 }, { ...ctx, commission: { status: 'active' } }).text, 'With the worker — finds land here as they come');
-  assert.equal(huntLine(agent, { found: 0, waiting: 0, drafted: 0, binned: 0 }, { ...ctx, workerReady: false, commission: { status: 'draft' } }).tone, 'warn');
+  assert.deepEqual(y.h1, { found: 5, waiting: 1, drafted: 2, binned: 1, below: 1 });
 
-  // 8. Suggestions: malformed, duplicated or already-hunted ones are dropped.
-  const parsed = parseSuggestions({ hunts: [
-    { kind: 'companies', query: 'museum shops in Spain', area: null, label: 'Museum shops', why: 'You said museum shops.' },
-    { kind: 'companies', query: 'Museum shops in Spain!', why: 'dup' },
-    { kind: 'maps', query: 'x shops' },
-    { kind: 'people', query: 'gift shops' },
-    { kind: 'people', query: 'organisers of medieval fairs', area: 'Spain', label: 'Fair organisers', why: 'Where you sell in summer.' },
-    { kind: 'agent', query: 'exhibitor lists of craft fairs in Spain' },
-    { kind: 'companies', query: 'bridal boutiques in Madrid' },
-    { kind: 'companies', query: 'tourist boutiques in Toledo' },
-  ] }, ['Gift shops']);
-  assert.deepEqual(parsed.map((p) => p.query), ['museum shops in Spain', 'organisers of medieval fairs', 'exhibitor lists of craft fairs in Spain', 'bridal boutiques in Madrid']);
-  assert.equal(parsed.length, MAX_SUGGESTIONS);
-  const fromOffer = suggestionsFromOffer({ sells: 'Handmade silver jewellery', for_who: 'Medieval fairs, museum shops and tourist boutiques' }, 'Toledo, Spain', []);
-  assert.deepEqual(fromOffer.map((s) => `${s.kind}:${s.query}`), ['companies:Medieval fairs', 'companies:museum shops', 'companies:tourist boutiques', 'people:owners and buyers at Medieval fairs']);
-  assert.ok(fromOffer.every((s) => s.area === 'Toledo, Spain'));
+  // 7. Keeping the plan honest. A search that has shown what it is worth is
+  //    retired — a row the user wrote on the old sheet too, since nothing on
+  //    screen can stop it now — and stays on file so its words are not planned again.
+  const row = (h: Partial<HuntH>): HuntH => ({
+    id: 'x', kind: 'companies', query: 'q', area: null, label: 'Q', status: 'active', origin: 'suggested', commission_id: null,
+    last_run_at: '2026-09-25T03:00:00Z', last_found: 6, last_dropped: null, last_error: null, created_at: '2026-09-15T00:00:00Z', ...h,
+  });
+  const flat = { found: 0, waiting: 0, drafted: 0, binned: 0, below: 0 };
+  const spent = spentHunts([
+    row({ id: 'unwanted' }),
+    row({ id: 'mine', origin: 'user' }),
+    row({ id: 'working' }),
+    row({ id: 'empty', last_found: 0 }),
+    row({ id: 'young', last_found: 0, created_at: '2026-09-24T00:00:00Z' }),
+    row({ id: 'off', status: 'paused' }),
+  ], {
+    unwanted: { ...flat, found: HUNT_BIN_FLAG, binned: 5, below: HUNT_BIN_FLAG - 5 },
+    mine: { ...flat, found: 20, binned: 20 },
+    working: { ...flat, found: 12, binned: 9, drafted: 1 },
+  }, now);
+  assert.deepEqual(spent.map((x) => x.id), ['unwanted', 'mine', 'empty'], 'a search that led to a draft, a young one and a retired one are kept; the user\'s old row is judged like any other');
+  assert.match(spent[0].why, /^Retired: 8 found, none worth drafting/);
+  assert.equal(spent[1].why, 'Retired: 20 found, none worth drafting');
+  assert.equal(spent[2].why, 'Retired: found nothing');
+  assert.ok(HUNT_GRACE_DAYS >= 2, 'a new search gets a few nights before it is judged empty');
+  assert.equal(huntsNeeded([row({}), row({ status: 'paused' }), row({ kind: 'agent' })]), AUTO_HUNTS - 1, 'paused and old agent rows do not fill a slot');
+  assert.equal(huntsNeeded([row({}), row({}), row({}), row({})]), 0);
 
-  // 9. Matches files each find under the search that brought it in.
-  const now = new Date('2026-09-25T10:00:00Z');
-  const row = (id: string, data: Record<string, unknown>, o: Partial<OpportunityV2> = {}) => bizV2({ id, title: id, data, created_at: '2026-09-25T03:00:00Z', ...o });
+  // 8. The plan: web kinds only, never the same words twice, never more than there are slots.
+  const plan = parsePlan({ hunts: [
+    { kind: 'companies', query: 'a family-run resort in Palawan that takes bookings by message', area: 'Palawan, Philippines', label: 'Palawan resorts' },
+    { kind: 'companies', query: 'A family-run resort in Palawan that takes bookings by message!' },
+    { kind: 'agent', query: 'exhibitor lists of travel fairs in Manila' },
+    { kind: 'people', query: 'Staycation & resorts' },
+    { kind: 'people', query: 'the owner of a pest control company in Metro Manila with a small team', area: 'Manila, Philippines' },
+    { kind: 'companies', query: 'a plumbing contractor in Quezon City that quotes by phone' },
+  ] }, ['Staycation & resorts'], 2);
+  assert.deepEqual(plan.map((p) => `${p.kind}:${p.query}`), ['companies:a family-run resort in Palawan that takes bookings by message', 'people:the owner of a pest control company in Metro Manila with a small team']);
+  const fallback = planFromOffer({ sells: 'Booking automation', for_who: 'Staycation & resorts, pest control and plumbing' }, 'Manila, Philippines', ['pest control']);
+  assert.deepEqual(fallback.map((p) => `${p.kind}:${p.query}`), ['companies:Staycation & resorts', 'companies:plumbing', 'people:owners and buyers at Staycation & resorts'].slice(0, AUTO_HUNTS));
+  assert.ok(fallback.every((p) => p.area === 'Manila, Philippines'));
+  assert.deepEqual(planFromOffer({}, null, []), [], 'nothing is planned from nothing (invariant 1)');
+  assert.deepEqual(buyersOf({ for_who: 'cafés, gyms and salons; spas / bars y ok' }), ['cafés', 'gyms', 'salons', 'spas', 'bars'], 'split the way people list them; a two-letter fragment is not a buyer');
+  // Nothing live and nothing to add is said, never returned as an empty run that reads as a quiet night.
+  assert.equal(noPlanReason({ sells: 'Booking automation' }), 'nothing to look for — your offer does not say who buys it', 'the one thing the user can change, named');
+  assert.match(noPlanReason({ sells: 'Booking automation', for_who: 'resorts' }), /^every search it could think of was tried/);
+  assert.equal(noPlanReason({ sells: 'x', for_who: 'resorts' }, 'rate limited'), 'could not work out what to look for (rate limited)', 'a model that failed is the cause, whatever the offer says');
+  for (const r of [noPlanReason({ sells: 'x' }), noPlanReason({ sells: 'x', for_who: 'resorts' }), noPlanReason({ sells: 'x' }, 'e'.repeat(500))]) {
+    assert.ok(`Web search failed last run: ${r}`.length <= 120, `fits the Scout line whole: ${r}`);
+  }
+  const prompt = planPrompt({ offer: { sells: 'Booking automation', for_who: 'resorts' }, area: 'Manila', working: '', goals: ['Revenue'], existing: ['pest control'] });
+  assert.ok(prompt.includes('Already searched (do not repeat): pest control'));
+  assert.ok(/not "Palawan resort booking automation buyer"/.test(PLAN_SYSTEM), 'a query describes the page, it is not a list of keywords');
+
+  // 9. A web find reads as what it is: the search's short name and the site, or a person's role.
   const feed = matchFeedH({
-    now, targetSegments: ['pest control', 'm'], triage: [], moves: [moveV2({ id: 'gig', job: 'watch', kind: 'earn' })],
+    now, targetSegments: ['pest control'], triage: [], moves: [],
     pipeline: [
-      row('w1', { hunt_id: 'h1', hunt_label: 'Jewellery stockists', segment: 'shops that stock handmade jewellery', host: 'a.es' }, { contact: { email: 'x@a.es' }, source: 'web' }),
-      row('w2', { hunt_id: 'h1', hunt_label: 'Jewellery stockists', segment: 'shops that stock handmade jewellery', host: 'b.es' }, { source: 'web', url: 'https://b.es' }),
-      row('p1', { hunt_id: 'h3', hunt_label: 'Museum buyers', role: 'Buyer · Museo del Greco', host: 'linkedin.com' }, { type: 'people', contact: {}, url: 'https://linkedin.com/in/p1', source: 'web' }),
-      row('m1', { segment: 'pest control', city: 'Manila' }),
-      row('junk', { segment: 'm', city: 'Toledo' }),
+      bizV2({ id: 'w1', title: 'w1', source: 'web', contact: { email: 'x@a.es' }, created_at: '2026-09-25T03:00:00Z', data: { hunt_id: 'h1', hunt_label: 'Palawan resorts', segment: 'a family-run resort in Palawan', host: 'a.es' } }),
+      bizV2({ id: 'p1', title: 'p1', source: 'web', type: 'people', contact: {}, url: 'https://linkedin.com/in/p1', created_at: '2026-09-25T03:00:00Z', data: { hunt_id: 'h3', hunt_label: 'Resort owners', role: 'Owner · Casa Blanca Resort', host: 'linkedin.com' } }),
     ],
   });
-  const lensOfId = Object.fromEntries(feed.map((i) => [i.id, i.lens.key]));
-  assert.deepEqual([lensOfId.w1, lensOfId.p1, lensOfId.m1, lensOfId.junk], ['hunt:h1', 'hunt:h3', 'seg:pest control', 'clients']);
-  assert.deepEqual(matchLenses(feed).map((l) => `${l.label} ${l.count}`), ['Jewellery stockists 2', 'Museum buyers 1', 'Pest control 1', 'Clients 1', 'Gigs & jobs 1'], 'hunts, then segments, then kinds');
   const byId = Object.fromEntries(feed.map((i) => [i.id, i]));
-  assert.equal(byId.w1.sub, 'Jewellery stockists · a.es', "the hunt's short name and the site, not the sentence the user typed");
-  assert.equal(byId.p1.sub, 'Buyer · Museo del Greco · linkedin.com');
-  assert.equal(byId.p1.facts, 'Public profile');
-  // 10. Work's path to money says the Scout is not only Maps any more.
+  assert.equal(byId.w1.sub, 'Palawan resorts · a.es');
+  assert.equal(byId.p1.sub, 'Owner · Casa Blanca Resort · linkedin.com');
+
+  // 10. Work's path to money says the web is searched too, without a word of configuration.
   const { businessMachine: bm } = await import('../../src/lib/copilot/machine');
-  const flat = { stages: [], bottleneck: null, outsideFunnel: 0, queueCount: 0, wonAmount: 0, currency: '$', goal: null };
-  assert.equal(bm({ ...flat, segments: ['gift shops'], area: 'Toledo, Spain', hunts: 2 })[0].detail, 'gift shops in Toledo, Spain · 2 hunts');
-  assert.equal(bm({ ...flat, segments: [], area: null, hunts: 1 })[0].detail, '1 hunt', 'no "No segments set" when a hunt is doing the finding');
-  assert.equal(bm({ ...flat, segments: [], area: null })[0].detail, 'No segments set');
+  const flatM = { stages: [], bottleneck: null, outsideFunnel: 0, queueCount: 0, wonAmount: 0, currency: '$', goal: null };
+  assert.equal(bm({ ...flatM, segments: ['pest control'], area: 'Manila', web: true })[0].detail, 'pest control in Manila · and the web');
+  assert.equal(bm({ ...flatM, segments: [], area: null, web: true })[0].detail, 'The web, from what you sell');
+  assert.equal(bm({ ...flatM, segments: [], area: null })[0].detail, 'Nothing to search yet');
   console.log('copilot-core: hunts checks passed');
 }
 

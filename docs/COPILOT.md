@@ -305,7 +305,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | Tab | The question | What is on it | Pure module |
 | --- | --- | --- | --- |
 | Today | what do I do, and what did it do while I was away | the call (`CallCard`, unchanged) · done for you · needs you · worth doing (≤ 3) · the composer | `today.ts` |
-| Matches | who is worth contacting | the queue as one strip · chips (Clients, Gigs & jobs, People, Signals) · every find, newest first | `matches.ts` |
+| Matches | who is worth contacting, and where each one is | a stage bar (New · To send · Waiting · Replied) · what it searches for · chips when there is more than one kind · a card per business with a photo or initials, what it is and where · poor fits folded | `matches.ts` |
 | Work | what am I building | the offer · the path to money · the agents · projects handed over · the brief for Claude | `machine.ts` |
 | You | how is it going | money, runway, deep work, replies · the week read back · goals · settings | `review.ts`, `focus.ts` |
 
@@ -352,6 +352,46 @@ otherwise someone who watches job feeds would see finds counted on Today and
 have nowhere to open them. "Keep" on a feed find toasts "Kept.", read off the
 queue the route returns; it used to say "Drafted" over a queue with nothing new
 in it.
+
+**Four stages, one shown at a time.** The send queue was a card above the list —
+the biggest thing on the tab whatever it held, so "1 draft written and waiting"
+outweighed sixty matches. It is now a stage: New · To send · Waiting · Replied,
+from `stageCards` over the queue (in the queue's own order, so the cards and the
+one-at-a-time sheet walk the same drafts) and the pipeline's `sent`, `replied`
+and `meeting` rows. Each card does the one thing that moves it: a draft opens to
+be sent, a send can be marked replied, a reply opens to log what happened. Won
+and lost are over and are not on a list of people to chase. The bar hides until
+there is a second stage, and a stage emptied by the last answer falls back to New.
+
+**A card says what it is and where, at a glance.** A tile first — the listing's
+photo when Maps returned one (`image_url`, kept by the adapter since this
+change; older rows have none), initials on a per-title tint otherwise, a glyph
+for a feed find — then the listing's own category and its place with the region
+(`placeOf`), then rating and channel. The category replaced the segment as the
+label because the segment is the search term, and it can be wrong: on one live
+account it was the single letter "m", sixty unrelated businesses in Toledo, Ohio
+came back under it for someone selling jewellery in Toledo, Spain, and "M" was the
+only label on every card. With the region on the card, the wrong Toledo is
+visible in one glance.
+
+**What it searches for is always on screen**, with a Change button, because it is
+the one input on this tab that decides everything under it and it was invisible.
+A one-letter segment is refused at every write path (`isSearchableSegment`, in
+`setTargeting` and onboarding), named back in the toast rather than dropped
+quietly, and flagged in the targeting sheet as it is typed; a bare city name gets
+a line saying to add the country.
+
+**A poor fit is folded, not listed.** The ranker scores each candidate 0–100
+against the offer and goals, and says why in its reason — "a dental lab cannot
+buy medieval-market jewelry". Anything it judged under `WEAK_FIT` (40) is folded
+below the list behind a count; an unjudged listing is not weak, because the
+heuristic is not a verdict. When most of what was judged is poor
+(`poorFitMajority`, at least `WEAK_NOTICE_MIN`), a card says so with the search
+terms and a button to change them, and Today's matches row turns into a warning
+("12 new matches, mostly poor fits") that is left out of "N done for you". The
+header counts the list it sits over, so it says "60 found, all poor fits" instead
+of "60 to look at". The business sheet no longer prints the score as "% match"
+(invariant 2); it shows the place and the rating instead.
 
 **Work is an illustration with one rule: every part is drawn from rows.** Four
 stages — find, reach, convert, get paid — from the funnel's own counts, with who

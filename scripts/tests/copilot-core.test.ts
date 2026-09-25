@@ -4705,7 +4705,7 @@ function moveV2(m: Partial<MoveV2>): MoveV2 {
 
 async function todayTab() {
   const now = new Date('2026-09-24T10:00:00Z');
-  const base: DoneInput = { now, lastCronRun: '2026-09-24T05:02:00Z', jobsRun: null, matchCreated: [], matchesWaiting: 0, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] };
+  const base: DoneInput = { now, lastCronRun: '2026-09-24T05:02:00Z', jobsRun: null, matchCreated: [], matchesWaiting: 0, matchesPoor: 0, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] };
 
   // 1. What arrived in the last day, counted from the rows it arrived as.
   const done = doneForYou({
@@ -4883,7 +4883,7 @@ async function matchesTab() {
   assert.equal(counts.all, feed.length);
   assert.equal(counts.fresh, 2);
   assert.equal(counts.by.clients, 3);
-  assert.equal(matchesStatus(counts, 51), '2 new since yesterday · 51 to send');
+  assert.equal(matchesStatus(counts), '2 new since yesterday', 'the queue is on the stage bar, not repeated in the header');
   assert.equal(matchesStatus(matchCounts([]), 0), null);
   assert.equal(MATCH_GROUP_LABEL.work, 'Gigs & jobs');
   console.log('copilot-core: matches tab checks passed');
@@ -4978,3 +4978,138 @@ async function workTab() {
 }
 
 workTab().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// Matches, staged: New · To send · Waiting · Replied
+//
+// The send queue stopped being a card above the list and became a stage, and a
+// poor fit stopped being listed as "Matched for you". The checks are the ways
+// the old tab misled on the live account: sixty cards labelled "M", a Toledo in
+// Ohio shown with no region, a dental lab offered to a jewellery maker under a
+// calm header, and a queue card that was the biggest thing on the screen.
+// ---------------------------------------------------------------------------
+import {
+  MATCH_STAGES, MATCH_STAGE_LABEL, WEAK_FIT, imageOf, isWeak, lookingFor, matchCounts as matchCountsS, matchFeed as matchFeedS,
+  isSearchableSegment, matchesStatus as matchesStatusS, monogramOf, placeOf, poorFitMajority, ratingOf, stageCards, tintOf,
+} from '../../src/lib/copilot/matches';
+import { doneForYou as doneForYouS, todayStatus as todayStatusS } from '../../src/lib/copilot/today';
+import type { Execution as ExecutionS, QueueItem as QueueItemS } from '../../src/lib/copilot/types';
+
+async function matchesStaged() {
+  const now = new Date('2026-09-25T10:00:00Z');
+
+  // 1. Where a place is, with its region — the fact that exposes a wrong city.
+  assert.equal(placeOf({ city: 'Toledo', state: 'Ohio' }), 'Toledo, Ohio');
+  assert.equal(placeOf({ city: 'Toledo', address: '2130 S Reynolds Rd, Toledo, OH 43614' }), 'Toledo, OH', 'postcode dropped, state kept');
+  assert.equal(placeOf({ city: 'Toledo', address: 'Calle del Comercio 30, 45001 Toledo' }), 'Toledo');
+  assert.equal(placeOf({ city: 'Madrid', address: 'Calle Toledo 12, 28005 Madrid' }), 'Madrid', 'read from the end: a street can carry a city name');
+  assert.equal(placeOf({ area: 'Manila' }), 'Manila', 'hunter rows carry an area');
+  assert.equal(placeOf({ city: 'Manila', state: 'Metro Manila' }), 'Manila', 'not the city twice');
+  assert.equal(placeOf({}), null);
+
+  // 2. The facts a glance can use, and nothing invented when they are missing.
+  assert.equal(ratingOf({ rating: 4.6, reviews_count: 31 }), '4.6★ (31)');
+  assert.equal(ratingOf({ rating: 5 }), '5.0★', 'one decimal, as Maps prints it');
+  assert.equal(ratingOf({ rating: 0, reviews_count: 0 }), null, 'no reviews is not a zero rating');
+  assert.equal(imageOf({ image_url: 'https://lh5.googleusercontent.com/p/abc' }), 'https://lh5.googleusercontent.com/p/abc');
+  for (const bad of ['http://x.example/a.jpg', 'javascript:alert(1)', 'data:image/png;base64,AA', 42]) assert.equal(imageOf({ image_url: bad }), null, `${String(bad)} is not a photo URL`);
+  assert.equal(monogramOf('M & T Dental Lab'), 'MT');
+  assert.equal(monogramOf('The Olive Tree'), 'OT');
+  assert.equal(monogramOf('Joyería Álvarez'), 'JA', 'accents stripped, letters kept');
+  assert.equal(monogramOf('東京ジュエリー'), '東', 'a script the strip removes still gets its first character');
+  assert.equal(tintOf('Mountain Tops'), tintOf('Mountain Tops'), 'a card keeps its colour');
+  assert.ok(tintOf('anything') >= 0 && tintOf('anything') < 6);
+
+  // 3. A poor fit is the ranker's judgement, and only a judged listing can be one.
+  assert.equal(isWeak({ scored_at: '2026-09-25T04:00:00Z', fit_score: WEAK_FIT - 1 }), true);
+  assert.equal(isWeak({ scored_at: '2026-09-25T04:00:00Z', fit_score: WEAK_FIT }), false);
+  assert.equal(isWeak({ scored_at: null, fit_score: 10 }), false, 'unjudged is not weak — the heuristic is not a verdict');
+
+  const junk = (id: string, title: string, o: Partial<OpportunityV2> = {}) => bizV2({
+    id, title, scored_at: '2026-09-25T04:00:00Z', fit_score: 20, created_at: '2026-09-25T03:00:00Z',
+    data: { segment: 'm', category: 'Dental laboratory', city: 'Toledo', address: '1 Main St, Toledo, OH 43604', rating: 4.8, reviews_count: 31 }, ...o,
+  });
+  const feed = matchFeedS({
+    now, targetSegments: ['m'], triage: [], moves: [],
+    pipeline: [
+      junk('j1', 'M & T Dental Lab'),
+      junk('j2', 'Mountain Tops', { data: { segment: 'm', city: 'Toledo', state: 'Ohio' } }),
+      junk('j3', 'Maumee Bay Motors'),
+      bizV2({ id: 'fit', title: 'Casa de la Plata', scored_at: '2026-09-25T04:00:00Z', fit_score: 72, created_at: '2026-09-25T03:00:00Z', data: { category: 'Jewelry store', city: 'Toledo', state: 'Castilla-La Mancha', image_url: 'https://lh5.googleusercontent.com/p/x' } }),
+    ],
+  });
+  const by = Object.fromEntries(feed.map((i) => [i.id, i]));
+  assert.equal(by.j1.tag, 'Dental laboratory', 'what the listing is, not the term it was found under');
+  assert.equal(by.j1.sub, 'Dental laboratory · Toledo, OH');
+  assert.equal(by.j1.facts, '4.8★ (31) · WhatsApp');
+  assert.equal(by.j2.tag, null, 'a one-letter segment is never a label');
+  assert.equal(by.j2.sub, 'Toledo, Ohio');
+  assert.equal(by.fit.image, 'https://lh5.googleusercontent.com/p/x');
+  assert.equal(by.fit.initials, 'CP');
+  assert.deepEqual(feed.filter((i) => i.weak).map((i) => i.id).sort(), ['j1', 'j2', 'j3']);
+  assert.deepEqual(poorFitMajority(feed), { judged: 4, weak: 3, majority: true });
+  assert.equal(poorFitMajority(feed.slice(0, 2)).majority, false, 'two judged is a sample, not a finding');
+
+  // 4. The header counts the list it sits over. Poor fits are folded, so they are
+  //    not "to look at" — and when they are all there is, that is said.
+  const good = feed.filter((i) => !i.weak);
+  assert.equal(matchesStatusS(matchCountsS(good), 3), '1 new since yesterday');
+  assert.equal(matchesStatusS(matchCountsS([]), 60), '60 found, all poor fits');
+  assert.deepEqual(lookingFor(['m', ' '], 'Toledo'), { what: 'm', where: 'Toledo' }, 'the search terms, shown as they are — a wrong one has to be visible to be fixed');
+  assert.deepEqual(lookingFor([], null), { what: null, where: null });
+  assert.equal(isSearchableSegment('m'), false, 'one letter is a typo, and it is searched exactly as typed');
+  assert.equal(isSearchableSegment(' é '), false);
+  assert.equal(isSearchableSegment('IT'), true, 'two letters can be a market');
+
+  // 5. The other three stages. To send is the queue in the queue's order, with
+  //    the draft's first line; Waiting is oldest-sent first; Replied holds
+  //    replies and meetings; won and lost are over and are not here.
+  const exec = (o: Partial<ExecutionS>): ExecutionS => ({
+    id: 'e', action_id: null, opportunity_id: null, channel: 'whatsapp', recipient: '63917', subject: null, body: 'Hi Maria —\nsaw your ads.',
+    approval_state: 'needs_approval', provider: null, external_message_id: null, error: null, sent_at: null, dispatch: 'manual', created_at: '2026-09-11T10:00:00Z', ...o,
+  });
+  const queue = [{
+    id: 'a1', kind: 'plan', owner: 'ai', title: 'Opener to Casa de la Plata, ready to review', detail: null, ai_draft: null, urgency: 'normal',
+    due_label: null, minutes: 5, status: 'open', opportunity_id: 'fit', for_date: '2026-09-11',
+    execution: exec({ action_id: 'a1', opportunity_id: 'fit' }),
+    opp: { id: 'fit', title: 'Casa de la Plata', name: 'Maria', segment: 'jewelry store', score: 72 },
+  }] as unknown as QueueItemS[];
+  const pipeline = [
+    { ...bizV2({ id: 'fit', title: 'Casa de la Plata', data: { category: 'Jewelry store', city: 'Toledo', state: 'Castilla-La Mancha' } }), stage: 'to_send' as const },
+    { ...bizV2({ id: 's-new', title: 'Sent Recently' }), execution: exec({ approval_state: 'sent', sent_at: '2026-09-23T10:00:00Z' }), stage: 'sent' as const },
+    { ...bizV2({ id: 's-old', title: 'Sent Long Ago' }), execution: exec({ approval_state: 'sent', sent_at: '2026-09-05T10:00:00Z' }), stage: 'sent' as const },
+    { ...bizV2({ id: 'r1', title: 'Replied One' }), execution: exec({ approval_state: 'sent', sent_at: '2026-09-20T10:00:00Z' }), stage: 'replied' as const },
+    { ...bizV2({ id: 'm1', title: 'Met One' }), execution: exec({ approval_state: 'sent', sent_at: '2026-09-21T10:00:00Z' }), stage: 'meeting' as const },
+    { ...bizV2({ id: 'w1', title: 'Won One' }), stage: 'won' as const },
+  ];
+  const st = stageCards({ now, queue, pipeline, targetSegments: [] });
+  assert.equal(st.to_send.length, 1);
+  assert.equal(st.to_send[0].title, 'Casa de la Plata');
+  assert.equal(st.to_send[0].sub, 'Jewelry store · Toledo, Castilla-La Mancha', 'meta from the business, not the action title');
+  assert.equal(st.to_send[0].status, 'Written 14 days ago');
+  assert.equal(st.to_send[0].preview, 'Hi Maria —', 'the first line of what is about to go out');
+  assert.equal(st.to_send[0].draftId, 'a1');
+  assert.deepEqual(st.waiting.map((c) => c.oppId), ['s-old', 's-new'], 'the one closest to going cold first');
+  assert.equal(st.waiting[0].status, 'Sent 20 days ago · no reply yet');
+  assert.deepEqual(st.replied.map((c) => c.oppId), ['m1', 'r1'], 'the warmest reply first');
+  assert.equal(st.replied[0].status, 'Meeting or proposal logged');
+  assert.ok(!Object.values(st).flat().some((c) => c.oppId === 'w1'), 'won is over — it is on You, not on a list of people to chase');
+  assert.deepEqual([...MATCH_STAGES], ['new', 'to_send', 'waiting', 'replied']);
+  assert.equal(MATCH_STAGE_LABEL.to_send, 'To send');
+
+  // 6. Today does not report a night of poor fits as work done.
+  const done = doneForYouS({
+    now, lastCronRun: '2026-09-25T05:00:00Z', jobsRun: null, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [],
+    matchCreated: ['2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z'],
+    matchesWaiting: 4, matchesPoor: 3,
+  });
+  assert.equal(done.rows[0].label, '4 new matches, mostly poor fits');
+  assert.equal(done.rows[0].detail, 'It judged 3 of 4 a poor fit for what you sell — check what it searches for');
+  assert.equal(done.rows[0].tone, 'warn');
+  assert.equal(todayStatusS(done, []), null, 'a warning is not something done for you');
+  const fine = doneForYouS({ ...{ now, lastCronRun: null, jobsRun: null, motion: [], sourcesFailing: 0, commissions: [], outcomes: [], moves: [] }, matchCreated: ['2026-09-25T03:00:00Z', '2026-09-25T03:00:00Z'], matchesWaiting: 2, matchesPoor: 2 });
+  assert.equal(fine.rows[0].tone, 'done', 'two poor fits is under the minimum — not yet a finding');
+  console.log('copilot-core: matches staged checks passed');
+}
+
+matchesStaged().catch((e) => { console.error(e); process.exit(1); });

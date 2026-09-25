@@ -2,6 +2,7 @@
 // icons.tsx so the two sets sit together. Glyphs rather than emoji: an emoji is
 // a different picture on every phone, and on some it is a box.
 import type { AgentKey } from '@/lib/copilot/machine';
+import type { MatchGroup } from '@/lib/copilot/matches';
 
 const base = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24', 'aria-hidden': true };
 
@@ -32,5 +33,22 @@ export function AgentGlyph({ agent }: { agent: AgentKey }) {
     case 'researcher': return (<svg {...base}><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3" /><path d="M7 15h10" /></svg>);
     // A compass: it picks the direction.
     case 'planner': return (<svg {...base}><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" /></svg>);
+  }
+}
+
+/**
+ * The tile on a match with no photo and no initials worth showing — a find from
+ * a feed, whose title is a sentence. What kind of thing it is, as a picture.
+ */
+export function MatchGlyph({ group }: { group: MatchGroup }) {
+  switch (group) {
+    // A shopfront: a business you would pitch.
+    case 'clients': return (<svg {...base}><path d="M4 10v10h16V10" /><path d="M3 10l2-6h14l2 6H3z" /><path d="M10 20v-5h4v5" /></svg>);
+    // A case: somebody paying for work.
+    case 'work': return (<svg {...base}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18" /></svg>);
+    // A person worth meeting.
+    case 'people': return (<svg {...base}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>);
+    // A spark: something changing.
+    case 'signals': return (<svg {...base}><path d="M13 2L5 14h6l-1 8 8-12h-6l1-8z" /></svg>);
   }
 }

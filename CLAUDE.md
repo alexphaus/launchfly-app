@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 40 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 41 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 

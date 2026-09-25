@@ -6,6 +6,7 @@ import { copilotDb } from './db';
 import { runBrief } from './brief';
 import { addContextItem, ensureSources, logEvent, saveWatchSource } from './store';
 import { runSupply } from './supply';
+import { isSearchableSegment } from './matches';
 import { normalizeSourceUrl, type WatchIntent } from './watch/catalogue';
 import { CAPACITY_META, OPPORTUNITY_TYPES, type Capacity, type GoalMetric, type Offer } from './types';
 
@@ -52,7 +53,8 @@ export function parseOnboarding(body: unknown): OnboardingInput {
     if (url) watch.push({ url, label: s(w.label, 80) || undefined, intent: s(w.intent, 200) || undefined });
   }
   const rawSegments = Array.isArray(b.target_segments) ? (b.target_segments as unknown[]).map((x) => s(x, 40)) : s(b.target_segments, 240).split(',');
-  const target_segments = [...new Set(rawSegments.map((x) => x.trim()).filter(Boolean))].slice(0, 8);
+  // The same floor as setTargeting: a one-letter segment is searched as typed.
+  const target_segments = [...new Set(rawSegments.map((x) => x.trim()).filter(isSearchableSegment))].slice(0, 8);
   const email = s(b.email, 120).toLowerCase();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('That email does not look right');
   const o = (b.offer ?? {}) as Record<string, unknown>;

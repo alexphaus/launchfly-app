@@ -14,6 +14,7 @@ import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
 import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
 import { stageOf } from './pipeline';
+import { isSearchableSegment } from './matches';
 import { inMotion } from './motion';
 import { captureAsk, openedAwaitingAnswer, repliesAwaitingOutcome } from './capture';
 import { forecast } from './obligations';
@@ -1003,19 +1004,29 @@ export async function setFinance(profileId: string, finance: Finance) {
  * and sets its businesses aside (status only — reversible in SQL), so Pipeline
  * and Today stop showing work the user just said they do not want.
  */
-export async function setTargeting(profileId: string, t: { target_segments?: string[]; target_area?: string | null }): Promise<{ dropped: number }> {
+export async function setTargeting(profileId: string, t: { target_segments?: string[]; target_area?: string | null }): Promise<{ dropped: number; ignored: string[] }> {
   const db = copilotDb();
   const before = await getProfile(profileId);
   const patch: Record<string, unknown> = {};
-  if (t.target_segments) patch.target_segments = t.target_segments.map((x) => x.trim()).filter(Boolean).slice(0, 8);
+  // A one-letter segment is a typo, and it is searched exactly as typed: one
+  // live account's Matches filled with sixty unrelated businesses under the
+  // segment "m". Refused here and named back to the caller, so the save says
+  // what it left out rather than dropping it quietly.
+  const typed = t.target_segments?.map((x) => x.trim()).filter(Boolean);
+  const ignored = (typed ?? []).filter((x) => !isSearchableSegment(x));
+  const segments = typed?.filter(isSearchableSegment).slice(0, 8);
+  if (segments) patch.target_segments = segments;
   if (t.target_area !== undefined) patch.target_area = t.target_area?.trim() || null;
   if (Object.keys(patch).length) await db.from('copilot_profiles').update(patch).eq('id', profileId);
   await logEvent(profileId, 'targeting_updated', patch);
 
   let dropped = 0;
-  if (before && t.target_segments) {
+  // Compared against what was SAVED, not what was typed: re-saving a list that
+  // still holds a refused segment removes it, and the businesses found under it
+  // are set aside like any dropped segment's.
+  if (before && segments) {
     const norm = (s: string) => s.trim().toLowerCase();
-    const next = new Set(t.target_segments.map(norm));
+    const next = new Set(segments.map(norm));
     const removed = before.target_segments.map(norm).filter((s) => s && !next.has(s));
     if (removed.length) {
       const { data } = await db.from('copilot_opportunities').select('id, data, status, source, source_kind, reason, title')
@@ -1030,7 +1041,7 @@ export async function setTargeting(profileId: string, t: { target_segments?: str
       }
     }
   }
-  return { dropped };
+  return { dropped, ignored };
 }
 
 /**

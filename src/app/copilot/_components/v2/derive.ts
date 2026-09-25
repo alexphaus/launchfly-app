@@ -12,7 +12,7 @@
 import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster, businessMachine, workStatus } from '@/lib/copilot/machine';
-import { matchCounts, matchFeed, matchesStatus } from '@/lib/copilot/matches';
+import { lookingFor, matchCounts, matchFeed, matchesStatus, poorFitMajority, stageCards } from '@/lib/copilot/matches';
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { weekReview } from '@/lib/copilot/review';
 import { doneForYou, needsYou, todayStatus, worthDoing } from '@/lib/copilot/today';
@@ -30,7 +30,17 @@ export function derive(home: HomeData) {
 
   /* Matches — first, because Today reports how many of last night's finds are still waiting there. */
   const feed = matchFeed({ now, pipeline: home.pipeline, triage: home.triage, moves: home.moves, targetSegments: home.profile.target_segments });
-  const counts = matchCounts(feed);
+  // The list shows what the ranker did not rule out; the poor fits fold under
+  // it. Chips and the header count the list, so they agree with what is on it.
+  const good = feed.filter((i) => !i.weak);
+  const poor = feed.filter((i) => i.weak);
+  const counts = matchCounts(good);
+  const fit = poorFitMajority(feed);
+  const staged = stageCards({ now, queue: home.queue, pipeline: home.pipeline, targetSegments: home.profile.target_segments });
+  // Drafts written from a blank offer are not put in front of anyone to send
+  // (invariant 1) — the offer comes first, and Today's call says so.
+  const stages = noOffer ? { ...staged, to_send: [] } : staged;
+  const looking = lookingFor(home.profile.target_segments, home.profile.target_area || home.profile.location);
 
   /* Today */
   const ownMoves = [...home.moves, ...(home.callMove ? [home.callMove] : [])].filter((m) => m.job !== 'watch');
@@ -40,6 +50,7 @@ export function derive(home: HomeData) {
     jobsRun: home.jobsRun,
     matchCreated: home.pipeline.map((r) => r.opportunity.created_at),
     matchesWaiting: feed.filter((i) => i.from === 'business' && i.fresh).length,
+    matchesPoor: feed.filter((i) => i.from === 'business' && i.fresh && i.weak).length,
     motion: home.motion,
     sourcesFailing: home.watchSources.filter((s) => !!s.last_error).length,
     commissions: home.commissions,
@@ -116,7 +127,7 @@ export function derive(home: HomeData) {
 
   const status: Record<Tab2, string | null> = {
     today: todayStatus(done, asks),
-    matches: matchesStatus(counts, noOffer ? 0 : queueCount),
+    matches: matchesStatus(counts, poor.length),
     work: workStatus(team, running),
     you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : null,
   };
@@ -124,7 +135,7 @@ export function derive(home: HomeData) {
   return {
     now, noOffer, queueCount, oldestDays, queueBacked, currency,
     done, asks, worth, nothingYet,
-    feed, counts,
+    feed, good, poor, counts, fit, stages, looking,
     machine, team, running,
     review, week,
     status,

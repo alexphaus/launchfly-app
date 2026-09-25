@@ -28,6 +28,11 @@ export interface ScrapedLead {
   categoryName: string;
   placeId: string;
   reviews?: ScrapedReview[];
+  /** The listing's main photo. Optional: callers that print a lead ignore it. */
+  imageUrl?: string;
+  /** Region and country, so "Toledo" can be told apart from Toledo. */
+  state?: string;
+  countryCode?: string;
 }
 
 /** Get Apify API token from business config or env fallback */
@@ -148,6 +153,9 @@ export async function searchGoogleMaps(opts: {
       city: (r.city as string) || location,
       categoryName: (r.categoryName as string) || query,
       placeId: (r.placeId as string) || '',
+      imageUrl: typeof r.imageUrl === 'string' && r.imageUrl ? r.imageUrl : undefined,
+      state: typeof r.state === 'string' && r.state ? r.state : undefined,
+      countryCode: typeof r.countryCode === 'string' && r.countryCode ? r.countryCode : undefined,
       reviews: Array.isArray(r.reviews)
         ? (r.reviews as Record<string, unknown>[]).slice(0, reviewsPerPlace || 0).map(rev => ({
             text: (rev.text as string) || '',

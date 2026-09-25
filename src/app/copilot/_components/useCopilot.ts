@@ -523,9 +523,14 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async saveTargeting(t) {
       try {
-        const r = await post<{ home: HomeData; dropped?: number }>('/targeting', t);
+        const r = await post<{ home: HomeData; dropped?: number; ignored?: string[] }>('/targeting', t);
         setHome(r.home);
-        say(r.dropped ? `Targeting saved. ${r.dropped} ${r.dropped === 1 ? 'business' : 'businesses'} from dropped segments set aside.` : 'Targeting saved');
+        // What the save refused is said, not swallowed: a segment that silently
+        // failed to save reads as one that is being searched.
+        const left = r.ignored?.length ? ` Left out ${r.ignored.map((x) => `"${x}"`).join(', ')} — one letter is not something to search for.` : '';
+        say(r.dropped
+          ? `Targeting saved. ${r.dropped} ${r.dropped === 1 ? 'business' : 'businesses'} from dropped segments set aside.${left}`
+          : `Targeting saved.${left}`);
         return true;
       } catch (e) { fail(e, 'Could not save'); return false; }
     },

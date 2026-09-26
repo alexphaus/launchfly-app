@@ -188,7 +188,7 @@ and a metric, and the record grades itself against the ledger.
 owner's own verdict that the two-tab app had too many things and no single reason
 to open it. Built as a second layout over the same data rather than a rework, so
 the two can be compared by living with them. It adds one sensor — deep work,
-logged by hand — and no new ranking. See COPILOT.md → **Three tabs**.
+logged by hand — and no new ranking. See COPILOT.md → **Four tabs**.
 **Then** — hunts, twice. First as searches the user wrote and managed, beyond
 "segment in area" on Maps. Then, on its owner's verdict that this made finding
 people their job again — "serve, not configure" — as the app's own: planned from
@@ -207,7 +207,12 @@ funnel already keeps. Three tabs: Path · Matches · You. No new sensor and no n
 ranking; the past is rows, the future is the Moves. Then it was made to move and
 say so: a rung reached is dated where it happened, the plan names what left it
 and why, every step carries the planner's reason, and one swap is suggested only
-where hours and replies sit side by side. See COPILOT.md → **Three tabs**.
+where hours and replies sit side by side.
+**Then** — Work back, beside the Path. With the machine and the team under the
+numbers on You, its owner found the separation was the point: the Path is what
+to do and what moved, Work is the business being built — the offer, the
+machine, the team and the projects in full. Four tabs: Path · Matches · Work ·
+You. See COPILOT.md → **Four tabs**.
 
 ---
 

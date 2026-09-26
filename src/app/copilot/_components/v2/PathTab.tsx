@@ -13,9 +13,9 @@
 // This replaced Today and Work. Every part of Today has a place: the call is the
 // present, "done for you" is the recent past (a failure it reported is a notice
 // above "you are here", never a quiet line), "needs you" sits under the call,
-// and "worth doing" is the first of the next steps. Work's projects under way and
-// the work it offers to take on are next steps too; the machine and the team are
-// on You.
+// and "worth doing" is the first of the next steps. Projects under way and the
+// work it offers to take on are next steps too, one line each; Work has them in
+// full, beside the offer, the machine and the team.
 //
 // What makes it a path rather than a list is that it moves, and says so: a rung
 // reached is a moment in the stream where it happened; the plan marks what is

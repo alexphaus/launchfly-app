@@ -969,7 +969,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-capture-row span { font-weight: 500; }
 
 /* ══ /copilot2 — the four-tab shell ═════════════════════════════════════════
-   Today, Matches, Work, You. Calm theme only, so every rule stays inside this
+   Path, Matches, Work, You. Calm theme only, so every rule stays inside this
    block and scoped to [data-theme="soft"] — the two-shells test walks it. New
    classes are cp2-* and never generic: `.cp-steps` already sized every span
    inside it once, and the same kind of collision inside .cp-root is invisible
@@ -1092,7 +1092,14 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 
 .cp-root[data-theme="soft"] .cp2-stagefoot { margin: 4px 24px 0; }
 
-/* ── You: the machine and the team, moved from Work ─────────────────────── */
+/* ── Work: the product, the machine, the team ─────────────────────────── */
+.cp-root[data-theme="soft"] .cp2-product-name { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; margin: 2px 0 8px; }
+.cp-root[data-theme="soft"] .cp2-product-problem { font-size: 13.5px; line-height: 1.55; color: var(--muted); font-style: italic; margin-bottom: 12px; }
+.cp-root[data-theme="soft"] .cp2-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; line-height: 1.45; }
+.cp-root[data-theme="soft"] .cp2-facts b { font-weight: 600; color: var(--muted); margin-right: 3px; }
+.cp-root[data-theme="soft"] .cp2-facts a { color: var(--blue); font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-knows { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+
 /* The machine: numbered stages on a rail. The connector runs from under one
    circle to the top of the next, across the button padding between them. */
 .cp-root[data-theme="soft"] .cp2-flow { list-style: none; padding: 6px 0; }
@@ -1135,6 +1142,11 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-state.failed { color: var(--bad); }
 .cp-root[data-theme="soft"] .cp2-state.failed i { background: var(--bad); }
 .cp-root[data-theme="soft"] .cp2-team .cp-connect { flex: none; align-self: center; }
+
+/* Projects: the handed-over jobs keep their own card, inside the page gutter. */
+.cp-root[data-theme="soft"] .cp2-projects { padding: 0 22px; }
+.cp-root[data-theme="soft"] .cp2-projects .cp-thread { margin-bottom: 12px; }
+.cp-root[data-theme="soft"] .cp2-offer-label { margin: 4px 26px 8px; font-size: 11.5px; font-weight: 600; color: var(--ai); }
 
 .cp-root[data-theme="soft"] .cp2-claude .cp-chips { margin: 14px 0 2px; }
 .cp-root[data-theme="soft"] .cp2-claude .cp-btn-row .cp-btn { text-decoration: none; }

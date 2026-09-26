@@ -1,6 +1,6 @@
 // src/lib/copilot/machine.ts
-// The path to money and the team, on You: the business drawn as the machine it
-// is, and the agents that run parts of it.
+// The Work tab: the business drawn as the machine it is, and the agents that
+// run parts of it.
 //
 // What was asked for, in its owner's words: "the system or business the user is
 // working on … steps, processes, how the business is formed … see the path to
@@ -282,7 +282,7 @@ export function agentRoster(input: RosterInput): Agent[] {
   return [scout, watcher, writer, researcher, planner];
 }
 
-/** The line under the greeting on You when there is no runway to report. One line beside the capacity pill at 390px. */
+/** The line under the greeting on Work. One line beside the capacity pill at 390px. */
 export function workStatus(agents: Agent[], running: number): string {
   const working = agents.filter((a) => a.state === 'working').length;
   return [

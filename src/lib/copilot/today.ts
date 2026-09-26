@@ -34,7 +34,7 @@ export const DONE_WINDOW_HOURS = 24;
 export const STALE_NIGHT_HOURS = 36;
 /** Worth doing, below the call. Three is a morning; eight is a list nobody finishes. */
 export const MAX_WORTH_DOING = 3;
-/** Projects reported in done-for-you. The rest are on the Path, under way or done. */
+/** Projects reported in done-for-you. The rest are on Work; the ones under way are next steps on the Path too. */
 export const MAX_PROJECT_ROWS = 2;
 /**
  * How close closed_at and last_run_at are when the worker itself finished a
@@ -294,10 +294,11 @@ export function needsYou(input: NeedsInput): AskRow[] {
 /**
  * The Moves that belong on Today, beside the call rather than somewhere else.
  *
- * Four kinds go elsewhere, each to exactly one place, so nothing renders twice:
- * watched-feed finds are Matches; the send queue is its own row in Needs you; a
- * blocked mandate's question is its row in Needs you too; a plan the app offers
- * to carry out is a next step on the Path, opened with its plan.
+ * Four kinds go elsewhere, each to exactly one place on the Path, so nothing
+ * renders twice there: watched-feed finds are Matches; the send queue is its own
+ * row in Needs you; a blocked mandate's question is its row in Needs you too; a
+ * plan the app offers to carry out is a next step, opened with its plan — and,
+ * in full, an offer under Projects on Work.
  */
 export function worthDoing(moves: Move[], max = MAX_WORTH_DOING): { shown: Move[]; more: number } {
   const here = moves.filter((m) => m.job !== 'watch' && m.job !== 'send_queue' && m.job !== 'commission' && m.artifact?.kind !== 'plan');

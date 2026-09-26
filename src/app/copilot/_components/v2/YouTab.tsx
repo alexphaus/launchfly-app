@@ -1,16 +1,11 @@
 'use client';
-// You: how it is going, in the numbers that are actually yours, then the path
-// to money and the team running it, then the week read back, then goals, then
-// everything that is settings.
-//
-// The path to money and the team came from Work when the Path replaced it. They
-// are how the whole thing is doing rather than what to do next — the Path is for
-// that — so they sit with the numbers, where "how is it going" is asked.
+// You: how it is going, in the numbers that are actually yours, then the week
+// read back, then goals, then everything that is settings.
 //
 // What left, and why. The Working? tab rendered the funnel, the openings, a
 // per-segment read, the log of calls and the findings: five sections of true
 // record that its owner opened and found "a log, static, without much value".
-// The funnel is still one tap away — it is the path to money below, where each
+// The funnel is still one tap away — it is the path to money on Work, where each
 // stage opens the businesses in it — and "Ask your own record" still answers by
 // counting. What this tab does instead is ask the three questions a person
 // actually has about a week, and answer each with the rows behind it. See
@@ -23,7 +18,6 @@ import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { goalProgress, money } from '../format';
 import type { Actions } from '../shared';
 import { useShell } from '../shell';
-import { BuildWithClaude, Machine, Projects, Team } from './Business';
 import type { Derived } from './derive';
 import { IconAlert, IconCheck, IconChevron } from './icons2';
 
@@ -31,12 +25,8 @@ export default function YouTab({ home, d, actions, briefing }: { home: HomeData;
   return (
     <>
       <Numbers home={home} d={d} actions={actions} />
-      <Machine stages={d.machine} actions={actions} />
       <Week home={home} d={d} actions={actions} />
       <Goals home={home} actions={actions} />
-      <Team agents={d.team} actions={actions} briefing={briefing} />
-      <Projects home={home} actions={actions} />
-      <BuildWithClaude actions={actions} />
       <Settings home={home} d={d} actions={actions} briefing={briefing} />
     </>
   );
@@ -106,8 +96,7 @@ function Week({ home, d, actions }: { home: HomeData; d: Derived; actions: Actio
   const go = (t: ReviewTarget) => {
     if (t === 'queue') actions.openSheet({ kind: 'queue' });
     else if (t === 'sources') actions.openSheet({ kind: 'watchlist' });
-    // The finished ones are listed further down this tab; the ones under way are on the Path.
-    else if (t === 'projects') document.getElementById('cp2-projects')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else if (t === 'projects') actions.setTab('work');
     else if (t === 'focus') actions.openSheet({ kind: 'focus' });
     else if (t === 'matches') actions.setTab('matches');
     else if (t === 'record') actions.openSheet({ kind: 'ask' });

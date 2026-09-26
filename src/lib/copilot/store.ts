@@ -2030,7 +2030,7 @@ const HUNT_COLS = 'id, kind, query, area, label, status, origin, commission_id, 
  * planner reads those too, so it never plans the same words twice.
  *
  * Degrades on its own and says why. The table ships in 20260925, and without it
- * the planner cannot keep a search: the Scout on You says so, rather than the
+ * the planner cannot keep a search: the Scout on Work says so, rather than the
  * web quietly never being searched (invariant 13).
  */
 export async function loadHunts(profileId: string): Promise<{ hunts: Hunt[]; unreadable: string | null }> {

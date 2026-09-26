@@ -20,14 +20,14 @@ import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, O
 export type Tab = 'now' | 'working';
 
 /**
- * The four tabs of the shell at /copilot2, one question each: what do I do
- * today, who is worth contacting, what am I building, and how am I doing.
+ * The four tabs of the shell at /copilot2, one question each: where am I and
+ * what moves it, who is worth contacting, what am I building, and how am I doing.
  *
  * Its own type rather than a widening of Tab, because the two shells are two
  * layouts over one app — a v1 screen that could be told to open `work` would
  * have nothing to render.
  */
-export type Tab2 = 'path' | 'matches' | 'you';
+export type Tab2 = 'path' | 'matches' | 'work' | 'you';
 
 export type SheetState =
   | { kind: 'capacity' }

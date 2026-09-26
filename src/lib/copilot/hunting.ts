@@ -11,7 +11,7 @@
 //
 // Nothing is planned from a blank offer (invariant 1). A failure to plan or to
 // save a plan throws, and the supply run records it against the web adapter —
-// the Scout on You reads it — because the alternative is the web quietly never
+// the Scout on Work reads it — because the alternative is the web quietly never
 // being searched while the screen looks like a quiet week (invariant 13).
 
 import { createOpenAI } from '@ai-sdk/openai';

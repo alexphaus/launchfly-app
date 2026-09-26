@@ -1,4 +1,4 @@
-// Everything the three tabs render, derived once from HomeData.
+// Everything the four tabs render, derived once from HomeData.
 //
 // One pass, memoised on the home object, for two reasons. The header's status
 // line and the tab under it must say the same number — the old app shipped "61"
@@ -111,7 +111,7 @@ export function derive(home: HomeData) {
     swap: pathSwap({ now, timezone: home.profile.timezone, focus: home.recent.focus, sentAt, outcomes: home.recent.outcomes, queueCount: noOffer ? 0 : queueCount }),
   };
 
-  /* You — the machine and the team moved here from Work */
+  /* Work — the path to money and the team running it */
   // The goal a logged win actually moves: recordOutcome adds the amount to the
   // highest-priority currency goal, target or not. Showing any other one at the
   // end of the path to money would draw a pipe into the wrong tank.
@@ -173,8 +173,8 @@ export function derive(home: HomeData) {
   const status: Record<Tab2, string | null> = {
     path: pathStatus(path.ladder, asks.length, path.week.streak),
     matches: matchesStatus(counts),
-    // The team moved here from Work, and with it the one line that said whether it was working.
-    you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : workStatus(team, running),
+    work: workStatus(team, running),
+    you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : null,
   };
 
   return {

@@ -1,16 +1,21 @@
 'use client';
-// The three-tab shell at /copilot2. One question per tab:
+// The four-tab shell at /copilot2. One question per tab:
 //
 //   Path      where am I, and what moves it: what was done above, "you are
 //             here" with the one thing to do now, what comes next below
 //   Matches   who is worth contacting — everything it found, filtered
-//   You       how is it going: money, runway, deep work, the path to money and
-//             the team running it, the week read back, goals, settings
+//   Work      what am I building: the offer, the path to money, the agents
+//             running parts of it, the projects handed over
+//   You       how am I doing: money, runway, deep work, the week read back,
+//             goals, settings
 //
-// It was four — Today and Work beside each other — until the owner's verdict on
-// every draft of Work was that it could be had "from today's call, the You tab
-// or the handover". Today and Work were two halves of one question, and on a
-// time axis they are one stream. See lib/copilot/pathway.ts.
+// The Path replaced Today: the call, what moved and what comes next are one
+// stream on a time axis (lib/copilot/pathway.ts). For one release it replaced
+// Work as well, with the machine and the team moved under the numbers on You.
+// Work came back on its owner's word — "better for separation, and has
+// important features": the Path is what to do, Work is the business being
+// built, and the offer, the machine, the team and the projects in full had no
+// place on either of the others.
 //
 // Why a second layout rather than a rework of the first. The two-tab app was
 // built by removing things, one argued step at a time, and every step was right
@@ -28,22 +33,24 @@ import SheetContent from '../SheetContent';
 import type { Tab2 } from '../shared';
 import { sheetKey, useCopilot } from '../useCopilot';
 import { useDerived } from './derive';
-import { IconMatches, IconPath, IconYou } from './icons2';
+import { IconMatches, IconPath, IconWork, IconYou } from './icons2';
 import PathTab from './PathTab';
 import MatchesTab from './MatchesTab';
+import WorkTab from './WorkTab';
 import YouTab from './YouTab';
 
-const TABS: Tab2[] = ['path', 'matches', 'you'];
-const LABEL: Record<Tab2, string> = { path: 'Path', matches: 'Matches', you: 'You' };
-const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, matches: IconMatches, you: IconYou };
+const TABS: Tab2[] = ['path', 'matches', 'work', 'you'];
+const LABEL: Record<Tab2, string> = { path: 'Path', matches: 'Matches', work: 'Work', you: 'You' };
+const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, matches: IconMatches, work: IconWork, you: IconYou };
 /**
  * Every tab name either shell has ever used, mapped onto this one. A push or an
  * installed shortcut carrying `?tab=working` lands somewhere sensible here too,
- * and so do the two tabs the Path replaced.
+ * and so does Today, which the Path replaced.
  */
 const ALIAS: Record<string, Tab2> = {
-  path: 'path', today: 'path', now: 'path', work: 'path',
+  path: 'path', today: 'path', now: 'path',
   matches: 'matches', pipeline: 'matches', opportunities: 'matches', signals: 'matches',
+  work: 'work',
   you: 'you', working: 'you',
 };
 
@@ -76,6 +83,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
         {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
         {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
         {tab === 'matches' && <MatchesTab home={home} d={d} actions={actions} finding={finding} stage={matchStage} onStage={setMatchStage} />}
+        {tab === 'work' && <WorkTab home={home} d={d} actions={actions} briefing={briefing} />}
         {tab === 'you' && <YouTab home={home} d={d} actions={actions} briefing={briefing} />}
       </main>
 

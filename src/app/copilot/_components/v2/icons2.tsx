@@ -69,7 +69,7 @@ export function MatchGlyph({ group }: { group: MatchGroup }) {
 /**
  * One glyph per kind of thing that moved, so the stream reads at a glance: who
  * looked, who wrote, who sent, who answered. The agents keep their roster glyph
- * — the Scout's lens on Path is the Scout on You.
+ * — the Scout's lens on Path is the Scout on Work.
  */
 export function PathGlyph({ icon }: { icon: PathIcon }) {
   switch (icon) {

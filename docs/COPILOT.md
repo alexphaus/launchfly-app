@@ -17,7 +17,7 @@ but none of the business logic. Everything is under:
 
 | Layer | Path |
 | --- | --- |
-| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — three tabs (Path · Matches · You), calm |
+| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — four tabs (Path · Matches · Work · You), calm |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
@@ -200,7 +200,7 @@ Both install separately, so both can be lived with for a week and one of them
 chosen. Switch between them under the header avatar → Copilot → **Look**.
 
 A third shell, `/copilot2`, is a different *layout* rather than a different
-theme — three tabs, calm only — over the same data and actions. See **Three tabs**
+theme — four tabs, calm only — over the same data and actions. See **Four tabs**
 below. Its settings link back to `/lifeos`, and `shellOf` keeps every in-app link
 inside it (`/copilot` is a prefix of it, so the boundary is tested).
 
@@ -288,16 +288,19 @@ Old deep links still work: `TAB_ALIAS` maps `today`/`pipeline` → `now` and
 `signals` → `working`, so an installed shell and the weekly push keep landing
 somewhere sensible.
 
-## Three tabs (`/copilot2`)
+## Four tabs (`/copilot2`)
 
-A second layout over the same app: **Path**, **Matches**, **You**. It was four —
-Today, Matches, Work, You — written from its owner's verdict on the two-tab
-version ("too many things, nothing that stands out, the purpose lost from the
-original mock-ups; Working? is a log"). Then every redraft of Work met the same
-verdict — "static sections that compete for attention and nothing changes", its
-content "gettable from today's call, the You tab or the handover" — and the fix
-was not a better Work but the observation that Today and Work were halves of one
-question. On a time axis they are one stream: the Path.
+A second layout over the same app: **Path**, **Matches**, **Work**, **You**. It
+began as Today, Matches, Work, You, written from its owner's verdict on the
+two-tab version ("too many things, nothing that stands out, the purpose lost from
+the original mock-ups; Working? is a log"). Then every redraft of Work met the
+same verdict — "static sections that compete for attention and nothing changes",
+its content "gettable from today's call, the You tab or the handover" — and the
+answer was that Today and Work were halves of one question. On a time axis they
+are one stream: the Path. For one release the Path replaced both, with the
+machine and the team moved under the numbers on You. Work came back beside it on
+its owner's word — "better for separation, and has important features": the
+Path is what to do and what moved, Work is the business being built.
 
 It is a layout, not a fork. `useCopilot` (`_components/useCopilot.ts`) holds the
 state, the sheet stack and every action, and both `CopilotApp` and `CopilotApp2`
@@ -310,7 +313,8 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | done (the rungs reached, then the week's events, oldest first, a rung reached this week drawn where it happened, and one swap under the hours it is about) · notices · you are here (the rung, its progress, the week) · the call (`CallCard`, unchanged) · also needs you · next (what changed since you looked, the planner's steps with its reason on each, then the rungs ahead, then the goal) · the composer | `pathway.ts`, `today.ts` |
 | Matches | who is worth contacting, and where each one is | pills (New · To send · Waiting · Replied) · only what the ranker recommends, each card a tile, what it is and where, why, and one action · a draft sent from its own card | `matches.ts` |
-| You | how is it going | money, runway, deep work, replies · the path to money · the week read back · goals · the team · projects finished · the brief for Claude · settings | `review.ts`, `focus.ts`, `machine.ts` |
+| Work | what am I building | the offer and what it knows about how you work · the path to money · the agents · projects handed over, in full (the ones that need you, the ones running, what it offers to take on, what finished) · the brief for Claude | `machine.ts` |
+| You | how is it going | money, runway, deep work, replies · the week read back · goals · settings | `review.ts`, `focus.ts` |
 
 `derive.ts` computes all of it once per `HomeData`, from `generatedAt` rather
 than the clock, so the header's status line and the tab under it cannot disagree
@@ -401,8 +405,8 @@ from one that never changes, which was the verdict on every draft of Work.
 Today's parts all have a place here, so nothing it did was lost: the call is the
 present, "done for you" is the recent past (a reply `reconcileReplies` matched is
 the world's, never reported as the user's work), "needs you" is under the call,
-"worth doing" is the first of the next steps. Old links (`?tab=today`,
-`?tab=work`, `?tab=now`) land on the Path.
+"worth doing" is the first of the next steps. Old links to Today (`?tab=today`,
+`?tab=now`) land on the Path.
 
 **Matches is the deck laid flat, and it still learns.** Businesses are answered
 through the triage route, so "Draft opener" and "Not for me" feed the same keep
@@ -464,18 +468,19 @@ segment as the label because the segment is a search term and can be wrong: on
 one live account it was the letter "m". A one-letter segment is refused at every
 write path (`isSearchableSegment`) and named back when it is.
 
-**The path to money and the team are on You, drawn from rows.** They were
-Work (`Business.tsx`). Four stages — find, reach, convert, get paid — from the
-funnel's own counts, with who runs each and the one weak link placed on the part
-of the business it belongs to. Five agents — Scout, Watcher, Writer, Researcher,
-Planner — whose state is when they last actually ran and what they last
-produced, always with its word (`AGENT_STATE_LABEL`), never a coloured dot
-alone. A Researcher with no worker connected says "needs setup" rather than
-looking busy; a Writer on a blank offer is setup, not idle (invariant 1).
-Projects there are the way to hand one over and what finished; the ones under
-way are next steps on the Path. "Build with Claude" is the handoff route's text
-with one task line on top: the app exports what it knows instead of competing
-with a model on building, which is what DIRECTION.md already decided.
+**Work is an illustration with one rule: every part is drawn from rows.** Four
+stages — find, reach, convert, get paid — from the funnel's own counts, with who
+runs each and the one weak link placed on the part of the business it belongs to.
+Five agents — Scout, Watcher, Writer, Researcher, Planner — whose state is when
+they last actually ran and what they last produced, always with its word
+(`AGENT_STATE_LABEL`), never a coloured dot alone. A Researcher with no worker
+connected says "needs setup" rather than looking busy; a Writer on a blank offer
+is setup, not idle (invariant 1). Handed-over work has its home here, in full; a
+project under way and work it offers to take on are also next steps on the Path,
+one line each, because the Path is where the day's order is decided. "Build with
+Claude" is the handoff route's text with one task line on top: the app exports
+what it knows instead of competing with a model on building, which is what
+DIRECTION.md already decided.
 
 **You asks three questions of the week** — what created value, what was wasted,
 what has to change — and answers each from rows (`weekReview`). Money is never
@@ -491,8 +496,8 @@ it was stopped with no verdict at all; the sentence `closeCommission` writes is
 read only when the ledger row is missing, matched against `worthSentence` itself. An empty block
 says why it is empty, and `recent.unreadable` names any read that failed, so a
 broken read never renders as a quiet week (invariant 13). The funnel, openings
-and segments left the tab; the funnel is the path to money above the week, and
-"Ask your own record" still answers by counting.
+and segments left the tab; the funnel is still one tap away as the path to money
+on Work, and "Ask your own record" still answers by counting.
 
 **Deep work is the one new sensor.** It was asked for and nothing could supply
 it, so it is logged by hand (`POST /api/copilot/focus`) and stored as
@@ -553,7 +558,7 @@ seconds where a Maps segment takes ninety, and an interactive run's deadline
 cuts whatever comes last — and is metered like Maps, because Exa charges per
 search (invariant 6 protects the free adapters, not the paid ones).
 
-**A search that cannot run is said, on You.** The searches have no screen, so
+**A search that cannot run is said, on Work.** The searches have no screen, so
 the Scout does it: a missing table, a search whose last run failed, or a run
 that failed before any search did turns the Scout's row to Failed with the
 reason (`RosterInput.searchProblem`). That last kind — a plan that could not be

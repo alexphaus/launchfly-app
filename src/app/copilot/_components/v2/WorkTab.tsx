@@ -1,26 +1,100 @@
 'use client';
-// The business behind the Path, on You: how it makes money, the team running
-// parts of it, the projects it finished, and the brief for Claude.
+// Work: the business being built, drawn as a machine you can see into.
 //
-// These were the Work tab. The Path took the parts that change every day — the
-// call, what moved, what comes next, the projects under way — and what is left
-// here is the machine itself, which you look at when you want to see how the
-// whole thing is doing rather than what to do next. Every count is still the
-// funnel's and every agent state is still when it last ran (lib/copilot/machine.ts):
-// nothing moved here was redrawn.
+//   What you sell        the product, in the owner's words
+//   How it makes money   find → reach → convert → get paid, with who runs each
+//                        part and the count at each step
+//   Your team            the agents, and what each last actually did
+//   Projects             work handed over — the part that runs like having staff
+//   Build with Claude    everything it knows, as one brief, for the work a chat
+//                        does better than a request handler
+//
+// An illustration, not a workflow builder — its owner asked for exactly that,
+// "not another n8n". What makes it more than a picture is that nothing on it is
+// drawn from a template: every count is the funnel's, every agent state is when
+// it last ran, and a part of the machine that is not set up says so rather than
+// looking busy. See lib/copilot/machine.ts.
+//
+// Handed-over work finally has a home. It was a block on Now, split by whether
+// it needed you, which was right for Now and meant the thing that feels most
+// like having a team never had a place where you could see the team's work.
+//
+// It was folded into the Path and You for one release, and came back on its
+// owner's word: "better for separation, and has important features". The Path
+// is what to do and what moved; this is the business being built. The Path
+// draws on it — a project under way and work it offers to take on are next
+// steps there, one line each — and here they are in full, with the offer, the
+// machine and the team that the Path has no place for.
 import { useState } from 'react';
 import { AGENT_STATE_LABEL, type Agent, type MachineStage } from '@/lib/copilot/machine';
+import { SECTIONS } from '@/lib/copilot/working';
 import { shortDay } from '../format';
 import type { HomeData } from '@/lib/copilot/types';
 import { splitThreads } from '@/lib/copilot/commission';
 import type { Actions } from '../shared';
+import { JobCard } from '../CommissionThread';
+import { MoveCard } from '../views/NowView';
+import type { Derived } from './derive';
 import { AgentGlyph, IconChevron, IconExternal } from './icons2';
+
+export default function WorkTab({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
+  return (
+    <>
+      <Product home={home} actions={actions} />
+      <Machine stages={d.machine} actions={actions} />
+      <Team agents={d.team} actions={actions} briefing={briefing} />
+      <Projects home={home} actions={actions} />
+      <BuildWithClaude actions={actions} />
+    </>
+  );
+}
+
+/* ─── What you sell ───────────────────────────────────────────────────────── */
+
+function Product({ home, actions }: { home: HomeData; actions: Actions }) {
+  const o = home.profile.offer ?? {};
+  const w = home.workingProgress ?? { filled: 0, total: SECTIONS.length, proposals: 0 };
+  if (!o.sells?.trim()) {
+    return (
+      <div className="cp-card cp2-product">
+        <div className="cp-eyebrow">What you sell</div>
+        <h2 className="cp2-product-name">Not written down yet</h2>
+        <p className="cp2-lede">Everything it drafts, researches and proposes starts from this. With nothing here it writes nothing — a message from a blank offer is not yours.</p>
+        <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'offer' })}>Write your offer — three minutes</button>
+      </div>
+    );
+  }
+  return (
+    <div className="cp-card cp2-product">
+      <div className="cp-call-top">
+        <div className="cp-eyebrow">What you sell</div>
+        <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'offer' })}>Edit</button>
+      </div>
+      <h2 className="cp2-product-name">{o.sells}</h2>
+      {o.problem && <p className="cp2-product-problem">&ldquo;{o.problem}&rdquo;</p>}
+      <div className="cp2-facts">
+        {o.for_who && <span><b>For</b> {o.for_who}</span>}
+        <span><b>Price</b> {o.price_band || 'not set'}</span>
+        <span><b>Proof</b> {o.proof_url ? <a href={o.proof_url} target="_blank" rel="noreferrer">link</a> : 'none yet'}</span>
+      </div>
+      {/* The offer's other half. Five strings are a headline; this is the
+          business behind it, and the count says how much of it is known. */}
+      <button className="cp2-knows" onClick={() => actions.openSheet({ kind: 'working' })}>
+        <span className="cp2-row-main">
+          <span className="t">What it knows about how you work</span>
+          <span className="s">{w.filled} of {w.total} written{w.proposals ? ` · ${w.proposals} counted from your rows, waiting for your yes` : ''}</span>
+        </span>
+        <IconChevron />
+      </button>
+    </div>
+  );
+}
 
 /* ─── How it makes money ──────────────────────────────────────────────────── */
 
 const OWNER_LABEL = { ai: 'AI', you: 'You', both: 'AI + you' } as const;
 
-export function Machine({ stages, actions }: { stages: MachineStage[]; actions: Actions }) {
+function Machine({ stages, actions }: { stages: MachineStage[]; actions: Actions }) {
   const open = (s: MachineStage) => {
     if (s.key === 'find') actions.openSheet({ kind: 'targeting' });
     else if (s.key === 'reach') actions.openSheet({ kind: 'stage', stage: 'to_send' });
@@ -57,7 +131,7 @@ export function Machine({ stages, actions }: { stages: MachineStage[]; actions: 
 
 /* ─── Your team ───────────────────────────────────────────────────────────── */
 
-export function Team({ agents, actions, briefing }: { agents: Agent[]; actions: Actions; briefing: boolean }) {
+function Team({ agents, actions, briefing }: { agents: Agent[]; actions: Actions; briefing: boolean }) {
   const working = agents.filter((a) => a.state === 'working').length;
   const open = (a: Agent) => {
     if (a.key === 'scout') actions.openSheet({ kind: 'targeting' });
@@ -102,24 +176,43 @@ export function Team({ agents, actions, briefing }: { agents: Agent[]; actions: 
 
 /* ─── Projects ────────────────────────────────────────────────────────────── */
 
-/**
- * What stays here of Projects: the way to hand something over, and what came
- * back from the ones that finished. The ones under way and the work it offers to
- * take on are on the Path, beside the call — one place each.
- */
-export function Projects({ home, actions }: { home: HomeData; actions: Actions }) {
+function Projects({ home, actions }: { home: HomeData; actions: Actions }) {
   const [showDone, setShowDone] = useState(false);
   const jobs = splitThreads(home.commissions ?? []);
+  const live = [...jobs.needsYou, ...jobs.running];
+  // What the app offers to take on. The one on the call is on the Path already.
+  const offers = home.moves.filter((m) => m.artifact?.kind === 'plan');
   return (
     <>
-      <div className="cp-section" id="cp2-projects">
+      <div className="cp-section">
         <span className="lead">Projects</span>
         <button className="cp-connect" onClick={() => actions.openSheet({ kind: 'handover' })}>Hand one over</button>
       </div>
       {!home.workerConnected && (
         <div className="cp-note">No worker is connected to this server, so a project you hand over is written down but nothing picks it up. Set <code>COPILOT_JOBS_URL</code>.</div>
       )}
-      {jobs.finished.length > 0 ? (
+
+      {live.length > 0 && (
+        <div className="cp2-projects">
+          {live.map((t) => <JobCard key={t.commission.id} thread={t} actions={actions} />)}
+        </div>
+      )}
+
+      {offers.map((m) => (
+        <div key={m.id} className="cp2-offer">
+          <div className="cp2-offer-label">It offers to take this on</div>
+          <MoveCard move={m} actions={actions} />
+        </div>
+      ))}
+
+      {!live.length && !offers.length && (
+        <div className="cp-empty">
+          <b>Nothing handed over</b>
+          Give it something you would otherwise do yourself — research, a comparison, a shortlist, a first draft. It works on it overnight with a plan you approve, reports every step here, and never contacts anyone or spends anything.
+        </div>
+      )}
+
+      {jobs.finished.length > 0 && (
         <>
           <button className="cp2-more" onClick={() => setShowDone((v) => !v)}>
             {showDone ? 'Hide finished' : `${jobs.finished.length} finished`}
@@ -143,8 +236,6 @@ export function Projects({ home, actions }: { home: HomeData; actions: Actions }
             </div>
           )}
         </>
-      ) : (
-        <p className="cp-note">Give it something you would otherwise do yourself — research, a comparison, a shortlist, a first draft. It works on it overnight with a plan you approve, reports every step on the Path, and never contacts anyone or spends anything.</p>
       )}
     </>
   );
@@ -174,7 +265,7 @@ const TASKS = {
 type TaskKey = keyof typeof TASKS;
 const DEFAULT_ASK = 'Look at everything below and tell me the one thing to build or change next.';
 
-export function BuildWithClaude({ actions }: { actions: Actions }) {
+function BuildWithClaude({ actions }: { actions: Actions }) {
   const [task, setTask] = useState<TaskKey | null>(null);
   const [brief, setBrief] = useState<string | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'copied' | 'ready' | 'error'>('idle');

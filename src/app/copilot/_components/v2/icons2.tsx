@@ -24,6 +24,14 @@ export const IconChevron = () => (<svg {...base} className="cp2-chev"><path d="M
 export const IconCheck = () => (<svg {...base}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>);
 export const IconAlert = () => (<svg {...base}><path d="M12 8v5M12 16.5v.5" /><circle cx="12" cy="12" r="9" /></svg>);
 export const IconExternal = () => (<svg {...base} className="cp2-ext"><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>);
+/** A rung reached. Filled: at 14px an outline star reads as a smudge. */
+export const IconStar = () => (<svg {...base} fill="currentColor" strokeWidth={1.5}><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5z" /></svg>);
+/** The plan was redrawn. */
+export const IconRedraw = () => (<svg {...base}><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" /><path d="M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" /><path d="M20 20v-4h-4" /></svg>);
+/** Hours moved from one thing to another. */
+export const IconSwap = () => (<svg {...base}><path d="M7 4L3 8l4 4" /><path d="M3 8h13" /><path d="M17 20l4-4-4-4" /><path d="M21 16H8" /></svg>);
+/** Which way "now" is from here: down by default, `up` flips it. */
+export const IconArrow = ({ up }: { up?: boolean }) => (<svg {...base} style={up ? { transform: 'rotate(180deg)' } : undefined}><path d="M12 5v14" /><path d="M6 13l6 6 6-6" /></svg>);
 
 /** One glyph per agent, so the roster reads as a team at a glance. */
 export function AgentGlyph({ agent }: { agent: AgentKey }) {
@@ -83,5 +91,6 @@ export function PathGlyph({ icon }: { icon: PathIcon }) {
     // A clock: hours you put in.
     case 'focus': return (<svg {...base}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>);
     case 'done': return <IconCheck />;
+    case 'star': return <IconStar />;
   }
 }

@@ -204,7 +204,10 @@ were halves of one question — where am I, and what moves it — and on a time 
 they are one stream: what moved above, "you are here" with the call, the
 planner's next steps below, a ladder of rungs every one of which is a count the
 funnel already keeps. Three tabs: Path · Matches · You. No new sensor and no new
-ranking; the past is rows, the future is the Moves. See COPILOT.md → **Three tabs**.
+ranking; the past is rows, the future is the Moves. Then it was made to move and
+say so: a rung reached is dated where it happened, the plan names what left it
+and why, every step carries the planner's reason, and one swap is suggested only
+where hours and replies sit side by side. See COPILOT.md → **Three tabs**.
 
 ---
 

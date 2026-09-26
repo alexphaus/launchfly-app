@@ -228,6 +228,10 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 /* Toast */
 .cp-toast { position: absolute; left: 20px; right: 20px; bottom: calc(92px + env(safe-area-inset-bottom)); background: var(--ink); color: #fff; border: 2.5px solid var(--ink); border-radius: 10px; padding: 11px 14px; font-size: 12.5px; font-weight: 700; z-index: 40; box-shadow: 4px 4px 0 var(--blue); animation: cp-toast .25s ease-out; }
 @keyframes cp-toast { from { transform: translateY(8px); opacity: 0; } }
+/* A rung reached on the Path. Here, not with the calm theme's rules: a keyframe's
+   steps are not selectors and cannot carry its scope, and the name is used only
+   from inside it. */
+@keyframes cp2-stream-pop { from { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } to { transform: none; } }
 
 /* Setup error */
 .cp-setup { padding: 60px 24px; text-align: center; }
@@ -1257,3 +1261,52 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-stream-who .cp2-owner { flex: none; white-space: nowrap; }
 .cp-root[data-theme="soft"] .cp2-stream-plan { display: block; margin-top: 10px; padding: 12px 14px; border-radius: 14px; background: var(--track); font-size: 13px; line-height: 1.55; color: var(--ink); white-space: pre-line; }
 .cp-root[data-theme="soft"] .cp2-stream-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+/* ── Path, part two: the path moves, and says so ─────────────────────────
+   A rung reached is a moment in the stream, in the path's own blue — not a
+   new colour, so a star is never mistaken for a warning. The plan says when it
+   was redrawn and what left it; the one suggestion sits in a tinted box under
+   the hours it is about; and "Back to now" floats while you are away from it. */
+.cp-root[data-theme="soft"] .cp2-stream-node.moment { background: var(--blue); color: #fff; box-shadow: 0 0 0 4px rgba(79, 99, 210, 0.14); }
+.cp-root[data-theme="soft"] .cp2-stream-node.moment svg { width: 13px; height: 13px; }
+.cp-root[data-theme="soft"] .cp2-stream-stepdone { font-family: var(--display); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-stream-node.swap { background: var(--surface); color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue); }
+.cp-root[data-theme="soft"] .cp2-stream-node.swap svg { width: 13px; height: 13px; }
+/* The box's first line level with its node: 4px down, then the box's own 12px. */
+.cp-root[data-theme="soft"] .cp2-stream-body.cp2-stream-swapbody { padding-top: 4px; }
+.cp-root[data-theme="soft"] .cp2-stream-swap { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 14px; border-radius: 16px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-stream-swap .cp2-stream-s { color: var(--ink); opacity: 0.8; }
+.cp-root[data-theme="soft"] .cp2-stream-swap .cp2-stream-acts { margin-top: 8px; }
+.cp-root[data-theme="soft"] .cp2-stream-node.redraw { background: var(--surface); color: var(--muted); box-shadow: inset 0 0 0 2px var(--frame); }
+.cp-root[data-theme="soft"] .cp2-stream-node.redraw svg { width: 13px; height: 13px; }
+.cp-root[data-theme="soft"] .cp2-stream-newcount { flex: none; font-family: var(--display); font-size: 12.5px; font-weight: 700; color: var(--blue); white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-stream-gone { font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-stream-gone s { color: var(--muted); text-decoration-color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-stream-new { flex: none; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; background: var(--blue); color: #fff; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-stream-reached {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 5px 12px 5px 9px;
+  border-radius: 999px; background: var(--blue); color: #fff; box-shadow: var(--lift);
+  font-family: var(--display); font-size: 11.5px; font-weight: 700; animation: cp2-stream-pop .5s cubic-bezier(.2, 1.4, .4, 1) both;
+}
+.cp-root[data-theme="soft"] .cp2-stream-reached svg { width: 13px; height: 13px; }
+.cp-root[data-theme="soft"] .cp-note.cp2-stream-memo { padding-top: 0; }
+/* Room under Tell for the pill to float over at the end of the list, rather than over Tell. */
+.cp-root[data-theme="soft"] .cp2-stream-page { padding-bottom: 44px; }
+/* In the frame, above the floating nav, where the toast also sits. */
+.cp-root[data-theme="soft"] .cp2-stream-backwrap {
+  position: absolute; left: 0; right: 0; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 15;
+  display: flex; justify-content: center; pointer-events: none;
+}
+.cp-root[data-theme="soft"] .cp2-stream-back {
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px 9px 12px; border-radius: 999px;
+  background: var(--surface); color: var(--blue); font-size: 12.5px; font-weight: 700;
+  box-shadow: 0 10px 26px rgba(20, 25, 45, 0.16);
+  opacity: 0; transform: translateY(8px); visibility: hidden;
+  transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
+}
+.cp-root[data-theme="soft"] .cp2-stream-back svg { width: 15px; height: 15px; }
+.cp-root[data-theme="soft"] .cp2-stream-backwrap.on .cp2-stream-back { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s; }
+@media (prefers-reduced-motion: reduce) {
+  .cp-root[data-theme="soft"] .cp2-stream-reached { animation: none; }
+  .cp-root[data-theme="soft"] .cp2-stream-back { transition: none; }
+}

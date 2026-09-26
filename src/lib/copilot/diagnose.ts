@@ -61,6 +61,26 @@ export interface Diagnosis {
   segments: SegmentOpenings[];
   /** True when nothing can honestly be concluded yet. */
   thin: boolean;
+  /**
+   * When each first happened, all time. A count says a rung was reached, not
+   * when: the Path dates "first reply" by the reply that was first, and without
+   * this it could only guess from the week it can see — which calls a second
+   * reply from somebody who first answered a month ago the first. Absent on a
+   * diagnosis made before these were read.
+   */
+  firsts?: Firsts;
+}
+
+/** Wins dated: enough for the Path's "three paying clients" rung, which a test holds it to. */
+export const FIRST_WINS = 3;
+
+export interface Firsts {
+  /** The first message that went out. Null before one has, or when none carries a time. */
+  sent: string | null;
+  /** The first reply that came back. */
+  reply: string | null;
+  /** The first FIRST_WINS wins, oldest first. */
+  wins: string[];
 }
 
 /** Below this many in a week, a movement is noise and the label stays 'steady'. */
@@ -90,8 +110,9 @@ export interface SegmentOpenings {
 
 export interface DiagnoseInput {
   opportunities: Array<Pick<Opportunity, 'status' | 'source' | 'source_kind' | 'data' | 'reason' | 'title'> & Partial<Pick<Opportunity, 'created_at'>> & { id: string }>;
-  executions: Array<Pick<Execution, 'approval_state' | 'channel' | 'opportunity_id'>>;
-  outcomes: Array<Pick<Outcome, 'kind' | 'opportunity_id'>>;
+  /** `sent_at` and `occurred_at` date the firsts; rows without them are still counted. */
+  executions: Array<Pick<Execution, 'approval_state' | 'channel' | 'opportunity_id'> & Partial<Pick<Execution, 'sent_at'>>>;
+  outcomes: Array<Pick<Outcome, 'kind' | 'opportunity_id'> & Partial<Pick<Outcome, 'occurred_at'>>>;
   offer: Offer;
   /** The user's own segments: a grouping key, never counted as openings. */
   targetSegments?: string[];
@@ -236,7 +257,18 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
     findings.push({ kind: 'insufficient', headline: blocker.headline, detail: 'Everything on this tab is computed from what you actually sent and what came back. Nothing here is estimated.', action: blocker.action });
   }
 
-  return { stages, bottleneck, findings, thin, outsideFunnel, openings, segments };
+  // Off the same rows the counts are, so a dated rung and a counted one cannot disagree.
+  const earliest = (xs: Array<string | null | undefined>, n: number) => xs
+    .filter((x): x is string => !!x && Number.isFinite(Date.parse(x)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b))
+    .slice(0, n);
+  const firsts: Firsts = {
+    sent: earliest(sentExecs.map((e) => e.sent_at), 1)[0] ?? null,
+    reply: earliest(outcomes.filter((o) => o.kind === 'reply').map((o) => o.occurred_at), 1)[0] ?? null,
+    wins: earliest(outcomes.filter((o) => o.kind === 'won').map((o) => o.occurred_at), FIRST_WINS),
+  };
+
+  return { stages, bottleneck, findings, thin, outsideFunnel, openings, segments, firsts };
 }
 
 const label = (ch: string) => (ch === 'whatsapp' ? 'WhatsApp' : 'Email');

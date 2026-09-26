@@ -104,8 +104,8 @@ export async function loadDiagnosisRows(profileId: string): Promise<Pick<Diagnos
   const db = copilotDb();
   const [opportunities, executions, outcomes] = await Promise.all([
     db.from('copilot_opportunities').select('id, status, source, source_kind, data, reason, title, created_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['opportunities']),
-    db.from('copilot_executions').select('approval_state, channel, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['executions']),
-    db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
+    db.from('copilot_executions').select('approval_state, channel, opportunity_id, sent_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['executions']),
+    db.from('copilot_outcomes').select('kind, opportunity_id, occurred_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
   ]);
   return { opportunities, executions, outcomes };
 }

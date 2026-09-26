@@ -308,7 +308,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 
 | Tab | The question | What is on it | Pure module |
 | --- | --- | --- | --- |
-| Path | where am I, and what moves it | done (the rungs reached, then the week's events, oldest first) · notices · you are here (the rung, its progress, the week) · the call (`CallCard`, unchanged) · also needs you · next (the planner's steps, then the rungs ahead, then the goal) · the composer | `pathway.ts`, `today.ts` |
+| Path | where am I, and what moves it | done (the rungs reached, then the week's events, oldest first, a rung reached this week drawn where it happened, and one swap under the hours it is about) · notices · you are here (the rung, its progress, the week) · the call (`CallCard`, unchanged) · also needs you · next (what changed since you looked, the planner's steps with its reason on each, then the rungs ahead, then the goal) · the composer | `pathway.ts`, `today.ts` |
 | Matches | who is worth contacting, and where each one is | pills (New · To send · Waiting · Replied) · only what the ranker recommends, each card a tile, what it is and where, why, and one action · a draft sent from its own card | `matches.ts` |
 | You | how is it going | money, runway, deep work, replies · the path to money · the week read back · goals · the team · projects finished · the brief for Claude · settings | `review.ts`, `focus.ts`, `machine.ts` |
 
@@ -356,7 +356,47 @@ that part is the plan. `pathway.ts` holds the rules, and a suite covers them.
   (`doneForYou`'s stale, broke and warn rows). The asks (`needsYou`) sit under the
   call. The week under "you are here" counts days you moved it forward — a send,
   an answer you logged, a Move done — never app opens (`pathWeek`), and a streak
-  is not broken at nine in the morning.
+  is not broken at nine in the morning. A failed read of the ledger the past is
+  built from (`recent.unreadable`) is a notice there too, so a quiet stream is
+  never read as a quiet week.
+
+**The path moves, and says so.** A plan that changes silently cannot be told
+from one that never changes, which was the verdict on every draft of Work.
+
+- **A rung reached is a moment where it happened**, directly under the row that
+  reached it — the send, the reply, the payment — placed rather than sorted, so
+  two rows at one instant cannot come between them. It is dated by the
+  diagnosis's all-time `firsts` (`sent_at` and `occurred_at` off the same rows
+  the funnel counts, `FIRST_WINS` of the wins), so "first reply" is the reply
+  that was first and not the first one the week can see. A rung dated in the
+  stream is left out of the done rungs above it. A goal carries no date, so
+  reaching it is no moment; the next goal is the step (`input: 'next-goal'`).
+- **Every next step carries the planner's reason** — the Move's `why[0]`, a
+  project's `why` — and a step that came without one gets none.
+- **What changed since you looked** (`planChanges`): steps new since this device
+  last showed the plan are marked New; each step that left is named with what
+  happened to it, read off the rows — you did it, you said no, handed over,
+  finished, called off, now today's call — and the one reason with no row behind
+  it is said as exactly that: the last run replaced it. A rung reached since then
+  is a chip above "you are here". The snapshot is the whole plan, not the four on
+  screen (a step that moved up is not new), kept per device
+  (`cp2.path.seen:<profile>` in localStorage) because it is a convenience about
+  the screen and nothing is decided from it. No snapshot, or one older than
+  `PATH_DAYS`, is no change — a first visit is not "everything is new", and a
+  diff that can only say "gone" has said nothing. A browser that keeps nothing
+  says so under Next (invariant 13).
+- **One suggestion, and only with two facts** (`pathSwap`): at least
+  `SWAP_MIN_MINUTES` this week on one thing that is not outreach, next to what
+  sending brought back. Nothing sent with drafts waiting: send those first.
+  Sends being answered: try `SWAP_HOURS` of those hours on sending. Sending with
+  nothing back yet has no second fact, and says nothing; the app never claims to
+  know what the hours were worth. It sits under the hours it is about, and "Keep
+  it" holds for `SWAP_KEEP_DAYS` on this device.
+- **"Back to now"** floats above the nav while "you are here" is off screen,
+  pointing the way it is. Measured on scroll: an observer fires only when the
+  node crosses the edge, so a fling past it left the arrow pointing the way it
+  came. Portalled into the frame, like the toast — a sticky element is held
+  inside the list's padding, and that padding is where the floating nav is.
 
 Today's parts all have a place here, so nothing it did was lost: the call is the
 present, "done for you" is the recent past (a reply `reconcileReplies` matched is

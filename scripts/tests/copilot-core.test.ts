@@ -5457,3 +5457,215 @@ async function pathwayCore() {
 }
 
 pathwayCore().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The Path, part two: the plan says when it was redrawn, and why each step
+// left; a rung is dated by the row that reached it; and the one suggestion
+// on the stream is two facts side by side, never a verdict on the hours.
+// ---------------------------------------------------------------------------
+import { FIRST_WINS } from '../../src/lib/copilot/diagnose';
+import {
+  MAX_GONE, SWAP_HOURS, SWAP_KEEP_DAYS, parseSeenPlan, pathSwap, planChanges, snapshotPlan, swapKept,
+} from '../../src/lib/copilot/pathway';
+
+async function pathwayRedraw() {
+  const now = new Date('2026-09-26T10:00:00Z'); // a Saturday
+  const tz = 'UTC';
+
+  // 1. The firsts come off the same rows as the counts, all time.
+  {
+    const dx = diagnose({
+      opportunities: [],
+      executions: [
+        { approval_state: 'sent', channel: 'whatsapp', opportunity_id: 'a', sent_at: '2026-08-02T10:00:00Z' },
+        { approval_state: 'sent', channel: 'whatsapp', opportunity_id: 'b', sent_at: '2026-07-30T10:00:00Z' },
+        { approval_state: 'sent', channel: 'email', opportunity_id: 'c', sent_at: null },
+        { approval_state: 'drafted', channel: 'email', opportunity_id: 'd', sent_at: '2026-07-01T10:00:00Z' },
+      ] as never[],
+      outcomes: [
+        { kind: 'reply', opportunity_id: 'a', occurred_at: '2026-09-20T10:00:00Z' },
+        { kind: 'reply', opportunity_id: 'a', occurred_at: '2026-08-05T10:00:00Z' },
+        { kind: 'won', opportunity_id: 'a', occurred_at: '2026-09-01T10:00:00Z' },
+        { kind: 'won', opportunity_id: 'b', occurred_at: '2026-08-20T10:00:00Z' },
+        { kind: 'won', opportunity_id: 'c', occurred_at: '2026-09-24T10:00:00Z' },
+        { kind: 'won', opportunity_id: 'c', occurred_at: '2026-09-25T10:00:00Z' },
+      ] as never[],
+      offer: {},
+    });
+    assert.equal(dx.firsts?.sent, '2026-07-30T10:00:00Z', 'a draft is not a send, however early');
+    assert.equal(dx.firsts?.reply, '2026-08-05T10:00:00Z', 'the first reply, not the latest');
+    assert.deepEqual(dx.firsts?.wins, ['2026-08-20T10:00:00Z', '2026-09-01T10:00:00Z', '2026-09-24T10:00:00Z']);
+    assert.ok(FIRST_WINS >= REPEAT_WINS, 'the diagnosis dates as many wins as the ladder’s repeat rung needs');
+    const none = diagnose({ opportunities: [], executions: [], outcomes: [], offer: {} });
+    assert.deepEqual(none.firsts, { sent: null, reply: null, wins: [] });
+  }
+
+  // 2. A rung reached this week is a moment in the stream, straight under the row that reached it.
+  const exec = (id: string, created_at: string, sent_at: string | null) => ({ id, created_at, sent_at, channel: 'whatsapp', approval_state: sent_at ? 'sent' : 'drafted' }) as never;
+  const outcome = (o: Record<string, unknown>) => ({ id: 'o', kind: 'reply', amount: null, currency: null, note: null, source: 'system', occurred_at: '2026-09-26T09:00:00Z', opportunity_id: null, commission_id: null, who: null, ...o }) as never;
+  const base = {
+    now, timezone: tz,
+    pipeline: [
+      { ...bizV2({ id: 'b1', title: 'Casa Blanca Resort', created_at: '2026-09-23T04:00:00Z' }), execution: exec('e1', '2026-09-23T06:00:00Z', '2026-09-24T08:00:00Z'), stage: 'sent' as const },
+      { ...bizV2({ id: 'b2', title: 'Bayview Resort', created_at: '2026-09-23T04:00:00Z' }), execution: exec('e2', '2026-09-23T06:00:00Z', '2026-09-24T17:00:00Z'), stage: 'sent' as const },
+    ] as never[],
+    queue: [] as never[],
+    outcomes: [
+      outcome({ id: 'r1', who: 'Casa Blanca Resort', occurred_at: '2026-09-25T09:00:00Z' }),
+      outcome({ id: 'w1', kind: 'won', amount: 900, currency: '$', who: 'Bayview Resort', source: 'manual', occurred_at: '2026-09-26T08:00:00Z' }),
+      outcome({ id: 'cw', kind: 'won', commission_id: 'pc', who: 'A mandate', occurred_at: '2026-09-25T15:00:00Z' }),
+    ],
+    answered: [] as never[], focus: [], commissions: [] as never[], decisions: [] as never[], watchMoves: [] as never[],
+  };
+  {
+    const ev = pathEvents({ ...base, firsts: { sent: '2026-09-24T08:00:00Z', reply: '2026-09-25T09:00:00Z', wins: ['2026-09-26T08:00:00Z'] } });
+    const keys = ev.map((e) => e.key);
+    const after = (k: string) => keys[keys.indexOf(k) + 1];
+    assert.equal(after('sent:2026-09-24'), 'rung:sent', 'under the day’s sends, though the first of them was earlier than the roll-up’s time');
+    assert.equal(after('o:r1'), 'rung:reply');
+    assert.equal(after('o:w1'), 'rung:paid');
+    const sent = ev.find((e) => e.key === 'rung:sent')!;
+    assert.equal(sent.title, 'First message sent');
+    assert.equal(sent.detail, 'Step 2 of 6 done');
+    assert.equal(sent.rung, 'sent');
+    assert.equal(sent.icon, 'star');
+    assert.equal(sent.timed, false, 'the row above it carries the time');
+    assert.deepEqual(sent.target, { kind: 'matches', stage: 'waiting' }, 'it opens what its cause opens');
+    assert.equal(ev.find((e) => e.key === 'rung:paid')!.detail, 'Step 4 of 6 done');
+    const past = pathPast({ ...base, firsts: { sent: '2026-09-24T08:00:00Z', reply: '2026-09-25T09:00:00Z', wins: ['2026-09-26T08:00:00Z'] } });
+    assert.deepEqual(past.reached, ['sent', 'reply', 'paid'], 'the rungs drawn where they happened, which the done rungs above leave out');
+  }
+  {
+    // A first reply a month ago: this week's reply is a reply, not a milestone.
+    const ev = pathEvents({ ...base, firsts: { sent: '2026-08-01T08:00:00Z', reply: '2026-08-25T09:00:00Z', wins: ['2026-08-20T10:00:00Z', '2026-09-01T10:00:00Z', '2026-09-26T08:00:00Z'] } });
+    assert.ok(!ev.some((e) => e.key === 'rung:sent' || e.key === 'rung:reply' || e.key === 'rung:paid'), 'only what was first this week is marked');
+    const keys = ev.map((e) => e.key);
+    assert.equal(keys[keys.indexOf('o:w1') + 1], 'rung:repeat', 'the third win is the repeat rung');
+    assert.equal(ev.find((e) => e.key === 'rung:repeat')!.title, `${REPEAT_WINS} paying clients`);
+  }
+  {
+    // A project's progress logged at the payment's instant does not come between the payment and its step.
+    const busy = { ...base, commissions: [{ commission: { id: 'k', objective: 'Signage quotes', status: 'active', closed_at: null, last_run_at: null, outcome: null }, report: { did: [{ at: '2026-09-26T08:00:00Z', summary: 'Two quotes in' }], yours: [], progress: { done: 1, total: 3 } }, line: '' }] as never[] };
+    const keys = pathEvents({ ...busy, firsts: { sent: null, reply: null, wins: ['2026-09-26T08:00:00Z'] } }).map((e) => e.key);
+    assert.ok(keys.includes('p:k:2026-09-26'));
+    assert.equal(keys[keys.indexOf('o:w1') + 1], 'rung:paid', 'placed under its cause, not sorted among equals');
+  }
+  {
+    // The first win was a mandate's own row, which the stream does not show: the moment stands alone, timed.
+    const ev = pathEvents({ ...base, firsts: { sent: null, reply: null, wins: ['2026-09-25T15:00:00Z'] } });
+    const paid = ev.find((e) => e.key === 'rung:paid')!;
+    assert.equal(paid.timed, true);
+    assert.equal(paid.at, '2026-09-25T15:00:00Z');
+    assert.equal(paid.target, null);
+    assert.ok(!pathEvents(base).some((e) => e.rung), 'no firsts, no milestones — a count alone cannot date one');
+    assert.deepEqual(pathPast(base).reached, []);
+  }
+
+  // 3. Every next step carries the planner's reason, and the whole list is kept for the redraw.
+  {
+    const move = (o: Record<string, unknown>) => ({ id: 'mv', job: 'goal_gap', kind: 'earn', headline: 'Quote Casa Blanca', why: ['$10,200 to go, and 60 days to do it in.', 'You set this one.'], artifact: { kind: 'message', value: 'Hi', label: 'Send' }, cost_label: '10 min', created_at: '2026-09-26T05:00:00Z', ...o }) as never;
+    const thread = (c: Record<string, unknown>) => ({ commission: { id: 'c', objective: 'Shortlist spa resorts', status: 'active', why: 'Resorts reply twice as often.', closed_at: null, last_run_at: null, outcome: null, ...c }, report: { did: [], yours: [], progress: { done: 0, total: 0 } }, line: '' }) as never;
+    const nx = pathNext({
+      moves: [move({ id: 'a' }), move({ id: 'b', why: [] }), move({ id: 'c', why: ['  ', 'Second line counts.'] }), move({ id: 'p', artifact: { kind: 'plan', value: '1. Search', label: 'Hand it over' } })],
+      commissions: [thread({ id: 'x' }), thread({ id: 'y', why: null })],
+    }, 2);
+    assert.equal(nx.steps[0].because, '$10,200 to go, and 60 days to do it in.');
+    assert.equal(nx.steps[1].because, null, 'no reason is invented for a step that came without one');
+    assert.deepEqual(nx.all.map((x) => x.key), ['m:a', 'm:b', 'm:c', 'o:p', 'p:x', 'p:y'], 'what is remembered is the whole plan, not the four on screen');
+    const whole = pathNext({ moves: [move({ id: 'c', why: ['  ', 'Second line counts.'] })], commissions: [thread({ id: 'x' }), thread({ id: 'y', why: null })] });
+    assert.deepEqual(whole.steps.map((x) => x.because), ['Second line counts.', 'Resorts reply twice as often.', null]);
+  }
+
+  // 4. The redraw, said — with what happened to each step that left.
+  {
+    const seen = (at: string, current: number, keys: string[]) => snapshotPlan(at, current, keys.map((key) => ({ key, title: `Title ${key}` })));
+    const answered = [
+      { id: 'b', job: 'goal_gap', kind: 'earn', headline: 'h', status: 'done', acted_at: '2026-09-25T12:00:00Z' },
+      { id: 'c', job: 'goal_gap', kind: 'earn', headline: 'h', status: 'dismissed', acted_at: '2026-09-25T12:00:00Z' },
+      { id: 'p', job: 'propose', kind: 'build', headline: 'h', status: 'done', acted_at: '2026-09-25T12:00:00Z' },
+    ] as never[];
+    const commissions = [
+      { commission: { id: 'x', status: 'done' }, report: {}, line: '' },
+      { commission: { id: 'z', status: 'stopped' }, report: {}, line: '' },
+      { commission: { id: 'k', status: 'blocked' }, report: {}, line: '' },
+    ] as never[];
+    const ctx = { at: now, timezone: tz, answered, commissions, callMoveId: 'q' };
+    const prev = seen('2026-09-25T07:00:00Z', 1, ['m:a', 'm:b', 'm:c', 'o:p', 'p:x', 'p:z', 'p:k', 'm:q', 'm:gone']);
+    const ch = planChanges(prev, { ...ctx, all: [{ key: 'm:a', title: 'A' }, { key: 'm:new', title: 'N' }, { key: 'p:y', title: 'Y' }], current: 3 })!;
+    assert.equal(ch.since, 'since yesterday');
+    assert.deepEqual(ch.added, ['m:new', 'p:y']);
+    assert.deepEqual(ch.gone.map((g) => g.why), ['You did it', 'You said no', 'Handed over']);
+    assert.equal(ch.gone[0].title, 'Title m:b', 'named the way it was on screen');
+    assert.equal(ch.goneMore, 8 - MAX_GONE);
+    assert.deepEqual(ch.stepUp, { from: 2, to: 4 }, 'numbered the way the screen numbers them');
+    const whys = planChanges(seen('2026-09-26T07:00:00Z', 1, ['p:x', 'p:z', 'p:k', 'm:q', 'm:gone', 'p:vanished']), { ...ctx, all: [], current: 1 })!;
+    assert.equal(whys.since, 'since earlier today');
+    assert.deepEqual(planChanges(seen('2026-09-26T07:00:00Z', 1, ['p:x', 'p:z', 'p:k']), { ...ctx, all: [], current: 1 })!.gone.map((g) => g.why), ['Finished', 'Called off', 'Waiting on you, above']);
+    assert.deepEqual(planChanges(seen('2026-09-26T07:00:00Z', 1, ['m:q', 'm:gone', 'p:vanished']), { ...ctx, all: [], current: 1 })!.gone.map((g) => g.why), ['Now today’s call', 'The last run replaced it', 'Closed']);
+    assert.equal(planChanges(seen('2026-09-23T07:00:00Z', 1, ['m:gone']), { ...ctx, all: [], current: 1 })!.since, 'since Wednesday');
+
+    assert.equal(planChanges(null, { ...ctx, all: [{ key: 'm:a', title: 'A' }], current: 0 }), null, 'a first visit is not "everything is new"');
+    assert.equal(planChanges(seen('2026-09-18T07:00:00Z', 0, ['m:gone']), { ...ctx, all: [], current: 0 }), null, 'older than the week the reasons are read from');
+    assert.equal(planChanges(seen('2026-09-27T07:00:00Z', 0, ['m:gone']), { ...ctx, all: [], current: 0 }), null, 'a snapshot from the future is a broken clock, not a change');
+    assert.equal(planChanges(seen('2026-09-25T07:00:00Z', 2, ['m:a']), { ...ctx, all: [{ key: 'm:a', title: 'A' }], current: 2 }), null, 'nothing changed is nothing said');
+    assert.equal(planChanges(seen('2026-09-25T07:00:00Z', 3, ['m:a']), { ...ctx, all: [{ key: 'm:a', title: 'A' }], current: 2 }), null, 'a step down is not a step up');
+
+    // What the device kept is read for its shape and nothing else.
+    const round = parseSeenPlan(JSON.parse(JSON.stringify(prev)));
+    assert.deepEqual(round, prev);
+    assert.equal(parseSeenPlan(null), null);
+    assert.equal(parseSeenPlan('x'), null);
+    assert.equal(parseSeenPlan({ at: 'not a date', current: 0, steps: [] }), null);
+    assert.equal(parseSeenPlan({ at: '2026-09-25T07:00:00Z', current: -1, steps: [] }), null);
+    assert.equal(parseSeenPlan({ at: '2026-09-25T07:00:00Z', current: 1.5, steps: [] }), null);
+    assert.deepEqual(parseSeenPlan({ at: '2026-09-25T07:00:00Z', current: 1, steps: [{ key: 'm:a', title: 'A' }, { key: 3 }, null] })!.steps, [{ key: 'm:a', title: 'A' }]);
+    const long = snapshotPlan('2026-09-25T07:00:00Z', 0, Array.from({ length: 40 }, (_, i) => ({ key: `m:${i}`, title: 'x'.repeat(300) })));
+    assert.equal(long.steps.length, 24);
+    assert.equal(long.steps[0].title.length, 160);
+  }
+
+  // 5. The swap: hours next to what sending brought back — two facts, and only with the second.
+  {
+    const log = (id: string, minutes: number, on: string, note: string | null, at = `${on}T20:00:00Z`) => ({ id, minutes, on, note, at });
+    const focus = [log('f1', 180, '2026-09-23', 'the booking app'), log('f2', 120, '2026-09-25', 'The Booking  App'), log('f0', 600, '2026-09-10', 'the booking app')];
+    const swap = pathSwap({ now, timezone: tz, focus, sentAt: ['2026-09-24T08:00:00Z', '2026-09-25T08:00:00Z', '2026-09-01T08:00:00Z'], outcomes: [outcome({ id: 'r', occurred_at: '2026-09-25T09:00:00Z' }), outcome({ id: 'm', kind: 'reply', commission_id: 'pc' })], queueCount: 4 })!;
+    assert.equal(swap.title, `Try ${SWAP_HOURS} of those hours on sending`);
+    assert.equal(swap.detail, '5h on The Booking App this week. 2 messages sent, and 1 reply back.', 'a fortnight-old block and a mandate’s reply are not this week’s facts');
+    assert.equal(swap.key, 'swap:the booking app', 'the same thing, however it was typed');
+    assert.equal(swap.afterKey, 'f:f2', 'under the latest block on it');
+    assert.deepEqual(swap.action, { label: 'Open the drafts', stage: 'to_send' });
+    const wins = pathSwap({ now, timezone: tz, focus, sentAt: ['2026-09-24T08:00:00Z'], outcomes: [outcome({ id: 'r', occurred_at: '2026-09-25T09:00:00Z' }), outcome({ id: 'w', kind: 'won', occurred_at: '2026-09-25T10:00:00Z' }), outcome({ id: 'g', kind: 'meeting', occurred_at: '2026-09-25T11:00:00Z' })], queueCount: 0 })!;
+    assert.equal(wins.detail, '5h on The Booking App this week. 1 message sent, and 1 reply, 1 meeting and 1 win back.');
+    assert.deepEqual(wins.action, { label: 'See who to message', stage: 'new' });
+
+    const waiting = pathSwap({ now, timezone: tz, focus, sentAt: [], outcomes: [], queueCount: 3 })!;
+    assert.equal(waiting.title, 'Send the drafts first');
+    assert.equal(waiting.detail, '5h on The Booking App this week, and nothing sent. 3 drafts are written and waiting.');
+    assert.equal(pathSwap({ now, timezone: tz, focus, sentAt: [], outcomes: [], queueCount: 1 })!.detail.endsWith('1 draft is written and waiting.'), true);
+
+    assert.equal(pathSwap({ now, timezone: tz, focus, sentAt: ['2026-09-24T08:00:00Z'], outcomes: [], queueCount: 2 }), null, 'sending with nothing back yet is no second fact');
+    assert.equal(pathSwap({ now, timezone: tz, focus, sentAt: [], outcomes: [], queueCount: 0 }), null, 'nothing written to send: the call has it');
+    assert.equal(pathSwap({ now, timezone: tz, focus: [log('s', 200, '2026-09-25', 'the booking app')], sentAt: [], outcomes: [], queueCount: 3 }), null, 'under four hours is not a pattern');
+    assert.equal(pathSwap({ now, timezone: tz, focus: [log('o', 600, '2026-09-25', 'WhatsApp outreach'), log('p', 300, '2026-09-24', 'follow-ups')], sentAt: [], outcomes: [], queueCount: 3 }), null, 'hours on reaching people are the swap already made');
+    assert.equal(pathSwap({ now, timezone: tz, focus: [log('u', 600, '2026-09-25', null)], sentAt: [], outcomes: [], queueCount: 3 }), null, 'unlabelled hours cannot be named back');
+
+    // "Keep it" holds for a week from the tap, and anything else the device kept is no answer.
+    assert.equal(swapKept({ 'swap:the booking app': '2026-09-26' }, 'swap:the booking app', '2026-09-26'), true);
+    assert.equal(swapKept({ 'swap:the booking app': '2026-09-20' }, 'swap:the booking app', '2026-09-26'), true);
+    assert.equal(swapKept({ 'swap:the booking app': '2026-09-19' }, 'swap:the booking app', '2026-09-26'), false, `${SWAP_KEEP_DAYS} days, then it may ask again`);
+    assert.equal(swapKept({ 'swap:x': '2026-09-26' }, 'swap:the booking app', '2026-09-26'), false);
+    assert.equal(swapKept('nonsense', 'swap:x', '2026-09-26'), false);
+    assert.equal(swapKept({ 'swap:x': 'Tuesday' }, 'swap:x', '2026-09-26'), false);
+  }
+
+  // 6. At the goal, the next goal is the step.
+  {
+    const met = pathLadder({ offerSet: true, sent: 90, replied: 20, won: 5, goal: { title: 'Goal', target: 1000, current: 1500, money: true, unit: '$' }, currency: '$' });
+    assert.equal(met.steps[5].input, 'next-goal');
+    const open = pathLadder({ offerSet: true, sent: 90, replied: 20, won: 5, goal: { title: 'Goal', target: 1000, current: 100, money: true, unit: '$' }, currency: '$' });
+    assert.equal(open.steps[5].input, null);
+  }
+  console.log('copilot-core: pathway redraw checks passed');
+}
+
+pathwayRedraw().catch((e) => { console.error(e); process.exit(1); });

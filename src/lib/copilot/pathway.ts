@@ -27,11 +27,18 @@
 //   What comes next is the planner's, not a curriculum: the Moves the nightly
 //   pass ranked, the work it offers to take on, the projects it is running —
 //   then the ladder's next rungs, then the goal the user named. It is redrawn
-//   every run because the Moves are.
+//   every run because the Moves are, and the redraw is said: what is new since
+//   you last looked, and what went, with what happened to it (planChanges). A
+//   plan that changes silently cannot be told from one that never changes.
+//
+// And one suggestion, only where two rows sit side by side: hours logged on
+// something, next to what the messages brought back (pathSwap). The rows say
+// both halves; the app does not claim to know what the hours were worth.
 //
 // Pure: no DB import. The tab renders what these return.
 
 import { verdictOf, type Decision } from './decision';
+import type { Firsts } from './diagnose';
 import type { FocusLog } from './focus';
 import { dayLetter, hoursLabel, shiftDay } from './focus';
 import { belowBar } from './matches';
@@ -61,7 +68,7 @@ const names = (list: Array<string | null | undefined>, max = 2) => {
 
 /** Who did it: the app's agents, you, or somebody outside answering. */
 export type PathActor = 'ai' | 'you' | 'world';
-export type PathIcon = 'scout' | 'watcher' | 'writer' | 'send' | 'reply' | 'meeting' | 'money' | 'lost' | 'research' | 'call' | 'focus' | 'done';
+export type PathIcon = 'scout' | 'watcher' | 'writer' | 'send' | 'reply' | 'meeting' | 'money' | 'lost' | 'research' | 'call' | 'focus' | 'done' | 'star';
 export type PathTarget =
   | { kind: 'matches'; stage: 'new' | 'to_send' | 'waiting' | 'replied' }
   | { kind: 'project'; id: string }
@@ -83,6 +90,8 @@ export interface PathEvent {
   target: PathTarget;
   /** False where the instant is not when it happened: hours are typed in after the fact. */
   timed: boolean;
+  /** Set on the row that marks a rung reached — the stream's milestones. */
+  rung?: StepKey;
 }
 
 export interface PathDay { day: string; label: string; events: PathEvent[] }
@@ -99,6 +108,8 @@ export interface PastInput {
   decisions: Decision[];
   /** Open feed finds, for the watcher's line. */
   watchMoves: Array<Pick<Move, 'id' | 'job' | 'created_at'>>;
+  /** All-time firsts off the diagnosis, which date the rungs. Absent on an older read. */
+  firsts?: Firsts | null;
 }
 
 const inWindow = (iso: string | null | undefined, now: Date) => {
@@ -107,13 +118,14 @@ const inWindow = (iso: string | null | undefined, now: Date) => {
   return Number.isFinite(t) && now.getTime() - t <= PATH_DAYS * DAY_MS && t <= now.getTime() + 3_600_000;
 };
 
+const FULL_DAY: Record<string, string> = { Sun: 'Sunday', Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday' };
+
 /** "Monday's call" — how a person names a call they got earlier in the week. */
 export function callName(forDate: string, today: string): string {
   const w = whenLabel(forDate, today);
   if (w === 'today') return 'Today’s call';
   if (w === 'yesterday') return 'Yesterday’s call';
-  const full: Record<string, string> = { Sun: 'Sunday', Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday' };
-  return `${full[w] ?? w}’s call`;
+  return `${FULL_DAY[w] ?? w}’s call`;
 }
 
 /** Everything that moved in the last week, oldest first, as the rows prove it. */
@@ -256,11 +268,63 @@ export function pathEvents(input: PastInput): PathEvent[] {
     out.push({ timed: true, key: `m:${a.id}`, day: localDay(a.acted_at, tz), at: a.acted_at, actor: 'you', icon: 'done', title: a.headline, detail: `Done · ${KIND_LABEL[a.kind] ?? 'Move'}`, target: null });
   }
 
-  return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const sorted = out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+
+  // The rungs reached this week, each directly under the row that reached it —
+  // the send, the reply, the payment. Dated by the all-time first, so "first
+  // reply" is the reply that was first, not the first one this week can see.
+  const f = input.firsts;
+  if (f) {
+    const same = (a: string, b: string) => Date.parse(a) === Date.parse(b);
+    const outcomeRow = (kind: 'reply' | 'won', at: string) => {
+      const o = input.outcomes.find((x) => x.kind === kind && same(x.occurred_at, at));
+      return o ? sorted.find((e) => e.key === `o:${o.id}`) : undefined;
+    };
+    const reached: Array<{ key: StepKey; at: string | null | undefined; cause: (at: string) => PathEvent | undefined }> = [
+      { key: 'sent', at: f.sent, cause: (at) => sorted.find((e) => e.key === `sent:${localDay(at, tz)}`) },
+      { key: 'reply', at: f.reply, cause: (at) => outcomeRow('reply', at) },
+      { key: 'paid', at: f.wins[0], cause: (at) => outcomeRow('won', at) },
+      { key: 'repeat', at: f.wins[REPEAT_WINS - 1], cause: (at) => outcomeRow('won', at) },
+    ];
+    for (const r of reached) {
+      if (!r.at || !inWindow(r.at, now)) continue;
+      const cause = r.cause(r.at);
+      const moment: PathEvent = {
+        key: `rung:${r.key}`, rung: r.key, actor: 'you', icon: 'star',
+        // The cause shows the time and shares its instant, so the order by time
+        // holds. With no cause in the stream — a mandate's own reply — it stands
+        // alone, timed.
+        day: cause?.day ?? localDay(r.at, tz), at: cause?.at ?? r.at, timed: !cause,
+        title: REACHED[r.key],
+        detail: `Step ${LADDER.indexOf(r.key) + 1} of ${LADDER.length} done`,
+        target: cause?.target ?? null,
+      };
+      // Placed, not sorted: two rows at one instant — a busy import, a roll-up
+      // — must not come between a payment and the step it reached.
+      const i = cause ? sorted.indexOf(cause) + 1 : sorted.findIndex((e) => Date.parse(e.at) > Date.parse(moment.at));
+      sorted.splice(i === -1 ? sorted.length : i, 0, moment);
+    }
+  }
+
+  return sorted;
 }
 
-/** The last `max` events, grouped by day, oldest first — and how many are held back. */
-export function pathPast(input: PastInput, max = MAX_PAST): { days: PathDay[]; earlier: number } {
+/** A rung, said as the moment it was reached. */
+const REACHED: Record<StepKey, string> = {
+  offer: 'Said what you sell',
+  sent: 'First message sent',
+  reply: 'First reply',
+  paid: 'First paying client',
+  repeat: `${REPEAT_WINS} paying clients`,
+  goal: 'Goal reached',
+};
+
+/**
+ * The last `max` events, grouped by day, oldest first — and how many are held
+ * back, and which rungs are dated among the ones shown. Those are drawn where
+ * they happened, so the done rungs above the stream leave them out.
+ */
+export function pathPast(input: PastInput, max = MAX_PAST): { days: PathDay[]; earlier: number; reached: StepKey[] } {
   const events = pathEvents(input);
   const shown = events.slice(Math.max(0, events.length - max));
   const today = localDay(input.now.toISOString(), input.timezone);
@@ -272,13 +336,14 @@ export function pathPast(input: PastInput, max = MAX_PAST): { days: PathDay[]; e
     const w = whenLabel(day, today);
     return { day, label: w === 'today' ? 'Today' : w === 'yesterday' ? 'Yesterday' : w, events: evs };
   });
-  return { days, earlier: events.length - shown.length };
+  return { days, earlier: events.length - shown.length, reached: shown.flatMap((e) => (e.rung ? [e.rung] : [])) };
 }
 
 /* ─── The ladder ──────────────────────────────────────────────────────────── */
 
 export type StepState = 'done' | 'current' | 'next';
 export type StepKey = 'offer' | 'sent' | 'reply' | 'paid' | 'repeat' | 'goal';
+const LADDER: StepKey[] = ['offer', 'sent', 'reply', 'paid', 'repeat', 'goal'];
 
 export interface PathStep {
   key: StepKey;
@@ -289,10 +354,11 @@ export interface PathStep {
   /** A fraction only where there is a count to be a fraction of. */
   progress: { done: number; of: number } | null;
   /**
-   * The rung is the user's to write, not to earn: the offer, and a goal nobody
-   * named. The screen puts the one tap that writes it on the rung itself.
+   * The rung is the user's to write, not to earn: the offer, a goal nobody
+   * named, and the next goal once this one is reached. The screen puts the one
+   * tap that writes it on the rung itself.
    */
-  input: 'offer' | 'goal' | null;
+  input: 'offer' | 'goal' | 'next-goal' | null;
 }
 
 export interface LadderInput {
@@ -327,7 +393,7 @@ export function pathLadder(input: LadderInput): { steps: PathStep[]; current: nu
   // The first rung not reached is where you are, even when a later one counts
   // something: a reply that came in before the offer was written does not make
   // the offer optional.
-  const order: StepKey[] = ['offer', 'sent', 'reply', 'paid', 'repeat', 'goal'];
+  const order = LADDER;
   const firstOpen = order.findIndex((k) => !done[k]);
   const current = firstOpen === -1 ? order.length - 1 : firstOpen;
 
@@ -355,7 +421,8 @@ export function pathLadder(input: LadderInput): { steps: PathStep[]; current: nu
     state: i < current || (done[k] && i !== current) ? 'done' : i === current ? 'current' : 'next',
     // A done rung shows no fraction: it is done.
     progress: done[k] && i !== current ? null : copy[k].progress,
-    input: k === 'offer' && !done.offer ? 'offer' : k === 'goal' && !g ? 'goal' : null,
+    // At the top with the goal met there is nowhere left to point — the next goal is the step.
+    input: k === 'offer' && !done.offer ? 'offer' : k === 'goal' && !g ? 'goal' : k === 'goal' && goalMet ? 'next-goal' : null,
   }));
   return { steps, current };
 }
@@ -374,9 +441,18 @@ export interface NextStep {
   actor: 'ai' | 'you';
   title: string;
   detail: string;
+  /**
+   * Why the planner put it here, in its own first line — the Move's `why[0]`,
+   * a project's reason for being handed over. The plan is a guess, and a guess
+   * with its reason on it can be argued with.
+   */
+  because: string | null;
   /** For an offer: the plan being approved, always on screen when it is. */
   plan: string | null;
 }
+
+/** A step as a device remembers it: enough to say it went, and what it was. */
+export interface PlanEntry { key: string; title: string }
 
 /**
  * The planner's next steps after the call, in its own order: the Moves it
@@ -388,27 +464,228 @@ const KIND_ICON: Record<Move['kind'], PathIcon> = {
   earn: 'money', spend: 'money', build: 'research', fix: 'writer', learn: 'watcher', meet: 'meeting', decide: 'call', avoid: 'lost',
 };
 
-export function pathNext(input: { moves: Move[]; commissions: CommissionThread[] }, max = MAX_NEXT): { steps: NextStep[]; more: number } {
+const firstWhy = (why: string[] | null | undefined) => why?.find((w) => typeof w === 'string' && w.trim())?.trim() ?? null;
+
+/**
+ * `all` is the whole list, uncapped: what is remembered as seen. A step that was
+ * fifth yesterday and is third today moved up; it is not new.
+ */
+export function pathNext(input: { moves: Move[]; commissions: CommissionThread[] }, max = MAX_NEXT): { steps: NextStep[]; more: number; all: PlanEntry[] } {
   const steps: NextStep[] = [];
   for (const m of worthDoing(input.moves, Number.POSITIVE_INFINITY).shown) {
     steps.push({
       key: `m:${m.id}`, kind: 'move', id: m.id, icon: m.artifact.kind === 'message' ? 'send' : KIND_ICON[m.kind] ?? 'done', actor: 'you', title: m.headline,
       detail: [KIND_LABEL[m.kind], m.artifact.kind === 'message' ? 'drafted' : null, m.cost_label].filter(Boolean).join(' · '),
-      plan: null,
+      because: firstWhy(m.why), plan: null,
     });
   }
   for (const m of input.moves) {
     if (m.artifact?.kind !== 'plan') continue;
-    steps.push({ key: `o:${m.id}`, kind: 'offer', id: m.id, icon: 'research', actor: 'ai', title: m.headline, detail: 'It can do this itself — the plan is below', plan: m.artifact.value });
+    steps.push({ key: `o:${m.id}`, kind: 'offer', id: m.id, icon: 'research', actor: 'ai', title: m.headline, detail: 'It can do this itself — the plan is below', because: firstWhy(m.why), plan: m.artifact.value });
   }
   for (const t of input.commissions) {
     const c = t.commission;
     // A project stopped on you is an ask, said beside the call; this is the work under way.
     if (c.status !== 'active') continue;
     const { done, total } = t.report.progress;
-    steps.push({ key: `p:${c.id}`, kind: 'project', id: c.id, icon: 'research', actor: 'ai', title: c.objective, detail: total ? `Under way · ${done} of ${total} steps done` : 'Under way · reports back here', plan: null });
+    steps.push({ key: `p:${c.id}`, kind: 'project', id: c.id, icon: 'research', actor: 'ai', title: c.objective, detail: total ? `Under way · ${done} of ${total} steps done` : 'Under way · reports back here', because: c.why?.trim() || null, plan: null });
   }
-  return { steps: steps.slice(0, max), more: Math.max(0, steps.length - max) };
+  return { steps: steps.slice(0, max), more: Math.max(0, steps.length - max), all: steps.map((x) => ({ key: x.key, title: x.title })) };
+}
+
+/* ─── What changed since you looked ──────────────────────────────────────── */
+
+/**
+ * The plan as it was last on screen, kept on the device. Per device on purpose:
+ * it is a convenience about what this screen showed, not a fact about the
+ * business, and nothing is decided from it.
+ */
+export interface SeenPlan {
+  /** The read it was on screen from — HomeData.generatedAt, not the clock. */
+  at: string;
+  /** The rung you were on, 0-based, as the ladder counts it. */
+  current: number;
+  steps: PlanEntry[];
+}
+
+/** Gone steps named; beyond these they are counted. */
+export const MAX_GONE = 3;
+const SEEN_STEPS = 24;
+
+export function snapshotPlan(at: string, current: number, all: PlanEntry[]): SeenPlan {
+  return { at, current, steps: all.slice(0, SEEN_STEPS).map((x) => ({ key: x.key, title: x.title.slice(0, 160) })) };
+}
+
+/** What a device kept, trusted no further than its shape. Anything else is no snapshot. */
+export function parseSeenPlan(raw: unknown): SeenPlan | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.at !== 'string' || !Number.isFinite(Date.parse(r.at))) return null;
+  if (typeof r.current !== 'number' || !Number.isInteger(r.current) || r.current < 0) return null;
+  if (!Array.isArray(r.steps)) return null;
+  const steps = r.steps.filter((x): x is PlanEntry =>
+    !!x && typeof x === 'object' && typeof (x as PlanEntry).key === 'string' && typeof (x as PlanEntry).title === 'string');
+  return { at: r.at, current: r.current, steps: steps.slice(0, SEEN_STEPS) };
+}
+
+export interface PlanChanges {
+  /** "since yesterday", "since Tuesday" — when it was last looked at. */
+  since: string;
+  /** Keys on the plan now that were not on it then. */
+  added: string[];
+  /** Steps that were on it and are gone, each with what happened to it. */
+  gone: Array<PlanEntry & { why: string }>;
+  goneMore: number;
+  /** A rung reached since then: 1-based, as the screen numbers them. */
+  stepUp: { from: number; to: number } | null;
+}
+
+/**
+ * The redraw, said. Every step that left the plan leaves with a reason read off
+ * the rows — you did it, you said no, it was handed over, it finished — and the
+ * one reason with no row behind it is said as exactly that: the last run
+ * replaced it. Nothing here guesses why the planner changed its mind.
+ *
+ * No snapshot, or one older than the week the reasons are read from, is no
+ * change: a first visit is not "everything is new", and a diff that can only say
+ * "gone" has not said anything.
+ */
+export function planChanges(prev: SeenPlan | null, now: {
+  at: Date; timezone: string; all: PlanEntry[]; current: number;
+  answered: AnsweredMove[]; commissions: CommissionThread[]; callMoveId: string | null;
+}): PlanChanges | null {
+  if (!prev) return null;
+  const age = now.at.getTime() - Date.parse(prev.at);
+  if (!(age >= 0) || age > PATH_DAYS * DAY_MS) return null;
+
+  const before = new Set(prev.steps.map((x) => x.key));
+  const after = new Set(now.all.map((x) => x.key));
+  const added = now.all.filter((x) => !before.has(x.key)).map((x) => x.key);
+  const gone = prev.steps.filter((x) => !after.has(x.key)).map((x) => ({ ...x, why: whyGone(x.key, now) }));
+  const stepUp = now.current > prev.current ? { from: prev.current + 1, to: now.current + 1 } : null;
+  if (!added.length && !gone.length && !stepUp) return null;
+
+  const w = whenLabel(localDay(prev.at, now.timezone), localDay(now.at.toISOString(), now.timezone));
+  return {
+    since: w === 'today' ? 'since earlier today' : w === 'yesterday' ? 'since yesterday' : `since ${FULL_DAY[w] ?? w}`,
+    added, gone: gone.slice(0, MAX_GONE), goneMore: Math.max(0, gone.length - MAX_GONE), stepUp,
+  };
+}
+
+function whyGone(key: string, now: { answered: AnsweredMove[]; commissions: CommissionThread[]; callMoveId: string | null }): string {
+  const id = key.slice(2);
+  if (key.startsWith('p:')) {
+    const c = now.commissions.find((t) => t.commission.id === id)?.commission;
+    if (c?.status === 'done') return 'Finished';
+    if (c?.status === 'stopped') return 'Called off';
+    // Not gone: stopped on a question, which is said beside the call.
+    if (c?.status === 'blocked') return 'Waiting on you, above';
+    return 'Closed';
+  }
+  if (now.callMoveId === id) return 'Now today’s call';
+  const a = now.answered.find((x) => x.id === id);
+  if (a?.status === 'done') return key.startsWith('o:') ? 'Handed over' : 'You did it';
+  if (a?.status === 'dismissed') return 'You said no';
+  return 'The last run replaced it';
+}
+
+/* ─── A swap ──────────────────────────────────────────────────────────────── */
+
+/** Hours on one thing in a week before the stream asks what else they could buy. */
+export const SWAP_MIN_MINUTES = 240;
+/** What it suggests moving: a slice, never the whole — the thing may be the point. */
+export const SWAP_HOURS = 2;
+/** "Keep it" holds for this long. After that it is a new week's hours. */
+export const SWAP_KEEP_DAYS = 7;
+
+// Hours spent reaching people are already the work a swap would move them to.
+const OUTREACH = /\b(outreach|send|sending|sent|messag(e|es|ing)|dms?|calls?|calling|prospect(s|ing)?|follow[- ]?ups?|following up|sales|selling|pitch(es|ing)?|e-?mails?|emailing|whatsapp|leads?|cold)\b/i;
+
+export interface PathSwap {
+  /** The note, normalised: what "Keep it" is remembered against. */
+  key: string;
+  /** The focus row it sits under: the latest block on this. */
+  afterKey: string;
+  title: string;
+  detail: string;
+  action: { label: string; stage: 'to_send' | 'new' };
+}
+
+/**
+ * The one suggestion on the stream: hours on something, next to what sending
+ * brought back. Two facts the rows hold, side by side — and only when there is
+ * a second fact. Hours alone are not a verdict on the hours; the app cannot see
+ * what building the thing was worth, and says nothing it cannot see.
+ *
+ * Two shapes. Nothing sent and drafts waiting: send those first, because they
+ * are finished work earning nothing. Sending and answers coming back: move a
+ * slice of the hours to the thing that is answering. Anything else — sending
+ * with nothing back yet, nothing written to send — has no second fact, and is
+ * left to the call.
+ */
+export function pathSwap(input: { now: Date; timezone: string; focus: FocusLog[]; sentAt: string[]; outcomes: RecentOutcome[]; queueCount: number }): PathSwap | null {
+  const today = localDay(input.now.toISOString(), input.timezone);
+  const from = shiftDay(today, -(PATH_DAYS - 1));
+  const onWeek = (day: string) => day >= from && day <= today;
+
+  const byNote = new Map<string, { note: string; minutes: number; last: FocusLog }>();
+  for (const f of input.focus) {
+    const note = f.note?.trim().replace(/\s+/g, ' ');
+    // Unlabelled hours cannot be named back, and hours on outreach are the swap already made.
+    if (!note || !onWeek(f.on) || OUTREACH.test(note)) continue;
+    const k = note.toLowerCase();
+    const cur = byNote.get(k);
+    if (!cur) byNote.set(k, { note, minutes: f.minutes, last: f });
+    else {
+      cur.minutes += f.minutes;
+      // Named the way it was written last.
+      if (Date.parse(f.at) > Date.parse(cur.last.at)) Object.assign(cur, { note, last: f });
+    }
+  }
+  const top = [...byNote.entries()].sort(([, a], [, b]) => b.minutes - a.minutes)[0];
+  if (!top || top[1].minutes < SWAP_MIN_MINUTES) return null;
+  const [k, t] = top;
+  const hours = `${hoursLabel(t.minutes)} on ${t.note}`;
+
+  const sent = input.sentAt.filter((iso) => onWeek(localDay(iso, input.timezone))).length;
+  const back = (kind: RecentOutcome['kind']) => input.outcomes.filter((o) =>
+    o.kind === kind && !o.commission_id && onWeek(localDay(o.occurred_at, input.timezone))).length;
+  const answers = [
+    back('reply') ? plural(back('reply'), 'reply', 'replies') : null,
+    back('meeting') ? plural(back('meeting'), 'meeting') : null,
+    back('won') ? plural(back('won'), 'win') : null,
+  ].filter(Boolean) as string[];
+  const base = { key: `swap:${k}`, afterKey: `f:${t.last.id}` };
+
+  if (!sent && input.queueCount > 0) {
+    return {
+      ...base,
+      title: 'Send the drafts first',
+      detail: `${hours} this week, and nothing sent. ${plural(input.queueCount, 'draft')} ${input.queueCount === 1 ? 'is' : 'are'} written and waiting.`,
+      action: { label: 'Open the drafts', stage: 'to_send' },
+    };
+  }
+  if (sent && answers.length) {
+    return {
+      ...base,
+      title: `Try ${SWAP_HOURS} of those hours on sending`,
+      detail: `${hours} this week. ${plural(sent, 'message')} sent, and ${joinAnd(answers)} back.`,
+      action: input.queueCount > 0 ? { label: 'Open the drafts', stage: 'to_send' } : { label: 'See who to message', stage: 'new' },
+    };
+  }
+  return null;
+}
+
+const joinAnd = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+/**
+ * Whether "Keep it" still holds for this swap. `kept` is whatever the device
+ * stored — trusted no further than its shape — as key → the day it was tapped.
+ */
+export function swapKept(kept: unknown, key: string, today: string): boolean {
+  if (!kept || typeof kept !== 'object') return false;
+  const day = (kept as Record<string, unknown>)[key];
+  return typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) && shiftDay(day, SWAP_KEEP_DAYS) > today;
 }
 
 /* ─── The week ────────────────────────────────────────────────────────────── */

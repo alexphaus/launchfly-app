@@ -15,7 +15,7 @@ import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster, businessMachine, workStatus } from '@/lib/copilot/machine';
 import { matchCounts, matchFeed, matchesStatus, stageCards } from '@/lib/copilot/matches';
 import { offerIsEmpty } from '@/lib/copilot/offer';
-import { pathLadder, pathNext, pathPast, pathStatus, pathWeek } from '@/lib/copilot/pathway';
+import { pathLadder, pathNext, pathPast, pathStatus, pathSwap, pathWeek } from '@/lib/copilot/pathway';
 import { weekReview } from '@/lib/copilot/review';
 import { doneForYou, needsYou } from '@/lib/copilot/today';
 import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
@@ -79,6 +79,7 @@ export function derive(home: HomeData) {
   // so a rung and the machine cannot disagree about how many were sent.
   const funnel = (k: string) => d.stages.find((st) => st.key === k)?.count ?? 0;
   const primaryGoal = home.goals.find((g) => g.metric === 'currency') ?? home.goals[0] ?? null;
+  const sentAt = home.pipeline.map((r) => r.execution?.sent_at).filter((x): x is string => !!x);
   const pastInput = {
     now,
     timezone: home.profile.timezone,
@@ -90,6 +91,8 @@ export function derive(home: HomeData) {
     commissions: home.commissions,
     decisions: home.decisionLog,
     watchMoves: home.moves,
+    // The same rows the ladder counts, so a rung dated in the stream is one the ladder has.
+    firsts: d.firsts ?? null,
   };
   const path = {
     ladder: pathLadder({
@@ -103,13 +106,9 @@ export function derive(home: HomeData) {
     past: pathPast(pastInput),
     pastAll: pathPast(pastInput, Number.POSITIVE_INFINITY),
     next: pathNext({ moves: home.moves, commissions: home.commissions }),
-    week: pathWeek({
-      now,
-      timezone: home.profile.timezone,
-      sentAt: home.pipeline.map((r) => r.execution?.sent_at).filter((x): x is string => !!x),
-      outcomes: home.recent.outcomes,
-      answered: home.recent.answered,
-    }),
+    week: pathWeek({ now, timezone: home.profile.timezone, sentAt, outcomes: home.recent.outcomes, answered: home.recent.answered }),
+    // Drafts from a blank offer are not on To send (above), so they are not waiting to be sent either.
+    swap: pathSwap({ now, timezone: home.profile.timezone, focus: home.recent.focus, sentAt, outcomes: home.recent.outcomes, queueCount: noOffer ? 0 : queueCount }),
   };
 
   /* You — the machine and the team moved here from Work */

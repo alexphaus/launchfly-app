@@ -55,7 +55,7 @@ export interface Hunt {
   /** The search, as the index gets it. */
   query: string;
   area: string | null;
-  /** A short name, for the log and the Work tab. */
+  /** A short name, for the log and a find's line on Matches. */
   label: string;
   /** Paused is also retired: the row stays so the planner does not suggest it again. */
   status: HuntStatus;

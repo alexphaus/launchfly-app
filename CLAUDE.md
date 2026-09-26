@@ -44,7 +44,7 @@ static check. Do not report that lint passed; there is nothing to run.
 `/opt/pw-browsers/chromium`; shoot at 390×844. The pattern that works: a
 throwaway `src/app/copilot/zz-preview/page.tsx` rendering `<CopilotApp initial={fixture}/>`
 (or `src/app/copilot2/zz-preview/page.tsx` rendering `<CopilotApp2 …/>` for the
-four-tab layout, so it picks up the calm theme from that layout), screenshot it,
+three-tab layout, so it picks up the calm theme from that layout), screenshot it,
 then **delete it and confirm `git status` before committing**.
 Never verify inside a `/tmp` worktree — Turbopack rejects a symlinked
 `node_modules` with "Symlink node_modules is invalid, it points out of the
@@ -94,7 +94,7 @@ stale, not the schema — `notify pgrst, 'reload schema';`.
 
 The app's own web searches (`copilot_hunts`, 20260925) need `EXA_API_KEY` and
 that migration. Without either, Maps and feeds run as before and the Scout on
-Work says what is missing — there is no screen of searches to check instead.
+You says what is missing — there is no screen of searches to check instead.
 
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —

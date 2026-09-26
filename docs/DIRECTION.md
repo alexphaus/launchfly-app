@@ -188,7 +188,7 @@ and a metric, and the record grades itself against the ledger.
 owner's own verdict that the two-tab app had too many things and no single reason
 to open it. Built as a second layout over the same data rather than a rework, so
 the two can be compared by living with them. It adds one sensor — deep work,
-logged by hand — and no new ranking. See COPILOT.md → **Four tabs**.
+logged by hand — and no new ranking. See COPILOT.md → **Three tabs**.
 **Then** — hunts, twice. First as searches the user wrote and managed, beyond
 "segment in area" on Maps. Then, on its owner's verdict that this made finding
 people their job again — "serve, not configure" — as the app's own: planned from
@@ -196,6 +196,15 @@ the offer, the working file and the goals, retired when they bring in nothing
 anybody drafts, never shown. Matches lost its setup with them: no "looking for",
 no poor fits, no queue sheet — only what the ranker recommends, and one tap to
 act on it. See COPILOT.md → **What it looks for is worked out, not configured**.
+**Then** — the Path. Four drafts of a better Work tab (an honest take with
+tests, a live machine, a milestone path, a weekly quota) all met the same
+verdict: static sections competing for attention, nothing that changes, content
+gettable from the call, You or the handover. The answer was that Today and Work
+were halves of one question — where am I, and what moves it — and on a time axis
+they are one stream: what moved above, "you are here" with the call, the
+planner's next steps below, a ladder of rungs every one of which is a count the
+funnel already keeps. Three tabs: Path · Matches · You. No new sensor and no new
+ranking; the past is rows, the future is the Moves. See COPILOT.md → **Three tabs**.
 
 ---
 

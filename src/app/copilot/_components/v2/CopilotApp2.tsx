@@ -1,12 +1,16 @@
 'use client';
-// The four-tab shell at /copilot2. One question per tab:
+// The three-tab shell at /copilot2. One question per tab:
 //
-//   Today     what do I do, and what did it do for me while I was away
+//   Path      where am I, and what moves it: what was done above, "you are
+//             here" with the one thing to do now, what comes next below
 //   Matches   who is worth contacting — everything it found, filtered
-//   Work      what am I building: the offer, the path to money, the agents
-//             running parts of it, the projects handed over
-//   You       how am I doing: money, runway, deep work, the week read back,
-//             goals, settings
+//   You       how is it going: money, runway, deep work, the path to money and
+//             the team running it, the week read back, goals, settings
+//
+// It was four — Today and Work beside each other — until the owner's verdict on
+// every draft of Work was that it could be had "from today's call, the You tab
+// or the handover". Today and Work were two halves of one question, and on a
+// time axis they are one stream. See lib/copilot/pathway.ts.
 //
 // Why a second layout rather than a rework of the first. The two-tab app was
 // built by removing things, one argued step at a time, and every step was right
@@ -24,32 +28,31 @@ import SheetContent from '../SheetContent';
 import type { Tab2 } from '../shared';
 import { sheetKey, useCopilot } from '../useCopilot';
 import { useDerived } from './derive';
-import { IconMatches, IconToday, IconWork, IconYou } from './icons2';
-import TodayTab from './TodayTab';
+import { IconMatches, IconPath, IconYou } from './icons2';
+import PathTab from './PathTab';
 import MatchesTab from './MatchesTab';
-import WorkTab from './WorkTab';
 import YouTab from './YouTab';
 
-const TABS: Tab2[] = ['today', 'matches', 'work', 'you'];
-const LABEL: Record<Tab2, string> = { today: 'Today', matches: 'Matches', work: 'Work', you: 'You' };
-const ICON: Record<Tab2, () => React.ReactElement> = { today: IconToday, matches: IconMatches, work: IconWork, you: IconYou };
+const TABS: Tab2[] = ['path', 'matches', 'you'];
+const LABEL: Record<Tab2, string> = { path: 'Path', matches: 'Matches', you: 'You' };
+const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, matches: IconMatches, you: IconYou };
 /**
  * Every tab name either shell has ever used, mapped onto this one. A push or an
- * installed shortcut carrying `?tab=working` lands somewhere sensible here too.
+ * installed shortcut carrying `?tab=working` lands somewhere sensible here too,
+ * and so do the two tabs the Path replaced.
  */
 const ALIAS: Record<string, Tab2> = {
-  today: 'today', now: 'today',
+  path: 'path', today: 'path', now: 'path', work: 'path',
   matches: 'matches', pipeline: 'matches', opportunities: 'matches', signals: 'matches',
-  work: 'work',
   you: 'you', working: 'you',
 };
 
 export default function CopilotApp2({ initial }: { initial: HomeData }) {
   const { home, tab, setTab, actions, sheet, sheetOpen, dismissSheets, briefing, finding, toast, mainRef } =
-    useCopilot<Tab2>(initial, { initialTab: 'today', alias: ALIAS });
+    useCopilot<Tab2>(initial, { initialTab: 'path', alias: ALIAS });
   const d = useDerived(home);
   const status = d.status[tab];
-  // Which pill Matches shows. Held here so Today can open it on the right one:
+  // Which pill Matches shows. Held here so the Path can open it on the right one:
   // "send the drafts" lands on To send, in context, rather than in a sheet.
   const [matchStage, setMatchStage] = useState<MatchStage>('new');
   const openMatches = (s: MatchStage) => { setMatchStage(s); setTab('matches'); };
@@ -71,9 +74,8 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
 
       <main className="cp-content" ref={mainRef}>
         {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
-        {tab === 'today' && <TodayTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
+        {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
         {tab === 'matches' && <MatchesTab home={home} d={d} actions={actions} finding={finding} stage={matchStage} onStage={setMatchStage} />}
-        {tab === 'work' && <WorkTab home={home} d={d} actions={actions} briefing={briefing} />}
         {tab === 'you' && <YouTab home={home} d={d} actions={actions} briefing={briefing} />}
       </main>
 
@@ -81,7 +83,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
         {TABS.map((t) => {
           const Icon = ICON[t];
           // One count, on the one tab where it is an ask: what needs you today.
-          const badge = t === 'today' ? d.asks.length : 0;
+          const badge = t === 'path' ? d.asks.length : 0;
           return (
             <button
               key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)} aria-current={tab === t ? 'page' : undefined}

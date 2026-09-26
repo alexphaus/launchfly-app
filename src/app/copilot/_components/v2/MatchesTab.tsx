@@ -101,8 +101,8 @@ function NewMatches({ home, d, actions, finding, onSendFirst }: { home: HomeData
             ? <><b>Looking now</b>Real listings and real pages, not a sample — the first pass takes a minute.</>
             : !d.searching
             // Said rather than shown as a quiet morning: nothing on this server
-            // can search yet, and the Scout on Work names what is missing.
-            ? <><b>Nothing can look for you yet</b>Web search is not set up on this server. The Scout on Work says what is missing.</>
+            // can search yet, and the Scout on You names what is missing.
+            ? <><b>Nothing can look for you yet</b>Web search is not set up on this server. The Scout on You says what is missing.</>
             // "Every night" only while the nightly job is running; Today says when it is not.
             : <><b>Nothing worth your time yet</b>{setAside ? `It went through ${setAside} and none were worth a message. ` : ''}{d.done.stale ? '' : 'It keeps looking every night.'}</>}
         </div>

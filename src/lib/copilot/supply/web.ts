@@ -45,7 +45,7 @@ export const webAdapter: SupplyAdapter = {
   available: (profile) => exaConfigured() && !offerIsEmpty(profile.offer),
   async discover(profile, { limit, deadline }) {
     // Throws when the plan cannot be read, made or saved; runSupply keeps it on
-    // this adapter's entry and the Scout on Work reads it back (loadHunting).
+    // this adapter's entry and the Scout on You reads it back (loadHunting).
     // Never an empty list over a failure.
     // Longest-waiting first, so a search the clock cut off really does go first next run.
     const live = (await planHunts(profile, { deadline })).filter((h) => exaCategoryFor(h.kind))

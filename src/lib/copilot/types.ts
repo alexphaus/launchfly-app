@@ -477,7 +477,7 @@ export interface HomeData {
    * search the web at all, `unreadable` why the searches could not be read,
    * `lastError` why the last web run failed before any search did (the plan
    * could not be made or saved), and a live one's last_error why that search
-   * failed. The Scout on Work says whichever is true, so a search that cannot
+   * failed. The Scout on You says whichever is true, so a search that cannot
    * run never looks like one that found nothing.
    */
   hunting: { hunts: Hunt[]; webReady: boolean; unreadable: string | null; lastError: string | null };

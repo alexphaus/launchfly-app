@@ -5290,3 +5290,170 @@ async function huntsCore() {
 }
 
 huntsCore().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The Path tab: one stream — what moved above, you are here, what comes next.
+//
+// The checks: only what moved something is in the past, and nothing the
+// ledger cannot prove; the ladder is counted, never estimated; the next steps
+// are the planner's and nothing is invented to fill them; the week counts what
+// you did, not that you opened the app.
+// ---------------------------------------------------------------------------
+import { MAX_PAST, REPEAT_WINS, callName, pathEvents, pathLadder, pathNext, pathPast, pathStatus, pathWeek } from '../../src/lib/copilot/pathway';
+
+async function pathwayCore() {
+  const now = new Date('2026-09-26T10:00:00Z');
+  const tz = 'UTC';
+  const execP = (id: string, created_at: string, sent_at: string | null) => ({ id, created_at, sent_at, channel: 'whatsapp', approval_state: sent_at ? 'sent' : 'drafted' }) as never;
+  const pipeline = [
+    { ...bizV2({ id: 'f1', title: 'Casa Blanca Resort', created_at: '2026-09-25T04:00:00Z', scored_at: '2026-09-25T05:00:00Z', fit_score: 80 }), execution: execP('e1', '2026-09-25T06:00:00Z', '2026-09-25T11:00:00Z'), stage: 'sent' as const },
+    bizV2({ id: 'f2', title: 'Bayview Resort', created_at: '2026-09-25T04:10:00Z', scored_at: '2026-09-25T05:00:00Z', fit_score: 72 }),
+    bizV2({ id: 'f3', title: 'Tubero Plumbing', created_at: '2026-09-25T04:20:00Z', scored_at: '2026-09-25T05:00:00Z', fit_score: 30 }),
+    bizV2({ id: 'old', title: 'Old Find', created_at: '2026-09-10T04:00:00Z' }),
+  ];
+  const queue = [
+    { id: 'a1', execution: execP('q1', '2026-09-26T07:00:00Z', null), opp: { id: 'f2', title: 'Bayview Resort', name: null, segment: null, score: 70 } },
+    { id: 'a2', execution: execP('q2', '2026-09-26T07:01:00Z', null), opp: { id: 'x', title: 'Palm Cove', name: null, segment: null, score: 70 } },
+  ] as never[];
+  const outcome = (o: Record<string, unknown>) => ({ id: 'o', kind: 'reply', amount: null, currency: null, note: null, source: 'system', occurred_at: '2026-09-26T09:00:00Z', opportunity_id: null, commission_id: null, who: null, ...o }) as never;
+  const outcomes = [
+    outcome({ id: 'r1', who: 'Casa Blanca Resort' }),
+    outcome({ id: 'w1', kind: 'won', amount: 900, currency: '$', who: 'Bayview Resort', source: 'manual', occurred_at: '2026-09-24T15:30:00Z' }),
+    outcome({ id: 'c1', kind: 'won', commission_id: 'pc', who: 'A mandate', occurred_at: '2026-09-25T15:00:00Z' }),
+    outcome({ id: 'n1', kind: 'no_reply', who: 'Nobody', occurred_at: '2026-09-25T15:00:00Z' }),
+  ];
+  const focus = [{ id: 'fo1', minutes: 180, on: '2026-09-25', note: 'the booking app', at: '2026-09-26T08:00:00Z' }];
+  const thread = (c: Record<string, unknown>, did: Array<{ at: string; summary: string }> = [], progress = { done: 0, total: 0 }) =>
+    ({ commission: { id: 'c', objective: 'Compare signage suppliers', status: 'active', closed_at: null, last_run_at: null, outcome: null, ...c }, report: { did, yours: [], progress }, line: '' }) as never;
+  const commissions = [
+    thread({ id: 'done-w', status: 'done', closed_at: '2026-09-25T18:00:00Z', last_run_at: '2026-09-25T18:00:10Z', outcome: '4 found, 2 list prices' }),
+    thread({ id: 'done-h', status: 'done', objective: 'Closed by hand', closed_at: '2026-09-25T18:00:00Z', last_run_at: '2026-09-20T18:00:00Z' }),
+    thread({ id: 'run', objective: 'Shortlist spa resorts' }, [{ at: '2026-09-26T06:00:00Z', summary: 'Found 6 with a booking page' }], { done: 1, total: 3 }),
+  ];
+  const decision = (o: Record<string, unknown>) => ({ id: 'd', for_date: '2026-09-22', headline: 'Clear the queue', response: 'did', verify: { metric: 'sent', baseline: 0, after: 3, verifiedAt: '2026-09-25T09:00:00Z' }, ...o }) as never;
+  const decisions = [decision({ id: 'd1' }), decision({ id: 'd2', response: 'pending', verify: { metric: 'sent', baseline: 0, after: null, verifiedAt: null } })];
+  const answered = [
+    { id: 'm1', job: 'goal_gap', kind: 'earn', headline: 'Quote the Bayview upsell', status: 'done', acted_at: '2026-09-24T12:00:00Z' },
+    { id: 'm2', job: 'goal_gap', kind: 'earn', headline: 'Dismissed thing', status: 'dismissed', acted_at: '2026-09-24T12:00:00Z' },
+    { id: 'm3', job: 'watch', kind: 'earn', headline: 'A feed find kept', status: 'done', acted_at: '2026-09-24T12:00:00Z' },
+  ] as never[];
+  const watchMoves = [{ id: 'w1', job: 'watch', created_at: '2026-09-26T05:00:00Z' }, { id: 'w2', job: 'watch', created_at: '2026-09-26T05:30:00Z' }] as never[];
+  const input = { now, timezone: tz, pipeline: pipeline as never[], queue, outcomes, answered, focus, commissions, decisions, watchMoves };
+
+  // 1. The past is what moved, rolled up per day where one thing happened many times.
+  const ev = pathEvents(input);
+  const titles = ev.map((e) => e.title);
+  assert.ok(titles.includes('Scout found 3 businesses'), titles.join(' | '));
+  assert.equal(ev.find((e) => e.title === 'Scout found 3 businesses')!.detail, '2 worth a message', 'the one below the bar was looked at, not kept');
+  assert.ok(!titles.some((t) => t.includes('Old Find')) && ev.filter((e) => e.icon === 'scout').length === 1, 'a find from a fortnight ago is not this week');
+  assert.ok(titles.includes('Writer drafted 2 openers') && titles.includes('Writer drafted 1 opener'), 'the queue and the pipeline, each draft once');
+  assert.equal(ev.find((e) => e.title === 'You sent 1 message')!.detail, 'Casa Blanca Resort');
+  assert.equal(ev.find((e) => e.title === 'Casa Blanca Resort replied')!.detail, 'Matched to what you sent');
+  assert.ok(titles.includes('Bayview Resort paid $900'));
+  assert.ok(!titles.includes('A mandate paid') && !titles.some((t) => t.includes('Nobody')), 'a mandate’s own ledger row and an inferred no-reply are not events');
+  assert.ok(titles.includes('Finished: Compare signage suppliers') && !titles.includes('Finished: Closed by hand'), 'only a finish the worker posted is something it did');
+  assert.equal(ev.find((e) => e.title === 'Shortlist spa resorts')!.detail, 'Found 6 with a booking page');
+  assert.ok(titles.includes('Tuesday’s call worked') && ev.filter((e) => e.icon === 'call').length === 1, 'only a call the ledger read back');
+  assert.equal(ev.find((e) => e.icon === 'call')!.detail, '“Clear the queue” · sent 0 → 3');
+  const hours = ev.find((e) => e.icon === 'focus')!;
+  assert.equal(hours.title, '3h on the booking app');
+  assert.equal(hours.day, '2026-09-25', 'hours belong to the day they were worked, not the day they were typed');
+  assert.equal(hours.timed, false);
+  assert.ok(titles.includes('Quote the Bayview upsell') && !titles.includes('Dismissed thing') && !titles.includes('A feed find kept'));
+  assert.ok(titles.includes('Watcher flagged 2 posts'));
+  assert.ok(!titles.some((t) => /\b(ran|running|checked)\b/i.test(t)), 'nothing reports that an agent merely ran — that is the log');
+  assert.deepEqual([...ev].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).map((e) => e.key), ev.map((e) => e.key), 'oldest first');
+  assert.ok(ev.every((e) => e.actor === 'ai' || e.actor === 'you' || e.actor === 'world'));
+  assert.equal(ev.find((e) => e.title.includes('replied'))!.actor, 'world', 'an answer from outside is neither the app nor you');
+
+  // 2. Grouped by the person's own days, with the words they would use.
+  const past = pathPast(input);
+  assert.deepEqual(past.days.map((d) => d.label), ['Thu', 'Yesterday', 'Today']);
+  assert.ok(past.days[1].events.some((e) => e.icon === 'focus'), 'Friday’s hours sit under Friday');
+  assert.equal(past.earlier, Math.max(0, ev.length - MAX_PAST));
+  const short = pathPast(input, 3);
+  assert.equal(short.earlier, ev.length - 3, 'the rest waits behind Show earlier');
+  assert.equal(short.days.flatMap((d) => d.events).length, 3);
+  assert.equal(callName('2026-09-26', '2026-09-26'), 'Today’s call');
+  assert.equal(callName('2026-09-25', '2026-09-26'), 'Yesterday’s call');
+  assert.equal(callName('2026-09-21', '2026-09-26'), 'Monday’s call');
+
+  // 3. The ladder is counted from the funnel. Where you are is the first rung not reached.
+  const blank = pathLadder({ offerSet: false, sent: 0, replied: 0, won: 0, goal: null, currency: '$' });
+  assert.equal(blank.current, 0);
+  assert.equal(blank.steps[0].state, 'current');
+  assert.ok(blank.steps.slice(1).every((s) => s.state === 'next'));
+  assert.equal(blank.steps[5].title, 'Name your goal', 'with no goal, naming it is the step');
+  assert.deepEqual(blank.steps.map((s) => s.input), ['offer', null, null, null, null, 'goal'], 'the two rungs that are yours to write, not to earn');
+  const mid = pathLadder({ offerSet: true, sent: 41, replied: 7, won: 2, goal: { title: '$12,000 from resorts', target: 12000, current: 1800, money: true, unit: '$' }, currency: '$' });
+  assert.equal(mid.current, 4);
+  assert.deepEqual(mid.steps.map((s) => s.state), ['done', 'done', 'done', 'done', 'current', 'next']);
+  assert.deepEqual(mid.steps[4].progress, { done: 2, of: REPEAT_WINS });
+  assert.equal(mid.steps[1].detail, '41 messages sent so far');
+  assert.equal(mid.steps[2].detail, '7 replies so far');
+  assert.equal(mid.steps[3].detail, '2 clients so far');
+  assert.equal(mid.steps[5].detail, '$1,800 of $12,000');
+  assert.deepEqual(mid.steps[5].progress, { done: 1800, of: 12000 });
+  assert.ok(mid.steps.slice(0, 4).every((s) => s.progress === null), 'a done rung shows no fraction, and none is invented for a rung with no count');
+  const early = pathLadder({ offerSet: false, sent: 3, replied: 1, won: 0, goal: null, currency: '$' });
+  assert.equal(early.current, 0, 'a reply before the offer does not make the offer optional');
+  const all = pathLadder({ offerSet: true, sent: 90, replied: 20, won: 5, goal: { title: 'Goal', target: 1000, current: 1500, money: true, unit: '$' }, currency: '$' });
+  const clients = pathLadder({ offerSet: true, sent: 9, replied: 2, won: 1, goal: { title: 'Ten retainers', target: 10, current: 1, money: false, unit: 'clients' }, currency: '$' });
+  assert.equal(clients.steps[5].detail, '1 of 10 clients', 'a goal counted in clients is not written as money');
+  assert.equal(all.current, 5);
+  assert.equal(all.steps[5].state, 'current');
+  assert.equal(all.steps[5].detail, 'Reached — set the next one');
+  assert.ok(mid.steps.every((s) => s.input === null), 'nothing left to write once the offer and the goal exist');
+
+  // 4. What comes next is the planner's, in its order, and nothing is invented to fill it.
+  const move = (o: Record<string, unknown>) => ({ id: 'mv', job: 'goal_gap', kind: 'earn', headline: 'Quote Casa Blanca', artifact: { kind: 'message', value: 'Hi', label: 'Send' }, cost_label: '10 min', created_at: '2026-09-26T05:00:00Z', ...o }) as never;
+  const nx = pathNext({
+    moves: [
+      move({ id: 'm1' }),
+      move({ id: 'p1', headline: 'Shortlist 20 spa resorts', artifact: { kind: 'plan', value: '1. Search\n2. Check booking pages', label: 'Hand it over' } }),
+      move({ id: 'w1', job: 'watch' }),
+      move({ id: 's1', job: 'send_queue' }),
+    ],
+    commissions: [
+      thread({ id: 'run', objective: 'Shortlist spa resorts' }, [], { done: 1, total: 3 }),
+      thread({ id: 'blk', status: 'blocked', objective: 'Stuck on you' }),
+      thread({ id: 'drf', status: 'draft', objective: 'Not approved yet' }),
+    ],
+  });
+  assert.deepEqual(nx.steps.map((s) => `${s.kind}:${s.id}`), ['move:m1', 'offer:p1', 'project:run']);
+  assert.equal(nx.steps[0].actor, 'you');
+  assert.equal(nx.steps[0].detail, 'Earn · drafted · 10 min');
+  assert.equal(nx.steps[1].actor, 'ai');
+  assert.equal(nx.steps[1].plan, '1. Search\n2. Check booking pages', 'a plan is approved with the plan on screen, never behind it');
+  assert.equal(nx.steps[2].detail, 'Under way · 1 of 3 steps done');
+  assert.deepEqual(nx.steps.map((s) => s.icon), ['send', 'research', 'research'], 'a drafted message is a send; work the app does is research');
+  assert.equal(pathNext({ moves: [move({ id: 'd1', kind: 'decide', artifact: { kind: 'text', value: 'v', label: 'Read it' } })], commissions: [] }).steps[0].icon, 'call');
+  assert.equal(pathNext({ moves: [], commissions: [] }).steps.length, 0, 'nothing beyond the call is said as nothing');
+  const capped = pathNext({ moves: [move({ id: 'a' }), move({ id: 'b' }), move({ id: 'c' })], commissions: [] }, 2);
+  assert.equal(capped.steps.length, 2);
+  assert.equal(capped.more, 1);
+
+  // 5. The week counts what the ledger can prove you did.
+  const week = pathWeek({
+    now, timezone: tz,
+    sentAt: ['2026-09-25T11:00:00Z', '2026-09-24T09:00:00Z'],
+    outcomes: [outcome({ id: 'x1', source: 'manual', occurred_at: '2026-09-23T09:00:00Z' }), outcome({ id: 'x2', source: 'system', occurred_at: '2026-09-21T09:00:00Z' })],
+    answered: [{ id: 'm1', job: 'goal_gap', kind: 'earn', headline: 'h', status: 'done', acted_at: '2026-09-26T08:00:00Z' }] as never[],
+  });
+  assert.deepEqual(week.days.map((d) => d.day), ['2026-09-20', '2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26']);
+  assert.deepEqual(week.days.map((d) => d.moved), [false, false, false, true, true, true, true], 'a reply the app matched on its own is not something you did');
+  assert.equal(week.days[6].today, true);
+  assert.equal(week.days[6].letter, 'S');
+  assert.equal(week.streak, 4);
+  const openDay = pathWeek({ now, timezone: tz, sentAt: ['2026-09-25T11:00:00Z', '2026-09-24T09:00:00Z'], outcomes: [], answered: [] });
+  assert.equal(openDay.streak, 2, 'a streak is not broken at nine in the morning');
+  assert.equal(pathWeek({ now, timezone: tz, sentAt: ['2026-09-23T11:00:00Z'], outcomes: [], answered: [] }).streak, 0);
+
+  // 6. The status line says where you are and what needs you.
+  assert.equal(pathStatus(mid, 2, 4), 'Step 5 of 6 · 2 need you');
+  assert.equal(pathStatus(mid, 0, 4), 'Step 5 of 6 · 4 days in a row');
+  assert.equal(pathStatus(blank, 0, 1), 'Step 1 of 6');
+  console.log('copilot-core: pathway checks passed');
+}
+
+pathwayCore().catch((e) => { console.error(e); process.exit(1); });

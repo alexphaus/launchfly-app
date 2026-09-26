@@ -1,4 +1,4 @@
-// Everything the four tabs render, derived once from HomeData.
+// Everything the three tabs render, derived once from HomeData.
 //
 // One pass, memoised on the home object, for two reasons. The header's status
 // line and the tab under it must say the same number — the old app shipped "61"
@@ -6,16 +6,18 @@
 // here is computed from `generatedAt` rather than the clock, so the server
 // render and the hydrating client agree.
 //
-// No logic of its own beyond wiring: the rules live in lib/copilot/today.ts,
-// matches.ts, machine.ts and review.ts, where copilot-core.test.ts covers them.
+// No logic of its own beyond wiring: the rules live in lib/copilot/pathway.ts,
+// today.ts, matches.ts, machine.ts and review.ts, where copilot-core.test.ts
+// covers them.
 
 import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster, businessMachine, workStatus } from '@/lib/copilot/machine';
 import { matchCounts, matchFeed, matchesStatus, stageCards } from '@/lib/copilot/matches';
 import { offerIsEmpty } from '@/lib/copilot/offer';
+import { pathLadder, pathNext, pathPast, pathStatus, pathWeek } from '@/lib/copilot/pathway';
 import { weekReview } from '@/lib/copilot/review';
-import { doneForYou, needsYou, todayStatus, worthDoing } from '@/lib/copilot/today';
+import { doneForYou, needsYou } from '@/lib/copilot/today';
 import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Tab2 } from '../shared';
@@ -46,7 +48,7 @@ export function derive(home: HomeData) {
   const webReady = !!home.hunting?.webReady && !noOffer && !home.hunting?.unreadable;
   const searching = mapsReady || webReady;
 
-  /* Today */
+  /* Path — what was Today: the call, what needs you, and what broke, said beside it */
   const ownMoves = [...home.moves, ...(home.callMove ? [home.callMove] : [])].filter((m) => m.job !== 'watch');
   const done = doneForYou({
     now,
@@ -68,13 +70,49 @@ export function derive(home: HomeData) {
     queueIsCall: home.callMove?.job === 'send_queue',
     noOffer,
   });
-  const worth = worthDoing(home.moves);
   // A brand new account: nothing to call, nothing found, nothing handed over.
   // One card that says what is happening beats five empty sections.
   const nothingYet = !home.decision && !home.insight && !queueCount && !home.moves.length && !home.pipeline.length && !home.commissions.length;
 
-  /* Work */
   const d = home.diagnosis;
+  // The stream. The ladder counts from the same funnel the path to money shows,
+  // so a rung and the machine cannot disagree about how many were sent.
+  const funnel = (k: string) => d.stages.find((st) => st.key === k)?.count ?? 0;
+  const primaryGoal = home.goals.find((g) => g.metric === 'currency') ?? home.goals[0] ?? null;
+  const pastInput = {
+    now,
+    timezone: home.profile.timezone,
+    pipeline: home.pipeline,
+    queue: home.queue,
+    outcomes: home.recent.outcomes,
+    answered: home.recent.answered,
+    focus: home.recent.focus,
+    commissions: home.commissions,
+    decisions: home.decisionLog,
+    watchMoves: home.moves,
+  };
+  const path = {
+    ladder: pathLadder({
+      offerSet: !noOffer,
+      sent: funnel('sent'),
+      replied: funnel('replied'),
+      won: funnel('won'),
+      goal: primaryGoal ? { title: primaryGoal.title, target: primaryGoal.target_value, current: primaryGoal.current_value, money: primaryGoal.metric === 'currency', unit: primaryGoal.unit } : null,
+      currency: primaryGoal?.unit || currency,
+    }),
+    past: pathPast(pastInput),
+    pastAll: pathPast(pastInput, Number.POSITIVE_INFINITY),
+    next: pathNext({ moves: home.moves, commissions: home.commissions }),
+    week: pathWeek({
+      now,
+      timezone: home.profile.timezone,
+      sentAt: home.pipeline.map((r) => r.execution?.sent_at).filter((x): x is string => !!x),
+      outcomes: home.recent.outcomes,
+      answered: home.recent.answered,
+    }),
+  };
+
+  /* You — the machine and the team moved here from Work */
   // The goal a logged win actually moves: recordOutcome adds the amount to the
   // highest-priority currency goal, target or not. Showing any other one at the
   // end of the path to money would draw a pipe into the wrong tank.
@@ -115,7 +153,6 @@ export function derive(home: HomeData) {
   });
   const running = home.commissions.filter((t) => t.commission.status === 'active' || t.commission.status === 'blocked').length;
 
-  /* You */
   const review = weekReview({
     now,
     today: home.recent.today,
@@ -135,15 +172,15 @@ export function derive(home: HomeData) {
   const week = focusWeek(home.recent.focus, home.recent.today);
 
   const status: Record<Tab2, string | null> = {
-    today: todayStatus(done, asks),
+    path: pathStatus(path.ladder, asks.length, path.week.streak),
     matches: matchesStatus(counts),
-    work: workStatus(team, running),
-    you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : null,
+    // The team moved here from Work, and with it the one line that said whether it was working.
+    you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : workStatus(team, running),
   };
 
   return {
     now, noOffer, queueCount, oldestDays, queueBacked, currency,
-    done, asks, worth, nothingYet,
+    done, asks, nothingYet, path,
     feed, good, counts, stages, searching,
     machine, team, running,
     review, week,

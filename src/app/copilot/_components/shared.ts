@@ -27,7 +27,7 @@ export type Tab = 'now' | 'working';
  * layouts over one app — a v1 screen that could be told to open `work` would
  * have nothing to render.
  */
-export type Tab2 = 'today' | 'matches' | 'work' | 'you';
+export type Tab2 = 'path' | 'matches' | 'you';
 
 export type SheetState =
   | { kind: 'capacity' }

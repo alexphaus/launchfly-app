@@ -5,7 +5,8 @@
 
 import { runBrief, type BriefResult } from './brief';
 import { JOBS, runJobs, type JobsResult } from './jobs';
-import type { NightlyOutput, NightlyStep } from './nightly';
+import { redrawIfDue, type NightlyRoadmap } from './agent/roadmap';
+import { isNightlyPass, type NightlyOutput, type NightlyStep } from './nightly';
 import { reconcileReplies } from './outcomes';
 import { finishNightlyRun, markNightlyStep } from './store';
 import { ADAPTERS, runSupply, type SupplyResult } from './supply';
@@ -16,6 +17,8 @@ export interface DailyResult {
   /** Every non-outbound job: what each found and what was new. */
   jobs: JobsResult | { error: string } | null;
   brief: Pick<BriefResult, 'agent' | 'fellBack' | 'graded' | 'pushed'> & { skipped?: string };
+  /** The Path's plan. Only the nightly pass redraws it; "Find new matches" leaves it alone. */
+  roadmap?: NightlyRoadmap | null;
 }
 
 export interface JobsThenBrief {
@@ -89,6 +92,13 @@ export async function runDaily(
   // Surfaced in the cron report: it is how you can tell from outside whether
   // the record is actually being graded, or just accumulating.
   out.brief = { agent: ran.brief.agent, fellBack: ran.brief.fellBack, graded: ran.brief.graded, pushed: ran.brief.pushed };
+  // Last, after the replies were read and the call was graded, so a redraw
+  // "from what came back" has what came back. Isolated like every other step.
+  if (isNightlyPass(opts.reason)) {
+    await opts.onStep?.('roadmap');
+    try { out.roadmap = await redrawIfDue(profileId, opts.reason); }
+    catch (e) { out.roadmap = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] roadmap failed', e); }
+  }
   return out;
 }
 

@@ -106,6 +106,12 @@ export interface PastInput {
   firsts?: Firsts | null;
   /** For a call graded on money, which is said in money. */
   currency?: string;
+  /**
+   * The drawn plan's ticks. A step done is something the person did and said
+   * so, which is exactly what the evidence is for; one ticked and then put back
+   * is not.
+   */
+  marks?: Array<{ item: string; title: string; state: 'done' | 'dropped' | 'open'; at: string }>;
 }
 
 const inWindow = (iso: string | null | undefined, now: Date, days = EVIDENCE_DAYS) => {
@@ -187,6 +193,17 @@ export function pathEvents(input: PastInput): PathEvent[] {
       title: f.note ? `${hoursLabel(f.minutes)} on ${f.note}` : `${hoursLabel(f.minutes)} of deep work`,
       detail: 'Logged by you', target: { kind: 'focus' },
     });
+  }
+
+  // Ticked off on the plan: the newest mark per item, and only a done one.
+  const latest = new Map<string, NonNullable<PastInput['marks']>[number]>();
+  for (const m of input.marks ?? []) {
+    const was = latest.get(m.item);
+    if (!was || Date.parse(m.at) >= Date.parse(was.at)) latest.set(m.item, m);
+  }
+  for (const m of latest.values()) {
+    if (m.state !== 'done' || !m.title || !inWindow(m.at, now)) continue;
+    out.push({ timed: true, key: `rm:${m.item}`, day: localDay(m.at, tz), at: m.at, actor: 'you', icon: 'done', title: m.title, detail: 'Ticked off on your plan', target: null });
   }
 
   const sorted = out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
@@ -645,9 +662,11 @@ export interface WeekDot { day: string; letter: string; moved: boolean; today: b
  * streak that counted opens would be a number that means nothing — this counts
  * what the ledger can prove you did.
  */
-export function pathWeek(input: { now: Date; timezone: string; sentAt: string[]; outcomes: RecentOutcome[]; answered: AnsweredMove[] }): { days: WeekDot[]; streak: number; moved: number } {
+export function pathWeek(input: { now: Date; timezone: string; sentAt: string[]; outcomes: RecentOutcome[]; answered: AnsweredMove[]; ticked?: string[] }): { days: WeekDot[]; streak: number; moved: number } {
   const today = localDay(input.now.toISOString(), input.timezone);
   const movedOn = new Set<string>();
+  // A step of the drawn plan ticked off is a day moved, for a path that is not a sales funnel.
+  for (const t of input.ticked ?? []) movedOn.add(localDay(t, input.timezone));
   for (const s of input.sentAt) movedOn.add(localDay(s, input.timezone));
   for (const o of input.outcomes) if (o.source === 'manual' && !o.commission_id && o.kind !== 'nothing') movedOn.add(localDay(o.occurred_at, input.timezone));
   for (const a of input.answered) if (a.status === 'done' && a.job !== 'watch') movedOn.add(localDay(a.acted_at, input.timezone));

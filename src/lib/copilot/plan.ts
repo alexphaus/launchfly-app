@@ -110,7 +110,7 @@ export function pathHere(ladder: { steps: PathStep[]; current: number }, f: Funn
 
 /* ─── The move ────────────────────────────────────────────────────────────── */
 
-export type NowKind = 'offer' | 'call' | 'send' | 'question' | 'fix' | 'approve' | 'confirm' | 'move' | 'find' | 'rest';
+export type NowKind = 'offer' | 'call' | 'send' | 'question' | 'fix' | 'approve' | 'confirm' | 'step' | 'move' | 'find' | 'rest';
 
 export interface NowMove {
   kind: NowKind;
@@ -123,6 +123,8 @@ export interface NowMove {
   cta: string | null;
   /** The commission or Move it opens. */
   id?: string;
+  /** The drawn plan's step it is, which the one tap marks done. */
+  item?: string;
 }
 
 export interface NowInput {
@@ -138,6 +140,14 @@ export interface NowInput {
   funnel: Funnel;
   /** Businesses worth a message that nobody has drafted for yet. */
   freshMatches: number;
+  /**
+   * The drawn plan's first open step that fits today (roadmapFirstStep), and
+   * whether there is a drawn plan at all. With one, the plan decides whether
+   * selling is part of this person's path, so a blank offer is no longer the
+   * move by default.
+   */
+  planStep?: { item: string; title: string; milestone: string; why: string | null; size: string } | null;
+  hasPlan?: boolean;
 }
 
 const ASK_NOW: Record<AskRow['kind'], { title: (a: AskRow) => string; cta: string; size: string }> = {
@@ -170,7 +180,7 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
   const also = (without?: string) => asks.filter((a) => a.key !== without).slice(0, MAX_ALSO);
 
   if (input.callPending) return { now: { kind: 'call', key: 'call', title: '', why: null, size: null, cta: null }, also: also() };
-  if (input.noOffer) {
+  if (input.noOffer && !input.hasPlan) {
     return {
       now: { kind: 'offer', key: 'offer', title: 'Write what you sell', why: 'Three lines. Nothing is drafted, researched or proposed without them — a message written from a blank offer is not yours.', size: 'about 3 min', cta: 'Write it' },
       also: also(),
@@ -203,6 +213,21 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
   if (ask) {
     const k = ASK_NOW[ask.kind];
     return { now: { kind: ask.kind, key: ask.key, title: k.title(ask), why: ask.detail, size: k.size || null, cta: k.cta, id: ask.id }, also: also(ask.key) };
+  }
+
+  // The plan's step before the planner's Moves: the plan is ordered against the
+  // person's goals, and a Move is one job's idea of a good next thing.
+  const step = input.planStep;
+  if (step) {
+    return {
+      now: {
+        kind: 'step', key: `rm:${step.item}`, item: step.item, title: step.title,
+        why: [`Toward: ${step.milestone}.`, step.why].filter(Boolean).join(' '),
+        size: `${step.size} · you have ${cap.minutes} min`,
+        cta: 'Mark it done',
+      },
+      also: also(),
+    };
   }
 
   const fitting = input.moves.find((m) => (costMinutesOf(m.cost_label) ?? DEFAULT_COST_MINUTES) <= cap.minutes);

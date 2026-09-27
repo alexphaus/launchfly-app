@@ -46,6 +46,8 @@ import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans'
 import { computeOutcomeAffinity, rankOpportunities, selectPlan } from './ranking';
 import { getUsage, periodKey } from './usage';
 import { NIGHTLY_COLUMNS, nightlyFromRow, type NightlyOutput, type NightlyRun, type NightlyStep } from './nightly';
+import { resolveLlmConfig } from './agent/llm';
+import { ROADMAP_COLUMNS, ROADMAP_MARK_EVENT, ROADMAP_RUN_KIND, markFromEvent, roadmapRunFromRow, type RoadmapMark, type RoadmapRun } from './roadmap';
 
 export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
@@ -669,7 +671,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -709,6 +711,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadRecentRows(profileId),
     loadHunting(profileId),
     loadLastNightly(profileId),
+    loadRoadmapRuns(profileId),
+    loadRoadmapMarks(profileId),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -950,6 +954,15 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     lastRun,
     lastCronRun,
     nightly,
+    roadmap: {
+      enabled: !!resolveLlmConfig(),
+      latest: roadmapRuns.latest,
+      current: roadmapRuns.current,
+      previous: roadmapRuns.previous,
+      marks: roadmapMarks.marks,
+      // Either read failing is said on the Path; a plan without its ticks would show done steps as open.
+      unreadable: roadmapRuns.unreadable ?? roadmapMarks.unreadable,
+    },
     metrics,
     recent,
     hunting,
@@ -1335,6 +1348,85 @@ export async function loadLastNightly(profileId: string): Promise<{ run: Nightly
     .order('started_at', { ascending: false }).limit(1).maybeSingle();
   if (error) return { run: null, unreadable: describeDbError(error) };
   return { run: data ? nightlyFromRow(data as Record<string, unknown>) : null, unreadable: null };
+}
+
+/* ─── The drawn plan ──────────────────────────────────────────────────────── */
+
+/**
+ * A draw of the Path's plan: a copilot_agent_runs row of kind 'roadmap', with
+ * the plan in `output.roadmap` and the signature of what the person had said
+ * in `input_summary`. Free-text kind, so no migration — see roadmap.ts.
+ */
+export async function startRoadmapRun(profileId: string, fin: { reason: string; signature: string; model: string }): Promise<{ run: RoadmapRun } | { error: string }> {
+  const { data, error } = await copilotDb().from('copilot_agent_runs')
+    .insert({ profile_id: profileId, kind: ROADMAP_RUN_KIND, agent: 'llm', model: fin.model, input_summary: { reason: fin.reason, signature: fin.signature } })
+    .select(ROADMAP_COLUMNS).single();
+  if (error || !data) return { error: error ? describeDbError(error) : 'the run row did not come back' };
+  return { run: roadmapRunFromRow(data as Record<string, unknown>) };
+}
+
+export async function finishRoadmapRun(runId: string, fin: { status: 'ok' | 'error'; output?: Record<string, unknown> | null; error?: string | null }): Promise<string | null> {
+  const { error } = await copilotDb().from('copilot_agent_runs')
+    .update({ status: fin.status, output: fin.output ?? null, error: fin.error ?? null, finished_at: new Date().toISOString() })
+    .eq('id', runId);
+  return error ? describeDbError(error) : null;
+}
+
+/** How many draws are read: enough to find the two newest that produced a plan past a run of failures. */
+const ROADMAP_READ = 8;
+
+/**
+ * The newest draw of any status, the newest plan, and the plan before it (for
+ * what changed). A failed read is said, never returned as "no plan": that would
+ * put the funnel plan back on screen and draw a fresh one over a read error.
+ */
+export async function loadRoadmapRuns(profileId: string): Promise<{ latest: RoadmapRun | null; current: RoadmapRun | null; previous: RoadmapRun | null; unreadable: string | null }> {
+  const { data, error } = await copilotDb().from('copilot_agent_runs').select(ROADMAP_COLUMNS)
+    .eq('profile_id', profileId).eq('kind', ROADMAP_RUN_KIND)
+    .order('started_at', { ascending: false }).limit(ROADMAP_READ);
+  if (error) return { latest: null, current: null, previous: null, unreadable: describeDbError(error) };
+  const runs = ((data ?? []) as Record<string, unknown>[]).map(roadmapRunFromRow);
+  const plans = runs.filter((r) => r.status === 'ok' && r.roadmap);
+  return { latest: runs[0] ?? null, current: plans[0] ?? null, previous: plans[1] ?? null, unreadable: null };
+}
+
+/** Enough marks to cover every item of the last few plans. */
+const ROADMAP_MARKS_READ = 300;
+
+export async function loadRoadmapMarks(profileId: string): Promise<{ marks: RoadmapMark[]; unreadable: string | null }> {
+  const { data, error } = await copilotDb().from('copilot_events').select('payload, created_at')
+    .eq('profile_id', profileId).eq('event_type', ROADMAP_MARK_EVENT)
+    .order('created_at', { ascending: false }).limit(ROADMAP_MARKS_READ);
+  if (error) return { marks: [], unreadable: describeDbError(error) };
+  return { marks: ((data ?? []) as Array<{ payload: unknown; created_at: string }>).map(markFromEvent).filter((m): m is RoadmapMark => !!m), unreadable: null };
+}
+
+/**
+ * A step or milestone ticked, set aside, or put back. Throws, like insertFocus:
+ * logEvent swallows its error, and a tick that did not save while the row shows
+ * it done is the calm screen over a failure.
+ */
+export async function insertRoadmapMark(profileId: string, mark: Omit<RoadmapMark, 'at'>): Promise<void> {
+  const { error } = await copilotDb().from('copilot_events').insert({
+    profile_id: profileId,
+    event_type: ROADMAP_MARK_EVENT,
+    payload: { item: mark.item, title: mark.title, state: mark.state },
+  });
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
+}
+
+/**
+ * What the person has told it, as few words as a prompt can afford: the newest
+ * notes they typed themselves. Imports and syncs are not their words.
+ */
+const OWN_NOTE_SOURCES = ['note', 'onboarding'];
+
+export async function loadOwnNotes(profileId: string, limit = 12): Promise<string[]> {
+  const { data, error } = await copilotDb().from('copilot_context_items').select('content, source, created_at')
+    .eq('profile_id', profileId).in('source', OWN_NOTE_SOURCES)
+    .order('created_at', { ascending: false }).limit(limit);
+  if (error) throw new Error(`could not read your notes: ${describeDbError(error)}`);
+  return ((data ?? []) as Array<{ content: string }>).map((r) => r.content.replace(/\s+/g, ' ').trim().slice(0, 400)).filter(Boolean);
 }
 
 /**

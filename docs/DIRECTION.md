@@ -224,6 +224,22 @@ checkpoint saying when the guesses become numbers. It passes the survival test
 for the same reason the rest does: an agent with memory can write a roadmap;
 "10 clients at your $150, about 45 sends at the rate your own 9 earned" needs
 the ledger. Goals past the first are named, not planned.
+**Then** — the plan drawn for the person, not walked back through the funnel.
+The ladder was the same for everybody, and its owner's verdict on it was the
+brief: static, hardcoded, outbound-centric, where the want was a plan that
+understands the goals — a job, a property, a skill, a business — and orders them
+by what is achievable now, quick wins first, then the long pulls, redrawn as
+things work. That reverses "arithmetic rather than a written roadmap" above,
+knowingly: a model now writes the order, the milestones and the steps. What
+keeps it on this side of the survival test is what it is drawn *from* and what
+it is not allowed to write. It reads the ledger — replies, payments, hours,
+research that finished, and what the person did with every step of the last
+plan — and it cannot write a number the input did not contain, cannot mark
+anything done, and never sees its own earlier reasoning. A harness with memory
+can write a roadmap; one redrawn from which of last week's steps you actually
+ticked, and what came back from them, needs the rows. The funnel plan stays
+where there is no model to draw with. See COPILOT.md → **The plan is drawn, not
+walked back**.
 
 ---
 

@@ -5916,7 +5916,7 @@ async function nightlyPass() {
   const v1 = nightlyView(running(72_000, { output: { step: 'jobs' } }), now);
   assert.equal(v1.state, 'running');
   if (v1.state === 'running') {
-    assert.equal(v1.stepN, 3); assert.equal(v1.of, 4);
+    assert.equal(v1.stepN, 3); assert.equal(v1.of, 5);
     assert.equal(v1.doing, 'running the checks');
     assert.equal(v1.elapsed, '1m 12s');
     assert.equal(v1.by, 'you');
@@ -6051,3 +6051,260 @@ async function nightlyPass() {
 }
 
 nightlyPass().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The drawn plan (lib/copilot/roadmap.ts) ───────────────────────────── */
+import {
+  MAX_MILESTONES_PER_PHASE, MAX_STEPS_PER_MILESTONE, ROADMAP_MAX_AGE_DAYS, ROADMAP_RETRY_MS, ROADMAP_STALE_MS, ROADMAP_SYSTEM,
+  goalMarkers, happenedLines, idsByTitle, markFromEvent, parseRoadmap, previousForPrompt, roadmapChanges, roadmapDue, roadmapFirstStep,
+  roadmapItem, roadmapPrompt, roadmapRunFromRow, roadmapSignature, roadmapView, sourcedNumbers, unsourcedNumber,
+  type RoadmapInput, type RoadmapRun,
+} from '../../src/lib/copilot/roadmap';
+import { pathEvents as roadmapPathEvents } from '../../src/lib/copilot/pathway';
+import { pathNow as roadmapPathNow } from '../../src/lib/copilot/plan';
+import { nightlyLines as roadmapNightlyLines } from '../../src/lib/copilot/nightly';
+
+async function drawnPlan() {
+  const now = new Date('2026-09-27T12:00:00Z');
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+
+  // 1. The number guard. Only numbers the input carried survive; one number is
+  //    one number however it is written; a small count is an instruction.
+  const allowed = sourcedNumbers('Goal: €1,000 of €60,000 · within 180 days · runway 3.4 months · price €5');
+  assert.equal(unsourcedNumber('Close the €60,000 gap', allowed), null);
+  assert.equal(unsourcedNumber('Close the 60k gap', allowed), null, '60k is 60,000');
+  assert.equal(unsourcedNumber('Within the 180 days you set', allowed), null);
+  assert.equal(unsourcedNumber('With 3.4 months of runway', allowed), null);
+  assert.equal(unsourcedNumber('Make two calls and send 3 messages', allowed), null, 'a count of things to do is not a claim');
+  assert.equal(unsourcedNumber('Aim for a 20% reply rate', allowed), '20%', 'a rate it made up');
+  assert.equal(unsourcedNumber('Earn €3,000 by March', allowed), '€3,000');
+  assert.equal(unsourcedNumber('Done in 6 weeks', allowed), null, 'six is a small count');
+  assert.equal(unsourcedNumber('Done in 45 days', allowed), '45');
+  assert.equal(unsourcedNumber('Save €5 a day', allowed), null);
+  assert.equal(unsourcedNumber('Raise the price to €8', allowed), '€8', 'money is never a small count');
+  assert.equal(unsourcedNumber('Aim for 2.5 hours', allowed), '2.5', 'a decimal is a measurement');
+
+  // 2. The prompt: every goal with the person's own numbers, a money goal said
+  //    in clients at their price, and the last plan as titles and ticks only.
+  const input: RoadmapInput = {
+    today: '2026-09-27', name: 'Maria', headline: 'Jewellery seller', location: 'Valencia', capacity: 'moderate', currency: '€', runwayMonths: null,
+    offer: { sells: 'Stainless steel jewellery', price_band: '€5 each' }, price: 5,
+    goals: [
+      { id: 'g1', title: 'Property buy and renovation', metric: 'currency', unit: '€', target: 60000, current: 1000, horizonDays: 180, note: 'Want to flip it' },
+      { id: 'g2', title: 'Learn Spanish', metric: 'none', unit: null, target: null, current: null, horizonDays: null, note: null },
+    ],
+    working: 'How you deliver:\n- Market stalls on weekends',
+    notes: ['I have an interview Thursday'],
+    funnel: { windowDays: 30, sent: 0, replied: 0, won: 0, wonAmount: 0 },
+    happened: ['2h logged on renovation research'],
+    previous: [{ id: 'first-buyer', phase: 'week', title: 'A first wholesale buyer', state: 'dropped', steps: [{ id: 'list-five', title: 'List five buyers', state: 'done' }] }],
+    aiAvailable: true,
+  };
+  const prompt = roadmapPrompt(input);
+  assert.match(prompt, /\[g1\] Property buy and renovation · €1,000 of €60,000 · within 180 days · their note: Want to flip it/);
+  assert.match(prompt, /at their price of €5: €59,000 to go is 11800 clients/);
+  assert.match(prompt, /Time each day: 60 minutes \(Moderate\)/);
+  assert.match(prompt, /\[first-buyer\] \(week\) A first wholesale buyer — dropped/);
+  assert.match(prompt, /\[list-five\] List five buyers — done/);
+  assert.match(prompt, /I have an interview Thursday/);
+  assert.match(prompt, /ai_available: true/);
+  assert.match(ROADMAP_SYSTEM, /Never invent a number about them/, 'the rule the guard enforces is also said to the model');
+  assert.match(ROADMAP_SYSTEM, /quick_win.*leverage.*foundation/s);
+
+  // 3. What goes back in is the record, never the view (invariant 12).
+  const earlier = {
+    here: { title: 'Selling jewellery toward a flat', line: 'You are far from the property.' },
+    direction: 'Cash first, because the property needs it.', changed: null,
+    phases: [{ key: 'week' as const, milestones: [{ id: 'm1', title: 'First sale', why: 'It proves demand.', doneWhen: 'Someone paid', goalId: 'g1', steps: [{ id: 's1', title: 'Ask three shops', size: 'quick' as const, tag: 'quick_win' as const, who: 'you' as const }] }] }],
+  };
+  const prev = previousForPrompt(earlier, [
+    { item: 's1', title: 'Ask three shops', state: 'done', at: ago(3_600_000) },
+    { item: 'm1', title: 'First sale', state: 'dropped', at: ago(7_200_000) },
+    { item: 'm1', title: 'First sale', state: 'open', at: ago(1_000) },
+  ]);
+  assert.deepEqual(prev, [{ id: 'm1', phase: 'week', title: 'First sale', state: 'open', steps: [{ id: 's1', title: 'Ask three shops', state: 'done' }] }], 'the newest mark wins; undo is a mark');
+  assert.ok(!JSON.stringify(prev).includes('proves demand') && !JSON.stringify(prev).includes('Cash first'), 'no why, no direction');
+
+  // 4. The parse holds the plan to the rules.
+  const ctx = { allowed: sourcedNumbers(`${ROADMAP_SYSTEM}\n${prompt}`), goalIds: ['g1', 'g2'], aiAvailable: false, previousIds: idsByTitle(earlier) };
+  const many = (n: number, f: (i: number) => unknown) => Array.from({ length: n }, (_, i) => f(i));
+  const raw = {
+    here: { title: 'Saving toward the property', line: 'The jewellery pays €5 a piece; the gap is €59,000.' },
+    direction: 'Income first, then the property search.',
+    changed: 'Dropped the wholesale buyer, you set it aside.',
+    phases: [
+      { key: 'later', milestones: [{ id: 'buy', title: 'Make an offer on a property', steps: [] }] },
+      { key: 'week', milestones: [
+        { title: 'First sale', why: 'It proves somebody pays', done_when: 'One person has paid', goal_id: 'g1',
+          steps: many(5, (i) => ({ id: `step-${i}`, title: `Ask shop ${i + 1}`, size: 'quick', tag: 'quick_win', who: 'ai' })) },
+        { id: 'rate', title: 'Hit a 25% conversion rate', steps: [] },
+        { id: 'site', title: 'Put the shop online', why: 'Online sells €2,000 a month', goal_id: 'not-a-goal', steps: [{ id: 'site', title: 'Pick a platform', size: 'enormous', tag: 'shiny' }] },
+        { id: 'extra-1', title: 'Extra one' }, { id: 'extra-2', title: 'Extra two' },
+      ] },
+      { key: 'someday', milestones: [{ id: 'spanish', title: 'Spanish lessons booked' }] },
+    ],
+  };
+  const parsed = parseRoadmap(raw, ctx)!;
+  assert.ok(parsed, 'a usable plan comes back');
+  const r = parsed.roadmap;
+  assert.deepEqual(r.phases.map((p) => p.key), ['week', 'later'], 'in phase order, an unknown phase read as later');
+  const week = r.phases[0].milestones;
+  assert.equal(week.length, MAX_MILESTONES_PER_PHASE);
+  assert.ok(!week.some((m) => /25%/.test(m.title)), 'a milestone whose title invents a number is dropped whole');
+  assert.equal(week[0].id, 'm1', 'the last plan’s id, found by title, so its ticks carry');
+  assert.equal(week[0].steps.length, MAX_STEPS_PER_MILESTONE);
+  assert.ok(week[0].steps.every((s) => s.who === 'you'), 'no worker, so nothing is offered to one (invariant 7)');
+  assert.equal(week[0].goalId, 'g1');
+  assert.equal(week[0].doneWhen, 'One person has paid');
+  const site = week.find((m) => m.title === 'Put the shop online')!;
+  assert.equal(site.why, null, 'a reason carrying a made-up €2,000 is dropped');
+  assert.equal(site.goalId, null, 'a goal that does not exist is not linked');
+  assert.equal(site.steps[0].size, 'sitting'); assert.equal(site.steps[0].tag, 'foundation');
+  assert.notEqual(site.steps[0].id, site.id, 'ids are unique across the plan, so a tick means one thing');
+  assert.ok(r.phases[1].milestones.some((m) => m.title === 'Spanish lessons booked'));
+  assert.equal(r.here?.line, 'The jewellery pays €5 a piece; the gap is €59,000.', 'numbers from the input pass');
+  assert.equal(parsed.withheld, 2);
+  assert.equal(parseRoadmap({ phases: [{ key: 'week', milestones: [{ title: 'Earn €9,999 this week' }] }] }, ctx), null, 'nothing that holds up is a failed draw, not an empty plan');
+  assert.equal(parseRoadmap('not json at all', ctx), null);
+  const withAi = parseRoadmap({ phases: [{ key: 'week', milestones: [{ id: 'x', title: 'Shortlist renovation upgrades', steps: [{ id: 'r', title: 'Research resale value', who: 'ai' }] }] }] }, { ...ctx, aiAvailable: true })!;
+  assert.equal(withAi.roadmap.phases[0].milestones[0].steps[0].who, 'ai');
+  assert.deepEqual(roadmapItem(r, week[0].steps[0].id), { kind: 'step', title: 'Ask shop 1' });
+  assert.equal(roadmapItem(r, 'nope'), null);
+
+  // 5. A stored row is read defensively: a plan that is not one is a failure with a reason.
+  const run = (o: Partial<Record<string, unknown>> = {}) => roadmapRunFromRow({ id: 'r1', status: 'ok', started_at: ago(60_000), finished_at: ago(0), output: { roadmap: r }, error: null, input_summary: { reason: 'manual', signature: 'abc' }, ...o });
+  assert.equal(run().status, 'ok'); assert.equal(run().signature, 'abc'); assert.equal(run().roadmap?.phases.length, 2);
+  const junk = run({ output: { roadmap: { phases: 'x' } } });
+  assert.equal(junk.status, 'error'); assert.match(junk.error ?? '', /could not be read/);
+  assert.equal(run({ status: 'weird' }).status, 'error');
+  const thin = run({ output: { roadmap: { phases: [{ key: 'week', milestones: [{ id: 'a', title: 'A' }, { title: 'no id' }] }] } } });
+  assert.deepEqual(thin.roadmap?.phases[0].milestones.map((m) => [m.id, m.steps.length]), [['a', 0]], 'a milestone with no steps array is kept; one with no id is not');
+  assert.equal(markFromEvent({ payload: { item: 's1', state: 'done', title: 'T' }, created_at: ago(0) })?.state, 'done');
+  assert.equal(markFromEvent({ payload: { state: 'done' }, created_at: ago(0) }), null);
+
+  // 6. The signature is what the person SAID, in any order.
+  const sigIn = { goals: [{ id: 'b', title: 'B', target_value: 5, current_value: 0, horizon_days: null, priority: 2, note: null }, { id: 'a', title: 'A', target_value: null, current_value: null, horizon_days: 30, priority: 1, note: 'n' }], working: [{ id: 'w', body: 'x' }], contextCount: 6, capacity: 'moderate' as const, offer: { sells: 'S' } };
+  const sig = roadmapSignature(sigIn);
+  assert.equal(roadmapSignature({ ...sigIn, goals: [...sigIn.goals].reverse() }), sig);
+  assert.notEqual(roadmapSignature({ ...sigIn, contextCount: 7 }), sig, 'a new note');
+  assert.notEqual(roadmapSignature({ ...sigIn, capacity: 'deep' }), sig, 'a different day');
+  assert.notEqual(roadmapSignature({ ...sigIn, goals: [{ ...sigIn.goals[0], target_value: 6 }, sigIn.goals[1]] }), sig, 'a changed target');
+
+  // 7. When it is redrawn.
+  const cur = (o: Partial<RoadmapRun> = {}): RoadmapRun => ({ id: 'c', status: 'ok', reason: 'manual', signature: sig, startedAt: ago(86_400_000), finishedAt: ago(86_300_000), roadmap: r, error: null, ...o });
+  const due = (o: Partial<Parameters<typeof roadmapDue>[0]>) => roadmapDue({ latest: cur(), current: cur(), signature: sig, now, trigger: 'open', ...o });
+  assert.equal(due({ latest: null, current: null }), 'first');
+  assert.equal(due({}), null, 'the plan on screen still holds');
+  assert.equal(due({ signature: 'other' }), 'changed');
+  assert.equal(due({ lastOutcomeAt: ago(0) }), null, 'a reply waits for the night, so the plan does not move under the thumb');
+  assert.equal(due({ trigger: 'nightly', lastOutcomeAt: ago(0) }), 'progress');
+  assert.equal(due({ trigger: 'nightly', lastMarkAt: ago(1_000) }), 'progress');
+  assert.equal(due({ trigger: 'nightly', lastMarkAt: ago(2 * 86_400_000) }), null, 'a tick from before this plan is already in it');
+  assert.equal(due({ trigger: 'nightly', current: cur({ startedAt: ago(ROADMAP_MAX_AGE_DAYS * 86_400_000) }), latest: null }), 'weekly');
+  const running = cur({ id: 'x', status: 'running', startedAt: ago(20_000), finishedAt: null });
+  assert.equal(due({ latest: running, signature: 'other' }), null, 'never a second draw beside one in flight');
+  assert.equal(due({ latest: cur({ status: 'running', startedAt: ago(ROADMAP_STALE_MS + 1) }), signature: 'other' }), 'changed', 'a draw whose process died does not block forever');
+  const failedRun = cur({ id: 'f', status: 'error', startedAt: ago(60_000), finishedAt: ago(30_000), roadmap: null, error: 'bad key' });
+  assert.equal(due({ latest: failedRun, signature: 'other' }), null, 'opening the app does not retry a failure straight away');
+  assert.equal(due({ latest: { ...failedRun, finishedAt: ago(ROADMAP_RETRY_MS + 1) }, signature: 'other' }), 'changed');
+  assert.equal(due({ trigger: 'nightly', latest: failedRun, signature: 'other' }), 'changed', 'the night tries again');
+
+  // 8. The view: ticks applied, the newest winning; a reached milestone's steps are not waiting on anyone.
+  const marks = [
+    { item: week[0].steps[0].id, title: 'Ask shop 1', state: 'done' as const, at: ago(5_000) },
+    { item: site.id, title: 'Put the shop online', state: 'done' as const, at: ago(4_000) },
+  ];
+  const view = roadmapView({ enabled: true, latest: cur(), current: cur(), previous: cur({ roadmap: earlier }), marks, goals: [{ id: 'g1', title: 'Property buy and renovation' }], capacity: 'low', now });
+  assert.equal(view.state, 'ready');
+  if (view.state === 'ready') {
+    assert.equal(view.phases[0].label, 'This week');
+    const m0 = view.phases[0].milestones[0];
+    assert.equal(m0.goalTitle, 'Property buy and renovation');
+    assert.deepEqual(m0.steps.map((s) => s.state), ['done', 'open', 'open']);
+    assert.equal(m0.open, 2);
+    assert.ok(m0.steps.every((s) => s.fits), 'a quick step fits Low energy');
+    const siteView = view.phases[0].milestones.find((m) => m.id === site.id)!;
+    assert.equal(siteView.state, 'done');
+    assert.equal(siteView.steps[0].state, 'done');
+    assert.equal(siteView.steps[0].fits, false, 'a sitting is more than 30 minutes');
+    assert.equal(view.done, 1); assert.equal(view.total, 5);
+    assert.equal(view.failed, null);
+    assert.ok(view.changes?.added.includes('Put the shop online'));
+    assert.equal(view.changes?.note, 'Dropped the wholesale buyer, you set it aside.');
+  }
+  assert.deepEqual(roadmapView({ enabled: false, latest: null, current: null, previous: null, marks: [], goals: [], capacity: 'deep', now }), { state: 'off' }, 'no model and nothing drawn: nothing is said about a plan it cannot draw');
+  assert.deepEqual(roadmapView({ enabled: true, latest: running, current: null, previous: null, marks: [], goals: [], capacity: 'deep', now }), { state: 'none', drawing: true, failed: null });
+  const broken = roadmapView({ enabled: true, latest: failedRun, current: cur(), previous: null, marks: [], goals: [], capacity: 'deep', now });
+  assert.equal(broken.state === 'ready' && broken.failed, 'bad key', 'a failed redraw is said beside the plan it could not replace (invariant 13)');
+  assert.equal(roadmapChanges(r, { ...r, changed: null }), null, 'the same plan redrawn is no change');
+  assert.deepEqual(roadmapChanges(r, r), { added: [], dropped: [], note: r.changed }, 'but what it says it changed is still said');
+  assert.equal(roadmapChanges(null, r), null, 'a first plan changed nothing');
+
+  // 9. The step the plan puts first: yours, open, fitting today, this week or this month.
+  const first = roadmapFirstStep(view);
+  assert.equal(first?.step.title, 'Ask shop 2', 'the done one is skipped');
+  const aiOnly = roadmapView({ enabled: true, latest: null, current: cur({ roadmap: withAi.roadmap }), previous: null, marks: [], goals: [], capacity: 'deep', now });
+  assert.equal(roadmapFirstStep(aiOnly), null, 'handed-over work is not a thing to do now');
+
+  // 10. The move: after the drafts and whatever a person is blocking, before the planner's Moves.
+  const f0 = { sent: 0, replied: 0, won: 0 };
+  const planStep = { item: 's', title: 'Ask shop 2', milestone: 'First sale', why: 'It proves somebody pays', size: 'Under 30 min' };
+  const nowBase = { noOffer: false, callPending: false, queue: { count: 0, oldestDays: 0 }, asks: [], moves: [{ id: 'm', job: 'goal_gap', kind: 'decide', headline: 'A Move', why: [], artifact: { kind: 'text', label: 'x', value: 'y' }, cost_label: '10 min', status: 'open', created_at: ago(0) }] as never[], capacity: 'moderate' as const, funnel: f0, freshMatches: 0, planStep, hasPlan: true };
+  const stepNow = roadmapPathNow(nowBase).now;
+  assert.equal(stepNow.kind, 'step'); assert.equal(stepNow.item, 's'); assert.equal(stepNow.cta, 'Mark it done');
+  assert.equal(stepNow.why, 'Toward: First sale. It proves somebody pays');
+  assert.equal(stepNow.size, 'Under 30 min · you have 60 min');
+  assert.equal(roadmapPathNow({ ...nowBase, queue: { count: 2, oldestDays: 3 } }).now.kind, 'send', 'written drafts still go first');
+  assert.equal(roadmapPathNow({ ...nowBase, noOffer: true }).now.kind, 'step', 'with a drawn plan, a blank offer is not the move by default');
+  assert.equal(roadmapPathNow({ ...nowBase, noOffer: true, hasPlan: false, planStep: null }).now.kind, 'offer');
+  assert.equal(roadmapPathNow({ ...nowBase, planStep: null }).now.kind, 'move');
+
+  // 11. A tick is evidence; one put back is not.
+  const evs = roadmapPathEvents({ now, timezone: 'UTC', outcomes: [], focus: [], commissions: [], decisions: [], marks: [
+    { item: 'a', title: 'Ask shop 1', state: 'done', at: ago(3_600_000) },
+    { item: 'b', title: 'Pick a platform', state: 'done', at: ago(7_200_000) },
+    { item: 'b', title: 'Pick a platform', state: 'open', at: ago(3_000_000) },
+    { item: 'c', title: 'Long ago', state: 'done', at: ago(30 * 86_400_000) },
+  ] });
+  assert.deepEqual(evs.map((e) => [e.title, e.detail]), [['Ask shop 1', 'Ticked off on your plan']]);
+
+  // 12. The fortnight, said from rows, newest first; hours summed by what they were on.
+  const lines = happenedLines({
+    outcomes: [
+      { id: 'o1', kind: 'won', amount: 500, currency: '€', note: 'Paid in cash', source: 'manual', occurred_at: '2026-09-25T10:00:00Z', opportunity_id: null, commission_id: null, who: 'Casa Blanca' },
+      { id: 'o2', kind: 'no_reply', amount: null, currency: null, note: null, source: 'system', occurred_at: '2026-09-26T10:00:00Z', opportunity_id: null, commission_id: null, who: null },
+    ],
+    focus: [
+      { id: 'f1', minutes: 60, on: '2026-09-24', note: 'Reshaped app', at: '2026-09-24T20:00:00Z' },
+      { id: 'f2', minutes: 90, on: '2026-09-26', note: 'Reshaped app', at: '2026-09-26T20:00:00Z' },
+    ],
+    answered: [{ id: 'm', job: 'x', kind: 'decide', headline: 'Apply to the coordinator role', status: 'done', acted_at: '2026-09-23T09:00:00Z' }],
+    finished: [{ objective: 'Compare wholesale marketplaces', closedAt: '2026-09-22T09:00:00Z', outcome: 'Three fit' }],
+    currency: '€',
+  });
+  assert.deepEqual(lines, [
+    '2.5h logged on Reshaped app',
+    '2026-09-25: a client won (Casa Blanca) for €500 — "Paid in cash"',
+    'Did a suggestion: Apply to the coordinator role',
+    'Research finished: Compare wholesale marketplaces — Three fit',
+  ]);
+
+  // 13. The goals where the plan ends: every one, in order, with what leads to it.
+  const markers = goalMarkers([
+    { id: 'g1', title: 'Property buy and renovation', metric: 'currency', unit: '€', target_value: 60000, current_value: 1000, horizon_days: 180 },
+    { id: 'g2', title: 'Learn Spanish', metric: 'none', unit: null, target_value: null, current_value: null, horizon_days: null },
+  ], view, '$');
+  assert.deepEqual(markers.map((g) => [g.status, g.horizon, g.toward]), [
+    ['€1,000 of €60,000', 'Within 180 days, as you set it', 1],
+    [null, null, 0],
+  ], 'a reached milestone no longer leads anywhere; a goal nothing serves says so');
+
+  // 14. The night reports the plan like any other step, and a skip that is news is said.
+  assert.deepEqual(roadmapNightlyLines({ roadmap: { drawn: true, reason: 'progress' } }).filter((l) => l.step === 'roadmap').map((l) => [l.tone, l.text]), [['ok', 'Redrew your plan from what came back']]);
+  assert.deepEqual(roadmapNightlyLines({ roadmap: { skipped: 'nothing changed since the last plan' } }).filter((l) => l.step === 'roadmap').map((l) => l.text), ['Kept your plan · nothing changed since it was drawn']);
+  assert.deepEqual(roadmapNightlyLines({ roadmap: { error: 'timeout' } }).filter((l) => l.step === 'roadmap').map((l) => [l.tone, l.text]), [['broke', 'Could not redraw your plan: timeout']]);
+  assert.equal(roadmapNightlyLines({ roadmap: { skipped: 'no model set up' } }).filter((l) => l.step === 'roadmap').length, 0, 'not configured is not news');
+
+  console.log('copilot-core: drawn plan checks passed');
+}
+
+drawnPlan().catch((e) => { console.error(e); process.exit(1); });

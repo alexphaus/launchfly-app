@@ -27,7 +27,7 @@ import type { BriefOutput, BriefRunOpts, ContextPack, OpportunityAgent } from '.
 import { SYSTEM_PROMPT, extractJson, normalizeBrief, userPrompt } from './schema';
 import { isNightlyPass } from '../nightly';
 
-interface LlmConfig { apiKey: string; baseURL?: string; model: string }
+export interface LlmConfig { apiKey: string; baseURL?: string; model: string }
 
 /**
  * Deliberately conservative. 55s was chosen against a guess that the proxy
@@ -110,6 +110,26 @@ export function resolveLlmConfig(): LlmConfig | null {
     return { apiKey: process.env.DEEPSEEK_API_KEY, baseURL: 'https://api.deepseek.com', model: process.env.COPILOT_AI_MODEL || 'deepseek-chat' };
   }
   return null;
+}
+
+/**
+ * A provider for one call outside the brief, with COPILOT_AI_EXTRA_BODY merged
+ * in the same way, so a knob set for the endpoint applies to every call this
+ * app makes rather than only to the one written first.
+ */
+export function providerFor(cfg: LlmConfig) {
+  const extra = extraBody();
+  return createOpenAI({
+    apiKey: cfg.apiKey,
+    baseURL: cfg.baseURL,
+    fetch: extra
+      ? (input, init) => {
+          if (typeof init?.body !== 'string') return fetch(input, init);
+          try { return fetch(input, { ...init, body: JSON.stringify({ ...JSON.parse(init.body), ...extra }) }); }
+          catch { return fetch(input, init); }
+        }
+      : undefined,
+  });
 }
 
 export class LlmAgent implements OpportunityAgent {

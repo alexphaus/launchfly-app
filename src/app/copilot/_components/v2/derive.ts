@@ -17,6 +17,7 @@ import { matchCounts, matchFeed, matchesStatus, stageCards } from '@/lib/copilot
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
 import { pathAhead, pathHere, pathNow, planStatus, priceOf } from '@/lib/copilot/plan';
+import { SIZE_LABEL, goalMarkers, markMap, roadmapDue, roadmapFirstStep, roadmapSignature, roadmapView } from '@/lib/copilot/roadmap';
 import { weekReview } from '@/lib/copilot/review';
 import { doneForYou, needsYou, worthDoing } from '@/lib/copilot/today';
 import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
@@ -98,6 +99,7 @@ export function derive(home: HomeData) {
     // The same rows the ladder counts, so a step dated in the past is one the ladder has.
     firsts: d.firsts ?? null,
     currency,
+    marks: home.roadmap?.marks ?? [],
   };
   const ladder = pathLadder({
     offerSet: !noOffer,
@@ -105,7 +107,38 @@ export function derive(home: HomeData) {
     goal: primaryGoal ? { title: primaryGoal.title, target: primaryGoal.target_value, current: primaryGoal.current_value, money: primaryGoal.metric === 'currency', unit: primaryGoal.unit } : null,
     currency: primaryGoal?.unit || currency,
   });
-  const here = pathHere(ladder, funnel);
+  // The drawn plan, when there is one. Without a model on the server, or
+  // before the first draw lands, the funnel plan below stands in unchanged.
+  const rm = home.roadmap;
+  const plan = rm
+    ? roadmapView({ enabled: rm.enabled, latest: rm.latest, current: rm.current, previous: rm.previous, marks: rm.marks, goals: home.goals, capacity: home.profile.capacity, now })
+    : { state: 'off' as const };
+  // Whether opening the app should draw: only for what the person said since
+  // the last plan (roadmapDue), never over a read that failed.
+  const planDue = rm?.enabled && !rm.unreadable
+    ? roadmapDue({
+        latest: rm.latest, current: rm.current, now, trigger: 'open',
+        signature: roadmapSignature({
+          goals: home.goals,
+          working: home.working.filter((w) => w.status === 'live').map((w) => ({ id: w.id, body: w.body })),
+          contextCount: home.contextCount,
+          capacity: home.profile.capacity,
+          offer: home.profile.offer ?? null,
+        }),
+      })
+    : null;
+  const first = roadmapFirstStep(plan);
+  const counted = pathHere(ladder, funnel);
+  // Where you are, in the plan's words when it has some, with the counts under
+  // it only once something has been sent — "0 sent · 0 replied · 0 paid" says
+  // nothing to somebody whose path is not a sales funnel.
+  const here = plan.state === 'ready' && plan.here
+    ? { title: plan.here.title, line: plan.here.line ?? '', counts: funnel.sent > 0 ? counted.line : null }
+    // A plan on its way, and nothing sent: the funnel's "Nothing sent yet"
+    // would name a path this person may not be on. Their goal is the fact.
+    : plan.state !== 'off' && funnel.sent === 0
+    ? { title: 'At the start', line: primaryGoal ? `Toward ${primaryGoal.title}` : 'Name a goal and the plan is drawn from it', counts: null }
+    : { ...counted, counts: null };
   // The one move. What it takes from the lists below is not repeated in them.
   const move = pathNow({
     noOffer,
@@ -116,9 +149,12 @@ export function derive(home: HomeData) {
     capacity: home.profile.capacity,
     funnel,
     freshMatches: good.filter((i) => i.from === 'business' && i.fresh).length,
+    hasPlan: plan.state === 'ready',
+    planStep: first ? { item: first.step.id, title: first.step.title, milestone: first.milestone.title, why: first.milestone.why, size: SIZE_LABEL[first.step.size] } : null,
   });
   const nowMoveId = move.now.kind === 'move' ? move.now.id : null;
-  const movedWeek = pathWeek({ now, timezone: home.profile.timezone, sentAt, outcomes: home.recent.outcomes, answered: home.recent.answered });
+  const ticked = [...markMap(home.roadmap?.marks ?? []).values()].filter((m) => m.state === 'done').map((m) => m.at);
+  const movedWeek = pathWeek({ now, timezone: home.profile.timezone, sentAt, outcomes: home.recent.outcomes, answered: home.recent.answered, ticked });
   const bottleneck = d.findings.find((f) => f.kind === 'bottleneck') ?? null;
   const path = {
     ladder,
@@ -141,6 +177,9 @@ export function derive(home: HomeData) {
     }),
     week: movedWeek,
     fortnight: sentFortnight,
+    plan,
+    planDue,
+    goals: goalMarkers(home.goals, plan, currency),
     // Drafts from a blank offer are not on To send (above), so they are not waiting to be sent either.
     swap: pathSwap({ now, timezone: home.profile.timezone, focus: home.recent.focus, sentAt, outcomes: home.recent.outcomes, queueCount: noOffer ? 0 : queueCount }),
   };

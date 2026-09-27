@@ -16,6 +16,12 @@
 // either side is counted from rows, and a number the rows cannot give is said
 // to be missing rather than filled in.
 //
+// The plan below the move is drawn for the person when the server has a model
+// (PathPlan.tsx, lib/copilot/roadmap.ts): phases from this week to the next
+// few months, milestones with what makes them done, quick wins first, redrawn
+// as things work or do not. Without a model it is the funnel plan it replaced,
+// unchanged, and nothing on screen mentions a plan it cannot draw.
+//
 // The call stays the call: while it waits, it is the move, with its own card.
 // Once answered it is a receipt at the foot of the evidence, and the move is the
 // next thing — the answered card had the centre of the screen to itself before,
@@ -36,6 +42,7 @@ import type { Actions } from '../shared';
 import { CallCard, FirstRun } from '../views/NowView';
 import type { Derived } from './derive';
 import { IconAlert, IconArrow, IconCheck, IconChevron, IconFlag, IconRedraw, IconStar, IconSwap, IconYou, PathGlyph } from './icons2';
+import { AlsoThisWeek, DrawnPlanHead, GoalMarkers, IconMilestone, PhaseBlock, PlanPending } from './PathPlan';
 
 export default function PathTab({ home, d, actions, briefing, finding, openMatches }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean; finding: boolean; openMatches: (s: MatchStage) => void }) {
   const hereRef = useRef<HTMLDivElement>(null);
@@ -63,10 +70,17 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
   const showRedraw = !!redraw && (redraw.added.length > 0 || redraw.gone.length > 0);
   // A step reached since this device last showed the path, named — never numbered.
   const reached = redraw?.stepUp ? d.path.ladder.steps[redraw.stepUp.to - 2] : null;
+  const plan = d.path.plan;
+  // A step handed to the worker is known by the project it wrote, whose objective is the step's title.
+  const handed = new Set(home.commissions.filter((t) => t.commission.status !== 'stopped').map((t) => t.commission.objective));
+  useAutoDraw(home, d, actions);
 
   // A brand new account has no evidence, no plan to speak of and nothing to
-  // send; one card that says what is happening beats an empty line.
-  if (d.nothingYet && !home.decision) {
+  // send; one card that says what is happening beats an empty line. That card
+  // is about finding businesses, so it stands only where there is no plan to
+  // draw: with a model, a new account's first screen is its plan being drawn
+  // from its goals, whatever those goals are.
+  if (d.nothingYet && !home.decision && plan.state === 'off') {
     return <div className="cp2-way"><FirstRun home={home} actions={actions} finding={finding} /><Tell home={home} actions={actions} briefing={briefing} /></div>;
   }
 
@@ -79,8 +93,12 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
         {!rows.length && (
           <div className="cp2-way-row">
             <span className="cp2-way-node sm quiet"><IconCheck /></span>
-            <span className="cp2-way-t">Nothing came back in the last two weeks</span>
-            <span className="cp2-way-s">{d.path.fortnight} sent in that time. Answers, payments and results show here as they arrive.</span>
+            <span className="cp2-way-t">{d.path.fortnight || plan.state !== 'ready' ? 'Nothing came back in the last two weeks' : 'Nothing recorded in the last two weeks'}</span>
+            <span className="cp2-way-s">
+              {d.path.fortnight || plan.state !== 'ready'
+                ? `${d.path.fortnight} sent in that time. Answers, payments and results show here as they arrive.`
+                : 'Steps you tick off, hours you log, answers and payments show here as they happen.'}
+            </span>
           </div>
         )}
         {rows.map((r) => {
@@ -89,7 +107,7 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
           return <EventRow key={r.e.key} e={r.e} tz={home.profile.timezone} onOpen={open} />;
         })}
         {answered && <CallReceipt decision={answered} currency={d.currency} actions={actions} />}
-        <WeekRow d={d} />
+        <WeekRow d={d} planned={plan.state !== 'off'} />
         <Notices home={home} d={d} actions={actions} />
       </section>
 
@@ -97,7 +115,8 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
         <span className="cp2-way-node here"><IconYou /></span>
         <span className="cp2-way-eyebrow">You are here</span>
         <span className="cp2-way-heretitle">{d.path.here.title}</span>
-        <span className="cp2-way-s">{d.path.here.line}</span>
+        {d.path.here.line && <span className="cp2-way-s">{d.path.here.line}</span>}
+        {d.path.here.counts && <span className="cp2-way-s">{d.path.here.counts}</span>}
         {/* Since this device last showed the path; the step itself is in the evidence, where it happened.
             Under the fact rather than over it, so the node stays level with "You are here". */}
         {reached && <span className="cp2-way-reached"><IconStar />Reached: {REACHED[reached.key]}</span>}
@@ -119,6 +138,26 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
           </div>
         )}
 
+        {plan.state !== 'off' ? (
+          <>
+            <DrawnPlanHead view={plan} now={d.now} onRedraw={() => void actions.drawRoadmap('manual')} unreadable={home.roadmap?.unreadable ?? null} />
+            <button className="cp2-way-sized" onClick={() => actions.openSheet({ kind: 'capacity' })}>
+              Sized for <b>{cap.label}</b>, {cap.minutes} min a day. It redraws when you change that, when you tell it something, and as results come back.
+            </button>
+            {plan.state === 'none' && <PlanPending view={plan} onDraw={() => void actions.drawRoadmap('manual')} />}
+            {plan.state === 'ready'
+              ? plan.phases.map((ph) => (
+                  <PhaseBlock key={ph.key} phase={ph} actions={actions} workerConnected={home.workerConnected} handed={handed}>
+                    {ph.key === plan.phases[0].key && (
+                      <AlsoThisWeek steps={next.steps} render={(s) => <NextRow key={s.key} step={s} actions={actions} isNew={added.has(s.key)} capMinutes={cap.minutes} />} />
+                    )}
+                  </PhaseBlock>
+                ))
+              : next.steps.map((s) => <NextRow key={s.key} step={s} actions={actions} isNew={added.has(s.key)} capMinutes={cap.minutes} />)}
+            <GoalMarkers goals={d.path.goals} actions={actions} />
+          </>
+        ) : (
+        <>
         <div className="cp2-way-head"><span>The plan</span><span className="note">its best guess</span></div>
         {/* Capacity, visibly: the move's size, a milestone's days and whether a step fits are all read from it. */}
         <button className="cp2-way-sized" onClick={() => actions.openSheet({ kind: 'capacity' })}>
@@ -145,6 +184,8 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
             )}
           </StopRow>
         ))}
+        </>
+        )}
       </section>
 
       <Tell home={home} actions={actions} briefing={briefing} />
@@ -247,7 +288,7 @@ function CallReceipt({ decision, currency, actions }: { decision: Decision; curr
 }
 
 /** The week at the foot of the evidence: which days you moved it forward. Sends, answers, Moves done — never opens. */
-function WeekRow({ d }: { d: Derived }) {
+function WeekRow({ d, planned }: { d: Derived; planned: boolean }) {
   const w = d.path.week;
   return (
     <div className="cp2-way-row cp2-way-week" role="img" aria-label={`This week: moved forward on ${w.moved} of 7 days${w.streak >= 2 ? `, ${w.streak} in a row` : ''}`}>
@@ -255,7 +296,7 @@ function WeekRow({ d }: { d: Derived }) {
         {w.days.map((x) => <i key={x.day} className={`${x.moved ? 'moved' : ''} ${x.today ? 'today' : ''}`}>{x.letter}</i>)}
       </span>
       <span className="cp2-way-s">
-        {w.streak >= 2 ? `${w.streak} days in a row` : w.moved ? `Moved it forward ${w.moved} of 7 days` : 'Send something and today counts'}
+        {w.streak >= 2 ? `${w.streak} days in a row` : w.moved ? `Moved it forward ${w.moved} of 7 days` : planned ? 'Tick off a step and today counts' : 'Send something and today counts'}
       </span>
     </div>
   );
@@ -306,6 +347,7 @@ function NowCard({ now, actions, openMatches }: { now: NowMove; actions: Actions
     else if (now.kind === 'send') openMatches('to_send');
     else if (now.kind === 'find') openMatches('new');
     else if (now.kind === 'confirm') actions.openSheet({ kind: 'capture' });
+    else if (now.kind === 'step' && now.item) void actions.markRoadmap(now.item, 'done');
     else if (now.kind === 'move' && now.id) actions.openSheet({ kind: 'move', id: now.id });
     else if (now.id) actions.openSheet({ kind: 'commission', id: now.id });
   };
@@ -481,10 +523,6 @@ function StopRow({ stop, end, actions, children }: { stop: Stop; end: boolean; a
   );
 }
 
-/** A milestone ahead: a waypoint rather than a flag, which is the goal's. */
-const IconMilestone = () => (
-  <svg fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden><path d="M12 3.5 20.5 12 12 20.5 3.5 12Z" /></svg>
-);
 
 /* ─── Around it ───────────────────────────────────────────────────────────── */
 
@@ -515,7 +553,7 @@ function Tell({ home, actions, briefing }: { home: HomeData; actions: Actions; b
         placeholder="Maria replied. Burn is down to 200. I have an interview Thursday…"
       />
       <div className="bar">
-        <span className="hint">Changes tomorrow&rsquo;s call.</span>
+        <span className="hint">{home.roadmap?.enabled ? 'Redraws your plan and tomorrow’s call.' : 'Changes tomorrow’s call.'}</span>
         <button className="cp-btn" disabled={sending} onClick={() => { setOpen(false); setNote(''); }}>Cancel</button>
         <button className="cp-btn primary" disabled={sending || briefing || !note.trim()} onClick={() => void submit()}>Add &amp; re-plan</button>
       </div>
@@ -590,6 +628,25 @@ function useAway(ref: RefObject<HTMLDivElement | null>): 'up' | 'down' | null {
     };
   }, [ref]);
   return away;
+}
+
+/**
+ * Draw when opening the Path finds the person said something the plan has not
+ * heard — a goal, a note, a changed day — or there is no plan yet. Once per
+ * thing said: the key is what was due and the plan it was due against, so a
+ * draw that fails to start is not retried on every render. roadmapDue already
+ * holds off for an hour after a failed draw, and the route caps the day.
+ */
+function useAutoDraw(home: HomeData, d: Derived, actions: Actions) {
+  const asked = useRef<string | null>(null);
+  const due = d.path.planDue;
+  const key = due ? `${due}:${home.roadmap?.current?.id ?? ''}:${home.roadmap?.latest?.id ?? ''}:${home.contextCount}:${home.goals.length}` : null;
+  useEffect(() => {
+    if (!due || !key || asked.current === key) return;
+    asked.current = key;
+    void actions.drawRoadmap(due);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 }
 
 type DeviceMemory = ReturnType<typeof useDeviceMemory>;

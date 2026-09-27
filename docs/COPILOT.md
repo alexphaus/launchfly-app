@@ -312,7 +312,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 
 | Tab | The question | What is on it | Pure module |
 | --- | --- | --- | --- |
-| Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan (this week's steps with their reasons and what changed since you looked, then the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal, the goals beyond it) · the composer | `plan.ts`, `pathway.ts`, `today.ts` |
+| Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Matches | who is worth contacting, and where each one is | pills (New · To send · Waiting · Replied) · only what the ranker recommends, each card a tile, what it is and where, why, and one action · a draft sent from its own card | `matches.ts` |
 | Work | what am I building | the offer and what it knows about how you work · the path to money · the agents · projects handed over, in full (the ones that need you, the ones running, what it offers to take on, what finished) · the brief for Claude | `machine.ts` |
 | You | how is it going | money, runway, deep work, replies · the week read back · goals · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts` |
@@ -424,6 +424,66 @@ log of what already happened", in its owner's words). The rules are in `plan.ts`
   node crosses the edge, so a fling past it left the arrow pointing the way it
   came. Portalled into the frame, like the toast — a sticky element is held
   inside the list's padding, and that padding is where the floating nav is.
+
+**The plan is drawn, not walked back** (`roadmap.ts`, `agent/roadmap.ts`,
+`PathPlan.tsx`). The funnel plan above — first message, first reply, three
+paying clients, the goal — was the same ladder for everybody. It told someone
+saving for a €60,000 property renovation "11800 clients at your €5", and it
+told someone applying for jobs how many sends to their third client. Its owner's
+verdict: static, hardcoded, centric to outbound; what was wanted was a plan that
+understands the goals, puts quick wins before the long pulls, names milestones
+and the actions with leverage, and redraws as things work or do not.
+
+So a model draws it: phases (`week`, `month`, `quarter`, `later`), at most
+three milestones each, each an outcome with a `done_when` a person can check
+and at most three steps, every step sized (`quick`, `sitting`, `days`) and
+tagged (quick win, high leverage, groundwork), plus one line on why this order
+and one on what changed. The rows keep it honest, by structure rather than by
+asking nicely:
+
+- **Every number is the input's.** `unsourcedNumber` reads the plan against the
+  exact text the model was shown; a line carrying money, a percentage, a decimal
+  or any count above `SMALL_COUNT` that was not in it is dropped whole, and the
+  row records how many (`withheld`). "Send three" passes; "a 20% reply rate",
+  "€3,000 by March" and "in 45 days" do not (invariant 2). The one piece of
+  arithmetic handed over is a money goal said in clients at the person's own
+  price, so the planner can see that €5 pieces do not close a €59,000 gap.
+- **Done is a tap.** A step or milestone is done when a `roadmap_marked` event
+  says so; the model is shown the ticks and cannot write one. The newest mark
+  per item wins, so undo is another mark. A tick is evidence on the Path and
+  counts as a day moved in the week's dots.
+- **The record goes back in, the view does not.** The next draw sees the last
+  plan's titles and ids and what the person did with each — never its `here`,
+  `direction` or `why` (invariant 12). Ids are carried, by id or by title, so a
+  tick survives a redraw.
+- **`who: 'ai'` only with a worker connected** (invariant 7), and "Hand it over"
+  writes a draft commission that still needs approving.
+- **A failed draw is said beside the plan it could not replace**, and a plan
+  that never landed says why (invariant 13). The row is the record: a `running`
+  row older than `ROADMAP_STALE_MS` reads as stopped.
+
+When it is redrawn (`roadmapDue`): opening the app draws only when there is no
+plan or when what the person *said* changed — goals, the working file, a note in
+the composer, capacity, the offer (`roadmapSignature`) — and not for an hour
+after a failure. The nightly pass (step 5, "Plan", on You) also redraws when an
+outcome or a tick landed since the last plan, and once `ROADMAP_MAX_AGE_DAYS`
+have passed; otherwise it reports "Kept your plan". A tick never redraws the
+plan under the thumb that ticked it.
+
+With a plan, the move after the drafts and whatever a person is blocking is its
+first open step of the person's own that fits today (`roadmapFirstStep`), ahead
+of the planner's Moves, and one tap marks it done; a blank offer is no longer the
+move by default, because the plan decides whether selling is on this person's
+path. "You are here" is the plan's own title and line, with the send counts only
+once something was sent. The planner's Moves and projects stay, under this week,
+as "Also in motion". Every goal is shown at the end, in the person's order, with
+how many milestones lead to it — including "nothing on the plan leads here yet".
+
+Stored without a migration: the draw is a `copilot_agent_runs` row of kind
+`roadmap` (plan in `output.roadmap`, the signature in `input_summary`) and a tick
+is a `copilot_events` row of type `roadmap_marked`. With no model configured
+(`resolveLlmConfig()` null) and nothing ever drawn, the Path renders the funnel
+plan exactly as before and says nothing about a plan it cannot draw.
 
 Today's parts all have a place, so nothing it did was lost: the call is the move
 while it waits and a receipt once answered; "needs you" is the move and the chips
@@ -890,8 +950,9 @@ stops calling it. What the pass does, and what it deliberately does not do:
   `/health`'s `loop.nightlyRuns` still say whether the scheduled task exists.
   The row says when the schedule itself last ran, underneath.
 - **It reports every step.** Before each step the row's `output` is
-  `{ step }`, so the row, and a banner on every tab, can say "2 of 4 · reading
-  replies". Afterwards `output` is the `DailyResult` plus the adapter and job
+  `{ step }`, so the row, and a banner on every tab, can say "2 of 5 · reading
+  replies". The fifth step, Plan, redraws the Path's plan only when something
+  changed since it was drawn (see **The plan is drawn, not walked back**). Afterwards `output` is the `DailyResult` plus the adapter and job
   labels, and `nightlyLines()` turns it into one line per step, with a line for
   each adapter or job that broke. Skips that are by design ("not configured")
   are left out. A fallback brief is reported as broken even though a call came
@@ -1697,6 +1758,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
 | POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |
+| GET/POST | `/api/copilot/roadmap` | the Path's drawn plan: `POST { action: 'draw', reason? }` writes a `copilot_agent_runs` row of kind `roadmap`, draws in `after()` and returns 202 (or the draw in flight; 12 a day) · `POST { action: 'mark', item, state: done \| dropped \| open }` ticks a step or milestone of the current plan (`copilot_events`, `roadmap_marked`) · `GET` is the latest draw, polled while it runs |
 
 All copilot API responses are `Cache-Control: private, no-store` (rule in `next.config.ts`).
 

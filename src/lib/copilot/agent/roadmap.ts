@@ -21,7 +21,7 @@ import { oldestWaitDays } from '../triage';
 import { loadMetrics } from '../outcomes';
 import { priceOf } from '../plan';
 import {
-  MAX_FOUND, ROADMAP_SYSTEM, happenedLines, idsByTitle, parseRoadmap, previousForPrompt, roadmapDue, roadmapPrompt, roadmapSignature, sourcedFrom,
+  MAX_FOUND, ROADMAP_SYSTEM, happenedLines, idsByTitle, openIds, parseRoadmap, previousForPrompt, roadmapDue, roadmapPrompt, roadmapSignature, sourcedFrom,
   type DueReason, type RoadmapInput, type RoadmapRun,
 } from '../roadmap';
 import {
@@ -192,6 +192,7 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
       goalIds: goals.map((g) => g.id),
       aiAvailable: input.aiAvailable,
       previousIds: idsByTitle(last),
+      previousOpen: openIds(last, marks.marks),
     });
     if (!parsed) throw new Error('the model answered with no milestone that held up');
 

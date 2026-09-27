@@ -6486,3 +6486,42 @@ async function planPointsTheSearch() {
 }
 
 planPointsTheSearch().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Notes close the loop: suggested ticks, never ticks ─────────────────── */
+import { ROADMAP_SYSTEM as RM_SYSTEM, openIds, parseRoadmap as rmParseSuggest, roadmapRunFromRow as rmRow, roadmapView as rmViewSuggest, sourcedFrom as rmSrc } from '../../src/lib/copilot/roadmap';
+
+async function suggestedTicks() {
+  const step = (id: string, title: string) => ({ id, title, size: 'quick' as const, tag: 'quick_win' as const, who: 'you' as const });
+  const last = { here: null, direction: null, changed: null, phases: [{ key: 'week' as const, milestones: [{ id: 'markets', title: 'Have your next market days booked', why: null, doneWhen: null, goalId: null, steps: [step('book', 'Contact market organizers'), step('costs', 'List what each piece costs')] }] }] };
+  const at = '2026-09-26T10:00:00Z';
+  const previousOpen = openIds(last, [{ item: 'costs', title: 'List what each piece costs', state: 'done', at }]);
+  assert.deepEqual([...previousOpen].sort(), ['book', 'markets'], 'a ticked step is not open, so it cannot be suggested again');
+
+  // 1. Only ids open on the last plan and still on this one survive.
+  const raw = {
+    probably_done: ['book', 'costs', 'invented', 42, 'markets'],
+    phases: [{ key: 'week', milestones: [{ id: 'markets', title: 'Have your next market days booked', steps: [{ id: 'book', title: 'Contact market organizers' }, { id: 'costs', title: 'List what each piece costs' }] }] }],
+  };
+  const parsed = rmParseSuggest(raw, { allowed: rmSrc(''), goalIds: [], aiAvailable: false, previousOpen })!;
+  assert.deepEqual(parsed.roadmap.suggestedDone, ['book', 'markets'], 'not a ticked step, not an id nobody drew, not a number');
+  const none = rmParseSuggest({ phases: raw.phases }, { allowed: rmSrc(''), goalIds: [], aiAvailable: false, previousOpen })!;
+  assert.equal(none.roadmap.suggestedDone, undefined, 'nothing said, nothing asked');
+  assert.match(RM_SYSTEM, /probably_done/);
+  assert.match(RM_SYSTEM, /Only from their words, never from silence/);
+
+  // 2. The view asks only about what is still open, in the plan's own words.
+  const run = rmRow({ id: 'r', status: 'ok', started_at: at, finished_at: at, output: { roadmap: parsed.roadmap }, error: null, input_summary: { signature: 's' } });
+  const view = (marks: Array<{ item: string; title: string; state: 'done' | 'dropped' | 'open'; at: string }>) =>
+    rmViewSuggest({ enabled: true, latest: run, current: run, previous: null, marks, goals: [], capacity: 'moderate', now: new Date('2026-09-27T12:00:00Z') });
+  const v = view([]);
+  assert.deepEqual(v.state === 'ready' && v.suggested, [{ id: 'book', title: 'Contact market organizers' }, { id: 'markets', title: 'Have your next market days booked' }]);
+  const answered = view([{ item: 'book', title: '', state: 'done', at: '2026-09-27T11:00:00Z' }, { item: 'markets', title: '', state: 'dropped', at: '2026-09-27T11:00:00Z' }]);
+  assert.deepEqual(answered.state === 'ready' && answered.suggested, [], 'a tick or a "not for me" answers the question');
+  assert.equal(v.state === 'ready' && v.phases[0].milestones[0].steps[0].state, 'open', 'a suggestion is never itself a tick');
+  const older = rmRow({ id: 'o', status: 'ok', started_at: at, finished_at: at, output: { roadmap: { phases: raw.phases } }, error: null, input_summary: {} });
+  assert.deepEqual(older.roadmap?.suggestedDone, [], 'a plan drawn before suggestions reads as none');
+
+  console.log('copilot-core: suggested ticks checks passed');
+}
+
+suggestedTicks().catch((e) => { console.error(e); process.exit(1); });

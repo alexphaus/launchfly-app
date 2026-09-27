@@ -525,6 +525,14 @@ to score a candidate higher when reaching it serves a line of it. Nothing is
 still planned from a blank offer (invariant 1), so a plan with no offer behind
 it changes the ranking of what exists but starts no search.
 
+**What you tell it can tick, but only you tick.** A note in the composer
+redraws the plan, and the draw may name items of the last plan, still open, that
+the person's own words say are done (`probably_done` → `suggestedDone`, held to
+ids that were open and are still on the plan). The Path asks "From what you told
+it — did you finish this?" with "Yes, tick it" and "Not yet". The model never
+ticks; the answer is the person's tap (rule 2). Before this, telling the app
+"booked two markets" left the step open until somebody found it and ticked it too.
+
 Stored without a migration: the draw is a `copilot_agent_runs` row of kind
 `roadmap` (plan in `output.roadmap`, the signature in `input_summary`) and a tick
 is a `copilot_events` row of type `roadmap_marked`. With no model configured

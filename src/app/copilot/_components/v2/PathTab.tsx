@@ -140,7 +140,7 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
 
         {plan.state !== 'off' ? (
           <>
-            <DrawnPlanHead view={plan} now={d.now} onRedraw={() => void actions.drawRoadmap('manual')} unreadable={home.roadmap?.unreadable ?? null} />
+            <DrawnPlanHead view={plan} now={d.now} onRedraw={() => void actions.drawRoadmap('manual')} unreadable={home.roadmap?.unreadable ?? null} actions={actions} />
             <button className="cp2-way-sized" onClick={() => actions.openSheet({ kind: 'capacity' })}>
               Sized for <b>{cap.label}</b>, {cap.minutes} min a day. It redraws when you change that, when you tell it something, and as results come back.
             </button>

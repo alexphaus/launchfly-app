@@ -114,6 +114,13 @@ export interface Roadmap {
   /** What it changed since the last plan, and why — in its own words, marked as such on screen. */
   changed: string | null;
   phases: RoadmapPhase[];
+  /**
+   * Items of this plan that the person's own recent words say are done ("booked
+   * two markets for October"). A question, never a tick: the screen asks "Did
+   * you finish this?" and only the person's tap marks it (rule 2). Absent on
+   * plans drawn before it existed.
+   */
+  suggestedDone?: string[];
 }
 
 /* ─── What goes in ────────────────────────────────────────────────────────── */
@@ -199,10 +206,12 @@ Hard rules:
 - At most ${MAX_MILESTONES_PER_PHASE} milestones per phase and ${MAX_STEPS_PER_MILESTONE} steps per milestone. Fewer is better.
 - Plain words, second person, short. No filler, no motivation, no exclamation marks.
 
+probably_done lists the ids of steps or milestones from the last plan, still open, that their own recent words say they have already done — "booked two markets" for a step about booking markets. Only from their words, never from silence or a guess. Keep those items in the plan: the person ticks them, you do not. Empty when nothing they wrote says so.
+
 here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence on what is true now and what matters next. why is one sentence. direction is at most two sentences, under 300 characters. changed is one sentence, and null on a first plan.
 
 Return only JSON:
-{"here":{"title":"...","line":"..."},"direction":"...","changed":null,"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":null,"steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
+{"here":{"title":"...","line":"..."},"direction":"...","changed":null,"probably_done":[],"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":null,"steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
 Phase keys, in order: week, month, quarter, later.`;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -499,6 +508,8 @@ export interface ParseContext {
   aiAvailable: boolean;
   /** The last plan's ids by lower-cased title, so a model that forgot the id still carries the marks. */
   previousIds?: Map<string, string>;
+  /** The last plan's items still open, the only ones probably_done may name. */
+  previousOpen?: Set<string>;
 }
 
 export interface Parsed { roadmap: Roadmap; withheld: number }
@@ -563,8 +574,14 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
 
   const h = obj(r.here);
   const hereTitle = clean(h.title, 60, 'claim');
+  // Only ids that were open on the last plan and are on this one: a suggestion
+  // about something the person cannot see, or already ticked, asks nothing.
+  const onPlan = new Set(phases.flatMap((p) => p.milestones.flatMap((m) => [m.id, ...m.steps.map((st) => st.id)])));
+  const suggestedDone = [...new Set(arr(r.probably_done).filter((x): x is string => typeof x === 'string').map(slugId))]
+    .filter((id) => onPlan.has(id) && !!ctx.previousOpen?.has(id));
   return {
     roadmap: {
+      ...(suggestedDone.length ? { suggestedDone } : {}),
       here: hereTitle ? { title: hereTitle, line: clean(h.line, TEXT_MAX, 'claim') } : null,
       // Room for the two sentences the prompt asks for, and a little over: a
       // model that runs long loses a sentence, not half of one.
@@ -608,6 +625,7 @@ export function roadmapRunFromRow(row: Record<string, unknown>): RoadmapRun {
         direction: typeof plan.direction === 'string' ? plan.direction : null,
         changed: typeof plan.changed === 'string' ? plan.changed : null,
         phases,
+        suggestedDone: arr(plan.suggestedDone).filter((x): x is string => typeof x === 'string'),
       }
     : null;
   const unreadable = status === 'ok' && !roadmap;
@@ -742,6 +760,16 @@ export function previousForPrompt(roadmap: Roadmap | null, marks: RoadmapMark[])
   })));
 }
 
+/** The last plan's items nobody has ticked or set aside: what probably_done may name. */
+export function openIds(roadmap: Roadmap | null, marks: RoadmapMark[]): Set<string> {
+  const m = markMap(marks);
+  const ids = new Set<string>();
+  for (const p of roadmap?.phases ?? []) for (const ms of p.milestones) {
+    for (const id of [ms.id, ...ms.steps.map((st) => st.id)]) if ((m.get(id)?.state ?? 'open') === 'open') ids.add(id);
+  }
+  return ids;
+}
+
 /** Last plan's ids by title, for parseRoadmap. */
 export function idsByTitle(roadmap: Roadmap | null): Map<string, string> {
   const map = new Map<string, string>();
@@ -797,6 +825,8 @@ export type RoadmapView =
       changes: RoadmapChanges | null;
       done: number;
       total: number;
+      /** Items the person's own words say are done and nobody has ticked: asked about, one tap each. */
+      suggested: Array<{ id: string; title: string }>;
     };
 
 export interface ViewInput {
@@ -854,6 +884,12 @@ export function roadmapView(input: ViewInput): RoadmapView {
     drawing, failed,
     changes: roadmapChanges(input.previous?.roadmap ?? null, plan),
     done, total,
+    // Still open by the marks, so a tick — or a "not for me" — answers it.
+    suggested: (plan.suggestedDone ?? []).flatMap((id) => {
+      if (stateOf(id) !== 'open') return [];
+      const item = roadmapItem(plan, id);
+      return item ? [{ id, title: item.title }] : [];
+    }),
   };
 }
 

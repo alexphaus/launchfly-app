@@ -562,6 +562,13 @@ export interface ContextPack {
   /** Sourced opportunities awaiting or refreshing a rank. The agent scores these; it does not invent them. */
   candidates: Candidate[];
   /**
+   * What the person's drawn plan is working on this week and this month
+   * (planFocus): milestone titles and unticked steps, never the plan's
+   * reasoning. So a candidate is ranked against where the person is going, not
+   * only against the offer. Empty with no plan; absent on an older pack.
+   */
+  plan?: string[];
+  /**
    * What prospects actually wrote back, in their own words. The most valuable
    * text this system holds and for months the only text it threw away:
    * reconcileReplies matched inbound WhatsApp messages by phone and selected

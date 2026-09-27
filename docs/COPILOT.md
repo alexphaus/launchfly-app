@@ -514,6 +514,17 @@ no column needed), and a tick that did not save is said in the toast. The plan
 is shown what the checks found (open Moves, proposals excepted, since a model
 wrote those), so it can plan around a client waiting or money owed.
 
+**The plan points the searching.** What finds matches and what ranks them were
+never told where the person is going, so they looked for buyers of the offer
+while Alex's plan said "a job offer" and Maria's said "market days booked".
+`planFocus` — the open milestones this week and this month with their unticked
+steps, titles only — now goes to the search planner (`planPrompt`, whose system
+text puts the plan first: an organiser for market days, an employer for a job)
+and into the brief's pack as `plan`, with a `PLAN:` section telling the ranker
+to score a candidate higher when reaching it serves a line of it. Nothing is
+still planned from a blank offer (invariant 1), so a plan with no offer behind
+it changes the ranking of what exists but starts no search.
+
 Stored without a migration: the draw is a `copilot_agent_runs` row of kind
 `roadmap` (plan in `output.roadmap`, the signature in `input_summary`) and a tick
 is a `copilot_events` row of type `roadmap_marked`. With no model configured

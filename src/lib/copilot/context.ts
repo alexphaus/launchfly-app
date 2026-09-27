@@ -11,7 +11,8 @@ import { copilotDb, todayIso } from './db';
 import { changesSince, movedBy, snapshotOf } from './decision';
 import { openingTrend } from './diagnose';
 import { loadMetrics } from './outcomes';
-import { getProfile, loadConversations, loadDecisions, loadOpeningRows, loadWorking, previousSnapshot, typeAffinityFor } from './store';
+import { planFocus } from './roadmap';
+import { getProfile, loadConversations, loadDecisions, loadOpeningRows, loadRoadmapMarks, loadRoadmapRuns, loadWorking, previousSnapshot, typeAffinityFor } from './store';
 import { workingBrief } from './working';
 import type { Action, Candidate, ContextItem, ContextPack, ContextSource, Goal, Opportunity, PackOpening } from './types';
 
@@ -27,7 +28,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
   if (!profile) throw new Error('profile not found');
 
   const today = todayIso(profile.timezone);
-  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent, conversations, openingRows, workingRows] = await Promise.all([
+  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent, conversations, openingRows, workingRows, roadmapRuns, roadmapMarks] = await Promise.all([
     db.from('copilot_goals').select('title, metric, unit, target_value, current_value, horizon_days, priority, note').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_context_items').select('source, kind, content, created_at, weight').eq('profile_id', profileId).order('created_at', { ascending: false }).limit(MAX_CONTEXT_ITEMS).then((r) => (r.data ?? []) as ContextItem[]),
     db.from('copilot_context_sources').select('source_key, status, last_synced_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as ContextSource[]),
@@ -45,7 +46,14 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
     loadConversations(profileId),
     loadOpeningRows(profileId),
     loadWorking(profileId),
+    loadRoadmapRuns(profileId),
+    loadRoadmapMarks(profileId),
   ]);
+
+  // The plan's open milestones, for ranking against where the person is going.
+  // A plan that cannot be read is no plan here: ranking falls back to the offer
+  // and goals, as it did before plans, and the Path already says it failed.
+  const plan = roadmapRuns.unreadable || roadmapMarks.unreadable ? [] : planFocus(roadmapRuns.current?.roadmap ?? null, roadmapMarks.marks);
 
   const pick = (s: Opportunity['status']) => opps.filter((o) => o.status === s).map((o) => ({ type: o.type, title: o.title }));
 
@@ -95,6 +103,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
     recentDecisions: recent.map((d) => ({ for_date: d.for_date, headline: d.headline, topic: d.topic, response: d.response, moved: movedBy(d) })),
     typeAffinity: affinity,
     candidates,
+    plan,
     replies: conversations.replies,
     sent: conversations.sent,
     openings,

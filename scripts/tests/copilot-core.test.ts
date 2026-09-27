@@ -6441,3 +6441,48 @@ async function onePlanner() {
 }
 
 onePlanner().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The plan points the search and the ranking ─────────────────────────── */
+import { MAX_FOCUS, planFocus } from '../../src/lib/copilot/roadmap';
+import { PLAN_SYSTEM as HUNT_SYSTEM, planPrompt as huntPlanPrompt } from '../../src/lib/copilot/hunts';
+import { SYSTEM_PROMPT as BRIEF_SYSTEM } from '../../src/lib/copilot/agent/schema';
+
+async function planPointsTheSearch() {
+  const step = (id: string, title: string) => ({ id, title, size: 'quick' as const, tag: 'quick_win' as const, who: 'you' as const });
+  const ms = (id: string, title: string, steps: ReturnType<typeof step>[] = []) => ({ id, title, why: 'A reason the model wrote', doneWhen: null, goalId: null, steps });
+  const roadmap = {
+    here: null, direction: 'Its reasoning', changed: null,
+    phases: [
+      { key: 'week' as const, milestones: [ms('markets', 'Have your next market days booked', [step('book', 'Contact market organizers'), step('list', 'List three markets')]), ms('margin', 'Know what each piece earns')] },
+      { key: 'month' as const, milestones: [ms('earn', 'Earn more per market day')] },
+      { key: 'quarter' as const, milestones: [ms('between', 'Sell between market days')] },
+    ],
+  };
+
+  // 1. Open milestones this week and this month, with the unticked steps: titles only.
+  const at = '2026-09-27T10:00:00Z';
+  const focus = planFocus(roadmap, [{ item: 'list', title: '', state: 'done', at }, { item: 'margin', title: '', state: 'done', at }]);
+  assert.deepEqual(focus, [
+    'This week: Have your next market days booked — next: Contact market organizers',
+    'This month: Earn more per market day',
+  ], 'ticked steps and reached milestones are not searched for; the quarter is too far out to search for yet');
+  assert.ok(!focus.join(' ').includes('reason') && !focus.join(' ').includes('reasoning'), 'never the plan’s reasons (roadmap.ts rule 3)');
+  assert.deepEqual(planFocus(null, []), []);
+  const many = { ...roadmap, phases: [{ key: 'week' as const, milestones: Array.from({ length: 10 }, (_, i) => ms(`m${i}`, `M${i}`)) }] };
+  assert.equal(planFocus(many, []).length, MAX_FOCUS);
+
+  // 2. The search planner is told what the plan is working on, and to look for who it needs.
+  const prompt = huntPlanPrompt({ offer: { sells: 'Stainless steel jewellery', for_who: 'market shoppers' }, area: 'Valencia, Spain', working: '', goals: ['Property buy and renovation'], existing: [], plan: focus });
+  assert.match(prompt, /What their plan is working on now:\n- This week: Have your next market days booked/);
+  assert.ok(!huntPlanPrompt({ offer: { sells: 'x' }, area: null, working: '', goals: [], existing: [] }).includes('plan is working on'), 'no plan, no section');
+  assert.match(HUNT_SYSTEM, /Their plan comes first/);
+  assert.match(HUNT_SYSTEM, /market organiser for "market days booked"/);
+
+  // 3. The ranker reads the plan too, and is told what it is and is not.
+  assert.ok(BRIEF_SYSTEM.includes('PLAN:'), 'a field the prompt never names is a field the model ignores');
+  assert.match(BRIEF_SYSTEM, /Never add to it and never describe it as done/);
+
+  console.log('copilot-core: plan points the search checks passed');
+}
+
+planPointsTheSearch().catch((e) => { console.error(e); process.exit(1); });

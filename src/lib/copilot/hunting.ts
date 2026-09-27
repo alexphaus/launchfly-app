@@ -5,8 +5,8 @@
 // anybody has to take: the first run with an offer plans its searches, and
 // every run after keeps them honest — a search that keeps bringing in what
 // nobody drafts, or brings in nothing, is retired and replaced (spentHunts).
-// The plan is read from the offer, the working file, the goals and where the
-// user is; the model is asked when there is one and the time to ask it, and
+// The plan is read from the offer, the working file, the goals, what the
+// person's drawn plan is working on now, and where the user is; the model is asked when there is one and the time to ask it, and
 // otherwise the buyers the user named become the searches, as they wrote them.
 //
 // Nothing is planned from a blank offer (invariant 1). A failure to plan or to
@@ -24,7 +24,8 @@ import {
   type Hunt, type HuntPlanItem,
 } from './hunts';
 import { offerIsEmpty } from './offer';
-import { insertPlannedHunts, loadHuntYield, loadHunts, loadWorking, logEvent, retireHunts } from './store';
+import { planFocus } from './roadmap';
+import { insertPlannedHunts, loadHuntYield, loadHunts, loadRoadmapMarks, loadRoadmapRuns, loadWorking, logEvent, retireHunts } from './store';
 import type { Profile } from './types';
 import { workingBrief } from './working';
 
@@ -86,10 +87,15 @@ async function planFor(profile: Profile, existing: string[], need: number, deadl
     });
     const working = workingBrief(await loadWorking(profile.id).catch(() => []));
     const { data: goalRows } = await copilotDb().from('copilot_goals').select('title').eq('profile_id', profile.id).eq('status', 'active').order('priority').limit(3);
+    // Where the person's plan is going this week and this month, so a search
+    // finds who the plan needs (an organiser, an employer) and not only buyers
+    // of the offer. Unreadable is no plan: the offer and goals still plan it.
+    const [runs, marks] = await Promise.all([loadRoadmapRuns(profile.id), loadRoadmapMarks(profile.id)]);
+    const plan = runs.unreadable || marks.unreadable ? [] : planFocus(runs.current?.roadmap ?? null, marks.marks);
     const { text } = await generateText({
       model: provider(cfg.model),
       system: PLAN_SYSTEM,
-      prompt: planPrompt({ offer: profile.offer, area, working, goals: ((goalRows ?? []) as Array<{ title: string }>).map((g) => g.title), existing }),
+      prompt: planPrompt({ offer: profile.offer, area, working, goals: ((goalRows ?? []) as Array<{ title: string }>).map((g) => g.title), existing, plan }),
       temperature: 0.4,
       maxRetries: 0,
       maxOutputTokens: maxOutputTokens() ?? 700,

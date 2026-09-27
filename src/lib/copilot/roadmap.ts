@@ -1008,3 +1008,36 @@ export function stepForCall(roadmap: Roadmap | null, headline: string): { id: st
   }
   return null;
 }
+
+/* ─── What the plan is working on, for the rest of the app ─────────────────── */
+
+/** Lines of plan the ranker and the search planner are shown, at most. */
+export const MAX_FOCUS = 6;
+
+/**
+ * The plan's open milestones this week and this month, with the steps not yet
+ * ticked, one line each: "This week: Have your next market days booked — next:
+ * Contact market organizers and confirm your next stall dates".
+ *
+ * What finds matches and what ranks them were never told where the person is
+ * going, so they kept looking for buyers of the offer while Alex's plan said
+ * "a job offer" and Maria's said "market days booked". This hands them the
+ * plan's words — titles the person sees and ticks, never its reasons (rule 3) —
+ * so the searching serves the plan the person is following.
+ */
+export function planFocus(roadmap: Roadmap | null, marks: RoadmapMark[]): string[] {
+  if (!roadmap) return [];
+  const m = markMap(marks);
+  const open = (id: string) => (m.get(id)?.state ?? 'open') === 'open';
+  const lines: string[] = [];
+  for (const p of roadmap.phases) {
+    if (p.key !== 'week' && p.key !== 'month') continue;
+    for (const ms of p.milestones) {
+      if (!open(ms.id)) continue;
+      const next = ms.steps.filter((st) => open(st.id)).map((st) => st.title);
+      lines.push(`${PHASE_LABEL[p.key]}: ${ms.title}${next.length ? ` — next: ${next.join('; ')}` : ''}`);
+      if (lines.length >= MAX_FOCUS) return lines;
+    }
+  }
+  return lines;
+}

@@ -41,6 +41,8 @@ try {
   const moves = runs.reduce((n, r) => n + (r.moves ?? 0), 0);
   console.log(`copilot-cron: ${res.status} in ${took}s — ${ok}/${runs.length} profiles ok${moves ? `, ${moves} new moves` : ''}${body.skipped ? `, ${body.skipped} skipped` : ''}`);
   for (const r of runs.filter((r) => !r.ok)) console.error(`  failed ${r.id}: ${r.error ?? 'unknown'}`);
+  // Ran, but the account's screen cannot show it: its nightly row was not written.
+  for (const r of runs.filter((r) => r.ok && r.unrecorded)) console.error(`  ${r.id}: ran, but its row was not written — ${r.unrecorded}`);
   if (runs.length && ok === 0) process.exit(1);
 } catch (e) {
   console.error(`copilot-cron: could not reach ${url} after ${((Date.now() - started) / 1000).toFixed(1)}s —`, e instanceof Error ? e.message : e);

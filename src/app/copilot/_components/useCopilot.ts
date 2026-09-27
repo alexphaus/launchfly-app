@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActionStatus, Capacity, Channel, Goal, HomeData, Offer, OpportunityStatus, SourceKey } from '@/lib/copilot/types';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { AskAnswer } from '@/lib/copilot/ask';
+import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/lib/copilot/nightly';
 import { api, del, get, post } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
@@ -46,6 +47,14 @@ export function sheetKey(s: SheetState): string {
 
 /** The paid finders by name, for a toast that says which one failed; the rest are feeds. */
 const FINDER_NAME: Record<string, string> = { web: 'the web', google_maps: 'Google Maps' };
+
+/**
+ * How often a running nightly pass is checked on. It takes minutes, so this
+ * is about the step label keeping up, not about catching the end sooner.
+ */
+const NIGHTLY_POLL_MS = 4_000;
+/** Consecutive failed checks before saying so. One is a blip; three is the connection. */
+const NIGHTLY_MISSES = 3;
 
 export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: CopilotConfig<T>) {
   const shell = useShell();
@@ -132,6 +141,63 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     finally { setFinding(false); }
   }, [say]);
 
+  // "Run again": tonight's pass, now. The route only starts it, since the pass
+  // runs for minutes after the response, so this just shows it has begun. The
+  // effect below watches it and reloads when it ends.
+  const runNightly = useCallback(async () => {
+    try {
+      const r = await post<{ run: NightlyRun; already?: boolean }>('/nightly');
+      setHome((h) => ({ ...h, nightly: { run: r.run, unreadable: null } }));
+      say(r.already
+        ? 'Already running. The result lands under You when it ends.'
+        : 'Running tonight’s pass now. It takes a few minutes, and you can leave the app.');
+    } catch (e) { say(e instanceof Error ? e.message : 'Could not start the run'); }
+  }, [say]);
+
+  // While a pass is in flight, whoever started it (this tap, another device, or
+  // the schedule), follow it: update the step as it moves, and when it ends,
+  // reload everything it changed and say what came back. Keyed on the run id,
+  // so a newer run replaces the one being watched rather than racing it.
+  const liveNightly = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? home.nightly.run.id : null;
+  useEffect(() => {
+    if (!liveNightly) return;
+    let over = false;
+    let misses = 0;
+    const tick = async () => {
+      let run: NightlyRun | null;
+      try {
+        run = (await get<{ run: NightlyRun | null }>('/nightly')).run;
+        misses = 0;
+      } catch (e) {
+        // Said once, not swallowed: a screen that cannot reach the server would
+        // otherwise read "Running" for as long as the connection is down.
+        misses += 1;
+        if (misses === NIGHTLY_MISSES) say(`Cannot check on the run: ${e instanceof Error ? e.message : 'no connection'}. Still trying.`);
+        return;
+      }
+      if (over) return;
+      if (run && nightlyInFlight(run, new Date())) {
+        setHome((h) => ({ ...h, nightly: { run, unreadable: null } }));
+        return;
+      }
+      // Ended: done, failed, or stopped without finishing. Stop first, so a
+      // slow reload cannot overlap the next tick.
+      over = true;
+      clearInterval(timer);
+      const said = nightlyToast(nightlyView(run, new Date()));
+      try {
+        await refresh();
+      } catch {
+        setHome((h) => ({ ...h, nightly: { run, unreadable: null } }));
+        say('The run ended, but this screen could not reload. Reopen the app to see what it found.');
+        return;
+      }
+      if (said) say(said);
+    };
+    const timer = setInterval(() => { void tick(); }, NIGHTLY_POLL_MS);
+    return () => { over = true; clearInterval(timer); };
+  }, [liveNightly, refresh, say]);
+
   // First open. A brand new account has nothing to look at, so the first thing
   // the app does is go and find some — the supply route runs the brief too, so
   // this replaces the daily brief rather than racing it. One or the other,
@@ -177,6 +243,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     closeSheet,
     setTab,
     runBrief,
+    runNightly,
     async addNote(content, regenerate) {
       try {
         if (regenerate) setBriefing(true);

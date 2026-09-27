@@ -89,6 +89,9 @@ export interface Actions {
   /** Each shell maps the names it knows onto its own tabs and ignores the rest. */
   setTab(t: Tab | Tab2): void;
   runBrief(reason?: string): Promise<void>;
+  /** Tonight's whole pass, now: the cron's own code path for this account. It
+   *  resolves once the pass has started; the result arrives minutes later. */
+  runNightly(): Promise<void>;
   /** Resolves false when the save failed, so callers can keep the user's text. */
   addNote(content: string, regenerate: boolean): Promise<boolean>;
   setOppStatus(id: string, status: OpportunityStatus): Promise<void>;

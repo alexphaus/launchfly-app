@@ -11,6 +11,7 @@ import type { WatchSourceKind } from './watch/catalogue';
 import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
+import type { NightlyRun } from './nightly';
 import type { PipelineStage } from './pipeline';
 import type { SourceYield } from './watch/yield';
 import type { WorkingEntry } from './working';
@@ -462,6 +463,13 @@ export interface HomeData {
    * exactly like a quiet week — so the app now says so.
    */
   lastCronRun: string | null;
+  /**
+   * The last whole nightly pass, whether the schedule or "Run again" started
+   * it: which step it is on, or what each step did and what broke. Optional
+   * because a payload cached before this field existed has to render too.
+   * `unreadable` is the read's failure, kept apart from "never run".
+   */
+  nightly?: { run: NightlyRun | null; unreadable: string | null };
   metrics: Metrics;
   /**
    * The last fortnight read back: outcomes logged, Moves answered, deep work

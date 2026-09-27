@@ -26,6 +26,7 @@
 // is new. Both can be installed and lived with; the one that gets opened wins.
 import { useState } from 'react';
 import type { MatchStage } from '@/lib/copilot/matches';
+import { nightlyInFlight, nightlyView } from '@/lib/copilot/nightly';
 import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { greeting } from '../format';
 import Sheet from '../Sheet';
@@ -59,6 +60,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     useCopilot<Tab2>(initial, { initialTab: 'path', alias: ALIAS });
   const d = useDerived(home);
   const status = d.status[tab];
+  const nightly = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? nightlyView(home.nightly.run, new Date()) : null;
   // Which pill Matches shows. Held here so the Path can open it on the right one:
   // "send the drafts" lands on To send, in context, rather than in a sheet.
   const [matchStage, setMatchStage] = useState<MatchStage>('new');
@@ -80,11 +82,15 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
       </header>
 
       <main className="cp-content" ref={mainRef}>
-        {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
+        {/* The nightly pass runs for minutes after its tap has returned, so it is
+            said on every tab, not only on the row that started it. */}
+        {nightly?.state === 'running'
+          ? <div className="cp-banner"><span className="dot" />Nightly run · {nightly.stepN ? `${nightly.stepN} of ${nightly.of} · ` : ''}{nightly.doing}</div>
+          : (briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
         {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
         {tab === 'matches' && <MatchesTab home={home} d={d} actions={actions} finding={finding} stage={matchStage} onStage={setMatchStage} />}
         {tab === 'work' && <WorkTab home={home} d={d} actions={actions} briefing={briefing} />}
-        {tab === 'you' && <YouTab home={home} d={d} actions={actions} briefing={briefing} />}
+        {tab === 'you' && <YouTab home={home} d={d} actions={actions} />}
       </main>
 
       <nav className="cp-nav cp2-nav" aria-label="Sections">

@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 45 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 46 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -85,6 +85,13 @@ Set it up as a Coolify **Scheduled Task** running `node scripts/copilot-cron.mjs
 on `0 21 * * *`. That executes inside the container, so it reaches the app on
 localhost and bypasses Traefik entirely — the proxy timeout does not apply to
 the cron. The route accepts either `CRON_SECRET` or `COPILOT_CRON_SECRET`.
+
+To see what the pass does without waiting for 21:00, use You → Nightly run →
+**Run again** in `/copilot2`. It runs the cron's own code path (`runNightlyPass`)
+for your account and reports each step on that row. It records
+`reason = 'nightly_now'`, never `cron`, so it cannot make a schedule that never
+fires look alive. Each pass, from either caller, is a `copilot_agent_runs` row
+with `kind = 'nightly'`.
 
 To find out what is actually missing rather than guessing, paste
 `scripts/sql/copilot-schema-check.sql` into the Supabase SQL editor: every row

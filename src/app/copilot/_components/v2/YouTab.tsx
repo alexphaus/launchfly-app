@@ -10,9 +10,11 @@
 // counting. What this tab does instead is ask the three questions a person
 // actually has about a week, and answer each with the rows behind it. See
 // lib/copilot/review.ts.
+import { useEffect, useState } from 'react';
 import { PLANS } from '@/lib/copilot/plans';
 import { hoursLabel } from '@/lib/copilot/focus';
 import { agoLabel } from '@/lib/copilot/machine';
+import { nightlyInFlight, nightlyView, type NightlyLine } from '@/lib/copilot/nightly';
 import type { ReviewLine, ReviewTarget } from '@/lib/copilot/review';
 import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { goalProgress, money } from '../format';
@@ -21,13 +23,13 @@ import { useShell } from '../shell';
 import type { Derived } from './derive';
 import { IconAlert, IconCheck, IconChevron } from './icons2';
 
-export default function YouTab({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
+export default function YouTab({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
   return (
     <>
       <Numbers home={home} d={d} actions={actions} />
       <Week home={home} d={d} actions={actions} />
       <Goals home={home} actions={actions} />
-      <Settings home={home} d={d} actions={actions} briefing={briefing} />
+      <Settings home={home} d={d} actions={actions} />
     </>
   );
 }
@@ -193,7 +195,7 @@ function Goals({ home, actions }: { home: HomeData; actions: Actions }) {
 
 /* ─── Settings ────────────────────────────────────────────────────────────── */
 
-function Settings({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
+function Settings({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
   const shell = useShell();
   const p = home.profile;
   const b = home.billing;
@@ -226,13 +228,7 @@ function Settings({ home, d, actions, briefing }: { home: HomeData; d: Derived; 
             <IconChevron />
           </button>
         ))}
-        <div className="cp2-row">
-          <span className="cp2-row-main">
-            <span className="t">Today&rsquo;s call</span>
-            <span className="s">{home.lastRun ? `${home.lastRun.status === 'error' ? 'Last run failed' : 'Last weighed'} ${home.lastRun.finished_at ? agoLabel(home.lastRun.finished_at, d.now) : ''}` : 'Not weighed yet'}</span>
-          </span>
-          <button className="cp-connect ghost" disabled={briefing} onClick={() => void actions.runBrief('manual')}>{briefing ? 'Running' : 'Run again'}</button>
-        </div>
+        <NightlyRow home={home} d={d} actions={actions} />
         {/* The way back. Two layouts over one app, and neither is the real one
             until one of them is the one that gets opened. */}
         <a className="cp2-row" href="/lifeos">
@@ -250,5 +246,105 @@ function Settings({ home, d, actions, briefing }: { home: HomeData; d: Derived; 
           : 'Drafts open pre-filled in your own WhatsApp or mail app, so messages come from you, not from this server.'}
       </p>
     </>
+  );
+}
+
+/* ─── The nightly run ─────────────────────────────────────────────────────── */
+
+const MARK: Record<NightlyLine['tone'], string> = { ok: '✓', note: '·', broke: '✕' };
+/** Said aloud before the line, because the mark and its colour are not. */
+const SPOKEN: Record<NightlyLine['tone'], string> = { ok: '', note: 'Note: ', broke: 'Failed: ' };
+
+/** A clock for the elapsed time while a pass runs. Starts from the data's own time, so the first render matches the server's. */
+function useNow(start: Date, everyMs: number | null): Date {
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    if (!everyMs) return;
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), everyMs);
+    return () => clearInterval(t);
+  }, [everyMs]);
+  return now;
+}
+
+/**
+ * "Run again" runs the night, and this row is where it reports.
+ *
+ * It was "Today's call · Run again", which re-ran the brief alone. Testing what
+ * the night does then meant waiting for a night. Now the button starts the
+ * cron's own pass for this account (Scout, replies, checks, call), the row
+ * follows it step by step, and afterwards it keeps what each step did and
+ * what broke, since that is what the test is for.
+ *
+ * The scheduled run's own time is said separately, underneath. Pressing the
+ * button does not count as the schedule, and a schedule that never fires is
+ * the thing most worth noticing here.
+ */
+function NightlyRow({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+  const [starting, setStarting] = useState(false);
+  const run = home.nightly?.run ?? null;
+  // One clock for the whole row: whether it is live, how long it has run, and
+  // how long ago it ended all read the same instant.
+  const now = useNow(d.now, run?.status === 'running' ? 1_000 : 30_000);
+  const live = nightlyInFlight(run, now);
+  const view = nightlyView(run, now);
+  const busy = starting || live;
+
+  const start = async () => {
+    setStarting(true);
+    try { await actions.runNightly(); } finally { setStarting(false); }
+  };
+
+  // "3m 10s" is one reading, and a line break inside it makes two.
+  const nb = (x: string) => x.replace(/ /g, '\u00a0');
+  const sub = home.nightly?.unreadable
+    ? `Could not read the last run: ${home.nightly.unreadable}`
+    : view.state === 'never' ? 'Does now what runs overnight: finds matches, reads replies, runs the checks, picks the call'
+    : view.state === 'running' ? [
+      view.by === 'schedule' ? 'Running on schedule' : 'Running',
+      view.stepN ? `${view.stepN} of ${view.of}` : null,
+      view.doing,
+      nb(view.elapsed),
+    ].filter(Boolean).join(' · ')
+    : view.state === 'stopped' ? `${view.line} Started ${view.startedAgo}.`
+    : view.state === 'failed' ? `Failed ${view.ago}: ${view.line}`
+    : `Ran ${view.ago}${view.by === 'schedule' ? ' on schedule' : ''}${view.took ? ` · took ${nb(view.took)}` : ''}`;
+  const bad = !!home.nightly?.unreadable || view.state === 'failed' || view.state === 'stopped';
+  // Said when the last pass was not the schedule's own. When it was, the row
+  // above already says "on schedule", and saying it twice is noise.
+  const lastBySchedule = (view.state === 'done' || view.state === 'running' || view.state === 'failed' || view.state === 'stopped') && view.by === 'schedule';
+
+  return (
+    <div className="cp2-row cp2-nightly">
+      <div className="cp2-nightly-head">
+        <span className="cp2-row-main">
+          <span className="t">Nightly run</span>
+          <span className={`s${bad ? ' bad' : ''}`}>{sub}</span>
+        </span>
+        <button className="cp-connect ghost" disabled={busy} onClick={() => void start()}>{busy ? 'Running' : 'Run again'}</button>
+      </div>
+      {view.state === 'running' && (
+        <div className="cp2-nightly-track" role="progressbar" aria-label="Nightly run progress" aria-valuemin={0} aria-valuemax={view.of} aria-valuenow={view.stepN}>
+          <i style={{ width: `${Math.max(6, ((view.stepN - 0.5) / view.of) * 100)}%` }} />
+        </div>
+      )}
+      {view.state === 'done' && view.lines.length > 0 && (
+        <ul className="cp2-nightly-lines">
+          {view.lines.map((l, i) => (
+            <li key={i} className={l.tone}>
+              <span className="cp2-nightly-mark" aria-hidden>{MARK[l.tone]}</span>
+              <span className="cp2-nightly-text"><b>{SPOKEN[l.tone] && <span className="cp2-nightly-spoken">{SPOKEN[l.tone]}</span>}{l.name}</b> {l.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!lastBySchedule && (
+        <p className="cp2-nightly-sched">
+          {home.lastCronRun
+            ? `The schedule last ran ${agoLabel(home.lastCronRun, now)}.`
+            : 'The schedule has not run for this account yet. Running it here does not count as the schedule.'}
+        </p>
+      )}
+    </div>
   );
 }

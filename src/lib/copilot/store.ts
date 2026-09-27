@@ -45,6 +45,7 @@ import { hasSubscription, vapidPublicKey } from './push';
 import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans';
 import { computeOutcomeAffinity, rankOpportunities, selectPlan } from './ranking';
 import { getUsage, periodKey } from './usage';
+import { NIGHTLY_COLUMNS, nightlyFromRow, type NightlyOutput, type NightlyRun, type NightlyStep } from './nightly';
 
 export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
@@ -668,7 +669,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -707,6 +708,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadCommissions(profileId),
     loadRecentRows(profileId),
     loadHunting(profileId),
+    loadLastNightly(profileId),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -947,6 +949,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
       && remaining(effectivePlan(profile).limits.matchesPerMonth, usage.matches) > 0,
     lastRun,
     lastCronRun,
+    nightly,
     metrics,
     recent,
     hunting,
@@ -1293,6 +1296,45 @@ export async function loadSilence(profileId: string, now = new Date()): Promise<
       sentAt: r.sent_at,
       replied: repliedIds.has(r.id),
     }));
+}
+
+/**
+ * The nightly pass's own row: one per pass, whoever started it, so the screen
+ * can say what the last night did without reading four tables. The kind is new,
+ * but the column is free text, so this needs no migration.
+ */
+export async function startNightlyRun(profileId: string, reason: string): Promise<{ run: NightlyRun } | { error: string }> {
+  const { data, error } = await copilotDb().from('copilot_agent_runs')
+    .insert({ profile_id: profileId, kind: 'nightly', agent: 'pass', input_summary: { reason } })
+    .select(NIGHTLY_COLUMNS).single();
+  if (error || !data) return { error: error ? describeDbError(error) : 'the run row did not come back' };
+  return { run: nightlyFromRow(data as Record<string, unknown>) };
+}
+
+/** Where a running pass is. Returns the failure rather than throwing: progress is not worth stopping the pass for. */
+export async function markNightlyStep(runId: string, step: NightlyStep): Promise<string | null> {
+  const { error } = await copilotDb().from('copilot_agent_runs').update({ output: { step } }).eq('id', runId).eq('status', 'running');
+  return error ? describeDbError(error) : null;
+}
+
+export async function finishNightlyRun(runId: string, fin: { status: 'ok' | 'error'; output?: NightlyOutput | null; error?: string | null }): Promise<string | null> {
+  const { error } = await copilotDb().from('copilot_agent_runs')
+    .update({ status: fin.status, output: fin.output ?? null, error: fin.error ?? null, finished_at: new Date().toISOString() })
+    .eq('id', runId);
+  return error ? describeDbError(error) : null;
+}
+
+/**
+ * The latest pass. A read that fails returns its reason instead of null,
+ * because null means "never run", and a row that says so about an account
+ * that ran last night is the calm-screen failure again.
+ */
+export async function loadLastNightly(profileId: string): Promise<{ run: NightlyRun | null; unreadable: string | null }> {
+  const { data, error } = await copilotDb().from('copilot_agent_runs').select(NIGHTLY_COLUMNS)
+    .eq('profile_id', profileId).eq('kind', 'nightly')
+    .order('started_at', { ascending: false }).limit(1).maybeSingle();
+  if (error) return { run: null, unreadable: describeDbError(error) };
+  return { run: data ? nightlyFromRow(data as Record<string, unknown>) : null, unreadable: null };
 }
 
 /**

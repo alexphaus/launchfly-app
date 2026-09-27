@@ -25,6 +25,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { generateText } from 'ai';
 import type { BriefOutput, BriefRunOpts, ContextPack, OpportunityAgent } from '../types';
 import { SYSTEM_PROMPT, extractJson, normalizeBrief, userPrompt } from './schema';
+import { isNightlyPass } from '../nightly';
 
 interface LlmConfig { apiKey: string; baseURL?: string; model: string }
 
@@ -72,9 +73,11 @@ export function cronTimeoutMs(): number {
 }
 
 /** What the caller can afford to wait, by why the brief is being run. Only the
- *  cron escapes the proxy; every other reason is a tap behind one. */
+ *  nightly pass escapes the proxy: the cron runs inside the container, and
+ *  "Run again" runs it in `after()`, once the response has already gone. Every
+ *  other reason is a tap waiting behind Traefik. */
 export function budgetForReason(reason: string): number {
-  return reason === 'cron' ? cronTimeoutMs() : timeoutMs();
+  return isNightlyPass(reason) ? cronTimeoutMs() : timeoutMs();
 }
 
 export function maxOutputTokens(): number | undefined {

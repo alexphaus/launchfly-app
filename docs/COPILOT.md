@@ -168,10 +168,11 @@ three were:
   interrupting someone for. A count of nudges is not a reason to pick up a
   phone; "send the 7 drafts already written" is.
 
-So: **one notification a day, from the cron only, carrying the call.** It falls
-back to the top urgent nudge when there is no decision, and stays silent when
-there is neither. `notifyPayload()` holds the rule and is pure, so the gates are
-tested without a push service. `DailyResult.brief.pushed` reports how many
+So: **one notification a day, from the nightly pass only, carrying the call.**
+The nightly pass is the cron, or "Run again" on You, which starts the same pass
+early (see **Running the night now**). With no decision it stays silent. The
+urgent-nudge fallback went with the nudges. `notifyPayload()` holds the rule
+and is pure, so the gates are tested without a push service. `DailyResult.brief.pushed` reports how many
 devices it reached, which is how you tell from outside whether push is working
 at all.
 
@@ -314,7 +315,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan (this week's steps with their reasons and what changed since you looked, then the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal, the goals beyond it) · the composer | `plan.ts`, `pathway.ts`, `today.ts` |
 | Matches | who is worth contacting, and where each one is | pills (New · To send · Waiting · Replied) · only what the ranker recommends, each card a tile, what it is and where, why, and one action · a draft sent from its own card | `matches.ts` |
 | Work | what am I building | the offer and what it knows about how you work · the path to money · the agents · projects handed over, in full (the ones that need you, the ones running, what it offers to take on, what finished) · the brief for Claude | `machine.ts` |
-| You | how is it going | money, runway, deep work, replies · the week read back · goals · settings | `review.ts`, `focus.ts` |
+| You | how is it going | money, runway, deep work, replies · the week read back · goals · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts` |
 
 `derive.ts` computes all of it once per `HomeData`, from `generatedAt` rather
 than the clock, so the header's status line and the tab under it cannot disagree
@@ -723,7 +724,8 @@ In Coolify: application → **Scheduled Tasks** → the command above on `0 21 *
 run does supply → reply reconciliation → brief for every profile seen in the last 30 days, and
 reports `truncated: true` rather than silently dropping anyone. The app also runs the brief on
 open when today's is missing, so it works without the schedule; it just won't find new matches
-or notice replies until someone taps "Find new".
+or notice replies until someone taps "Find new", or runs the whole pass from You → Nightly run
+→ "Run again".
 
 ## How each phase works
 
@@ -866,6 +868,51 @@ Rows with `kind = 'daily_brief'` and a `finished_at` mean the loop is alive. On 
 Monday there should also be a `copilot_insights` row with `kind = 'weekly'`, and
 a notification.
 
+### Running the night now
+
+You → Settings → **Nightly run → Run again** runs tonight's pass for the
+signed-in account, so you do not have to wait a night to see what it does. It
+used to be "Today's call · Run again", which re-ran the brief alone.
+
+It is the cron's own code path, not a lighter copy. `runNightlyPass`
+(`daily.ts`) is what both `/api/copilot/cron/daily` and `POST
+/api/copilot/nightly` call. It runs supply, reply reconciliation, the jobs and
+the brief, in that order, with no deadline, and a test fails if either route
+stops calling it. What the pass does, and what it deliberately does not do:
+
+- **It runs after the response.** A pass takes minutes and Traefik gives up in
+  under one, so the route writes a `copilot_agent_runs` row (`kind = 'nightly'`,
+  status `running`), hands the pass to `after()` and returns 202. On `next start`
+  `after()` work runs to completion, so the button gets the long agent budget
+  and the push, like the cron. `isNightlyPass()` is the one rule for both.
+- **It never counts as the schedule.** It records `reason = 'nightly_now'`,
+  never `cron`, so `lastCronRun`, the "Nothing ran overnight" notice and
+  `/health`'s `loop.nightlyRuns` still say whether the scheduled task exists.
+  The row says when the schedule itself last ran, underneath.
+- **It reports every step.** Before each step the row's `output` is
+  `{ step }`, so the row, and a banner on every tab, can say "2 of 4 · reading
+  replies". Afterwards `output` is the `DailyResult` plus the adapter and job
+  labels, and `nightlyLines()` turns it into one line per step, with a line for
+  each adapter or job that broke. Skips that are by design ("not configured")
+  are left out. A fallback brief is reported as broken even though a call came
+  out of it.
+- **A row that dies says so.** A redeploy kills `after()` work mid-pass. A row
+  still `running` after `NIGHTLY_STALE_MS` (15 minutes, well past the slowest
+  live pass) reads "Stopped without finishing", and a new tap is allowed.
+  Whatever the dead pass wrote before that is kept, since each step persists as
+  it goes.
+- **It costs what a brief costs.** It uses the brief route's key and cap
+  (`copilot:brief:<id>`, `briefsPerDay`), which is what that cap is for: re-runs
+  on top of the one the schedule gets. Paid supply is capped inside `runSupply`
+  at the monthly allowance, as it is for the cron. A tap while a pass is in
+  flight gets that pass back rather than a second one.
+
+The cron now writes the same row for every profile it runs, so the row on You
+also reports what last night did. A row that cannot be written does not stop the
+cron's pass: the cron's report carries the result, and `scripts/copilot-cron.mjs`
+names the profile whose row is missing. The button refuses instead, because a
+pass nobody can watch is the silent kind.
+
 ## When the brief 504s
 
 A reasoning model on this prompt can spend 6,000-11,000 tokens thinking before
@@ -883,6 +930,7 @@ user sees a 504 having paid for a brief they never got.
 | reason | budget | env var | default |
 | --- | --- | --- | --- |
 | `cron` | the nightly run, started by `scripts/copilot-cron.mjs` against `127.0.0.1` | `COPILOT_AI_CRON_TIMEOUT_MS` | 120s |
+| `nightly_now` | the same pass from "Run again", running in `after()` once the response has gone | `COPILOT_AI_CRON_TIMEOUT_MS` | 120s |
 | anything else | a tap — `manual`, `offer`, `note` — sitting behind the proxy | `COPILOT_AI_TIMEOUT_MS` | 30s |
 
 The distinction is the whole point: **Traefik is not in the cron's path**, so
@@ -1633,6 +1681,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | DELETE | `/api/copilot/session` | forget this device |
 | GET | `/api/copilot/health` | what this deployment actually has: missing env vars by name, unapplied migrations by file (session or cron bearer) |
 | GET | `/api/copilot/cron/daily` | scheduled loop (Bearer `CRON_SECRET`, fails closed) |
+| GET/POST | `/api/copilot/nightly` | "Run again": `POST` starts tonight's pass for this account and returns 202 with its row, or the pass already in flight · `GET` is the latest pass, polled while it runs |
 | GET/POST/DELETE | `/api/copilot/watch/sources` | the feeds this profile watches |
 | POST | `/api/copilot/watch/discover` | find feeds for the offer; every result is fetched and parsed before it is offered |
 | POST | `/api/copilot/watch/run` | read the sources now (25s budget) — the nightly budget cannot fit the watcher |

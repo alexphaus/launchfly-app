@@ -441,11 +441,17 @@ tagged (quick win, high leverage, groundwork), plus one line on why this order
 and one on what changed. The rows keep it honest, by structure rather than by
 asking nicely:
 
-- **Every number is the input's.** `unsourcedNumber` reads the plan against the
-  exact text the model was shown; a line carrying money, a percentage, a decimal
-  or any count above `SMALL_COUNT` that was not in it is dropped whole, and the
-  row records how many (`withheld`). "Send three" passes; "a 20% reply rate",
-  "€3,000 by March" and "in 45 days" do not (invariant 2). The one piece of
+- **Every number is the input's.** `unsourced` reads the plan against the
+  prompt the model was shown (ids and the digits of dates taken out, and not the
+  system text), numbers written as digits or as words, and months. A line with
+  one the input did not contain is dropped whole, and the row records how many
+  (`withheld`). Where a line sits decides what a small number means: in a step
+  or a milestone (`target`) "send three" is an instruction and passes; in a
+  reason, where you are, why this order or what changed (`claim`) it is an
+  assertion and needs a source, and a small bare count must match a bare count
+  in the input, not a price that happens to share its value. "A 20% reply
+  rate", "€3,000 by March", "in 45 days", "five sales cover the fine" and "by
+  mid-October" do not pass (invariant 2). Only "one" is exempt everywhere. The one piece of
   arithmetic handed over is a money goal said in clients at the person's own
   price, so the planner can see that €5 pieces do not close a €59,000 gap.
 - **Done is a tap.** A step or milestone is done when a `roadmap_marked` event
@@ -470,14 +476,27 @@ outcome or a tick landed since the last plan, and once `ROADMAP_MAX_AGE_DAYS`
 have passed; otherwise it reports "Kept your plan". A tick never redraws the
 plan under the thumb that ticked it.
 
-With a plan, the move after the drafts and whatever a person is blocking is its
-first open step of the person's own that fits today (`roadmapFirstStep`), ahead
-of the planner's Moves, and one tap marks it done; a blank offer is no longer the
+With a plan, the plan decides whether the drafts go first. It is told they
+exist (count and age) and asked to make sending them a step or to fix the opener
+first. The move is whatever a person is blocking, then the plan's first open
+step of the person's own that fits today (`roadmapFirstStep`), ahead of the
+planner's Moves, and one tap marks it done. The drafts are the move only when
+that step is about them or nothing of the person's fits today; otherwise they
+are a chip beside it. This was added after Alex's plan said to rewrite the
+opener before sending more, while the card over it said "Send 25 of your 56
+drafts" written with the old one; a blank offer is no longer the
 move by default, because the plan decides whether selling is on this person's
 path. "You are here" is the plan's own title and line, with the send counts only
 once something was sent. The planner's Moves and projects stay, under this week,
-as "Also in motion". Every goal is shown at the end, in the person's order, with
-how many milestones lead to it — including "nothing on the plan leads here yet".
+as "Also in motion". The goals it works on are shown at the end, in the person's order,
+with how many milestones lead to each; the first always shows, and the rest are
+one line, "4 more goals wait", that lists them on a tap (`goalLayout`) — five
+rows in a row saying "nothing on the plan leads here yet" were one fact said five
+times. "For <goal>" on a milestone only where the plan serves more than one
+goal. Reasoning cut for length ends at the last whole sentence, never
+mid-thought. The empty evidence agrees with the week's dots under it
+(`quietEvidence`): a day moved with nothing back yet says so, rather than
+"nothing recorded".
 
 Stored without a migration: the draw is a `copilot_agent_runs` row of kind
 `roadmap` (plan in `output.roadmap`, the signature in `input_summary`) and a tick

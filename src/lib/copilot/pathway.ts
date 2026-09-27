@@ -685,3 +685,22 @@ export function pathWeek(input: { now: Date; timezone: string; sentAt: string[];
   }
   return { days, streak, moved: days.filter((d) => d.moved).length };
 }
+
+/**
+ * The evidence when nothing in it is shown, said so it agrees with the week's
+ * dots under it. The dots count what you did — a send, a Move done, a step
+ * ticked — and the evidence shows what came back, so "Nothing recorded in the
+ * last two weeks" over a green Thursday read as the app contradicting itself.
+ */
+export function quietEvidence(input: { sentFortnight: number; movedDays: number; planned: boolean }): { title: string; detail: string } {
+  const days = `${input.movedDays} day${input.movedDays === 1 ? '' : 's'}`;
+  if (input.sentFortnight > 0) {
+    return { title: 'Nothing came back in the last two weeks', detail: `${input.sentFortnight} sent in that time. Answers, payments and results show here as they arrive.` };
+  }
+  if (input.movedDays > 0) {
+    return { title: 'Nothing came back yet', detail: `You moved it forward on ${days} this week. What that brings back — answers, payments, results — shows here.` };
+  }
+  return input.planned
+    ? { title: 'Nothing recorded in the last two weeks', detail: 'Steps you tick off, hours you log, answers and payments show here as they happen.' }
+    : { title: 'Nothing came back in the last two weeks', detail: '0 sent in that time. Answers, payments and results show here as they arrive.' };
+}

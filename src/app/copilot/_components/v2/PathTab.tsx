@@ -33,7 +33,7 @@ import { agoLabel } from '@/lib/copilot/machine';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { VERDICT_LABEL, metricLabel, metricWords, verdictOf, type Decision } from '@/lib/copilot/decision';
 import {
-  REACHED, parseSeenPlan, planChanges, snapshotPlan, swapKept,
+  REACHED, parseSeenPlan, planChanges, quietEvidence, snapshotPlan, swapKept,
   type NextStep, type PathDay, type PathEvent, type PathSwap, type PathTarget, type PlanChanges, type SeenPlan,
 } from '@/lib/copilot/pathway';
 import { RATE_SAMPLE, type NowMove, type Stop } from '@/lib/copilot/plan';
@@ -42,6 +42,7 @@ import type { Actions } from '../shared';
 import { CallCard, FirstRun } from '../views/NowView';
 import type { Derived } from './derive';
 import { IconAlert, IconArrow, IconCheck, IconChevron, IconFlag, IconRedraw, IconStar, IconSwap, IconYou, PathGlyph } from './icons2';
+import { planServesOneGoal } from '@/lib/copilot/roadmap';
 import { AlsoThisWeek, DrawnPlanHead, GoalMarkers, IconMilestone, PhaseBlock, PlanPending } from './PathPlan';
 
 export default function PathTab({ home, d, actions, briefing, finding, openMatches }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean; finding: boolean; openMatches: (s: MatchStage) => void }) {
@@ -90,17 +91,16 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
       <section className="cp2-way-past">
         {past.earlier > 0 && <button className="cp2-way-earlier" onClick={() => setAllPast(true)}>Show {past.earlier} earlier</button>}
         {/* Nothing came back is itself the finding, with the count that explains it. */}
-        {!rows.length && (
-          <div className="cp2-way-row">
-            <span className="cp2-way-node sm quiet"><IconCheck /></span>
-            <span className="cp2-way-t">{d.path.fortnight || plan.state !== 'ready' ? 'Nothing came back in the last two weeks' : 'Nothing recorded in the last two weeks'}</span>
-            <span className="cp2-way-s">
-              {d.path.fortnight || plan.state !== 'ready'
-                ? `${d.path.fortnight} sent in that time. Answers, payments and results show here as they arrive.`
-                : 'Steps you tick off, hours you log, answers and payments show here as they happen.'}
-            </span>
-          </div>
-        )}
+        {!rows.length && (() => {
+          const q = quietEvidence({ sentFortnight: d.path.fortnight, movedDays: d.path.week.moved, planned: plan.state !== 'off' });
+          return (
+            <div className="cp2-way-row">
+              <span className="cp2-way-node sm quiet"><IconCheck /></span>
+              <span className="cp2-way-t">{q.title}</span>
+              <span className="cp2-way-s">{q.detail}</span>
+            </div>
+          );
+        })()}
         {rows.map((r) => {
           if (r.t === 'day') return <div key={r.day.day} className="cp2-way-day">{r.day.label}</div>;
           if (r.t === 'swap') return <SwapRow key={r.swap.key} swap={r.swap} onAct={() => openMatches(r.swap.action.stage)} onKeep={keep} />;
@@ -147,7 +147,7 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
             {plan.state === 'none' && <PlanPending view={plan} onDraw={() => void actions.drawRoadmap('manual')} />}
             {plan.state === 'ready'
               ? plan.phases.map((ph) => (
-                  <PhaseBlock key={ph.key} phase={ph} actions={actions} workerConnected={home.workerConnected} handed={handed}>
+                  <PhaseBlock key={ph.key} phase={ph} actions={actions} workerConnected={home.workerConnected} handed={handed} showGoal={!planServesOneGoal(plan)}>
                     {ph.key === plan.phases[0].key && (
                       <AlsoThisWeek steps={next.steps} render={(s) => <NextRow key={s.key} step={s} actions={actions} isNew={added.has(s.key)} capMinutes={cap.minutes} />} />
                     )}

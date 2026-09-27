@@ -6056,7 +6056,7 @@ nightlyPass().catch((e) => { console.error(e); process.exit(1); });
 import {
   MAX_MILESTONES_PER_PHASE, MAX_STEPS_PER_MILESTONE, ROADMAP_MAX_AGE_DAYS, ROADMAP_RETRY_MS, ROADMAP_STALE_MS, ROADMAP_SYSTEM,
   goalMarkers, happenedLines, idsByTitle, markFromEvent, parseRoadmap, previousForPrompt, roadmapChanges, roadmapDue, roadmapFirstStep,
-  roadmapItem, roadmapPrompt, roadmapRunFromRow, roadmapSignature, roadmapView, sourcedNumbers, unsourcedNumber,
+  roadmapItem, roadmapPrompt, roadmapRunFromRow, roadmapSignature, roadmapView, sourcedFrom, unsourced,
   type RoadmapInput, type RoadmapRun,
 } from '../../src/lib/copilot/roadmap';
 import { pathEvents as roadmapPathEvents } from '../../src/lib/copilot/pathway';
@@ -6067,21 +6067,39 @@ async function drawnPlan() {
   const now = new Date('2026-09-27T12:00:00Z');
   const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
 
-  // 1. The number guard. Only numbers the input carried survive; one number is
-  //    one number however it is written; a small count is an instruction.
-  const allowed = sourcedNumbers('Goal: €1,000 of €60,000 · within 180 days · runway 3.4 months · price €5');
-  assert.equal(unsourcedNumber('Close the €60,000 gap', allowed), null);
-  assert.equal(unsourcedNumber('Close the 60k gap', allowed), null, '60k is 60,000');
-  assert.equal(unsourcedNumber('Within the 180 days you set', allowed), null);
-  assert.equal(unsourcedNumber('With 3.4 months of runway', allowed), null);
-  assert.equal(unsourcedNumber('Make two calls and send 3 messages', allowed), null, 'a count of things to do is not a claim');
-  assert.equal(unsourcedNumber('Aim for a 20% reply rate', allowed), '20%', 'a rate it made up');
-  assert.equal(unsourcedNumber('Earn €3,000 by March', allowed), '€3,000');
-  assert.equal(unsourcedNumber('Done in 6 weeks', allowed), null, 'six is a small count');
-  assert.equal(unsourcedNumber('Done in 45 days', allowed), '45');
-  assert.equal(unsourcedNumber('Save €5 a day', allowed), null);
-  assert.equal(unsourcedNumber('Raise the price to €8', allowed), '€8', 'money is never a small count');
-  assert.equal(unsourcedNumber('Aim for 2.5 hours', allowed), '2.5', 'a decimal is a measurement');
+  // 1. The guard. Only numbers and months the input carried survive; one number
+  //    is one number however it is written, digits or words; a small count is an
+  //    instruction in a step and a claim in a reason.
+  const src = sourcedFrom('- [3f2a91b7-5e14] Goal: €1,000 of €60,000 · within 180 days · runway 3.4 months · price €5 · Save Exit PH [NOV]\n2026-09-25: a reply');
+  const t = (x: string) => unsourced(x, src, 'target');
+  const c = (x: string) => unsourced(x, src, 'claim');
+  assert.equal(t('Close the €60,000 gap'), null);
+  assert.equal(t('Close the 60k gap'), null, '60k is 60,000');
+  assert.equal(t('Close the sixty thousand gap'), null, 'and so is sixty thousand');
+  assert.equal(t('Within the 180 days you set'), null);
+  assert.equal(c('With 3.4 months of runway'), null);
+  assert.equal(t('Make two calls and send 3 messages'), null, 'in a step, a count of things to do is an instruction');
+  assert.equal(t('Aim for a 20% reply rate'), '20%', 'a rate it made up');
+  assert.equal(t('Earn €3,000 by March'), '€3,000');
+  assert.equal(t('Done in 6 weeks'), null, 'six is a small count in a step');
+  assert.equal(t('Done in 45 days'), '45');
+  assert.equal(t('Done in forty-five days'), 'forty-five', 'words are numbers too');
+  assert.equal(t('Save €5 a day'), null);
+  assert.equal(t('Raise the price to €8'), '€8', 'money is never a small count');
+  assert.equal(t('Aim for 2.5 hours'), '2.5', 'a decimal is a measurement');
+  assert.equal(c('Five sales at €5 covers the fine and a ticket'), 'Five', 'in a reason, five is a claim: the digit guard let exactly this through');
+  assert.equal(c('Keep the one channel that already works'), null, 'English cannot do without "one"');
+  assert.equal(c('Two market days booked keeps cash in'), 'Two');
+  assert.equal(t('Two market days booked'), null, 'but as a target it is fine');
+  assert.equal(c('By mid-October you will know which path pays'), 'October', 'a timeline nobody gave');
+  assert.equal(c('The Nov deadline is the constraint'), null, 'NOV was in their goal');
+  assert.equal(c('The November deadline bends everything'), null);
+  assert.equal(c('The September reply'), null, 'a date in the input names its month');
+  assert.equal(c('The reply on 25 September'), '25', 'its day is not kept: a plan does not need to quote dates back');
+  assert.equal(c('You may want to rest'), null, 'may is a verb here, and is never read as a month');
+  assert.equal(c('Your 2026 plan'), '2026', 'the digits of a date are not a quantity anybody gave');
+  assert.equal(c('Reply by the 25th'), '25');
+  assert.ok(!src.numbers.has(3) && !src.numbers.has(91), 'an id listed in the prompt lends it no numbers');
 
   // 2. The prompt: every goal with the person's own numbers, a money goal said
   //    in clients at their price, and the last plan as titles and ticks only.
@@ -6107,6 +6125,9 @@ async function drawnPlan() {
   assert.match(prompt, /\[list-five\] List five buyers — done/);
   assert.match(prompt, /I have an interview Thursday/);
   assert.match(prompt, /ai_available: true/);
+  assert.ok(!/DRAFTS WRITTEN/.test(prompt), 'no drafts, no line');
+  assert.match(roadmapPrompt({ ...input, drafts: { count: 56, oldestDays: 18 } }), /DRAFTS WRITTEN AND WAITING: 56, the oldest 18 days old/, 'the plan is told the drafts exist, so it can decide about them');
+  assert.match(ROADMAP_SYSTEM, /never send more of what is not working/);
   assert.match(ROADMAP_SYSTEM, /Never invent a number about them/, 'the rule the guard enforces is also said to the model');
   assert.match(ROADMAP_SYSTEM, /quick_win.*leverage.*foundation/s);
 
@@ -6125,7 +6146,7 @@ async function drawnPlan() {
   assert.ok(!JSON.stringify(prev).includes('proves demand') && !JSON.stringify(prev).includes('Cash first'), 'no why, no direction');
 
   // 4. The parse holds the plan to the rules.
-  const ctx = { allowed: sourcedNumbers(`${ROADMAP_SYSTEM}\n${prompt}`), goalIds: ['g1', 'g2'], aiAvailable: false, previousIds: idsByTitle(earlier) };
+  const ctx = { allowed: sourcedFrom(prompt), goalIds: ['g1', 'g2'], aiAvailable: false, previousIds: idsByTitle(earlier) };
   const many = (n: number, f: (i: number) => unknown) => Array.from({ length: n }, (_, i) => f(i));
   const raw = {
     here: { title: 'Saving toward the property', line: 'The jewellery pays €5 a piece; the gap is €59,000.' },
@@ -6253,7 +6274,23 @@ async function drawnPlan() {
   assert.equal(stepNow.kind, 'step'); assert.equal(stepNow.item, 's'); assert.equal(stepNow.cta, 'Mark it done');
   assert.equal(stepNow.why, 'Toward: First sale. It proves somebody pays');
   assert.equal(stepNow.size, 'Under 30 min · you have 60 min');
-  assert.equal(roadmapPathNow({ ...nowBase, queue: { count: 2, oldestDays: 3 } }).now.kind, 'send', 'written drafts still go first');
+  // With a plan the drafts are no longer first by default: the plan said to fix
+  // the opener, and the card over it said to send 25 written with the old one.
+  const withDrafts = { ...nowBase, queue: { count: 56, oldestDays: 18 }, asks: [{ key: 'queue', kind: 'send' as const, title: '56 drafts ready to send', detail: 'The oldest has waited 18 days' }] };
+  const planFirst = roadmapPathNow(withDrafts);
+  assert.equal(planFirst.now.kind, 'step', 'the plan decides whether sending is this week');
+  assert.deepEqual(planFirst.also.map((a) => a.key), ['queue'], 'the drafts are a chip beside it, one tap away');
+  const planSends = roadmapPathNow({ ...withDrafts, planStep: { ...planStep, title: 'Send the waiting drafts', sends: true } });
+  assert.equal(planSends.now.kind, 'send', 'when the plan asks for them, it is the send card, sized to the day');
+  assert.equal(planSends.now.title, 'Send 10 of your 56 drafts');
+  assert.equal(planSends.now.why, 'The oldest has waited 18 days. Your plan puts sending them this week.');
+  assert.deepEqual(planSends.also, [], 'and not also a chip');
+  const nothingFits = roadmapPathNow({ ...withDrafts, planStep: null });
+  assert.equal(nothingFits.now.kind, 'send', 'with nothing of yours that fits today, finished drafts are the best use of it');
+  assert.ok(!nothingFits.now.why!.includes('Nothing on this path moves'), 'but a plan never said sending is the path, so neither does the card');
+  assert.equal(roadmapPathNow({ ...withDrafts, hasPlan: false, planStep: null }).now.why, 'The oldest has waited 18 days. Nothing on this path moves until something goes out.', 'without a plan, nothing changes');
+  const blocked = roadmapPathNow({ ...withDrafts, asks: [{ key: 'q:c1', kind: 'question' as const, title: 'Which of the three?', detail: 'The worker is waiting', id: 'c1' }, ...withDrafts.asks] });
+  assert.equal(blocked.now.kind, 'question', 'whatever a person is blocking still comes before the plan');
   assert.equal(roadmapPathNow({ ...nowBase, noOffer: true }).now.kind, 'step', 'with a drawn plan, a blank offer is not the move by default');
   assert.equal(roadmapPathNow({ ...nowBase, noOffer: true, hasPlan: false, planStep: null }).now.kind, 'offer');
   assert.equal(roadmapPathNow({ ...nowBase, planStep: null }).now.kind, 'move');
@@ -6308,3 +6345,50 @@ async function drawnPlan() {
 }
 
 drawnPlan().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The drawn plan, second pass: what the first live plans showed ─────── */
+import { goalLayout as rmGoalLayout, parseRoadmap as rmParse, planServesOneGoal as rmOneGoal, roadmapView as rmView, sourcedFrom as rmSourced, type RoadmapRun as RmRun } from '../../src/lib/copilot/roadmap';
+import { quietEvidence } from '../../src/lib/copilot/pathway';
+
+async function drawnPlanSecondPass() {
+  const src = rmSourced('Goal: €1,000 of €60,000 · within 180 days');
+  const parse = (direction: string) => rmParse({ direction, phases: [{ key: 'week', milestones: [{ id: 'm', title: 'A first sale' }] }] }, { allowed: src, goalIds: [], aiAvailable: false })!.roadmap.direction;
+
+  // 1. Reasoning is cut at the last whole sentence that fits, never mid-thought.
+  const long = `${'Income first, because the property needs a bigger source than stalls. '.repeat(5)}The renovation research you finished stays as reference; nothing new on renovation until the income is steady.`;
+  const cut = parse(long)!;
+  assert.ok(cut.endsWith('stalls.'), `ends on a sentence, got: …${cut.slice(-30)}`);
+  assert.ok(cut.length <= 420);
+  assert.equal(parse('Short and whole.'), 'Short and whole.');
+  const noStop = parse(`${'word '.repeat(120)}`)!;
+  assert.ok(noStop.endsWith('…') && !noStop.endsWith(' …'), 'with no sentence to end on, cut at a word and say so');
+
+  // 2. The goals: the first always, any the plan leads to, and the rest folded into one line.
+  const g = (id: string, toward: number) => ({ id, title: id, status: null, progress: null, horizon: null, toward });
+  const laid = rmGoalLayout([g('exit', 6), g('macbook', 1), g('job', 2), g('arr', 0), g('daily', 0), g('emergency', 0), g('app', 0)]);
+  assert.deepEqual(laid.shown.map((x) => x.id), ['exit', 'macbook', 'job']);
+  assert.deepEqual(laid.waiting.map((x) => x.id), ['arr', 'daily', 'emergency', 'app'], 'five "nothing leads here yet" rows became one line');
+  assert.deepEqual(rmGoalLayout([g('first', 0), g('second', 0)]).shown.map((x) => x.id), ['first'], 'the first goal shows even before a plan leads to it');
+  assert.deepEqual(rmGoalLayout([]), { shown: [], waiting: [] });
+
+  // 3. "For <goal>" only where milestones serve different goals.
+  const run = (goals: Array<string | null>): RmRun => ({
+    id: 'r', status: 'ok', reason: null, signature: 's', startedAt: '2026-09-27T00:00:00Z', finishedAt: '2026-09-27T00:01:00Z', error: null,
+    roadmap: { here: null, direction: null, changed: null, phases: [{ key: 'week', milestones: goals.map((goalId, i) => ({ id: `m${i}`, title: `M${i}`, why: null, doneWhen: null, goalId, steps: [] })) }] },
+  });
+  const view = (goals: Array<string | null>) => rmView({ enabled: true, latest: run(goals), current: run(goals), previous: null, marks: [], goals: [], capacity: 'deep', now: new Date('2026-09-27T12:00:00Z') });
+  assert.equal(rmOneGoal(view(['g1', 'g1', 'g1'])), true, 'Maria: seven milestones, one goal, one label would say it seven times');
+  assert.equal(rmOneGoal(view(['g1', 'g2', 'g1'])), false, 'Alex: the exit and the job, so each says which');
+  assert.equal(rmOneGoal(view(['g1', null])), false, 'a milestone serving no goal is worth telling apart');
+
+  // 4. The empty evidence agrees with the dots under it.
+  assert.equal(quietEvidence({ sentFortnight: 0, movedDays: 1, planned: true }).title, 'Nothing came back yet', 'a green Thursday is not "nothing recorded"');
+  assert.match(quietEvidence({ sentFortnight: 0, movedDays: 1, planned: true }).detail, /moved it forward on 1 day this week/);
+  assert.equal(quietEvidence({ sentFortnight: 0, movedDays: 0, planned: true }).title, 'Nothing recorded in the last two weeks');
+  assert.equal(quietEvidence({ sentFortnight: 9, movedDays: 3, planned: true }).detail, '9 sent in that time. Answers, payments and results show here as they arrive.');
+  assert.equal(quietEvidence({ sentFortnight: 0, movedDays: 0, planned: false }).detail, '0 sent in that time. Answers, payments and results show here as they arrive.', 'without a plan, the funnel copy stands');
+
+  console.log('copilot-core: drawn plan second pass checks passed');
+}
+
+drawnPlanSecondPass().catch((e) => { console.error(e); process.exit(1); });

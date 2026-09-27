@@ -150,7 +150,11 @@ export function derive(home: HomeData) {
     funnel,
     freshMatches: good.filter((i) => i.from === 'business' && i.fresh).length,
     hasPlan: plan.state === 'ready',
-    planStep: first ? { item: first.step.id, title: first.step.title, milestone: first.milestone.title, why: first.milestone.why, size: SIZE_LABEL[first.step.size] } : null,
+    planStep: first ? {
+      item: first.step.id, title: first.step.title, milestone: first.milestone.title, why: first.milestone.why, size: SIZE_LABEL[first.step.size],
+      // "Send the waiting drafts": the plan asked for the drafts, so the move is the send card, sized to the day, with its one tap to them.
+      sends: /\bdrafts?\b/i.test(first.step.title),
+    } : null,
   });
   const nowMoveId = move.now.kind === 'move' ? move.now.id : null;
   const ticked = [...markMap(home.roadmap?.marks ?? []).values()].filter((m) => m.state === 'done').map((m) => m.at);

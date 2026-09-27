@@ -13,11 +13,14 @@
 
 import { generateText } from 'ai';
 import { copilotDb, todayIso } from '../db';
+import { loadSendQueue } from '../execution';
 import { availableJobs } from '../jobs';
+import { offerIsEmpty } from '../offer';
+import { oldestWaitDays } from '../triage';
 import { loadMetrics } from '../outcomes';
 import { priceOf } from '../plan';
 import {
-  ROADMAP_SYSTEM, happenedLines, idsByTitle, parseRoadmap, previousForPrompt, roadmapDue, roadmapPrompt, roadmapSignature, sourcedNumbers,
+  ROADMAP_SYSTEM, happenedLines, idsByTitle, parseRoadmap, previousForPrompt, roadmapDue, roadmapPrompt, roadmapSignature, sourcedFrom,
   type DueReason, type RoadmapInput, type RoadmapRun,
 } from '../roadmap';
 import {
@@ -98,7 +101,7 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
     const profile = await getProfile(profileId);
     if (!profile) throw new Error('profile not found');
 
-    const [goals, working, notes, metrics, recent, commissions, runs, marks, jobs] = await Promise.all([
+    const [goals, working, notes, metrics, recent, commissions, runs, marks, jobs, queue] = await Promise.all([
       activeGoals(profileId),
       loadWorking(profileId),
       loadOwnNotes(profileId),
@@ -108,6 +111,8 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
       loadRoadmapRuns(profileId),
       loadRoadmapMarks(profileId),
       availableJobs(profile),
+      // The same read the send card counts, so the plan and "Send 25 of your 56" see one number.
+      loadSendQueue(profileId),
     ]);
     // A plan drawn without knowing what the person already did with the last
     // one would bring back what they set aside. Better to fail and say so.
@@ -144,6 +149,10 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
       }),
       previous: previousForPrompt(last, marks.marks),
       aiAvailable: jobs.includes('commission'),
+      // Drafts from a blank offer are not put in front of anyone (invariant 1), so the plan is not told about them either.
+      drafts: offerIsEmpty(profile.offer) || !queue.length
+        ? null
+        : { count: queue.length, oldestDays: oldestWaitDays(queue.map((q) => q.execution.created_at), new Date()) },
     };
     const prompt = roadmapPrompt(input);
 
@@ -170,8 +179,10 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
     }
 
     const parsed = parseRoadmap(raw, {
-      // Every number in what it was shown, and nothing else: the guard reads the same text the model did.
-      allowed: sourcedNumbers(`${ROADMAP_SYSTEM}\n${prompt}`),
+      // Every number and month in what it was shown about the person, and nothing
+      // else: the guard reads the same text the model did. Not the system text —
+      // its "30 minutes" and "8 words" are this file's numbers, not theirs.
+      allowed: sourcedFrom(prompt),
       goalIds: goals.map((g) => g.id),
       aiAvailable: input.aiAvailable,
       previousIds: idsByTitle(last),

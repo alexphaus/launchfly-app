@@ -19,12 +19,14 @@
 //
 // Four rules make that structural rather than promised:
 //
-// 1. A number the input did not contain does not survive (`unsourcedNumber`).
+// 1. A number the input did not contain does not survive (`unsourced`).
 //    Targets, prices, counts and dates the person gave pass; "a 20% reply rate",
-//    "€3,000 by March" and "in 6 weeks" do not, and the line carrying one is
-//    dropped rather than shown with the number blanked. Small counts of things
-//    to do ("two calls", "send three") are instructions, not claims about the
-//    person, and pass. Invariant 2.
+//    "€3,000 by March", "in 45 days" and "by mid-October" do not, whether the
+//    number is written in digits or in words, and the line carrying one is
+//    dropped rather than shown with the number blanked. In a step or a
+//    milestone a small count ("two calls", "send three") is an instruction and
+//    passes; in a reason it is a claim ("five sales cover the fine") and needs
+//    a source like any other number. Invariant 2.
 // 2. Done is the person's tap, never the model's say-so. A step is done when a
 //    `roadmap_marked` event says so; the model is shown those marks and cannot
 //    write one. Invariant 10, the same shape.
@@ -64,6 +66,7 @@ export const MAX_STEPS_PER_MILESTONE = 3;
 export const SMALL_COUNT = 10;
 const TITLE_MAX = 110;
 const TEXT_MAX = 240;
+const DIRECTION_MAX = 420;
 const ID_MAX = 48;
 
 export type PhaseKey = 'week' | 'month' | 'quarter' | 'later';
@@ -152,6 +155,12 @@ export interface RoadmapInput {
   previous: Array<{ id: string; phase: PhaseKey; title: string; state: MarkState; steps: Array<{ id: string; title: string; state: MarkState }> }>;
   /** Whether research can be handed to a worker at all. */
   aiAvailable: boolean;
+  /**
+   * Openers already written and waiting to be sent. The plan decides whether
+   * sending them is this week's work — "Now" follows it — so it has to know
+   * they exist. Null on a blank offer, where nothing is shown to send.
+   */
+  drafts?: { count: number; oldestDays: number } | null;
 }
 
 export const ROADMAP_SYSTEM = `You draw one person's plan: from where they are now to the goals they set, over weeks and months. You are the planner who decides the order, not a coach writing encouragement.
@@ -167,18 +176,20 @@ How to draw it:
 - Goals compete for the same hours. When two pull against each other, say which comes first and why in direction, and put the other later.
 - Plan for what the goals actually need. It is not always selling: a job search, learning a skill, building a product, getting money under control, a move, a qualification.
 - If they seem lost — goals vague, nothing working — the first milestone is getting clear: a small experiment or one conversation that produces a fact. Do not make the decision for them.
+- Drafts already written are listed when there are any. If sending them serves this week, make it a step ("Send the waiting drafts"). If the record says the opener or the list is wrong, the step is to fix that first — never send more of what is not working.
 - Use what happened. A step marked done is done: build on it, never repeat it. A step marked dropped stays out in that form. When something has brought results, lean into it; when the record shows effort and nothing back, change the approach and say what you changed in changed.
 - Later phases can be one milestone with no steps. A plan past the next quarter is a direction, not a schedule.
 
 Hard rules:
-- Never invent a number about them. Use only numbers that appear in the input: their targets, prices, counts, days. Do not estimate rates, percentages, income or durations as numbers. A line with a number not in the input is thrown away. Small counts of things to do ("send three", "two calls") are fine.
+- Never invent a number about them. Use only numbers that appear in the input: their targets, prices, counts, days. Do not estimate rates, percentages, income, costs or durations, in digits or in words, and do not multiply the input's numbers into new ones. A line with a number not in the input is thrown away. In a step or a milestone a small count of things to do ("send three", "two calls") is fine; in why, here, direction and changed it is not.
+- Never name a month or a date the input does not contain. "By mid-October" is a promise nobody made.
 - Never state as fact anything the input does not say.
 - Reuse the id of an earlier milestone or step when it is the same thing, even reworded. New things get a new short id in kebab-case.
 - who is "ai" only for research or drafting a machine can do alone on the open web, and only when ai_available is true. Everything else is "you".
 - At most ${MAX_MILESTONES_PER_PHASE} milestones per phase and ${MAX_STEPS_PER_MILESTONE} steps per milestone. Fewer is better.
 - Plain words, second person, short. No filler, no motivation, no exclamation marks.
 
-here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence on what is true now and what matters next. changed is null on a first plan.
+here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence on what is true now and what matters next. why is one sentence. direction is at most two sentences, under 300 characters. changed is one sentence, and null on a first plan.
 
 Return only JSON:
 {"here":{"title":"...","line":"..."},"direction":"...","changed":null,"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":null,"steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
@@ -254,6 +265,9 @@ export function roadmapPrompt(input: RoadmapInput): string {
     lines.push('THE LAST PLAN: none, this is the first.');
   }
   lines.push('');
+  if (input.drafts && input.drafts.count > 0) {
+    lines.push(`DRAFTS WRITTEN AND WAITING: ${input.drafts.count}, the oldest ${input.drafts.oldestDays} days old`);
+  }
   lines.push(`ai_available: ${input.aiAvailable}`);
   return lines.join('\n');
 }
@@ -312,6 +326,33 @@ const NUMBER = /([$€£₱¥]\s?)?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(\s?(?:k\
 
 interface Found { raw: string; value: number; marked: boolean }
 
+const UNIT_WORDS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, dozen: 12,
+};
+const SCALE_WORDS: Record<string, number> = { hundred: 100, thousand: 1_000, million: 1_000_000, billion: 1_000_000_000 };
+/** A run of number words: "five", "twenty-five", "two thousand", "a hundred and ten". */
+const WORD_RUN = /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|dozen|hundred|thousand|million|billion)(?:(?:[\s-]+|\s+and\s+)(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion))*\b/gi;
+
+function wordValue(run: string): number {
+  let total = 0;
+  let current = 0;
+  for (const w of run.toLowerCase().split(/[\s-]+/)) {
+    if (w === 'and') continue;
+    if (w in UNIT_WORDS) current += UNIT_WORDS[w];
+    else if (w === 'hundred') current = (current || 1) * 100;
+    else if (w in SCALE_WORDS) { total += (current || 1) * SCALE_WORDS[w]; current = 0; }
+  }
+  return total + current;
+}
+
+/**
+ * Every number in a piece of text, written as digits or as words. The guard
+ * read digits only, and "Five sales at $150 covers the fine and a ticket" went
+ * straight through it: five was never in the input, and neither was the price
+ * of the fine or the ticket.
+ */
 function numbersIn(text: string): Found[] {
   const out: Found[] = [];
   for (const m of text.matchAll(NUMBER)) {
@@ -321,26 +362,91 @@ function numbersIn(text: string): Found[] {
     const value = suffix === 'k' ? base * 1000 : base;
     out.push({ raw: m[0].trim(), value, marked: !!m[1] || !!suffix || !!m[3] });
   }
+  for (const m of text.matchAll(WORD_RUN)) out.push({ raw: m[0], value: wordValue(m[0]), marked: false });
   return out;
 }
 
-/** Every number the input carried, as values — so "€60,000", "60000" and "60k" are one number. */
-export function sourcedNumbers(corpus: string): Set<number> {
-  const set = new Set<number>();
-  for (const n of numbersIn(corpus)) set.add(n.value);
-  return set;
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const MONTH_ABBR = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const monthOf = (w: string): number => {
+  const l = w.toLowerCase().replace(/^sept$/, 'sep');
+  const full = MONTHS.indexOf(l);
+  return full >= 0 ? full : MONTH_ABBR.indexOf(l);
+};
+/**
+ * A month named in the plan's own words. Capitalised, or an abbreviation in
+ * capitals ("NOV"), so "march on" and "a mar" are not months. May is left out
+ * altogether: it cannot be told apart from the verb, and a guard that drops
+ * every "you may" is worse than one that misses a May.
+ */
+const MONTH_IN_PLAN = /\b(?:(January|February|March|April|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)|(JAN|FEB|MAR|APR|JUN|JUL|AUG|SEPT?|OCT|NOV|DEC))\b/g;
+const MONTH_IN_INPUT = /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\b/gi;
+const ISO_DATE = /\b(\d{4})-(\d{2})-(\d{2})(?:T[\d:.]+Z?)?\b/g;
+/** "- [id] title" — the ids the prompt lists items by. A UUID is full of digits nobody said. */
+const LISTED_ID = /^(\s*- )\[[^\]\s]+\] /gm;
+
+/**
+ * What the input carried: every number as a value, the bare ones apart, and
+ * every month it named. Counts are kept apart because a value is not a meaning:
+ * "five sales" matched the €5 price and passed, when nobody had said five of
+ * anything. A small bare number has to match a bare one.
+ */
+export interface Sourced { numbers: Set<number>; counts: Set<number>; months: Set<number> }
+
+/**
+ * The numbers and months the plan may use: the ones in the prompt the model was
+ * shown, with two kinds of noise taken out first. Ids ("[3f2a…]") and the
+ * digits of dates are not quantities anybody gave — a day of the month let any
+ * small number through by accident. A date's month is kept: "the 25 Sep reply"
+ * may say September.
+ */
+export function sourcedFrom(prompt: string): Sourced {
+  const months = new Set<number>();
+  const clean = prompt
+    .replace(LISTED_ID, '$1')
+    .replace(ISO_DATE, (_m, _y, mo: string) => { months.add(Number(mo) - 1); return ' '; });
+  for (const m of clean.matchAll(MONTH_IN_INPUT)) {
+    const i = monthOf(m[1]);
+    if (i >= 0) months.add(i);
+  }
+  const numbers = new Set<number>();
+  const counts = new Set<number>();
+  for (const n of numbersIn(clean)) {
+    numbers.add(n.value);
+    if (!n.marked) counts.add(n.value);
+  }
+  return { numbers, counts, months };
 }
 
 /**
- * The first number in `text` that the input did not contain, or null. A bare
- * count up to SMALL_COUNT passes: "two calls" is an instruction. Money, a
- * percentage, a decimal or anything larger has to have come from the input.
+ * Where a line sits decides what a small number means in it.
+ *
+ * - `target`: a step, a milestone, what makes it done — "send three", "two
+ *   market days booked". A count up to SMALL_COUNT is an instruction, not a
+ *   claim about the person, and passes.
+ * - `claim`: a reason, where you are, why this order, what changed. A number
+ *   there asserts something ("five sales cover the fine"), so every one must
+ *   come from the input. Only "one" passes, because English cannot say "the
+ *   one channel that works" without it.
  */
-export function unsourcedNumber(text: string, allowed: Set<number>): string | null {
+export type LineKind = 'target' | 'claim';
+
+/**
+ * The first number or month in `text` that the input did not contain, or null.
+ * Money, a percentage and a decimal always need a source, whichever the kind.
+ * A month is a timeline — "by mid-October you will know" — and a timeline the
+ * person did not give is a promise the plan cannot keep.
+ */
+export function unsourced(text: string, src: Sourced, kind: LineKind): string | null {
   for (const n of numbersIn(text)) {
-    if (!n.marked && Number.isInteger(n.value) && n.value <= SMALL_COUNT) continue;
-    if (allowed.has(n.value)) continue;
+    const small = !n.marked && Number.isInteger(n.value) && n.value <= SMALL_COUNT;
+    if (small && (n.value === 1 || kind === 'target' || src.counts.has(n.value))) continue;
+    if (!small && src.numbers.has(n.value)) continue;
     return n.raw;
+  }
+  for (const m of text.matchAll(MONTH_IN_PLAN)) {
+    const i = monthOf(m[1] ?? m[2]);
+    if (i >= 0 && !src.months.has(i)) return m[0];
   }
   return null;
 }
@@ -353,8 +459,15 @@ const text = (v: unknown, max: number): string | null => {
   if (typeof v !== 'string') return null;
   const t = v.replace(/\s+/g, ' ').trim();
   if (!t || /^(null|none|n\/a)$/i.test(t)) return null;
-  // Cut at a word, never mid-word: half a word reads as a typo in somebody's own plan.
-  return t.length <= max ? t : `${t.slice(0, max).replace(/\s+\S*$/, '')}…`;
+  if (t.length <= max) return t;
+  // Cut at the last whole sentence that fits. "…nothing new on renovation…" was
+  // the reasoning for the order stopped mid-thought, which reads as the app
+  // losing its train of thought about somebody's life. Only when no sentence
+  // ends early enough is it cut at a word, never mid-word.
+  const head = t.slice(0, max);
+  const end = Math.max(head.lastIndexOf('. '), head.lastIndexOf('? '), head.lastIndexOf('! '), /[.?!]$/.test(head) ? head.length - 1 : -1);
+  if (end >= max * 0.4) return head.slice(0, end + 1);
+  return `${head.replace(/\s+\S*$/, '')}…`;
 };
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[], dflt: T): T => (typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as T) : dflt);
 
@@ -363,8 +476,8 @@ export function slugId(s: string): string {
 }
 
 export interface ParseContext {
-  /** sourcedNumbers() over the prompt and the system text. */
-  allowed: Set<number>;
+  /** sourcedFrom() over the prompt the model was shown. */
+  allowed: Sourced;
   goalIds: string[];
   aiAvailable: boolean;
   /** The last plan's ids by lower-cased title, so a model that forgot the id still carries the marks. */
@@ -383,10 +496,10 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
   let withheld = 0;
   // A line with an invented number is dropped whole: "about €3,000 by March"
   // with the number removed still reads as a promise.
-  const clean = (v: unknown, max: number): string | null => {
+  const clean = (v: unknown, max: number, kind: LineKind): string | null => {
     const t = text(v, max);
     if (!t) return null;
-    if (unsourcedNumber(t, ctx.allowed)) { withheld += 1; return null; }
+    if (unsourced(t, ctx.allowed, kind)) { withheld += 1; return null; }
     return t;
   };
   const ids = new Set<string>();
@@ -412,19 +525,19 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
     for (const m of arr(po.milestones)) {
       if (list.length >= MAX_MILESTONES_PER_PHASE) break;
       const mo = obj(m);
-      const title = clean(mo.title, TITLE_MAX);
+      const title = clean(mo.title, TITLE_MAX, 'target');
       if (!title) continue;
       const steps: RoadmapStep[] = [];
       for (const s of arr(mo.steps)) {
         if (steps.length >= MAX_STEPS_PER_MILESTONE) break;
         const so = obj(s);
-        const st = clean(so.title, TITLE_MAX);
+        const st = clean(so.title, TITLE_MAX, 'target');
         if (!st) continue;
         const who = so.who === 'ai' && ctx.aiAvailable ? 'ai' : 'you';
         steps.push({ id: uniqueId(so.id, st), title: st, size: oneOf(so.size, SIZES, 'sitting'), tag: oneOf(so.tag, TAGS, 'foundation'), who });
       }
       const goal = typeof mo.goal_id === 'string' && ctx.goalIds.includes(mo.goal_id) ? mo.goal_id : null;
-      list.push({ id: uniqueId(mo.id, title), title, why: clean(mo.why, TEXT_MAX), doneWhen: clean(mo.done_when, TEXT_MAX), goalId: goal, steps });
+      list.push({ id: uniqueId(mo.id, title), title, why: clean(mo.why, TEXT_MAX, 'claim'), doneWhen: clean(mo.done_when, TEXT_MAX, 'target'), goalId: goal, steps });
     }
     byKey.set(key, list);
   }
@@ -432,12 +545,14 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
   if (!phases.length) return null;
 
   const h = obj(r.here);
-  const hereTitle = clean(h.title, 60);
+  const hereTitle = clean(h.title, 60, 'claim');
   return {
     roadmap: {
-      here: hereTitle ? { title: hereTitle, line: clean(h.line, TEXT_MAX) } : null,
-      direction: clean(r.direction, 320),
-      changed: clean(r.changed, 320),
+      here: hereTitle ? { title: hereTitle, line: clean(h.line, TEXT_MAX, 'claim') } : null,
+      // Room for the two sentences the prompt asks for, and a little over: a
+      // model that runs long loses a sentence, not half of one.
+      direction: clean(r.direction, DIRECTION_MAX, 'claim'),
+      changed: clean(r.changed, DIRECTION_MAX, 'claim'),
       phases,
     },
     withheld,
@@ -802,4 +917,23 @@ export function goalMarkers(goals: Array<Pick<Goal, 'id' | 'title' | 'metric' | 
       toward: toward.get(g.id) ?? 0,
     };
   });
+}
+
+/**
+ * The goals the plan is working on, and the ones it is not. The first goal by
+ * the person's order always shows; so does any goal a milestone leads to. The
+ * rest wait, folded into one line: Alex's plan ended in five goals in a row
+ * that each said "Nothing on the plan leads here yet", which is one fact —
+ * the plan put the exit first — said five times.
+ */
+export function goalLayout(goals: GoalMarker[]): { shown: GoalMarker[]; waiting: GoalMarker[] } {
+  const shown = goals.filter((g, i) => i === 0 || g.toward > 0);
+  return { shown, waiting: goals.filter((g) => !shown.includes(g)) };
+}
+
+/** Whether the plan serves one goal at most — then "For <goal>" on every milestone says nothing new. */
+export function planServesOneGoal(view: RoadmapView): boolean {
+  if (view.state !== 'ready') return true;
+  const ids = new Set(view.phases.flatMap((p) => p.milestones.map((m) => m.goalId ?? '')));
+  return ids.size <= 1;
 }

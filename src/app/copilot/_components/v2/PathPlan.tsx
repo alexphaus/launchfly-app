@@ -18,7 +18,7 @@
 import { useState } from 'react';
 import { agoLabel } from '@/lib/copilot/machine';
 import {
-  TAG_LABEL, SIZE_LABEL,
+  TAG_LABEL, SIZE_LABEL, goalLayout,
   type GoalMarker, type MarkState, type MilestoneView, type PhaseView, type RoadmapView, type StepView,
 } from '@/lib/copilot/roadmap';
 import type { NextStep } from '@/lib/copilot/pathway';
@@ -100,13 +100,13 @@ export function PlanPending({ view, onDraw }: { view: Extract<RoadmapView, { sta
  * steps (Moves, projects under way) sit under this week, where they compete for
  * the same hours.
  */
-export function PhaseBlock({ phase, actions, workerConnected, handed, children }: { phase: PhaseView; actions: Actions; workerConnected: boolean; handed: Set<string>; children?: React.ReactNode }) {
+export function PhaseBlock({ phase, actions, workerConnected, handed, showGoal, children }: { phase: PhaseView; actions: Actions; workerConnected: boolean; handed: Set<string>; showGoal: boolean; children?: React.ReactNode }) {
   const open = phase.key === 'week';
   return (
     <>
       <div className="cp2-plan-phase"><span>{phase.label}</span></div>
       {phase.milestones.filter((m) => m.state !== 'dropped').map((m) => (
-        <MilestoneRow key={m.id} m={m} startOpen={open} actions={actions} workerConnected={workerConnected} handed={handed} />
+        <MilestoneRow key={m.id} m={m} startOpen={open} actions={actions} workerConnected={workerConnected} handed={handed} showGoal={showGoal} />
       ))}
       {phase.milestones.filter((m) => m.state === 'dropped').map((m) => (
         <SetAsideRow key={m.id} m={m} actions={actions} />
@@ -116,7 +116,7 @@ export function PhaseBlock({ phase, actions, workerConnected, handed, children }
   );
 }
 
-function MilestoneRow({ m, startOpen, actions, workerConnected, handed }: { m: MilestoneView; startOpen: boolean; actions: Actions; workerConnected: boolean; handed: Set<string> }) {
+function MilestoneRow({ m, startOpen, actions, workerConnected, handed, showGoal }: { m: MilestoneView; startOpen: boolean; actions: Actions; workerConnected: boolean; handed: Set<string>; showGoal: boolean }) {
   const [open, setOpen] = useState(startOpen && m.state === 'open');
   const reached = m.state === 'done';
   const visible = m.steps.filter((s) => s.state !== 'dropped');
@@ -126,7 +126,8 @@ function MilestoneRow({ m, startOpen, actions, workerConnected, handed }: { m: M
       <span className={`cp2-way-node ${reached ? 'you' : 'rung'}`}>{reached ? <IconCheck /> : <IconMilestone />}</span>
       <button className="cp2-way-tap" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         <span className="cp2-way-name">{m.title}</span>
-        {m.goalTitle && <span className="cp2-plan-for cp2-clamp1">For {m.goalTitle}</span>}
+        {/* Only where milestones serve different goals: Maria's plan said "For Property buy and renovation" under all seven. */}
+        {showGoal && m.goalTitle && <span className="cp2-plan-for cp2-clamp1">For {m.goalTitle}</span>}
         {!reached && m.why && <span className="cp2-way-s">{m.why}</span>}
         {!open && !reached && visible.length > 0 && (
           <span className="cp2-plan-fold">{m.open ? `${m.open} step${m.open === 1 ? '' : 's'} to go` : 'Every step done'}</span>
@@ -216,8 +217,14 @@ export function AlsoThisWeek({ steps, render }: { steps: NextStep[]; render: (s:
   );
 }
 
-/** Where the plan ends: every goal, in the person's order, and what points at it. */
+/**
+ * Where the plan ends: the goals it is working on, in the person's order, and
+ * one line for the ones it is not — tap it and they are listed. Folded rather
+ * than hidden: a goal the plan set aside is one the person should be able to
+ * see was set aside, and reorder if the plan got it wrong.
+ */
 export function GoalMarkers({ goals, actions }: { goals: GoalMarker[]; actions: Actions }) {
+  const [openWaiting, setOpenWaiting] = useState(false);
   if (!goals.length) {
     return (
       <div className="cp2-way-row cp2-way-stop goal end">
@@ -229,11 +236,18 @@ export function GoalMarkers({ goals, actions }: { goals: GoalMarker[]; actions: 
       </div>
     );
   }
+  const { shown, waiting } = goalLayout(goals);
+  const links = (
+    <span className="cp2-way-links">
+      <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'goal' })}>Add a goal</button>
+      <button className="cp2-link" onClick={() => actions.setTab('you')}>Reorder on You</button>
+    </span>
+  );
   return (
     <>
-      {goals.map((g, i) => {
+      {shown.map((g, i) => {
         const pct = g.progress && g.progress.of > 0 ? Math.min(100, Math.round((g.progress.done / g.progress.of) * 100)) : null;
-        const last = i === goals.length - 1;
+        const last = i === shown.length - 1 && !waiting.length;
         return (
           <div key={g.id} className={`cp2-way-row cp2-way-stop goal ${last ? 'end' : ''}`}>
             <span className="cp2-way-node goal"><IconFlag /></span>
@@ -246,15 +260,27 @@ export function GoalMarkers({ goals, actions }: { goals: GoalMarker[]; actions: 
             <span className="cp2-way-s">
               {[g.horizon, g.toward ? `${g.toward} milestone${g.toward === 1 ? '' : 's'} on the plan lead here` : 'Nothing on the plan leads here yet'].filter(Boolean).join(' · ')}
             </span>
-            {last && (
-              <span className="cp2-way-links">
-                <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'goal' })}>Add a goal</button>
-                <button className="cp2-link" onClick={() => actions.setTab('you')}>Reorder on You</button>
-              </span>
-            )}
+            {last && links}
           </div>
         );
       })}
+      {waiting.length > 0 && (
+        <div className="cp2-way-row cp2-way-stop goal end cp2-plan-waiting">
+          <span className="cp2-way-node sm quiet"><IconFlag /></span>
+          <button className="cp2-way-tap" onClick={() => setOpenWaiting((v) => !v)} aria-expanded={openWaiting}>
+            <span className="cp2-way-t">{waiting.length === 1 ? '1 more goal waits' : `${waiting.length} more goals wait`}</span>
+            <span className="cp2-way-s">Nothing on the plan leads to {waiting.length === 1 ? 'it' : 'them'} yet: it works on the ones above first. {openWaiting ? '' : 'Show them.'}</span>
+          </button>
+          {openWaiting && (
+            <span className="cp2-plan-waitlist">
+              {waiting.map((g) => (
+                <span key={g.id} className="cp2-way-beyondrow"><span className="t cp2-clamp2">{g.title}</span><span className="s">{g.status ?? g.horizon ?? 'No target'}</span></span>
+              ))}
+            </span>
+          )}
+          {links}
+        </div>
+      )}
     </>
   );
 }

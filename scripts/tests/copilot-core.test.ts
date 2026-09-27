@@ -6392,3 +6392,52 @@ async function drawnPlanSecondPass() {
 }
 
 drawnPlanSecondPass().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── One planner: the call is the plan's next step ──────────────────────── */
+import { MONEY_WAITING_DAYS, PLAN_TOPIC, moneyWaiting, planCall, roadmapPrompt as rpPrompt, stepForCall } from '../../src/lib/copilot/roadmap';
+import { NIGHTLY_STEPS as NIGHT_ORDER, nightlyLines as nightOrderLines } from '../../src/lib/copilot/nightly';
+
+async function onePlanner() {
+  // 1. The plan's step is the call, with what arbitration would have picked named as the trade-off.
+  const first = { step: { title: 'Rewrite the opener around missed booking calls' }, milestone: { title: 'First real reply that can become a $150 sale', why: 'Nothing has worked yet, so the message changes before the volume does.' } };
+  const call = planCall(first, { headline: 'Apply today to the Maintenance Coordinator role' })!;
+  assert.equal(call.headline, 'Rewrite the opener around missed booking calls');
+  assert.deepEqual(call.because, ['It is the next step toward: First real reply that can become a $150 sale.', 'Nothing has worked yet, so the message changes before the volume does.']);
+  assert.equal(call.instead_of, 'Apply today to the Maintenance Coordinator role', 'the Move it was chosen over is named, not hidden');
+  assert.equal(call.topic, PLAN_TOPIC);
+  assert.equal(call.verify_metric, 'none', 'a plan step stakes nothing on a number, so it is graded done or not');
+  assert.equal(call.source_move_id, undefined, 'and it answers no Move: the runner-up stays on the list');
+  assert.equal(planCall(null, null), null, 'no step that fits today, no plan call — the ladder picks');
+  assert.equal(planCall(first, { headline: first.step.title })!.instead_of, undefined, 'a trade-off with itself is not one');
+  assert.deepEqual(planCall({ ...first, milestone: { ...first.milestone, why: null } }, null)!.because, ['It is the next step toward: First real reply that can become a $150 sale.']);
+
+  // 2. Only money due soon outranks the plan for the call.
+  assert.equal(moneyWaiting({ value: 400, withinDays: 3 }), true, 'a deposit owed this week');
+  assert.equal(moneyWaiting({ value: 150, withinDays: MONEY_WAITING_DAYS }), true);
+  assert.equal(moneyWaiting({ value: 1500, withinDays: 90 }), false, 'a goal gap is due at its horizon, and it is what the plan is ordered against');
+  assert.equal(moneyWaiting({ value: undefined, withinDays: 1 }), false, 'urgent with no money is the plan’s to order');
+  assert.equal(moneyWaiting(null), false);
+
+  // 3. Answering the call finds its step by its words.
+  const roadmap = { here: null, direction: null, changed: null, phases: [{ key: 'week' as const, milestones: [{ id: 'm', title: 'M', why: null, doneWhen: null, goalId: null, steps: [{ id: 'rewrite', title: first.step.title, size: 'sitting' as const, tag: 'leverage' as const, who: 'you' as const }] }] }] };
+  assert.deepEqual(stepForCall(roadmap, first.step.title), { id: 'rewrite', title: first.step.title });
+  assert.equal(stepForCall(roadmap, 'Something the plan never said'), null, 'a call from somewhere else ticks nothing');
+  assert.equal(stepForCall(null, first.step.title), null);
+
+  // 4. The plan is drawn before the call is picked from it, and the report reads in that order.
+  assert.deepEqual(NIGHT_ORDER, ['supply', 'reconcile', 'jobs', 'roadmap', 'brief']);
+  const order = nightOrderLines({ jobs: { ran: 3, written: 1 }, roadmap: { drawn: true, reason: 'progress' }, brief: { agent: 'llm' } }).map((l) => l.step);
+  assert.ok(order.indexOf('roadmap') < order.indexOf('brief'), 'Plan is reported before Call');
+
+  // 5. The plan sees what the checks found.
+  const base = {
+    today: '2026-09-27', name: 'A', headline: null, location: null, capacity: 'deep' as const, currency: '$', runwayMonths: null, offer: null, price: null,
+    goals: [], working: '', notes: [], funnel: { windowDays: 30, sent: 0, replied: 0, won: 0, wonAmount: 0 }, happened: [], previous: [], aiAvailable: false,
+  };
+  assert.match(rpPrompt({ ...base, found: ['Casa Blanca paid 3 days ago and nothing was delivered'] }), /WHAT THE APP'S CHECKS FOUND, waiting on an answer:\n- Casa Blanca paid 3 days ago/);
+  assert.ok(!/CHECKS FOUND/.test(rpPrompt(base)), 'nothing found, no section');
+
+  console.log('copilot-core: one planner checks passed');
+}
+
+onePlanner().catch((e) => { console.error(e); process.exit(1); });

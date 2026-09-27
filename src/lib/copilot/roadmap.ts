@@ -45,7 +45,9 @@
 // Pure: no DB import. agent/roadmap.ts does the reading, the one call and the
 // write; copilot-core.test.ts covers everything here.
 
+import type { DecisionDraft } from './decision';
 import { hoursLabel, type FocusLog } from './focus';
+import type { Stake } from './stake';
 import { moneyLabel, type AnsweredMove, type RecentOutcome } from './review';
 import type { Capacity, Goal } from './types';
 import { CAPACITY_META } from './types';
@@ -161,6 +163,13 @@ export interface RoadmapInput {
    * they exist. Null on a blank offer, where nothing is shown to send.
    */
   drafts?: { count: number; oldestDays: number } | null;
+  /**
+   * What the app's checks found and are waiting on an answer for, one line
+   * each: "Casa Blanca paid 3 days ago and nothing was delivered". Computed by
+   * jobs from rows. Proposals are left out — a model wrote those, and the plan
+   * is not fed another model's view (rule 3).
+   */
+  found?: string[];
 }
 
 export const ROADMAP_SYSTEM = `You draw one person's plan: from where they are now to the goals they set, over weeks and months. You are the planner who decides the order, not a coach writing encouragement.
@@ -176,6 +185,7 @@ How to draw it:
 - Goals compete for the same hours. When two pull against each other, say which comes first and why in direction, and put the other later.
 - Plan for what the goals actually need. It is not always selling: a job search, learning a skill, building a product, getting money under control, a move, a qualification.
 - If they seem lost — goals vague, nothing working — the first milestone is getting clear: a small experiment or one conversation that produces a fact. Do not make the decision for them.
+- What the app's checks found is real and computed from their records: money owed, a client waiting, a goal falling behind. Plan around it; money due soon belongs in "week".
 - Drafts already written are listed when there are any. If sending them serves this week, make it a step ("Send the waiting drafts"). If the record says the opener or the list is wrong, the step is to fix that first — never send more of what is not working.
 - Use what happened. A step marked done is done: build on it, never repeat it. A step marked dropped stays out in that form. When something has brought results, lean into it; when the record shows effort and nothing back, change the approach and say what you changed in changed.
 - Later phases can be one milestone with no steps. A plan past the next quarter is a direction, not a schedule.
@@ -265,12 +275,19 @@ export function roadmapPrompt(input: RoadmapInput): string {
     lines.push('THE LAST PLAN: none, this is the first.');
   }
   lines.push('');
+  if (input.found?.length) {
+    lines.push("WHAT THE APP'S CHECKS FOUND, waiting on an answer:");
+    for (const f of input.found) lines.push(`- ${f}`);
+  }
   if (input.drafts && input.drafts.count > 0) {
     lines.push(`DRAFTS WRITTEN AND WAITING: ${input.drafts.count}, the oldest ${input.drafts.oldestDays} days old`);
   }
   lines.push(`ai_available: ${input.aiAvailable}`);
   return lines.join('\n');
 }
+
+/** Open findings the plan is shown, at most. */
+export const MAX_FOUND = 8;
 
 /** Lines about the fortnight, at most this many: the prompt's budget, not the record's. */
 export const MAX_HAPPENED = 24;
@@ -936,4 +953,58 @@ export function planServesOneGoal(view: RoadmapView): boolean {
   if (view.state !== 'ready') return true;
   const ids = new Set(view.phases.flatMap((p) => p.milestones.map((m) => m.goalId ?? '')));
   return ids.size <= 1;
+}
+
+/* ─── The plan as the day's call ──────────────────────────────────────────── */
+
+/** The topic a call drawn from the plan is recorded under, so answering it can tick the step. */
+export const PLAN_TOPIC = 'plan';
+/** Money due within this many days is the one thing that still outranks the plan for the call. */
+export const MONEY_WAITING_DAYS = 7;
+
+/**
+ * Real money, due soon: a deposit owed, a client who paid and is waiting for
+ * the work. A job computes both from rows, and a plan drawn last night may not
+ * have seen it yet. A goal's gap carries a value too, but it is due at the
+ * goal's horizon, weeks out, and it is exactly what the plan is ordered against.
+ */
+export function moneyWaiting(stake: Pick<Stake, 'value' | 'withinDays'> | null | undefined): boolean {
+  return !!stake && (stake.value ?? 0) > 0 && stake.withinDays <= MONEY_WAITING_DAYS;
+}
+
+/**
+ * The day's call, from the plan: its first step of the person's own that fits
+ * today, and what it was chosen over.
+ *
+ * Why the plan leads. Three things each answered "what should I do": the call,
+ * the Moves and the plan. They agreed only by luck — Alex's plan put the exit
+ * fund and a rewritten opener first, and the call the same evening was to apply
+ * for a maintenance coordinator role. The plan is the one drawn against every
+ * goal, with the record of what was done, so the call is its next step, and the
+ * Move arbitration would have picked is named as what it was chosen over. That
+ * Move stays on the list; it is not answered by this.
+ *
+ * Confidence is 'high': the call is not a guess about a category of work, it is
+ * the next step of the plan the person is following. It stakes nothing on a
+ * number, so it is graded as done or not, like any call with no metric.
+ */
+export function planCall(first: { step: Pick<StepView, 'title'>; milestone: Pick<MilestoneView, 'title' | 'why'> } | null, runnerUp: { headline: string } | null): DecisionDraft | null {
+  if (!first) return null;
+  return {
+    headline: first.step.title,
+    because: [`It is the next step toward: ${first.milestone.title}.`, ...(first.milestone.why ? [first.milestone.why] : [])],
+    instead_of: runnerUp && runnerUp.headline !== first.step.title ? runnerUp.headline : undefined,
+    confidence: 'high',
+    topic: PLAN_TOPIC,
+    verify_metric: 'none',
+  };
+}
+
+/** The step a call was drawn from, found by its words: the call carries no column for it, and needs none. */
+export function stepForCall(roadmap: Roadmap | null, headline: string): { id: string; title: string } | null {
+  for (const p of roadmap?.phases ?? []) for (const m of p.milestones) {
+    const s = m.steps.find((x) => x.title === headline);
+    if (s) return { id: s.id, title: s.title };
+  }
+  return null;
 }

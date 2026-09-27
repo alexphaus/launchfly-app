@@ -1,10 +1,14 @@
 // src/lib/copilot/call.ts
 // Picking the day's one Call out of everything the jobs produced.
 //
-// The ladder, in order:
+// The ladder, in order (persistBrief in brief.ts runs it):
 //
+//   0. With a drawn plan, its next step (roadmap.ts, planCall) — unless the
+//      winning Move is money due this week (moneyWaiting), which a plan drawn
+//      last night may not have seen. The Move it was chosen over is named.
 //   1. A blank offer forces the offer call, whatever anything else says. That
-//      rule predates this file and outranks it (invariant 1).
+//      rule predates this file and outranks everything but the plan (invariant
+//      1): a plan step is not a draft, and the draft routes still refuse.
 //   2. The winning Move, when one clears CALL_FLOOR. It is grounded in a real
 //      row and carries an artifact, which prose does not.
 //   3. Whatever the agent wrote.

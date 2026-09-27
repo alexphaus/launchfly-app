@@ -311,7 +311,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 
 | Tab | The question | What is on it | Pure module |
 | --- | --- | --- | --- |
-| Path | where am I, and what moves it | done (the rungs reached, then the week's events, oldest first, a rung reached this week drawn where it happened, and one swap under the hours it is about) · notices · you are here (the rung, its progress, the week) · the call (`CallCard`, unchanged) · also needs you · next (what changed since you looked, the planner's steps with its reason on each, then the rungs ahead, then the goal) · the composer | `pathway.ts`, `today.ts` |
+| Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan (this week's steps with their reasons and what changed since you looked, then the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal, the goals beyond it) · the composer | `plan.ts`, `pathway.ts`, `today.ts` |
 | Matches | who is worth contacting, and where each one is | pills (New · To send · Waiting · Replied) · only what the ranker recommends, each card a tile, what it is and where, why, and one action · a draft sent from its own card | `matches.ts` |
 | Work | what am I building | the offer and what it knows about how you work · the path to money · the agents · projects handed over, in full (the ones that need you, the ones running, what it offers to take on, what finished) · the brief for Claude | `machine.ts` |
 | You | how is it going | money, runway, deep work, replies · the week read back · goals · settings | `review.ts`, `focus.ts` |
@@ -321,92 +321,116 @@ than the clock, so the header's status line and the tab under it cannot disagree
 (the old header said 61 over a card saying 51) and the server render and the
 hydrating client agree across an hour boundary.
 
-**The Path is one stream: done above, you are here, next below.** It opens on
-"you are here" — scrolled there after the shell's own scroll reset, with a fifth
-of the screen of past above it so the direction is obvious — and it is drawn in
-the language of the path to money it grew out of: a rail of 28px nodes inside
-white cards, display-face names, who does each part in a pill. The rail is drawn
-per row (a segment above and below each node), so it stays joined whatever a
-row's height and never dangles off a card; ahead of you it is dashed, because
-that part is the plan. `pathway.ts` holds the rules, and a suite covers them.
+**The Path is a plan, not a log.** One line runs down the left of the screen,
+outside the cards: solid through the evidence above "you are here", dashed
+through the plan below it, because that half is a guess. It opens on "you are
+here" with a little of the evidence above. The stream it replaced put everything
+on one time axis and weighted the axis evenly, so what a person opens it for —
+what now, and where is this going — was a short list under a long log ("mostly a
+log of what already happened", in its owner's words). The rules are in `plan.ts`
+(the forward half) and `pathway.ts` (the evidence), and a suite covers each.
 
-- **The past is only what moved something** (`pathEvents`, `PATH_DAYS` = 7, the
-  last `MAX_PAST` behind "Show earlier"): finds rolled up per day with how many
-  cleared the bar, the watcher's flags, drafts and sends (each execution once,
-  from the queue and the pipeline), every reply, meeting, payment and no one row
-  each, a project the *worker* finished (`WORKER_CLOSE_MS` — a close by hand is
-  the owner's verdict) or moved, a call the ledger read back (`verdictOf`, only
-  `worked` or `no_movement` — until it is graded a call is a claim), hours you
-  logged (on the day worked, untimed, because they are typed in after), and Moves
-  you marked done (never a feed find: Keep and Did it are the same status). No
-  row says an agent merely ran — that was the log the Working? tab was. A
-  mandate's own ledger rows are its project's story, not separate events.
-- **The ladder is counted, never estimated** (`pathLadder`): say what you sell →
-  send the first message → get a reply → first paying client → `REPEAT_WINS` (3)
-  paying clients → your goal, each done by a count the funnel already keeps, so
-  a rung and the path to money cannot disagree. Where you are is the first rung
-  not reached, even when a later one counts something. The rungs that are the
-  user's to *write* (`input`: the offer, and a goal nobody named) carry the one
-  tap that writes them — except the offer while a call is on screen, because a
-  blank offer's call already carries it.
-- **What comes next is the planner's** (`pathNext`): the Moves it ranked
-  (`worthDoing`'s split still holds — a feed find is on Matches, the queue and a
-  blocked mandate are asks), then work it offers to do itself, then projects
-  under way; then the rungs ahead, then the goal. An offer opens in place with
-  its plan on screen and one tap to hand it over — a plan is never approved
-  unseen. Nothing is invented to fill the list.
-- **Around the call.** What broke is a notice above "you are here", not a line in
-  the past: a nightly job that never ran, a check that failed, sources failing
-  (`doneForYou`'s stale, broke and warn rows). The asks (`needsYou`) sit under the
-  call. The week under "you are here" counts days you moved it forward — a send,
-  an answer you logged, a Move done — never app opens (`pathWeek`), and a streak
-  is not broken at nine in the morning. A failed read of the ledger the past is
-  built from (`recent.unreadable`) is a notice there too, so a quiet stream is
-  never read as a quiet week.
-
-**The path moves, and says so.** A plan that changes silently cannot be told
-from one that never changes, which was the verdict on every draft of Work.
-
-- **A rung reached is a moment where it happened**, directly under the row that
-  reached it — the send, the reply, the payment — placed rather than sorted, so
-  two rows at one instant cannot come between them. It is dated by the
-  diagnosis's all-time `firsts` (`sent_at` and `occurred_at` off the same rows
-  the funnel counts, `FIRST_WINS` of the wins), so "first reply" is the reply
-  that was first and not the first one the week can see. A rung dated in the
-  stream is left out of the done rungs above it. A goal carries no date, so
-  reaching it is no moment; the next goal is the step (`input: 'next-goal'`).
-- **Every next step carries the planner's reason** — the Move's `why[0]`, a
-  project's `why` — and a step that came without one gets none.
+- **Where you are, in words** (`pathHere`): "2 paying clients · 9 sent · 2
+  replied · 2 paid" — never "Step 5 of 6 · 2 of 3", which was accurate and read
+  as a puzzle. The ladder still decides where you are (`pathLadder`: say what you
+  sell → first message → first reply → first paying client → `REPEAT_WINS`
+  paying clients → your goal, each done by a count the funnel keeps); its step
+  numbers are the app's structure and stay out of sight.
+- **One move, sized to the time you set** (`pathNow`). An offer when there is
+  none; today's call while it waits, because arbitration already weighed it; the
+  drafts, because on an outbound path nothing moves until something goes out —
+  "Send 25 of your 51 drafts, about 75 min of your 150", with what that is at your
+  own reply rate, marked early under `RATE_SAMPLE` sends; then whatever a person
+  is blocking — a question, a breakage, an approval, a reply with no ending; then
+  the planner's first Move that fits your capacity; then businesses worth a
+  message. The rest of what needs you is a chip beside it, at most `MAX_ALSO`.
+  Once answered, the call is a receipt at the foot of the evidence, said in its
+  metric's own unit (`metricLabel`: "$2", not "2"), and the move is the next
+  thing — the answered card had the centre of the screen to itself before.
+- **The plan walks the goal back through your own funnel** (`pathAhead`). It
+  points at your first goal by priority, a money one when there is one: money →
+  clients at your price (`priceOf`, the low end of what you wrote) → sends at your
+  own rate (sends per client, from your rows) → days at your capacity
+  (`sendsPerDay`, the same pace the move asks for). Between you and the goal are
+  the ladder's rungs still ahead, each with what it takes, and the checkpoint:
+  before `RATE_SAMPLE` sends, "at 20 sends the guesses become numbers", with what
+  each result means; after, the funnel's own bottleneck. The goal says the gap,
+  what it takes, how long at your capacity, and — when it does not get there —
+  the pace you actually kept this fortnight. The goals past it are named with
+  where they stand and no plan: a plan past the first goal is built on the first
+  goal's guesses. Where a link has nothing under it — no price, no client, no
+  reply — the stop says what would turn it into a number rather than supplying
+  one (invariant 2). Arithmetic rather than a written roadmap is DIRECTION.md's
+  survival test: an agent with memory can write "here is your plan to $1,500";
+  "10 clients at your $150, about 45 sends at the rate your own 9 sends earned,
+  two days of Deep focus" needs the ledger.
+- **Capacity is visible.** The move's size, a milestone's days and whether a step
+  fits are all read from the time you set. The plan says "Sized for Deep focus,
+  150 min a day", a step longer than that says "Bigger than today", and changing
+  it redraws the plan.
+- **This week's steps are the planner's** (`pathNext`): the Moves it ranked
+  (`worthDoing`'s split still holds), work it offers to do itself — opened in
+  place with its plan on screen and one tap to hand it over, never approved
+  unseen — and projects under way. Each carries the planner's reason, the Move's
+  `why[0]` or a project's `why`, and a step that came without one gets none.
+- **The evidence is only what teaches something** (`pathEvents`, `EVIDENCE_DAYS`
+  = 14, the last `MAX_PAST` behind "Show earlier"): every reply, meeting, payment
+  and no; a call the ledger read back (`worked` or `no_movement` — until graded a
+  call is a claim); a project's result, when the *worker* posted it
+  (`WORKER_CLOSE_MS`); hours you logged, on the day worked; a step reached. Not
+  what the app did — finds, drafts, a project's steps, a Move ticked off — and not
+  a send on its own, which teaches nothing until something comes back. What the
+  app did is on Work. Days before this week carry their date ("Sat 12 Sep"): a
+  weekday alone named two Saturdays. An empty fortnight says so, with the sends
+  that explain it.
+- **A step reached is a moment where it happened**, directly under the answer or
+  payment that reached it — placed rather than sorted, so rows at one instant
+  cannot come between them. It is dated by the diagnosis's all-time `firsts`
+  (`sent_at` and `occurred_at` off the rows the funnel counts, `FIRST_WINS` of
+  the wins), so "first reply" is the reply that was first, and it says how long
+  it took ("12 days after your first message") rather than a step number. A goal
+  carries no date, so once it is met the next goal is the step
+  (`input: 'next-goal'`).
+- **What broke** sits at the foot of the evidence, just above "you are here": a
+  nightly job that never ran, a failed check, failing sources, and a failed read
+  of the ledger the evidence is built from (`recent.unreadable`), so a quiet
+  stretch is never read as a quiet week (invariant 13). The week's dots count days
+  you moved it forward — a send, an answer you logged, a Move done, never an open
+  (`pathWeek`) — from sends read by date (`recent.sentAt`), not from the
+  pipeline, which holds only the 200 best-scored businesses and missed sends to
+  the rest.
 - **What changed since you looked** (`planChanges`): steps new since this device
   last showed the plan are marked New; each step that left is named with what
   happened to it, read off the rows — you did it, you said no, handed over,
   finished, called off, now today's call — and the one reason with no row behind
-  it is said as exactly that: the last run replaced it. A rung reached since then
-  is a chip above "you are here". The snapshot is the whole plan, not the four on
-  screen (a step that moved up is not new), kept per device
-  (`cp2.path.seen:<profile>` in localStorage) because it is a convenience about
-  the screen and nothing is decided from it. No snapshot, or one older than
+  it is said as exactly that: the last run replaced it. A step reached since then
+  is a chip under "you are here", named rather than numbered. The snapshot is
+  the whole plan, not the steps on screen (a step that moved up is not new), kept
+  per device (`cp2.path.seen:<profile>` in localStorage) because it is a
+  convenience about the screen and nothing is decided from it. No snapshot, or one older than
   `PATH_DAYS`, is no change — a first visit is not "everything is new", and a
   diff that can only say "gone" has said nothing. A browser that keeps nothing
-  says so under Next (invariant 13).
+  says so under The plan (invariant 13).
 - **One suggestion, and only with two facts** (`pathSwap`): at least
   `SWAP_MIN_MINUTES` this week on one thing that is not outreach, next to what
   sending brought back. Nothing sent with drafts waiting: send those first.
   Sends being answered: try `SWAP_HOURS` of those hours on sending. Sending with
   nothing back yet has no second fact, and says nothing; the app never claims to
-  know what the hours were worth. It sits under the hours it is about, and "Keep
-  it" holds for `SWAP_KEEP_DAYS` on this device.
+  know what the hours were worth. It sits in the evidence under the hours it is
+  about, and "Keep it" holds for `SWAP_KEEP_DAYS` on this device.
 - **"Back to now"** floats above the nav while "you are here" is off screen,
   pointing the way it is. Measured on scroll: an observer fires only when the
   node crosses the edge, so a fling past it left the arrow pointing the way it
   came. Portalled into the frame, like the toast — a sticky element is held
   inside the list's padding, and that padding is where the floating nav is.
 
-Today's parts all have a place here, so nothing it did was lost: the call is the
-present, "done for you" is the recent past (a reply `reconcileReplies` matched is
-the world's, never reported as the user's work), "needs you" is under the call,
-"worth doing" is the first of the next steps. Old links to Today (`?tab=today`,
-`?tab=now`) land on the Path.
+Today's parts all have a place, so nothing it did was lost: the call is the move
+while it waits and a receipt once answered; "needs you" is the move and the chips
+beside it; "worth doing" is this week's steps; and "done for you" is split by
+what it was — an answer is evidence (a reply `reconcileReplies` matched is the
+world's, never reported as the user's work), and the app's own activity is its
+team's line on Work. Old links to Today (`?tab=today`, `?tab=now`) land on the
+Path.
 
 **Matches is the deck laid flat, and it still learns.** Businesses are answered
 through the triage route, so "Draft opener" and "Not for me" feed the same keep

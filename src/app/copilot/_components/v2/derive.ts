@@ -15,9 +15,10 @@ import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster, businessMachine, workStatus } from '@/lib/copilot/machine';
 import { matchCounts, matchFeed, matchesStatus, stageCards } from '@/lib/copilot/matches';
 import { offerIsEmpty } from '@/lib/copilot/offer';
-import { pathLadder, pathNext, pathPast, pathStatus, pathSwap, pathWeek } from '@/lib/copilot/pathway';
+import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
+import { pathAhead, pathHere, pathNow, planStatus, priceOf } from '@/lib/copilot/plan';
 import { weekReview } from '@/lib/copilot/review';
-import { doneForYou, needsYou } from '@/lib/copilot/today';
+import { doneForYou, needsYou, worthDoing } from '@/lib/copilot/today';
 import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Tab2 } from '../shared';
@@ -75,38 +76,71 @@ export function derive(home: HomeData) {
   const nothingYet = !home.decision && !home.insight && !queueCount && !home.moves.length && !home.pipeline.length && !home.commissions.length;
 
   const d = home.diagnosis;
-  // The stream. The ladder counts from the same funnel the path to money shows,
-  // so a rung and the machine cannot disagree about how many were sent.
-  const funnel = (k: string) => d.stages.find((st) => st.key === k)?.count ?? 0;
+  // The ladder counts from the same funnel the path to money shows, so a
+  // milestone and the machine cannot disagree about how many were sent.
+  const count = (k: string) => d.stages.find((st) => st.key === k)?.count ?? 0;
+  const funnel = { sent: count('sent'), replied: count('replied'), won: count('won') };
+  // The goal the path points at: the first by the user's own priority, a money
+  // one when there is one — money is the goal a plan can walk back from.
   const primaryGoal = home.goals.find((g) => g.metric === 'currency') ?? home.goals[0] ?? null;
-  const sentAt = home.pipeline.map((r) => r.execution?.sent_at).filter((x): x is string => !!x);
+  // Sends by date, from the ledger. The pipeline's own executions are the
+  // fallback for a payload from before the ledger carried them; it only holds
+  // the 200 best-scored businesses, so on its own it misses sends.
+  const sentAt = home.recent.sentAt ?? home.pipeline.map((r) => r.execution?.sent_at).filter((x): x is string => !!x);
+  const sentFortnight = sentAt.filter((t) => Date.parse(t) >= now.getTime() - 14 * 86_400_000).length;
   const pastInput = {
     now,
     timezone: home.profile.timezone,
-    pipeline: home.pipeline,
-    queue: home.queue,
     outcomes: home.recent.outcomes,
-    answered: home.recent.answered,
     focus: home.recent.focus,
     commissions: home.commissions,
     decisions: home.decisionLog,
-    watchMoves: home.moves,
-    // The same rows the ladder counts, so a rung dated in the stream is one the ladder has.
+    // The same rows the ladder counts, so a step dated in the past is one the ladder has.
     firsts: d.firsts ?? null,
+    currency,
   };
+  const ladder = pathLadder({
+    offerSet: !noOffer,
+    ...funnel,
+    goal: primaryGoal ? { title: primaryGoal.title, target: primaryGoal.target_value, current: primaryGoal.current_value, money: primaryGoal.metric === 'currency', unit: primaryGoal.unit } : null,
+    currency: primaryGoal?.unit || currency,
+  });
+  const here = pathHere(ladder, funnel);
+  // The one move. What it takes from the lists below is not repeated in them.
+  const move = pathNow({
+    noOffer,
+    callPending: !!home.decision && home.decision.response === 'pending',
+    queue: { count: noOffer ? 0 : queueCount, oldestDays },
+    asks,
+    moves: worthDoing(home.moves, Number.POSITIVE_INFINITY).shown,
+    capacity: home.profile.capacity,
+    funnel,
+    freshMatches: good.filter((i) => i.from === 'business' && i.fresh).length,
+  });
+  const nowMoveId = move.now.kind === 'move' ? move.now.id : null;
+  const movedWeek = pathWeek({ now, timezone: home.profile.timezone, sentAt, outcomes: home.recent.outcomes, answered: home.recent.answered });
+  const bottleneck = d.findings.find((f) => f.kind === 'bottleneck') ?? null;
   const path = {
-    ladder: pathLadder({
-      offerSet: !noOffer,
-      sent: funnel('sent'),
-      replied: funnel('replied'),
-      won: funnel('won'),
-      goal: primaryGoal ? { title: primaryGoal.title, target: primaryGoal.target_value, current: primaryGoal.current_value, money: primaryGoal.metric === 'currency', unit: primaryGoal.unit } : null,
-      currency: primaryGoal?.unit || currency,
-    }),
+    ladder,
+    here,
+    now: move.now,
+    also: move.also,
     past: pathPast(pastInput),
     pastAll: pathPast(pastInput, Number.POSITIVE_INFINITY),
-    next: pathNext({ moves: home.moves, commissions: home.commissions }),
-    week: pathWeek({ now, timezone: home.profile.timezone, sentAt, outcomes: home.recent.outcomes, answered: home.recent.answered }),
+    next: pathNext({ moves: nowMoveId ? home.moves.filter((m) => m.id !== nowMoveId) : home.moves, commissions: home.commissions }),
+    ahead: pathAhead({
+      ladder,
+      funnel,
+      goal: primaryGoal,
+      others: home.goals.filter((g) => g.id !== primaryGoal?.id),
+      price: priceOf(home.profile.offer?.price_band),
+      currency: primaryGoal?.unit || currency,
+      capacity: home.profile.capacity,
+      sentFortnight,
+      bottleneck: bottleneck ? { headline: bottleneck.headline, action: bottleneck.action } : null,
+    }),
+    week: movedWeek,
+    fortnight: sentFortnight,
     // Drafts from a blank offer are not on To send (above), so they are not waiting to be sent either.
     swap: pathSwap({ now, timezone: home.profile.timezone, focus: home.recent.focus, sentAt, outcomes: home.recent.outcomes, queueCount: noOffer ? 0 : queueCount }),
   };
@@ -171,7 +205,7 @@ export function derive(home: HomeData) {
   const week = focusWeek(home.recent.focus, home.recent.today);
 
   const status: Record<Tab2, string | null> = {
-    path: pathStatus(path.ladder, asks.length, path.week.streak),
+    path: planStatus(path.here, asks.length, path.week.streak),
     matches: matchesStatus(counts),
     work: workStatus(team, running),
     you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : null,

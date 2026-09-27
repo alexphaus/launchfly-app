@@ -742,6 +742,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     })),
     answered: recentRows.answered,
     focus: recentRows.focus,
+    sentAt: recentRows.sentAt,
     unreadable: recentRows.unreadable,
   };
   const pipeline: PipelineRow[] = pipelineRows.map((o) => {
@@ -1950,9 +1951,9 @@ export async function recordCommissionWork(
 const RECENT_OUTCOME_COLS = 'id, kind, amount, currency, note, source, occurred_at, opportunity_id';
 
 /**
- * The last RECENT_DAYS of outcomes, answered Moves and logged deep work.
+ * The last RECENT_DAYS of outcomes, answered Moves, logged deep work and sends.
  *
- * Each of the three degrades on its own and says so in `unreadable`. The
+ * Each of the four degrades on its own and says so in `unreadable`. The
  * degrading is required — code and schema deploy separately here, and a You tab
  * that went blank over a missing column would be worse than one missing a line.
  * The saying so is invariant 13: an empty list is also exactly what a quiet week
@@ -1994,8 +1995,16 @@ export async function loadRecentRows(profileId: string, now = new Date()): Promi
     return focusFromEvents((r.data ?? []) as Array<{ id: number; payload: unknown; created_at: string }>);
   })();
 
-  const [o, a, f] = await Promise.all([outcomes, answered, focus]);
-  return { outcomes: o, answered: a, focus: f, unreadable };
+  const sentAt = (async (): Promise<string[]> => {
+    const r = await db.from('copilot_executions').select('sent_at')
+      .eq('profile_id', profileId).eq('approval_state', 'sent').gte('sent_at', since)
+      .order('sent_at', { ascending: false }).limit(500);
+    if (r.error) { unreadable.push('sent messages'); return []; }
+    return ((r.data ?? []) as Array<{ sent_at: string | null }>).map((x) => x.sent_at).filter((x): x is string => !!x);
+  })();
+
+  const [o, a, f, s] = await Promise.all([outcomes, answered, focus, sentAt]);
+  return { outcomes: o, answered: a, focus: f, sentAt: s, unreadable };
 }
 
 /**

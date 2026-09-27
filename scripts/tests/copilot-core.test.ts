@@ -5299,7 +5299,7 @@ huntsCore().catch((e) => { console.error(e); process.exit(1); });
 // are the planner's and nothing is invented to fill them; the week counts what
 // you did, not that you opened the app.
 // ---------------------------------------------------------------------------
-import { MAX_PAST, REPEAT_WINS, callName, pathEvents, pathLadder, pathNext, pathPast, pathStatus, pathWeek } from '../../src/lib/copilot/pathway';
+import { MAX_PAST, REPEAT_WINS, callName, pathEvents, pathLadder, pathNext, pathPast, pathWeek } from '../../src/lib/copilot/pathway';
 
 async function pathwayCore() {
   const now = new Date('2026-09-26T10:00:00Z');
@@ -5340,40 +5340,40 @@ async function pathwayCore() {
   const watchMoves = [{ id: 'w1', job: 'watch', created_at: '2026-09-26T05:00:00Z' }, { id: 'w2', job: 'watch', created_at: '2026-09-26T05:30:00Z' }] as never[];
   const input = { now, timezone: tz, pipeline: pipeline as never[], queue, outcomes, answered, focus, commissions, decisions, watchMoves };
 
-  // 1. The past is what moved, rolled up per day where one thing happened many times.
+  // 1. The past is what teaches something: answers, payments, verdicts, results, hours.
   const ev = pathEvents(input);
   const titles = ev.map((e) => e.title);
-  assert.ok(titles.includes('Scout found 3 businesses'), titles.join(' | '));
-  assert.equal(ev.find((e) => e.title === 'Scout found 3 businesses')!.detail, '2 worth a message', 'the one below the bar was looked at, not kept');
-  assert.ok(!titles.some((t) => t.includes('Old Find')) && ev.filter((e) => e.icon === 'scout').length === 1, 'a find from a fortnight ago is not this week');
-  assert.ok(titles.includes('Writer drafted 2 openers') && titles.includes('Writer drafted 1 opener'), 'the queue and the pipeline, each draft once');
-  assert.equal(ev.find((e) => e.title === 'You sent 1 message')!.detail, 'Casa Blanca Resort');
+  assert.ok(!ev.some((e) => ['scout', 'watcher', 'writer', 'send'].includes(e.icon)), `finds, flags, drafts and sends are activity, not evidence: ${titles.join(' | ')}`);
   assert.equal(ev.find((e) => e.title === 'Casa Blanca Resort replied')!.detail, 'Matched to what you sent');
   assert.ok(titles.includes('Bayview Resort paid $900'));
   assert.ok(!titles.includes('A mandate paid') && !titles.some((t) => t.includes('Nobody')), 'a mandate’s own ledger row and an inferred no-reply are not events');
-  assert.ok(titles.includes('Finished: Compare signage suppliers') && !titles.includes('Finished: Closed by hand'), 'only a finish the worker posted is something it did');
-  assert.equal(ev.find((e) => e.title === 'Shortlist spa resorts')!.detail, 'Found 6 with a booking page');
+  assert.ok(titles.includes('Finished: Compare signage suppliers') && !titles.includes('Finished: Closed by hand'), 'only a finish the worker posted is a result');
+  assert.ok(!titles.includes('Shortlist spa resorts'), 'a project’s progress is its own story, told in its thread');
   assert.ok(titles.includes('Tuesday’s call worked') && ev.filter((e) => e.icon === 'call').length === 1, 'only a call the ledger read back');
   assert.equal(ev.find((e) => e.icon === 'call')!.detail, '“Clear the queue” · sent 0 → 3');
   const hours = ev.find((e) => e.icon === 'focus')!;
   assert.equal(hours.title, '3h on the booking app');
   assert.equal(hours.day, '2026-09-25', 'hours belong to the day they were worked, not the day they were typed');
   assert.equal(hours.timed, false);
-  assert.ok(titles.includes('Quote the Bayview upsell') && !titles.includes('Dismissed thing') && !titles.includes('A feed find kept'));
-  assert.ok(titles.includes('Watcher flagged 2 posts'));
-  assert.ok(!titles.some((t) => /\b(ran|running|checked)\b/i.test(t)), 'nothing reports that an agent merely ran — that is the log');
+  assert.ok(!titles.includes('Quote the Bayview upsell'), 'a suggestion ticked off teaches nothing until its call is graded');
+  assert.ok(!titles.some((t) => /\b(ran|running|checked|found|drafted|sent)\b/i.test(t)), 'nothing reports activity — that is the log');
   assert.deepEqual([...ev].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).map((e) => e.key), ev.map((e) => e.key), 'oldest first');
   assert.ok(ev.every((e) => e.actor === 'ai' || e.actor === 'you' || e.actor === 'world'));
   assert.equal(ev.find((e) => e.title.includes('replied'))!.actor, 'world', 'an answer from outside is neither the app nor you');
+  // A fortnight, not a week: answers are rarer than activity.
+  const older = pathEvents({ ...input, outcomes: [outcome({ id: 'r9', who: 'Old Reply', occurred_at: '2026-09-15T09:00:00Z' }), outcome({ id: 'r0', who: 'Too Old', occurred_at: '2026-09-10T09:00:00Z' })] });
+  assert.ok(older.some((e) => e.title === 'Old Reply replied') && !older.some((e) => e.title === 'Too Old replied'));
+  assert.deepEqual(pathPast({ ...input, outcomes: [outcome({ id: 'r9', who: 'Old Reply', occurred_at: '2026-09-15T09:00:00Z' }), outcome({ id: 'r8', who: 'This Week', occurred_at: '2026-09-22T09:00:00Z' })], focus: [], commissions: [], decisions: [] }).days.map((d) => d.label),
+    ['Tue 15 Sep', 'Tue'], 'past this week a weekday names two days, so it carries the date');
 
   // 2. Grouped by the person's own days, with the words they would use.
   const past = pathPast(input);
   assert.deepEqual(past.days.map((d) => d.label), ['Thu', 'Yesterday', 'Today']);
   assert.ok(past.days[1].events.some((e) => e.icon === 'focus'), 'Friday’s hours sit under Friday');
   assert.equal(past.earlier, Math.max(0, ev.length - MAX_PAST));
-  const short = pathPast(input, 3);
-  assert.equal(short.earlier, ev.length - 3, 'the rest waits behind Show earlier');
-  assert.equal(short.days.flatMap((d) => d.events).length, 3);
+  const short = pathPast(input, 2);
+  assert.equal(short.earlier, ev.length - 2, 'the rest waits behind Show earlier');
+  assert.equal(short.days.flatMap((d) => d.events).length, 2);
   assert.equal(callName('2026-09-26', '2026-09-26'), 'Today’s call');
   assert.equal(callName('2026-09-25', '2026-09-26'), 'Yesterday’s call');
   assert.equal(callName('2026-09-21', '2026-09-26'), 'Monday’s call');
@@ -5449,10 +5449,6 @@ async function pathwayCore() {
   assert.equal(openDay.streak, 2, 'a streak is not broken at nine in the morning');
   assert.equal(pathWeek({ now, timezone: tz, sentAt: ['2026-09-23T11:00:00Z'], outcomes: [], answered: [] }).streak, 0);
 
-  // 6. The status line says where you are and what needs you.
-  assert.equal(pathStatus(mid, 2, 4), 'Step 5 of 6 · 2 need you');
-  assert.equal(pathStatus(mid, 0, 4), 'Step 5 of 6 · 4 days in a row');
-  assert.equal(pathStatus(blank, 0, 1), 'Step 1 of 6');
   console.log('copilot-core: pathway checks passed');
 }
 
@@ -5521,17 +5517,21 @@ async function pathwayRedraw() {
     const ev = pathEvents({ ...base, firsts: { sent: '2026-09-24T08:00:00Z', reply: '2026-09-25T09:00:00Z', wins: ['2026-09-26T08:00:00Z'] } });
     const keys = ev.map((e) => e.key);
     const after = (k: string) => keys[keys.indexOf(k) + 1];
-    assert.equal(after('sent:2026-09-24'), 'rung:sent', 'under the day’s sends, though the first of them was earlier than the roll-up’s time');
     assert.equal(after('o:r1'), 'rung:reply');
     assert.equal(after('o:w1'), 'rung:paid');
     const sent = ev.find((e) => e.key === 'rung:sent')!;
     assert.equal(sent.title, 'First message sent');
-    assert.equal(sent.detail, 'Step 2 of 6 done');
+    assert.equal(sent.detail, 'Where the path starts');
     assert.equal(sent.rung, 'sent');
     assert.equal(sent.icon, 'star');
-    assert.equal(sent.timed, false, 'the row above it carries the time');
-    assert.deepEqual(sent.target, { kind: 'matches', stage: 'waiting' }, 'it opens what its cause opens');
-    assert.equal(ev.find((e) => e.key === 'rung:paid')!.detail, 'Step 4 of 6 done');
+    assert.equal(sent.timed, true, 'a send on its own is not evidence, so the moment stands alone and carries its own time');
+    assert.equal(sent.at, '2026-09-24T08:00:00Z');
+    assert.equal(sent.target, null);
+    const reply = ev.find((e) => e.key === 'rung:reply')!;
+    assert.equal(reply.timed, false, 'the reply above it carries the time');
+    assert.deepEqual(reply.target, { kind: 'matches', stage: 'replied' }, 'it opens what its cause opens');
+    assert.equal(ev.find((e) => e.key === 'rung:paid')!.detail, '2 days after your first message', 'how long it took, never a step number');
+    assert.equal(ev.find((e) => e.key === 'rung:reply')!.detail, '1 day after your first message');
     const past = pathPast({ ...base, firsts: { sent: '2026-09-24T08:00:00Z', reply: '2026-09-25T09:00:00Z', wins: ['2026-09-26T08:00:00Z'] } });
     assert.deepEqual(past.reached, ['sent', 'reply', 'paid'], 'the rungs drawn where they happened, which the done rungs above leave out');
   }
@@ -5544,10 +5544,10 @@ async function pathwayRedraw() {
     assert.equal(ev.find((e) => e.key === 'rung:repeat')!.title, `${REPEAT_WINS} paying clients`);
   }
   {
-    // A project's progress logged at the payment's instant does not come between the payment and its step.
-    const busy = { ...base, commissions: [{ commission: { id: 'k', objective: 'Signage quotes', status: 'active', closed_at: null, last_run_at: null, outcome: null }, report: { did: [{ at: '2026-09-26T08:00:00Z', summary: 'Two quotes in' }], yours: [], progress: { done: 1, total: 3 } }, line: '' }] as never[] };
+    // Another answer logged at the payment's instant does not come between the payment and its step.
+    const busy = { ...base, outcomes: [...base.outcomes, outcome({ id: 'r2', who: 'Palm Cove', occurred_at: '2026-09-26T08:00:00Z' })] };
     const keys = pathEvents({ ...busy, firsts: { sent: null, reply: null, wins: ['2026-09-26T08:00:00Z'] } }).map((e) => e.key);
-    assert.ok(keys.includes('p:k:2026-09-26'));
+    assert.ok(keys.includes('o:r2'));
     assert.equal(keys[keys.indexOf('o:w1') + 1], 'rung:paid', 'placed under its cause, not sorted among equals');
   }
   {
@@ -5669,3 +5669,185 @@ async function pathwayRedraw() {
 }
 
 pathwayRedraw().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The Path as a plan: where you are in words, one move sized to the time you
+// set, and the way to the goal walked back through your own funnel — every
+// number from rows, and where there are none, what would make one.
+// ---------------------------------------------------------------------------
+import { MAX_ALSO, RATE_SAMPLE, SEND_MINUTES, pathAhead, pathHere, pathNow, planStatus, priceOf, sendBatch, sendsPerDay } from '../../src/lib/copilot/plan';
+import { metricLabel, metricWords } from '../../src/lib/copilot/decision';
+
+async function pathPlan() {
+  // 1. The price you wrote, planned at the low end.
+  assert.equal(priceOf('$150'), 150);
+  assert.equal(priceOf('$400-1,500 per build'), 400, 'the top of a range is how a plan becomes a wish');
+  assert.equal(priceOf('₱18,000 a month'), 18000);
+  assert.equal(priceOf('18k/mo'), 18000);
+  assert.equal(priceOf('$5'), 5);
+  assert.equal(priceOf('ask me'), null);
+  assert.equal(priceOf(''), null);
+  assert.equal(priceOf(undefined), null);
+
+  // 2. Capacity is the user's own number: minutes a day, at SEND_MINUTES a send.
+  assert.equal(SEND_MINUTES, 3);
+  assert.equal(sendsPerDay('deep'), 25, 'half the day: the rest is for what comes back');
+  assert.equal(sendsPerDay('moderate'), 10);
+  assert.equal(sendsPerDay('low'), 5);
+  assert.equal(sendBatch('deep', 54), 25, 'the move asks for a day at the same pace the plan counts in');
+  assert.equal(sendBatch('moderate', 54), 10);
+  assert.equal(sendBatch('low', 54), 5);
+  assert.equal(sendBatch('deep', 4), 4, 'never more than are written');
+  assert.equal(sendBatch('low', 0), 0);
+
+  // 3. Where you are, as a fact — never "Step 5 of 6".
+  const goal = { id: 'g1', title: 'Save Exit PH [NOV]', metric: 'currency' as const, target_value: 1500, current_value: 0, horizon_days: null };
+  const ladderOf = (o: { offerSet?: boolean; sent: number; replied: number; won: number }, g: { current: number; target: number } | null = { current: 0, target: 1500 }) =>
+    pathLadder({ offerSet: o.offerSet ?? true, sent: o.sent, replied: o.replied, won: o.won, goal: g ? { title: 'Save Exit PH [NOV]', target: g.target, current: g.current, money: true, unit: '$' } : null, currency: '$' });
+  const f = { sent: 9, replied: 2, won: 2 };
+  assert.deepEqual(pathHere(ladderOf(f), f), { title: '2 paying clients', line: '9 sent · 2 replied · 2 paid' });
+  assert.equal(pathHere(ladderOf({ offerSet: false, sent: 0, replied: 0, won: 0 }), { sent: 0, replied: 0, won: 0 }).title, 'Nothing to send yet');
+  assert.equal(pathHere(ladderOf({ sent: 0, replied: 0, won: 0 }), { sent: 0, replied: 0, won: 0 }).title, 'Nothing sent yet');
+  assert.equal(pathHere(ladderOf({ sent: 12, replied: 0, won: 0 }), { sent: 12, replied: 0, won: 0 }).title, '12 messages out, no reply yet');
+  assert.equal(pathHere(ladderOf({ sent: 12, replied: 3, won: 0 }), { sent: 12, replied: 3, won: 0 }).title, '3 conversations, no client yet');
+  assert.equal(pathHere(ladderOf({ sent: 40, replied: 9, won: 4 }, { current: 1600, target: 1500 }), { sent: 40, replied: 9, won: 4 }).title, 'Goal reached: Save Exit PH [NOV]');
+
+  // 4. One move, in order, sized to the time you set.
+  const askRows = [
+    { key: 'f:c1', kind: 'fix' as const, title: 'Step by step plan to exit Philippines', detail: 'The worker could not finish — one tap tries it again', id: 'c1' },
+    { key: 'capture', kind: 'confirm' as const, title: '3 replies are still open, oldest from X Out Pest Services. Where did they get to?', detail: 'A reply with no ending is a deal the app cannot count.' },
+    { key: 'queue', kind: 'send' as const, title: '54 drafts ready to send', detail: 'The oldest has waited 17 days' },
+  ];
+  const base = { noOffer: false, callPending: false, queue: { count: 54, oldestDays: 17 }, asks: askRows, moves: [] as never[], capacity: 'deep' as const, funnel: f, freshMatches: 3 };
+  const deep = pathNow(base);
+  assert.equal(deep.now.kind, 'send', 'on an outbound path nothing moves until something goes out');
+  assert.equal(deep.now.title, 'Send 25 of your 54 drafts');
+  assert.equal(deep.now.size, 'about 75 min of your 150');
+  assert.equal(deep.now.why, 'The oldest has waited 17 days. At your rate so far — 2 replies from 9 sends, early — that is about 6 replies.');
+  assert.equal(deep.now.cta, 'Open the drafts');
+  assert.deepEqual(deep.also.map((a) => a.key), ['f:c1', 'capture'], 'the drafts are the move, so they are not also an ask');
+  const low = pathNow({ ...base, capacity: 'low' });
+  assert.equal(low.now.title, 'Send 5 of your 54 drafts', 'Low energy asks for less');
+  assert.equal(low.now.size, 'about 15 min of your 30');
+  assert.ok(low.now.why!.endsWith('that is about 1 reply.'));
+  assert.equal(pathNow({ ...base, queue: { count: 3, oldestDays: 0 } }).now.title, 'Send your 3 drafts');
+  assert.equal(pathNow({ ...base, funnel: { sent: 0, replied: 0, won: 0 } }).now.why, 'The oldest has waited 17 days. Nothing on this path moves until something goes out.', 'no rate is invented before there is one');
+
+  assert.equal(pathNow({ ...base, noOffer: true }).now.kind, 'offer', 'nothing can be drafted without an offer');
+  assert.equal(pathNow({ ...base, noOffer: true, callPending: true }).now.kind, 'call', 'a waiting call is not hidden behind the offer: a blank offer’s call carries its own tap, and a call about a job post needs no offer');
+  const call = pathNow({ ...base, callPending: true });
+  assert.equal(call.now.kind, 'call', 'a waiting call was weighed against everything else already');
+  assert.deepEqual(call.also.map((a) => a.key), ['f:c1', 'capture', 'queue']);
+
+  const noQueue = { ...base, queue: { count: 0, oldestDays: 0 }, asks: askRows.slice(0, 2) };
+  const fix = pathNow(noQueue);
+  assert.equal(fix.now.kind, 'fix');
+  assert.equal(fix.now.title, 'Get "Step by step plan to exit Philippines" going again');
+  assert.equal(fix.now.id, 'c1');
+  assert.deepEqual(fix.also.map((a) => a.key), ['capture']);
+
+  const mv = (o: Record<string, unknown>) => ({ id: 'm', job: 'goal_gap', kind: 'decide', headline: 'h', why: ['w'], artifact: { kind: 'text', label: 'Read', value: 'v' }, cost_label: '20 min', status: 'open', created_at: '2026-09-26T05:00:00Z', ...o }) as never;
+  const moves = [mv({ id: 'big', headline: 'Rebuild the booking site', cost_label: '2 h' }), mv({ id: 'small', headline: 'Quote Casa Blanca', cost_label: '10 min', why: ['  ', 'They asked yesterday.'] })];
+  const lowMove = pathNow({ ...noQueue, asks: [], capacity: 'low', moves });
+  assert.equal(lowMove.now.id, 'small', 'Low energy skips the two-hour Move for the one that fits');
+  assert.equal(lowMove.now.size, 'about 10 min of your 30');
+  assert.equal(lowMove.now.why, 'They asked yesterday.');
+  assert.equal(pathNow({ ...noQueue, asks: [], capacity: 'deep', moves }).now.id, 'big', 'Deep focus has room for the planner’s first choice');
+  assert.equal(pathNow({ ...noQueue, asks: [], capacity: 'low', moves: [moves[0]] }).now.size, 'about 120 min of your 30 — more than today holds', 'nothing fits: the best of it, said to be too big');
+  assert.equal(pathNow({ ...noQueue, asks: [], moves: [] }).now.kind, 'find');
+  assert.equal(pathNow({ ...noQueue, asks: [], moves: [], freshMatches: 0 }).now.kind, 'rest');
+  assert.equal(pathNow({ ...base, callPending: true, asks: [...askRows, ...askRows.map((a) => ({ ...a, key: `${a.key}2` }))] }).also.length, MAX_ALSO, 'the move is one thing; beside it, a few');
+
+  // 5. The plan: the milestone you are on, what you will learn next, the goal.
+  const others = [
+    { id: 'g2', title: 'MacBook Air 15"', metric: 'currency' as const, target_value: 2000, current_value: 0, horizon_days: null },
+    { id: 'g5', title: 'Get a job', metric: 'none' as const, target_value: null, current_value: null, horizon_days: 90 },
+    { id: 'g6', title: 'Ten retainers', metric: 'number' as const, target_value: 10, current_value: 1, horizon_days: null },
+    { id: 'g7', title: '$1M ARR + 500K cash', metric: 'none' as const, target_value: null, current_value: null, horizon_days: null },
+  ];
+  const input = { ladder: ladderOf(f), funnel: f, goal, others, price: 150, currency: '$', capacity: 'deep' as const, sentFortnight: 0, bottleneck: null };
+  const { stops, beyond } = pathAhead(input);
+  assert.deepEqual(stops.map((s) => s.key), ['rung:repeat', 'check:sample', 'goal:g1']);
+  const [repeat, check, target] = stops;
+  assert.equal(repeat.title, '3 paying clients');
+  assert.equal(repeat.status, '2 of 3');
+  assert.deepEqual(repeat.progress, { done: 2, of: 3 });
+  assert.equal(repeat.takes, 'About 5 more sends at your rate — 2 clients from 9 sends.');
+  assert.equal(repeat.when, 'Under a day of sending at Deep focus. One client can be luck. Three is something you can repeat.');
+  assert.equal(repeat.early, true, 'a rate from 9 sends is marked early wherever it is used');
+  assert.equal(check.title, `At ${RATE_SAMPLE} sends, the guesses become numbers`);
+  assert.deepEqual(check.progress, { done: 9, of: RATE_SAMPLE });
+  assert.equal(check.takes, '2 or more replies by then: this opener works, send more of it. Fewer: change its first line or the list before the next batch.');
+  assert.equal(target.status, '$0 of $1,500');
+  assert.equal(target.takes, '10 clients at your $150 · about 45 sends at your rate — 2 clients from 9 sends.');
+  assert.equal(target.when, '2 days of sending at Deep focus.', 'at the pace the move asks for, not the whole day');
+  assert.equal(target.pace, 'Nothing sent in the last two weeks — at that pace it does not move.', 'the pace you could keep, and the one you did');
+  assert.equal(target.early, true);
+  assert.equal(pathAhead({ ...input, sentFortnight: 6 }).stops[2].pace, null, 'said only when it is news');
+  assert.equal(pathAhead({ ...input, capacity: 'low' }).stops[2].when, '9 days of sending at Low energy.', 'the same plan, at the time you set');
+  assert.equal(pathAhead({ ...input, capacity: 'low', goal: { ...goal, horizon_days: 30 } }).stops[2].when, '9 days of sending at Low energy. 30 days left: 2 sends a day gets there.');
+  assert.equal(pathAhead({ ...input, capacity: 'low', goal: { ...goal, horizon_days: 2 } }).stops[2].when, '9 days of sending at Low energy. 2 days left: 23 sends a day gets there, which is more than the time you set.');
+
+  const noPrice = pathAhead({ ...input, price: null }).stops[2];
+  assert.equal(noPrice.takes, '$1,500 to go. Put a price in your offer and this turns into clients and sends.');
+  assert.equal(noPrice.when, null, 'no price, no invented one');
+
+  const noWinF = { sent: 9, replied: 2, won: 0 };
+  const noWin = pathAhead({ ...input, ladder: ladderOf(noWinF), funnel: noWinF }).stops;
+  assert.deepEqual(noWin.map((s) => s.key), ['rung:paid', 'check:sample', 'rung:repeat', 'goal:g1']);
+  assert.equal(noWin[0].takes, 'About 5 sends a conversation at your rate so far.');
+  assert.equal(noWin[2].takes, null, 'no client yet: no rate to walk back from');
+  assert.equal(noWin[3].takes, '10 clients at your $150 · no client yet to measure a rate from.');
+  assert.equal(noWin[3].when, 'Your first paying client turns this into sends and days.');
+
+  const quietF = { sent: 12, replied: 0, won: 0 };
+  const quiet = pathAhead({ ...input, ladder: ladderOf(quietF), funnel: quietF }).stops;
+  assert.equal(quiet[0].key, 'rung:reply');
+  assert.equal(quiet[0].takes, 'No reply yet from 12 sends.');
+  assert.equal(quiet[0].when, `If there is still none at ${RATE_SAMPLE}, change the first line or the list.`);
+
+  const lateF = { sent: 40, replied: 2, won: 2 };
+  const late = pathAhead({ ...input, ladder: ladderOf(lateF), funnel: lateF, bottleneck: { headline: 'Sent → Replied is where you lose most: 2 of 40 (5%).', action: 'Change one thing in the opener — the first line or the ask — and send the next batch before changing anything else.' } }).stops;
+  assert.equal(late[0].early, false, 'forty sends is a measurement');
+  assert.equal(late[1].kind, 'check');
+  assert.equal(late[1].title, 'Sent → Replied is where you lose most: 2 of 40 (5%).', 'past the sample, the open question is the funnel’s own bottleneck');
+  assert.equal(late[1].takes, 'Change one thing in the opener — the first line or the ask — and send the next batch before changing anything else.');
+  assert.deepEqual(pathAhead({ ...input, ladder: ladderOf(lateF), funnel: lateF }).stops.map((s) => s.kind), ['rung', 'goal'], 'no bottleneck, no checkpoint made up');
+
+  const job = pathAhead({ ...input, goal: others[1] }).stops.at(-1)!;
+  assert.equal(job.title, 'Get a job');
+  assert.equal(job.takes, 'There is no number on it, so the plan cannot walk back from it. Give it a target and it can.');
+  assert.equal(pathAhead({ ...input, goal: null }).stops.at(-1)!.title, 'Name your goal');
+  assert.equal(pathAhead({ ...input, goal: { ...goal, current_value: 1600 } }).stops.at(-1)!.takes, 'Reached. Set the next one.');
+
+  assert.deepEqual(beyond.map((b) => [b.title, b.status]), [
+    ['MacBook Air 15"', '$0 of $2,000'],
+    ['Get a job', 'No target · 90 days'],
+    ['Ten retainers', '1 of 10'],
+    ['$1M ARR + 500K cash', 'No target'],
+  ], 'the goals past the first, in your order, named with where they stand and no plan built on a plan');
+
+  // 6. Nowhere on the way is there a step number.
+  const words = [...stops, ...noWin, ...quiet, ...late].flatMap((s) => [s.title, s.status, s.takes, s.when, s.pace]).filter(Boolean).join(' | ');
+  assert.ok(!/step \d+ of \d+/i.test(words), words);
+
+  // 7. The header line says where you are, and what needs you.
+  const here = pathHere(ladderOf(f), f);
+  assert.equal(planStatus(here, 3, 1), '2 paying clients · 3 need you');
+  assert.equal(planStatus(here, 0, 4), '2 paying clients · 4 days in a row');
+  assert.equal(planStatus(here, 0, 1), '2 paying clients');
+
+  // 8. A call's number in its own unit: "It was 2" over "$1,000 of $15,000" read as a contradiction.
+  assert.equal(metricWords('won_amount'), 'money won');
+  assert.equal(metricWords('replies'), 'replies');
+  assert.equal(metricLabel('won_amount', 2, '$'), '$2');
+  assert.equal(metricLabel('won_amount', 1500, '₱'), '₱1,500');
+  assert.equal(metricLabel('replies', 2, '$'), '2');
+  assert.equal(metricLabel('runway_months', 2.94, '$'), '2.9');
+  const graded = pathEvents({ now: new Date('2026-09-26T10:00:00Z'), timezone: 'UTC', outcomes: [], focus: [], commissions: [], currency: '$',
+    decisions: [{ id: 'd', for_date: '2026-09-24', headline: 'Quote the upsell', response: 'did', verify: { metric: 'won_amount', baseline: 2, after: 902, verifiedAt: '2026-09-26T08:00:00Z' } }] as never[] });
+  assert.equal(graded[0].detail, '“Quote the upsell” · money won $2 → $902');
+  console.log('copilot-core: path plan checks passed');
+}
+
+pathPlan().catch((e) => { console.error(e); process.exit(1); });

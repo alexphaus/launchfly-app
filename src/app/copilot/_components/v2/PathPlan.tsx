@@ -27,7 +27,7 @@ import { IconAlert, IconCheck, IconFlag, IconRedraw } from './icons2';
 
 type Ready = Extract<RoadmapView, { state: 'ready' }>;
 
-export function DrawnPlanHead({ view, now, onRedraw, unreadable }: { view: RoadmapView; now: Date; onRedraw: () => void; unreadable: string | null }) {
+export function DrawnPlanHead({ view, now, onRedraw, unreadable, actions }: { view: RoadmapView; now: Date; onRedraw: () => void; unreadable: string | null; actions: Actions }) {
   const drawing = view.state !== 'off' && view.drawing;
   const failed = view.state !== 'off' ? view.failed : null;
   return (
@@ -42,8 +42,38 @@ export function DrawnPlanHead({ view, now, onRedraw, unreadable }: { view: Roadm
       {/* Said beside the plan it could not replace, so an old plan is never read as a fresh one (invariant 13). */}
       {failed && <WarnRow title={view.state === 'ready' ? 'The last redraw failed' : 'Could not draw your plan'} detail={view.state === 'ready' ? `${sentence(failed)} This is the plan from before.` : failed} />}
       {unreadable && <WarnRow title="Could not read your plan" detail={`${unreadable}. Ticks may be missing below.`} />}
+      {view.state === 'ready' && view.suggested.length > 0 && <SuggestedDone items={view.suggested} actions={actions} />}
       {view.state === 'ready' && view.changes && <ChangesRow changes={view.changes} />}
     </>
+  );
+}
+
+/**
+ * What the person told it that sounds like a step done, asked rather than
+ * assumed. "Booked two markets for October" in the composer comes back as "Did
+ * you finish: Contact market organizers?" — one tap ticks it, "Not yet" puts
+ * the question away for this visit. The model only ever suggests; the tick is
+ * the person's (roadmap.ts rule 2). Without this, telling the app something was
+ * done left the step open until someone found it on the plan and ticked it too.
+ */
+function SuggestedDone({ items, actions }: { items: Array<{ id: string; title: string }>; actions: Actions }) {
+  const [put, setPut] = useState<Set<string>>(new Set());
+  const shown = items.filter((i) => !put.has(i.id));
+  if (!shown.length) return null;
+  return (
+    <div className="cp2-way-row">
+      <span className="cp2-way-node sm you"><IconCheck /></span>
+      <span className="cp2-way-t">From what you told it — did you finish {shown.length === 1 ? 'this' : 'these'}?</span>
+      {shown.map((i) => (
+        <span key={i.id} className="cp2-plan-suggest">
+          <span className="t cp2-clamp2">{i.title}</span>
+          <span className="cp2-way-acts">
+            <button className="cp-btn primary sm" onClick={() => void actions.markRoadmap(i.id, 'done')}>Yes, tick it</button>
+            <button className="cp-btn sm" onClick={() => setPut((p) => new Set(p).add(i.id))}>Not yet</button>
+          </span>
+        </span>
+      ))}
+    </div>
   );
 }
 

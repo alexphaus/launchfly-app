@@ -365,17 +365,19 @@ export function huntsNeeded(hunts: Array<Pick<Hunt, 'kind' | 'status'>>, want = 
 
 export interface HuntPlanItem { kind: PlanKind; query: string; area: string | null; label: string }
 
-export const PLAN_SYSTEM = `You decide where to look for one person's next buyers. You are given what they sell, who buys it, where they are, their goals, and what is already being searched.
+export const PLAN_SYSTEM = `You decide where to look for the people one person needs to reach next. You are given what they sell, who buys it, where they are, their goals, what their own plan is working on now, and what is already being searched.
+
+Their plan comes first. When a line of it needs somebody — a market organiser for "market days booked", an employer hiring for "a job offer", a stockist for "a first wholesale buyer" — search for those people. Otherwise, search for buyers of what they sell.
 
 Return JSON only: {"hunts":[{"kind","query","area","label"}]}, at most ${AUTO_HUNTS}.
 
 kind is one of:
-- "companies": a web search over company websites — businesses that would pay for what they sell: stockists, clients, B2B buyers, partners
-- "people": a web search over public profiles — a named buyer, owner, organiser or decision maker at the kind of business that buys
+- "companies": a web search over company websites — businesses that would pay for what they sell, or that their plan needs: stockists, clients, B2B buyers, partners, markets and venues, employers hiring for the work they do
+- "people": a web search over public profiles — a named buyer, owner, organiser, hiring manager or decision maker the plan or the offer needs
 
 Rules:
 - Write each query the way you would describe the page you want to find, in plain words: "a family-run resort in Palawan that takes bookings by Facebook message", not "Palawan resort booking automation buyer". 6 to 16 words. Never generic ("small businesses", "potential clients").
-- Pick buyers who can say yes at their price, where they can actually be reached from where the person is.
+- Pick people who can say yes — at their price, or to what the plan needs — where they can actually be reached from where the person is.
 - area only when place matters; a city or region with its country, else null.
 - label is 2 to 4 words.
 - Do not repeat anything already searched. Do not invent facts about their business.`;
@@ -426,7 +428,7 @@ export function noPlanReason(offer: Offer, modelError?: string | null): string {
     : 'nothing to look for — your offer does not say who buys it';
 }
 
-export function planPrompt(input: { offer: Offer; area: string | null; working: string; goals: string[]; existing: string[] }): string {
+export function planPrompt(input: { offer: Offer; area: string | null; working: string; goals: string[]; existing: string[]; plan?: string[] }): string {
   const o = input.offer;
   return [
     `They sell: ${o.sells ?? '(not said)'}`,
@@ -435,6 +437,7 @@ export function planPrompt(input: { offer: Offer; area: string | null; working: 
     o.price_band ? `Price: ${o.price_band}` : null,
     `Where they are: ${input.area ?? '(not said)'}`,
     input.goals.length ? `Their goals: ${input.goals.join('; ')}` : null,
+    input.plan?.length ? `What their plan is working on now:\n${input.plan.map((l) => `- ${l}`).join('\n')}` : null,
     input.working ? `What they have written about the business:\n${input.working}` : null,
     input.existing.length ? `Already searched (do not repeat): ${input.existing.join('; ')}` : 'Already searched: nothing yet',
   ].filter(Boolean).join('\n');

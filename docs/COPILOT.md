@@ -498,6 +498,41 @@ mid-thought. The empty evidence agrees with the week's dots under it
 (`quietEvidence`): a day moved with nothing back yet says so, rather than
 "nothing recorded".
 
+**One planner, not three.** The call, the Moves and the plan each answered
+"what should I do", and they agreed by luck: Alex's plan put the exit fund and a
+rewritten opener first while the call that evening was a maintenance-coordinator
+application. Now the nightly pass draws the plan after the jobs and before the
+brief (`NIGHTLY_STEPS`: supply, reconcile, jobs, roadmap, brief), and the call is
+the plan's next step (`planCall`) — topic `plan`, no metric, graded done or not,
+with the Move arbitration would have promoted named as what it was chosen over
+and left open on the list. Only money due within `MONEY_WAITING_DAYS` (a deposit
+owed, a client who paid — `moneyWaiting`) still takes the call from the plan. A
+blank offer no longer forces the offer call when there is a plan: that rung
+keeps drafts from being written from nothing, and a plan step is not a draft.
+"I did it" on a plan call ticks its step (`stepForCall`, found by its words —
+no column needed), and a tick that did not save is said in the toast. The plan
+is shown what the checks found (open Moves, proposals excepted, since a model
+wrote those), so it can plan around a client waiting or money owed.
+
+**The plan points the searching.** What finds matches and what ranks them were
+never told where the person is going, so they looked for buyers of the offer
+while Alex's plan said "a job offer" and Maria's said "market days booked".
+`planFocus` — the open milestones this week and this month with their unticked
+steps, titles only — now goes to the search planner (`planPrompt`, whose system
+text puts the plan first: an organiser for market days, an employer for a job)
+and into the brief's pack as `plan`, with a `PLAN:` section telling the ranker
+to score a candidate higher when reaching it serves a line of it. Nothing is
+still planned from a blank offer (invariant 1), so a plan with no offer behind
+it changes the ranking of what exists but starts no search.
+
+**What you tell it can tick, but only you tick.** A note in the composer
+redraws the plan, and the draw may name items of the last plan, still open, that
+the person's own words say are done (`probably_done` → `suggestedDone`, held to
+ids that were open and are still on the plan). The Path asks "From what you told
+it — did you finish this?" with "Yes, tick it" and "Not yet". The model never
+ticks; the answer is the person's tap (rule 2). Before this, telling the app
+"booked two markets" left the step open until somebody found it and ticked it too.
+
 Stored without a migration: the draw is a `copilot_agent_runs` row of kind
 `roadmap` (plan in `output.roadmap`, the signature in `input_summary`) and a tick
 is a `copilot_events` row of type `roadmap_marked`. With no model configured
@@ -970,8 +1005,9 @@ stops calling it. What the pass does, and what it deliberately does not do:
   The row says when the schedule itself last ran, underneath.
 - **It reports every step.** Before each step the row's `output` is
   `{ step }`, so the row, and a banner on every tab, can say "2 of 5 · reading
-  replies". The fifth step, Plan, redraws the Path's plan only when something
-  changed since it was drawn (see **The plan is drawn, not walked back**). Afterwards `output` is the `DailyResult` plus the adapter and job
+  replies". The fourth step, Plan, redraws the Path's plan only when something
+  changed since it was drawn, and runs before the call because the call is the
+  plan's next step (see **The plan is drawn, not walked back**). Afterwards `output` is the `DailyResult` plus the adapter and job
   labels, and `nightlyLines()` turns it into one line per step, with a line for
   each adapter or job that broke. Skips that are by design ("not configured")
   are left out. A fallback brief is reported as broken even though a call came

@@ -45,7 +45,9 @@
 // Pure: no DB import. agent/roadmap.ts does the reading, the one call and the
 // write; copilot-core.test.ts covers everything here.
 
+import type { DecisionDraft } from './decision';
 import { hoursLabel, type FocusLog } from './focus';
+import type { Stake } from './stake';
 import { moneyLabel, type AnsweredMove, type RecentOutcome } from './review';
 import type { Capacity, Goal } from './types';
 import { CAPACITY_META } from './types';
@@ -112,6 +114,13 @@ export interface Roadmap {
   /** What it changed since the last plan, and why — in its own words, marked as such on screen. */
   changed: string | null;
   phases: RoadmapPhase[];
+  /**
+   * Items of this plan that the person's own recent words say are done ("booked
+   * two markets for October"). A question, never a tick: the screen asks "Did
+   * you finish this?" and only the person's tap marks it (rule 2). Absent on
+   * plans drawn before it existed.
+   */
+  suggestedDone?: string[];
 }
 
 /* ─── What goes in ────────────────────────────────────────────────────────── */
@@ -161,6 +170,13 @@ export interface RoadmapInput {
    * they exist. Null on a blank offer, where nothing is shown to send.
    */
   drafts?: { count: number; oldestDays: number } | null;
+  /**
+   * What the app's checks found and are waiting on an answer for, one line
+   * each: "Casa Blanca paid 3 days ago and nothing was delivered". Computed by
+   * jobs from rows. Proposals are left out — a model wrote those, and the plan
+   * is not fed another model's view (rule 3).
+   */
+  found?: string[];
 }
 
 export const ROADMAP_SYSTEM = `You draw one person's plan: from where they are now to the goals they set, over weeks and months. You are the planner who decides the order, not a coach writing encouragement.
@@ -176,6 +192,7 @@ How to draw it:
 - Goals compete for the same hours. When two pull against each other, say which comes first and why in direction, and put the other later.
 - Plan for what the goals actually need. It is not always selling: a job search, learning a skill, building a product, getting money under control, a move, a qualification.
 - If they seem lost — goals vague, nothing working — the first milestone is getting clear: a small experiment or one conversation that produces a fact. Do not make the decision for them.
+- What the app's checks found is real and computed from their records: money owed, a client waiting, a goal falling behind. Plan around it; money due soon belongs in "week".
 - Drafts already written are listed when there are any. If sending them serves this week, make it a step ("Send the waiting drafts"). If the record says the opener or the list is wrong, the step is to fix that first — never send more of what is not working.
 - Use what happened. A step marked done is done: build on it, never repeat it. A step marked dropped stays out in that form. When something has brought results, lean into it; when the record shows effort and nothing back, change the approach and say what you changed in changed.
 - Later phases can be one milestone with no steps. A plan past the next quarter is a direction, not a schedule.
@@ -189,10 +206,12 @@ Hard rules:
 - At most ${MAX_MILESTONES_PER_PHASE} milestones per phase and ${MAX_STEPS_PER_MILESTONE} steps per milestone. Fewer is better.
 - Plain words, second person, short. No filler, no motivation, no exclamation marks.
 
+probably_done lists the ids of steps or milestones from the last plan, still open, that their own recent words say they have already done — "booked two markets" for a step about booking markets. Only from their words, never from silence or a guess. Keep those items in the plan: the person ticks them, you do not. Empty when nothing they wrote says so.
+
 here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence on what is true now and what matters next. why is one sentence. direction is at most two sentences, under 300 characters. changed is one sentence, and null on a first plan.
 
 Return only JSON:
-{"here":{"title":"...","line":"..."},"direction":"...","changed":null,"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":null,"steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
+{"here":{"title":"...","line":"..."},"direction":"...","changed":null,"probably_done":[],"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":null,"steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
 Phase keys, in order: week, month, quarter, later.`;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -265,12 +284,19 @@ export function roadmapPrompt(input: RoadmapInput): string {
     lines.push('THE LAST PLAN: none, this is the first.');
   }
   lines.push('');
+  if (input.found?.length) {
+    lines.push("WHAT THE APP'S CHECKS FOUND, waiting on an answer:");
+    for (const f of input.found) lines.push(`- ${f}`);
+  }
   if (input.drafts && input.drafts.count > 0) {
     lines.push(`DRAFTS WRITTEN AND WAITING: ${input.drafts.count}, the oldest ${input.drafts.oldestDays} days old`);
   }
   lines.push(`ai_available: ${input.aiAvailable}`);
   return lines.join('\n');
 }
+
+/** Open findings the plan is shown, at most. */
+export const MAX_FOUND = 8;
 
 /** Lines about the fortnight, at most this many: the prompt's budget, not the record's. */
 export const MAX_HAPPENED = 24;
@@ -482,6 +508,8 @@ export interface ParseContext {
   aiAvailable: boolean;
   /** The last plan's ids by lower-cased title, so a model that forgot the id still carries the marks. */
   previousIds?: Map<string, string>;
+  /** The last plan's items still open, the only ones probably_done may name. */
+  previousOpen?: Set<string>;
 }
 
 export interface Parsed { roadmap: Roadmap; withheld: number }
@@ -546,8 +574,14 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
 
   const h = obj(r.here);
   const hereTitle = clean(h.title, 60, 'claim');
+  // Only ids that were open on the last plan and are on this one: a suggestion
+  // about something the person cannot see, or already ticked, asks nothing.
+  const onPlan = new Set(phases.flatMap((p) => p.milestones.flatMap((m) => [m.id, ...m.steps.map((st) => st.id)])));
+  const suggestedDone = [...new Set(arr(r.probably_done).filter((x): x is string => typeof x === 'string').map(slugId))]
+    .filter((id) => onPlan.has(id) && !!ctx.previousOpen?.has(id));
   return {
     roadmap: {
+      ...(suggestedDone.length ? { suggestedDone } : {}),
       here: hereTitle ? { title: hereTitle, line: clean(h.line, TEXT_MAX, 'claim') } : null,
       // Room for the two sentences the prompt asks for, and a little over: a
       // model that runs long loses a sentence, not half of one.
@@ -591,6 +625,7 @@ export function roadmapRunFromRow(row: Record<string, unknown>): RoadmapRun {
         direction: typeof plan.direction === 'string' ? plan.direction : null,
         changed: typeof plan.changed === 'string' ? plan.changed : null,
         phases,
+        suggestedDone: arr(plan.suggestedDone).filter((x): x is string => typeof x === 'string'),
       }
     : null;
   const unreadable = status === 'ok' && !roadmap;
@@ -725,6 +760,16 @@ export function previousForPrompt(roadmap: Roadmap | null, marks: RoadmapMark[])
   })));
 }
 
+/** The last plan's items nobody has ticked or set aside: what probably_done may name. */
+export function openIds(roadmap: Roadmap | null, marks: RoadmapMark[]): Set<string> {
+  const m = markMap(marks);
+  const ids = new Set<string>();
+  for (const p of roadmap?.phases ?? []) for (const ms of p.milestones) {
+    for (const id of [ms.id, ...ms.steps.map((st) => st.id)]) if ((m.get(id)?.state ?? 'open') === 'open') ids.add(id);
+  }
+  return ids;
+}
+
 /** Last plan's ids by title, for parseRoadmap. */
 export function idsByTitle(roadmap: Roadmap | null): Map<string, string> {
   const map = new Map<string, string>();
@@ -780,6 +825,8 @@ export type RoadmapView =
       changes: RoadmapChanges | null;
       done: number;
       total: number;
+      /** Items the person's own words say are done and nobody has ticked: asked about, one tap each. */
+      suggested: Array<{ id: string; title: string }>;
     };
 
 export interface ViewInput {
@@ -837,6 +884,12 @@ export function roadmapView(input: ViewInput): RoadmapView {
     drawing, failed,
     changes: roadmapChanges(input.previous?.roadmap ?? null, plan),
     done, total,
+    // Still open by the marks, so a tick — or a "not for me" — answers it.
+    suggested: (plan.suggestedDone ?? []).flatMap((id) => {
+      if (stateOf(id) !== 'open') return [];
+      const item = roadmapItem(plan, id);
+      return item ? [{ id, title: item.title }] : [];
+    }),
   };
 }
 
@@ -936,4 +989,91 @@ export function planServesOneGoal(view: RoadmapView): boolean {
   if (view.state !== 'ready') return true;
   const ids = new Set(view.phases.flatMap((p) => p.milestones.map((m) => m.goalId ?? '')));
   return ids.size <= 1;
+}
+
+/* ─── The plan as the day's call ──────────────────────────────────────────── */
+
+/** The topic a call drawn from the plan is recorded under, so answering it can tick the step. */
+export const PLAN_TOPIC = 'plan';
+/** Money due within this many days is the one thing that still outranks the plan for the call. */
+export const MONEY_WAITING_DAYS = 7;
+
+/**
+ * Real money, due soon: a deposit owed, a client who paid and is waiting for
+ * the work. A job computes both from rows, and a plan drawn last night may not
+ * have seen it yet. A goal's gap carries a value too, but it is due at the
+ * goal's horizon, weeks out, and it is exactly what the plan is ordered against.
+ */
+export function moneyWaiting(stake: Pick<Stake, 'value' | 'withinDays'> | null | undefined): boolean {
+  return !!stake && (stake.value ?? 0) > 0 && stake.withinDays <= MONEY_WAITING_DAYS;
+}
+
+/**
+ * The day's call, from the plan: its first step of the person's own that fits
+ * today, and what it was chosen over.
+ *
+ * Why the plan leads. Three things each answered "what should I do": the call,
+ * the Moves and the plan. They agreed only by luck — Alex's plan put the exit
+ * fund and a rewritten opener first, and the call the same evening was to apply
+ * for a maintenance coordinator role. The plan is the one drawn against every
+ * goal, with the record of what was done, so the call is its next step, and the
+ * Move arbitration would have picked is named as what it was chosen over. That
+ * Move stays on the list; it is not answered by this.
+ *
+ * Confidence is 'high': the call is not a guess about a category of work, it is
+ * the next step of the plan the person is following. It stakes nothing on a
+ * number, so it is graded as done or not, like any call with no metric.
+ */
+export function planCall(first: { step: Pick<StepView, 'title'>; milestone: Pick<MilestoneView, 'title' | 'why'> } | null, runnerUp: { headline: string } | null): DecisionDraft | null {
+  if (!first) return null;
+  return {
+    headline: first.step.title,
+    because: [`It is the next step toward: ${first.milestone.title}.`, ...(first.milestone.why ? [first.milestone.why] : [])],
+    instead_of: runnerUp && runnerUp.headline !== first.step.title ? runnerUp.headline : undefined,
+    confidence: 'high',
+    topic: PLAN_TOPIC,
+    verify_metric: 'none',
+  };
+}
+
+/** The step a call was drawn from, found by its words: the call carries no column for it, and needs none. */
+export function stepForCall(roadmap: Roadmap | null, headline: string): { id: string; title: string } | null {
+  for (const p of roadmap?.phases ?? []) for (const m of p.milestones) {
+    const s = m.steps.find((x) => x.title === headline);
+    if (s) return { id: s.id, title: s.title };
+  }
+  return null;
+}
+
+/* ─── What the plan is working on, for the rest of the app ─────────────────── */
+
+/** Lines of plan the ranker and the search planner are shown, at most. */
+export const MAX_FOCUS = 6;
+
+/**
+ * The plan's open milestones this week and this month, with the steps not yet
+ * ticked, one line each: "This week: Have your next market days booked — next:
+ * Contact market organizers and confirm your next stall dates".
+ *
+ * What finds matches and what ranks them were never told where the person is
+ * going, so they kept looking for buyers of the offer while Alex's plan said
+ * "a job offer" and Maria's said "market days booked". This hands them the
+ * plan's words — titles the person sees and ticks, never its reasons (rule 3) —
+ * so the searching serves the plan the person is following.
+ */
+export function planFocus(roadmap: Roadmap | null, marks: RoadmapMark[]): string[] {
+  if (!roadmap) return [];
+  const m = markMap(marks);
+  const open = (id: string) => (m.get(id)?.state ?? 'open') === 'open';
+  const lines: string[] = [];
+  for (const p of roadmap.phases) {
+    if (p.key !== 'week' && p.key !== 'month') continue;
+    for (const ms of p.milestones) {
+      if (!open(ms.id)) continue;
+      const next = ms.steps.filter((st) => open(st.id)).map((st) => st.title);
+      lines.push(`${PHASE_LABEL[p.key]}: ${ms.title}${next.length ? ` — next: ${next.join('; ')}` : ''}`);
+      if (lines.length >= MAX_FOCUS) return lines;
+    }
+  }
+  return lines;
 }

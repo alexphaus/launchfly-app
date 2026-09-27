@@ -6392,3 +6392,136 @@ async function drawnPlanSecondPass() {
 }
 
 drawnPlanSecondPass().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── One planner: the call is the plan's next step ──────────────────────── */
+import { MONEY_WAITING_DAYS, PLAN_TOPIC, moneyWaiting, planCall, roadmapPrompt as rpPrompt, stepForCall } from '../../src/lib/copilot/roadmap';
+import { NIGHTLY_STEPS as NIGHT_ORDER, nightlyLines as nightOrderLines } from '../../src/lib/copilot/nightly';
+
+async function onePlanner() {
+  // 1. The plan's step is the call, with what arbitration would have picked named as the trade-off.
+  const first = { step: { title: 'Rewrite the opener around missed booking calls' }, milestone: { title: 'First real reply that can become a $150 sale', why: 'Nothing has worked yet, so the message changes before the volume does.' } };
+  const call = planCall(first, { headline: 'Apply today to the Maintenance Coordinator role' })!;
+  assert.equal(call.headline, 'Rewrite the opener around missed booking calls');
+  assert.deepEqual(call.because, ['It is the next step toward: First real reply that can become a $150 sale.', 'Nothing has worked yet, so the message changes before the volume does.']);
+  assert.equal(call.instead_of, 'Apply today to the Maintenance Coordinator role', 'the Move it was chosen over is named, not hidden');
+  assert.equal(call.topic, PLAN_TOPIC);
+  assert.equal(call.verify_metric, 'none', 'a plan step stakes nothing on a number, so it is graded done or not');
+  assert.equal(call.source_move_id, undefined, 'and it answers no Move: the runner-up stays on the list');
+  assert.equal(planCall(null, null), null, 'no step that fits today, no plan call — the ladder picks');
+  assert.equal(planCall(first, { headline: first.step.title })!.instead_of, undefined, 'a trade-off with itself is not one');
+  assert.deepEqual(planCall({ ...first, milestone: { ...first.milestone, why: null } }, null)!.because, ['It is the next step toward: First real reply that can become a $150 sale.']);
+
+  // 2. Only money due soon outranks the plan for the call.
+  assert.equal(moneyWaiting({ value: 400, withinDays: 3 }), true, 'a deposit owed this week');
+  assert.equal(moneyWaiting({ value: 150, withinDays: MONEY_WAITING_DAYS }), true);
+  assert.equal(moneyWaiting({ value: 1500, withinDays: 90 }), false, 'a goal gap is due at its horizon, and it is what the plan is ordered against');
+  assert.equal(moneyWaiting({ value: undefined, withinDays: 1 }), false, 'urgent with no money is the plan’s to order');
+  assert.equal(moneyWaiting(null), false);
+
+  // 3. Answering the call finds its step by its words.
+  const roadmap = { here: null, direction: null, changed: null, phases: [{ key: 'week' as const, milestones: [{ id: 'm', title: 'M', why: null, doneWhen: null, goalId: null, steps: [{ id: 'rewrite', title: first.step.title, size: 'sitting' as const, tag: 'leverage' as const, who: 'you' as const }] }] }] };
+  assert.deepEqual(stepForCall(roadmap, first.step.title), { id: 'rewrite', title: first.step.title });
+  assert.equal(stepForCall(roadmap, 'Something the plan never said'), null, 'a call from somewhere else ticks nothing');
+  assert.equal(stepForCall(null, first.step.title), null);
+
+  // 4. The plan is drawn before the call is picked from it, and the report reads in that order.
+  assert.deepEqual(NIGHT_ORDER, ['supply', 'reconcile', 'jobs', 'roadmap', 'brief']);
+  const order = nightOrderLines({ jobs: { ran: 3, written: 1 }, roadmap: { drawn: true, reason: 'progress' }, brief: { agent: 'llm' } }).map((l) => l.step);
+  assert.ok(order.indexOf('roadmap') < order.indexOf('brief'), 'Plan is reported before Call');
+
+  // 5. The plan sees what the checks found.
+  const base = {
+    today: '2026-09-27', name: 'A', headline: null, location: null, capacity: 'deep' as const, currency: '$', runwayMonths: null, offer: null, price: null,
+    goals: [], working: '', notes: [], funnel: { windowDays: 30, sent: 0, replied: 0, won: 0, wonAmount: 0 }, happened: [], previous: [], aiAvailable: false,
+  };
+  assert.match(rpPrompt({ ...base, found: ['Casa Blanca paid 3 days ago and nothing was delivered'] }), /WHAT THE APP'S CHECKS FOUND, waiting on an answer:\n- Casa Blanca paid 3 days ago/);
+  assert.ok(!/CHECKS FOUND/.test(rpPrompt(base)), 'nothing found, no section');
+
+  console.log('copilot-core: one planner checks passed');
+}
+
+onePlanner().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The plan points the search and the ranking ─────────────────────────── */
+import { MAX_FOCUS, planFocus } from '../../src/lib/copilot/roadmap';
+import { PLAN_SYSTEM as HUNT_SYSTEM, planPrompt as huntPlanPrompt } from '../../src/lib/copilot/hunts';
+import { SYSTEM_PROMPT as BRIEF_SYSTEM } from '../../src/lib/copilot/agent/schema';
+
+async function planPointsTheSearch() {
+  const step = (id: string, title: string) => ({ id, title, size: 'quick' as const, tag: 'quick_win' as const, who: 'you' as const });
+  const ms = (id: string, title: string, steps: ReturnType<typeof step>[] = []) => ({ id, title, why: 'A reason the model wrote', doneWhen: null, goalId: null, steps });
+  const roadmap = {
+    here: null, direction: 'Its reasoning', changed: null,
+    phases: [
+      { key: 'week' as const, milestones: [ms('markets', 'Have your next market days booked', [step('book', 'Contact market organizers'), step('list', 'List three markets')]), ms('margin', 'Know what each piece earns')] },
+      { key: 'month' as const, milestones: [ms('earn', 'Earn more per market day')] },
+      { key: 'quarter' as const, milestones: [ms('between', 'Sell between market days')] },
+    ],
+  };
+
+  // 1. Open milestones this week and this month, with the unticked steps: titles only.
+  const at = '2026-09-27T10:00:00Z';
+  const focus = planFocus(roadmap, [{ item: 'list', title: '', state: 'done', at }, { item: 'margin', title: '', state: 'done', at }]);
+  assert.deepEqual(focus, [
+    'This week: Have your next market days booked — next: Contact market organizers',
+    'This month: Earn more per market day',
+  ], 'ticked steps and reached milestones are not searched for; the quarter is too far out to search for yet');
+  assert.ok(!focus.join(' ').includes('reason') && !focus.join(' ').includes('reasoning'), 'never the plan’s reasons (roadmap.ts rule 3)');
+  assert.deepEqual(planFocus(null, []), []);
+  const many = { ...roadmap, phases: [{ key: 'week' as const, milestones: Array.from({ length: 10 }, (_, i) => ms(`m${i}`, `M${i}`)) }] };
+  assert.equal(planFocus(many, []).length, MAX_FOCUS);
+
+  // 2. The search planner is told what the plan is working on, and to look for who it needs.
+  const prompt = huntPlanPrompt({ offer: { sells: 'Stainless steel jewellery', for_who: 'market shoppers' }, area: 'Valencia, Spain', working: '', goals: ['Property buy and renovation'], existing: [], plan: focus });
+  assert.match(prompt, /What their plan is working on now:\n- This week: Have your next market days booked/);
+  assert.ok(!huntPlanPrompt({ offer: { sells: 'x' }, area: null, working: '', goals: [], existing: [] }).includes('plan is working on'), 'no plan, no section');
+  assert.match(HUNT_SYSTEM, /Their plan comes first/);
+  assert.match(HUNT_SYSTEM, /market organiser for "market days booked"/);
+
+  // 3. The ranker reads the plan too, and is told what it is and is not.
+  assert.ok(BRIEF_SYSTEM.includes('PLAN:'), 'a field the prompt never names is a field the model ignores');
+  assert.match(BRIEF_SYSTEM, /Never add to it and never describe it as done/);
+
+  console.log('copilot-core: plan points the search checks passed');
+}
+
+planPointsTheSearch().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Notes close the loop: suggested ticks, never ticks ─────────────────── */
+import { ROADMAP_SYSTEM as RM_SYSTEM, openIds, parseRoadmap as rmParseSuggest, roadmapRunFromRow as rmRow, roadmapView as rmViewSuggest, sourcedFrom as rmSrc } from '../../src/lib/copilot/roadmap';
+
+async function suggestedTicks() {
+  const step = (id: string, title: string) => ({ id, title, size: 'quick' as const, tag: 'quick_win' as const, who: 'you' as const });
+  const last = { here: null, direction: null, changed: null, phases: [{ key: 'week' as const, milestones: [{ id: 'markets', title: 'Have your next market days booked', why: null, doneWhen: null, goalId: null, steps: [step('book', 'Contact market organizers'), step('costs', 'List what each piece costs')] }] }] };
+  const at = '2026-09-26T10:00:00Z';
+  const previousOpen = openIds(last, [{ item: 'costs', title: 'List what each piece costs', state: 'done', at }]);
+  assert.deepEqual([...previousOpen].sort(), ['book', 'markets'], 'a ticked step is not open, so it cannot be suggested again');
+
+  // 1. Only ids open on the last plan and still on this one survive.
+  const raw = {
+    probably_done: ['book', 'costs', 'invented', 42, 'markets'],
+    phases: [{ key: 'week', milestones: [{ id: 'markets', title: 'Have your next market days booked', steps: [{ id: 'book', title: 'Contact market organizers' }, { id: 'costs', title: 'List what each piece costs' }] }] }],
+  };
+  const parsed = rmParseSuggest(raw, { allowed: rmSrc(''), goalIds: [], aiAvailable: false, previousOpen })!;
+  assert.deepEqual(parsed.roadmap.suggestedDone, ['book', 'markets'], 'not a ticked step, not an id nobody drew, not a number');
+  const none = rmParseSuggest({ phases: raw.phases }, { allowed: rmSrc(''), goalIds: [], aiAvailable: false, previousOpen })!;
+  assert.equal(none.roadmap.suggestedDone, undefined, 'nothing said, nothing asked');
+  assert.match(RM_SYSTEM, /probably_done/);
+  assert.match(RM_SYSTEM, /Only from their words, never from silence/);
+
+  // 2. The view asks only about what is still open, in the plan's own words.
+  const run = rmRow({ id: 'r', status: 'ok', started_at: at, finished_at: at, output: { roadmap: parsed.roadmap }, error: null, input_summary: { signature: 's' } });
+  const view = (marks: Array<{ item: string; title: string; state: 'done' | 'dropped' | 'open'; at: string }>) =>
+    rmViewSuggest({ enabled: true, latest: run, current: run, previous: null, marks, goals: [], capacity: 'moderate', now: new Date('2026-09-27T12:00:00Z') });
+  const v = view([]);
+  assert.deepEqual(v.state === 'ready' && v.suggested, [{ id: 'book', title: 'Contact market organizers' }, { id: 'markets', title: 'Have your next market days booked' }]);
+  const answered = view([{ item: 'book', title: '', state: 'done', at: '2026-09-27T11:00:00Z' }, { item: 'markets', title: '', state: 'dropped', at: '2026-09-27T11:00:00Z' }]);
+  assert.deepEqual(answered.state === 'ready' && answered.suggested, [], 'a tick or a "not for me" answers the question');
+  assert.equal(v.state === 'ready' && v.phases[0].milestones[0].steps[0].state, 'open', 'a suggestion is never itself a tick');
+  const older = rmRow({ id: 'o', status: 'ok', started_at: at, finished_at: at, output: { roadmap: { phases: raw.phases } }, error: null, input_summary: {} });
+  assert.deepEqual(older.roadmap?.suggestedDone, [], 'a plan drawn before suggestions reads as none');
+
+  console.log('copilot-core: suggested ticks checks passed');
+}
+
+suggestedTicks().catch((e) => { console.error(e); process.exit(1); });

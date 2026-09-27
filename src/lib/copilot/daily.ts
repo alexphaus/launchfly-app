@@ -47,7 +47,7 @@ export interface JobsThenBrief {
  */
 export async function runJobsThenBrief(
   profileId: string,
-  opts: { reason: string; deadline?: number; jobsDeadline?: number; onStep?: (step: NightlyStep) => Promise<void> },
+  opts: { reason: string; deadline?: number; jobsDeadline?: number; onStep?: (step: NightlyStep) => Promise<void>; beforeBrief?: () => Promise<void> },
 ): Promise<JobsThenBrief> {
   let jobs: JobsResult | { error: string };
   await opts.onStep?.('jobs');
@@ -57,6 +57,9 @@ export async function runJobsThenBrief(
     jobs = { error: e instanceof Error ? e.message : String(e) };
     console.error('[copilot/daily] jobs failed', e);
   }
+  // Between the two: the plan, drawn from what the jobs just found, which the
+  // brief then takes the call from. Never throws — the caller isolates it.
+  await opts.beforeBrief?.();
 
   // The brief is the slowest step. Out of budget, hand back what the jobs found
   // rather than spend the rest of it and return nothing.
@@ -83,7 +86,19 @@ export async function runDaily(
     catch (e) { out.reconcile = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] reconcile failed', e); }
   }
   // Jobs before the brief — see runJobsThenBrief for why that order is load-bearing.
-  const ran = await runJobsThenBrief(profileId, { reason: opts.reason, deadline: opts.deadline, onStep: opts.onStep });
+  // Jobs, then the plan (nightly only), then the brief: the call is the plan's
+  // next step (roadmap.ts, planCall), so the plan is drawn from tonight's rows
+  // and tonight's Moves before the call is picked from it. Isolated like every
+  // other step: a plan that fails to draw leaves last night's plan, or the
+  // ladder, to pick the call.
+  const beforeBrief = isNightlyPass(opts.reason)
+    ? async () => {
+        await opts.onStep?.('roadmap');
+        try { out.roadmap = await redrawIfDue(profileId, opts.reason); }
+        catch (e) { out.roadmap = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] roadmap failed', e); }
+      }
+    : undefined;
+  const ran = await runJobsThenBrief(profileId, { reason: opts.reason, deadline: opts.deadline, onStep: opts.onStep, beforeBrief });
   out.jobs = ran.jobs;
   if (!ran.brief) {
     out.brief = { ...out.brief, skipped: ran.skipped };
@@ -92,13 +107,6 @@ export async function runDaily(
   // Surfaced in the cron report: it is how you can tell from outside whether
   // the record is actually being graded, or just accumulating.
   out.brief = { agent: ran.brief.agent, fellBack: ran.brief.fellBack, graded: ran.brief.graded, pushed: ran.brief.pushed };
-  // Last, after the replies were read and the call was graded, so a redraw
-  // "from what came back" has what came back. Isolated like every other step.
-  if (isNightlyPass(opts.reason)) {
-    await opts.onStep?.('roadmap');
-    try { out.roadmap = await redrawIfDue(profileId, opts.reason); }
-    catch (e) { out.roadmap = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] roadmap failed', e); }
-  }
   return out;
 }
 

@@ -8,12 +8,13 @@ import { budgetForReason } from './agent/llm';
 import { buildContextPack } from './context';
 import { copilotDb } from './db';
 import { promoteCall } from './call';
-import { metricValue, snapshotOf, starterDecision } from './decision';
+import { metricValue, snapshotOf, starterDecision, type DecisionDraft } from './decision';
 import { isNightlyPass } from './nightly';
 import { offerIsEmpty } from './offer';
 import { sendPush } from './push';
 import { scoreOpportunity } from './ranking';
-import { getProfile, gradeDecisions, loadStandingRefusals, saveDecision } from './store';
+import { moneyWaiting, planCall, roadmapFirstStep, roadmapView } from './roadmap';
+import { getProfile, gradeDecisions, loadRoadmapMarks, loadRoadmapRuns, loadStandingRefusals, saveDecision } from './store';
 import type { DecisionSweep } from './store';
 import type { BriefOutput, OpportunityAgent, Profile, ContextPack } from './types';
 
@@ -71,6 +72,26 @@ async function finishRun(runId: string, status: 'ok' | 'error', output: BriefOut
   await copilotDb().from('copilot_agent_runs').update({ status, output, error: error ?? null, finished_at: new Date().toISOString() }).eq('id', runId);
 }
 
+/**
+ * The plan's next step as the call, or null — no plan, nothing of the person's
+ * that fits today, or the plan could not be read. An unreadable plan is not a
+ * reason to lose the brief: the ladder below it is what ran before plans
+ * existed, and the Path already says the plan could not be read.
+ */
+async function planCallFor(profile: Profile, runnerUp: { headline: string } | null): Promise<DecisionDraft | null> {
+  try {
+    const [runs, marks] = await Promise.all([loadRoadmapRuns(profile.id), loadRoadmapMarks(profile.id)]);
+    if (runs.unreadable || marks.unreadable || !runs.current) return null;
+    const view = roadmapView({ enabled: true, latest: runs.latest, current: runs.current, previous: null, marks: marks.marks, goals: [], capacity: profile.capacity, now: new Date() });
+    // The Move arbitration would have promoted is named as what this was chosen
+    // over. It stays an open Move, answered on its own, not by this call.
+    return planCall(roadmapFirstStep(view), runnerUp);
+  } catch (e) {
+    console.error('[copilot/brief] reading the plan for the call failed; the call falls back to the ladder', e);
+    return null;
+  }
+}
+
 async function persistBrief(profile: Profile, pack: ContextPack, runId: string, out: BriefOutput, reason: string): Promise<number> {
   const db = copilotDb();
   const pid = profile.id;
@@ -111,12 +132,18 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
     console.error('[copilot/brief] promoteCall failed', e);
     return null;
   });
-  const useFloor = blankOffer || (!promoted && !out.decision);
-  out.decision = blankOffer ? floor.decision : promoted ? promoted.draft : (out.decision ?? floor.decision);
+  // With a drawn plan, its next step is the call — unless the winning Move is
+  // money due this week, which a plan drawn last night may not have seen. See
+  // planCall for why one planner and not three. A blank offer does not force
+  // the offer call over it: that rung exists so nothing is drafted from
+  // nothing, and a plan step is not a draft; the draft routes still refuse.
+  const planned = promoted && moneyWaiting(promoted.move.stake) ? null : await planCallFor(profile, promoted?.move ?? null);
+  const useFloor = !planned && (blankOffer || (!promoted && !out.decision));
+  out.decision = planned ?? (blankOffer ? floor.decision : promoted ? promoted.draft : (out.decision ?? floor.decision));
   // A promoted Move brings its own trade-off (the runner-up) and its own
   // artifact, so a separate "not today" line beside it is a second opinion
-  // nobody asked for.
-  out.dont = promoted ? null : useFloor ? floor.dont : out.dont;
+  // nobody asked for. A plan step names its own: the Move it was chosen over.
+  out.dont = planned || promoted ? null : useFloor ? floor.dont : out.dont;
   if (out.decision) {
     await saveDecision(pid, {
       forDate: today, runId, draft: out.decision, dont: out.dont,

@@ -686,9 +686,11 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async answerCall(response, permanent) {
       try {
-        const r = await post<{ home: HomeData; stoodDown?: string }>('/decision', { response, permanent });
+        const r = await post<{ home: HomeData; stoodDown?: string; note?: string | null }>('/decision', { response, permanent });
         setHome(r.home);
-        say(r.stoodDown
+        say(r.note
+          ? r.note
+          : r.stoodDown
           ? 'Noted for good. It is in your working file under what you will not do — remove it there to undo.'
           : 'Recorded');
         return true;

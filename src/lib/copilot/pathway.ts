@@ -14,11 +14,13 @@
 //
 // Three rules, each an invariant in another form:
 //
-//   Only what moved something is in the past. A find, a draft, a send, a reply,
-//   a payment, a finished project, a call the ledger graded, hours you logged.
-//   Never "the agent ran" — the Working? tab that listed runs was "a log", and
-//   a stream of runs is a longer log (invariant 13 is served by the notices,
-//   which say what broke, not by listing what did not).
+//   Only what teaches something is in the past: an answer, a payment, a no, a
+//   call the ledger graded, a project's result, a step reached, the hours you
+//   put in. Not what the app did — finds, drafts, a project's progress — and not
+//   a send on its own: a send teaches nothing until something comes back, and a
+//   past full of activity was "mostly a log of what already happened", in its
+//   owner's words, pushing the plan below the fold. What the app did is on Work;
+//   what broke is a notice above "you are here" (invariant 13).
 //
 //   The ladder is measured, never estimated. Each step is done when a count the
 //   funnel already keeps says so; nothing here is a model's view of progress,
@@ -37,19 +39,20 @@
 //
 // Pure: no DB import. The tab renders what these return.
 
-import { verdictOf, type Decision } from './decision';
+import { metricLabel, metricWords, verdictOf, type Decision } from './decision';
 import type { Firsts } from './diagnose';
 import type { FocusLog } from './focus';
 import { dayLetter, hoursLabel, shiftDay } from './focus';
-import { belowBar } from './matches';
 import { KIND_LABEL } from './moves';
 import { localDay, moneyLabel, whenLabel, type AnsweredMove, type RecentOutcome } from './review';
-import { METRIC_LABEL } from './stake';
+import { costMinutesOf } from './stake';
 import { WORKER_CLOSE_MS, worthDoing } from './today';
-import type { CommissionThread, Move, PipelineRow, QueueItem } from './types';
+import type { CommissionThread, Move } from './types';
 
-/** How far back the stream reaches. A week is what a person remembers doing. */
+/** The week the dots and the swap count over. A week is what a person remembers doing. */
 export const PATH_DAYS = 7;
+/** How far back the evidence reaches. Answers are rarer than activity; a fortnight holds enough to learn from. */
+export const EVIDENCE_DAYS = 14;
 /** Events shown before "Show earlier". Enough for a busy week, short enough to scroll past. */
 export const MAX_PAST = 14;
 /** Next steps before the ladder takes over. The call is the first; these are the rest of the week. */
@@ -59,10 +62,6 @@ export const REPEAT_WINS = 3;
 
 const DAY_MS = 86_400_000;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const names = (list: Array<string | null | undefined>, max = 2) => {
-  const u = [...new Set(list.filter((x): x is string => !!x))];
-  return u.length ? `${u.slice(0, max).join(', ')}${u.length > max ? ` +${u.length - max}` : ''}` : '';
-};
 
 /* ─── The past ────────────────────────────────────────────────────────────── */
 
@@ -99,23 +98,20 @@ export interface PathDay { day: string; label: string; events: PathEvent[] }
 export interface PastInput {
   now: Date;
   timezone: string;
-  pipeline: PipelineRow[];
-  queue: QueueItem[];
   outcomes: RecentOutcome[];
-  answered: AnsweredMove[];
   focus: FocusLog[];
   commissions: CommissionThread[];
   decisions: Decision[];
-  /** Open feed finds, for the watcher's line. */
-  watchMoves: Array<Pick<Move, 'id' | 'job' | 'created_at'>>;
   /** All-time firsts off the diagnosis, which date the rungs. Absent on an older read. */
   firsts?: Firsts | null;
+  /** For a call graded on money, which is said in money. */
+  currency?: string;
 }
 
-const inWindow = (iso: string | null | undefined, now: Date) => {
+const inWindow = (iso: string | null | undefined, now: Date, days = EVIDENCE_DAYS) => {
   if (!iso) return false;
   const t = Date.parse(iso);
-  return Number.isFinite(t) && now.getTime() - t <= PATH_DAYS * DAY_MS && t <= now.getTime() + 3_600_000;
+  return Number.isFinite(t) && now.getTime() - t <= days * DAY_MS && t <= now.getTime() + 3_600_000;
 };
 
 const FULL_DAY: Record<string, string> = { Sun: 'Sunday', Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday' };
@@ -128,76 +124,14 @@ export function callName(forDate: string, today: string): string {
   return `${FULL_DAY[w] ?? w}’s call`;
 }
 
-/** Everything that moved in the last week, oldest first, as the rows prove it. */
+/** What the last fortnight taught, oldest first, as the rows prove it. */
 export function pathEvents(input: PastInput): PathEvent[] {
   const { now, timezone: tz } = input;
   const today = localDay(now.toISOString(), tz);
   const out: PathEvent[] = [];
 
-  // Rolled up per day, because "Scout found 12" is one thing that happened and
-  // twelve rows saying "found" is the log this stream must not become.
-  const perDay = <T,>(rows: T[], at: (r: T) => string): Map<string, T[]> => {
-    const m = new Map<string, T[]>();
-    for (const r of rows) {
-      const day = localDay(at(r), tz);
-      m.set(day, [...(m.get(day) ?? []), r]);
-    }
-    return m;
-  };
-  const latest = (xs: string[]) => xs.reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
-
-  // Finds. A day that looked at listings and kept none still did the looking,
-  // and says so rather than showing a count the Matches tab will not.
-  const found = input.pipeline.filter((r) => inWindow(r.opportunity.created_at, now));
-  for (const [day, rows] of perDay(found, (r) => r.opportunity.created_at)) {
-    const worth = rows.filter((r) => !belowBar(r.opportunity)).length;
-    out.push({ timed: true,
-      key: `find:${day}`, day, at: latest(rows.map((r) => r.opportunity.created_at)), actor: 'ai', icon: 'scout',
-      title: `Scout found ${plural(rows.length, 'business', 'businesses')}`,
-      detail: worth ? `${worth} worth a message` : 'None worth your time',
-      target: { kind: 'matches', stage: 'new' },
-    });
-  }
-
-  const watched = input.watchMoves.filter((m) => m.job === 'watch' && inWindow(m.created_at, now));
-  for (const [day, rows] of perDay(watched, (m) => m.created_at)) {
-    out.push({ timed: true,
-      key: `watch:${day}`, day, at: latest(rows.map((m) => m.created_at)), actor: 'ai', icon: 'watcher',
-      title: `Watcher flagged ${plural(rows.length, 'post')}`,
-      detail: 'From the sources you follow',
-      target: { kind: 'matches', stage: 'new' },
-    });
-  }
-
-  // Drafts and sends, from both places an execution can be: the queue (not
-  // sent yet) and the pipeline (the latest one for each business). One id, once.
-  const executions = new Map<string, { created_at: string; sent_at: string | null; who: string | null }>();
-  for (const q of input.queue) executions.set(q.execution.id, { created_at: q.execution.created_at, sent_at: q.execution.sent_at, who: q.opp?.title ?? null });
-  for (const r of input.pipeline) if (r.execution) executions.set(r.execution.id, { created_at: r.execution.created_at, sent_at: r.execution.sent_at, who: r.opportunity.title });
-  const all = [...executions.values()];
-
-  const drafted = all.filter((e) => inWindow(e.created_at, now));
-  for (const [day, rows] of perDay(drafted, (e) => e.created_at)) {
-    out.push({ timed: true,
-      key: `draft:${day}`, day, at: latest(rows.map((e) => e.created_at)), actor: 'ai', icon: 'writer',
-      title: `Writer drafted ${plural(rows.length, 'opener')}`,
-      detail: names(rows.map((e) => e.who)) || 'From your offer',
-      target: { kind: 'matches', stage: 'to_send' },
-    });
-  }
-
-  const sent = all.filter((e) => inWindow(e.sent_at, now));
-  for (const [day, rows] of perDay(sent, (e) => e.sent_at!)) {
-    out.push({ timed: true,
-      key: `sent:${day}`, day, at: latest(rows.map((e) => e.sent_at!)), actor: 'you', icon: 'send',
-      title: `You sent ${plural(rows.length, 'message')}`,
-      detail: names(rows.map((e) => e.who)) || 'From your own WhatsApp or email',
-      target: { kind: 'matches', stage: 'waiting' },
-    });
-  }
-
   // What came back, one row each: these are the rows the whole app is for.
-  // A mandate's own ledger rows are its project's story, told below.
+  // A mandate's own ledger rows are its project's story, told in its thread.
   for (const o of input.outcomes) {
     if (!inWindow(o.occurred_at, now) || o.commission_id) continue;
     const who = o.who ?? null;
@@ -217,22 +151,15 @@ export function pathEvents(input: PastInput): PathEvent[] {
     }
   }
 
-  // Handed-over work. A finish only when the worker posted it — a close by hand
-  // is the owner's own verdict, not something the app did — and progress by the
-  // plan's own count, rolled up per project per day.
+  // A project's result, when the worker posted it. A close by hand is the
+  // owner's own verdict, not something the app found; the steps on the way are
+  // the project's story, told in its thread on Work.
   for (const t of input.commissions) {
     const c = t.commission;
-    if (c.status === 'done') {
-      const byWorker = !!c.closed_at && !!c.last_run_at && Math.abs(Date.parse(c.closed_at) - Date.parse(c.last_run_at)) < WORKER_CLOSE_MS;
-      if (byWorker && inWindow(c.closed_at, now)) {
-        out.push({ timed: true, key: `pdone:${c.id}`, day: localDay(c.closed_at!, tz), at: c.closed_at!, actor: 'ai', icon: 'research', title: `Finished: ${c.objective}`, detail: c.outcome?.slice(0, 120) || 'Open it to see what came back', target: { kind: 'project', id: c.id } });
-      }
-      continue;
-    }
-    const did = t.report.did.filter((e) => inWindow(e.at, now));
-    for (const [day, evs] of perDay(did, (e) => e.at)) {
-      const last = evs.reduce((a, b) => (Date.parse(b.at) > Date.parse(a.at) ? b : a));
-      out.push({ timed: true, key: `p:${c.id}:${day}`, day, at: last.at, actor: 'ai', icon: 'research', title: c.objective, detail: last.summary.slice(0, 120), target: { kind: 'project', id: c.id } });
+    if (c.status !== 'done') continue;
+    const byWorker = !!c.closed_at && !!c.last_run_at && Math.abs(Date.parse(c.closed_at) - Date.parse(c.last_run_at)) < WORKER_CLOSE_MS;
+    if (byWorker && inWindow(c.closed_at, now)) {
+      out.push({ timed: true, key: `pdone:${c.id}`, day: localDay(c.closed_at!, tz), at: c.closed_at!, actor: 'ai', icon: 'research', title: `Finished: ${c.objective}`, detail: c.outcome?.slice(0, 120) || 'Open it to see what came back', target: { kind: 'project', id: c.id } });
     }
   }
 
@@ -242,11 +169,12 @@ export function pathEvents(input: PastInput): PathEvent[] {
     if (!d.verify.verifiedAt || !inWindow(d.verify.verifiedAt, now)) continue;
     const v = verdictOf(d);
     if (v !== 'worked' && v !== 'no_movement') continue;
-    const label = METRIC_LABEL[d.verify.metric];
+    const m = d.verify.metric;
+    const value = (n: number) => metricLabel(m, n, input.currency ?? '$');
     out.push({ timed: true,
       key: `call:${d.id}`, day: localDay(d.verify.verifiedAt, tz), at: d.verify.verifiedAt, actor: 'ai', icon: 'call',
       title: `${callName(d.for_date, today)} ${v === 'worked' ? 'worked' : 'did not move it'}`,
-      detail: `“${d.headline.slice(0, 70)}”${label ? ` · ${label} ${d.verify.baseline} → ${d.verify.after}` : ''}`,
+      detail: `“${d.headline.slice(0, 70)}”${m !== 'none' ? ` · ${metricWords(m)} ${value(d.verify.baseline)} → ${value(d.verify.after ?? d.verify.baseline)}` : ''}`,
       target: { kind: 'record' },
     });
   }
@@ -259,13 +187,6 @@ export function pathEvents(input: PastInput): PathEvent[] {
       title: f.note ? `${hoursLabel(f.minutes)} on ${f.note}` : `${hoursLabel(f.minutes)} of deep work`,
       detail: 'Logged by you', target: { kind: 'focus' },
     });
-  }
-
-  // Moves you marked done. Not a feed find: Keep and Did it write the same
-  // status there and cannot be told apart.
-  for (const a of input.answered) {
-    if (a.status !== 'done' || a.job === 'watch' || !inWindow(a.acted_at, now)) continue;
-    out.push({ timed: true, key: `m:${a.id}`, day: localDay(a.acted_at, tz), at: a.acted_at, actor: 'you', icon: 'done', title: a.headline, detail: `Done · ${KIND_LABEL[a.kind] ?? 'Move'}`, target: null });
   }
 
   const sorted = out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
@@ -281,7 +202,8 @@ export function pathEvents(input: PastInput): PathEvent[] {
       return o ? sorted.find((e) => e.key === `o:${o.id}`) : undefined;
     };
     const reached: Array<{ key: StepKey; at: string | null | undefined; cause: (at: string) => PathEvent | undefined }> = [
-      { key: 'sent', at: f.sent, cause: (at) => sorted.find((e) => e.key === `sent:${localDay(at, tz)}`) },
+      // No cause row: a send on its own is not in the evidence, so the moment stands alone, timed.
+      { key: 'sent', at: f.sent, cause: () => undefined },
       { key: 'reply', at: f.reply, cause: (at) => outcomeRow('reply', at) },
       { key: 'paid', at: f.wins[0], cause: (at) => outcomeRow('won', at) },
       { key: 'repeat', at: f.wins[REPEAT_WINS - 1], cause: (at) => outcomeRow('won', at) },
@@ -296,7 +218,9 @@ export function pathEvents(input: PastInput): PathEvent[] {
         // alone, timed.
         day: cause?.day ?? localDay(r.at, tz), at: cause?.at ?? r.at, timed: !cause,
         title: REACHED[r.key],
-        detail: `Step ${LADDER.indexOf(r.key) + 1} of ${LADDER.length} done`,
+        // How long it took, off the first message — never a step number, which
+        // is the app's structure and read as a puzzle.
+        detail: r.key === 'sent' ? 'Where the path starts' : sinceFirst(f.sent, r.at),
         target: cause?.target ?? null,
       };
       // Placed, not sorted: two rows at one instant — a busy import, a roll-up
@@ -309,8 +233,15 @@ export function pathEvents(input: PastInput): PathEvent[] {
   return sorted;
 }
 
+/** "12 days after your first message" — the evidence a milestone carries. */
+function sinceFirst(first: string | null, at: string): string {
+  if (!first || !(Date.parse(at) >= Date.parse(first))) return 'A step reached';
+  const days = Math.floor((Date.parse(at) - Date.parse(first)) / DAY_MS);
+  return days === 0 ? 'The same day as your first message' : `${plural(days, 'day')} after your first message`;
+}
+
 /** A rung, said as the moment it was reached. */
-const REACHED: Record<StepKey, string> = {
+export const REACHED: Record<StepKey, string> = {
   offer: 'Said what you sell',
   sent: 'First message sent',
   reply: 'First reply',
@@ -332,11 +263,25 @@ export function pathPast(input: PastInput, max = MAX_PAST): { days: PathDay[]; e
   // for a Tuesday sort by when they were typed and still belong to Tuesday.
   const byDay = new Map<string, PathEvent[]>();
   for (const e of shown) byDay.set(e.day, [...(byDay.get(e.day) ?? []), e]);
-  const days = [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, evs]): PathDay => {
-    const w = whenLabel(day, today);
-    return { day, label: w === 'today' ? 'Today' : w === 'yesterday' ? 'Yesterday' : w, events: evs };
-  });
+  const days = [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, evs]): PathDay => ({ day, label: dayLabel(day, today), events: evs }));
   return { days, earlier: events.length - shown.length, reached: shown.flatMap((e) => (e.rung ? [e.rung] : [])) };
+}
+
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * "Today", "Yesterday", "Tue" this week — and "Sat 12 Sep" before it. The
+ * evidence reaches back a fortnight, and a weekday on its own named two
+ * different Saturdays one above the other.
+ */
+function dayLabel(day: string, today: string): string {
+  const w = whenLabel(day, today);
+  if (w === 'today') return 'Today';
+  if (w === 'yesterday') return 'Yesterday';
+  const diff = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / DAY_MS);
+  if (diff < 7) return w;
+  const d = new Date(`${day}T00:00:00Z`);
+  return `${w} ${d.getUTCDate()} ${MONTH[d.getUTCMonth()]}`;
 }
 
 /* ─── The ladder ──────────────────────────────────────────────────────────── */
@@ -449,6 +394,8 @@ export interface NextStep {
   because: string | null;
   /** For an offer: the plan being approved, always on screen when it is. */
   plan: string | null;
+  /** Its size in minutes, off the Move's own cost label, so the screen can say when it is bigger than today. */
+  minutes: number | null;
 }
 
 /** A step as a device remembers it: enough to say it went, and what it was. */
@@ -476,19 +423,19 @@ export function pathNext(input: { moves: Move[]; commissions: CommissionThread[]
     steps.push({
       key: `m:${m.id}`, kind: 'move', id: m.id, icon: m.artifact.kind === 'message' ? 'send' : KIND_ICON[m.kind] ?? 'done', actor: 'you', title: m.headline,
       detail: [KIND_LABEL[m.kind], m.artifact.kind === 'message' ? 'drafted' : null, m.cost_label].filter(Boolean).join(' · '),
-      because: firstWhy(m.why), plan: null,
+      because: firstWhy(m.why), plan: null, minutes: costMinutesOf(m.cost_label),
     });
   }
   for (const m of input.moves) {
     if (m.artifact?.kind !== 'plan') continue;
-    steps.push({ key: `o:${m.id}`, kind: 'offer', id: m.id, icon: 'research', actor: 'ai', title: m.headline, detail: 'It can do this itself — the plan is below', because: firstWhy(m.why), plan: m.artifact.value });
+    steps.push({ key: `o:${m.id}`, kind: 'offer', id: m.id, icon: 'research', actor: 'ai', title: m.headline, detail: 'It can do this itself — the plan is below', because: firstWhy(m.why), plan: m.artifact.value, minutes: null });
   }
   for (const t of input.commissions) {
     const c = t.commission;
     // A project stopped on you is an ask, said beside the call; this is the work under way.
     if (c.status !== 'active') continue;
     const { done, total } = t.report.progress;
-    steps.push({ key: `p:${c.id}`, kind: 'project', id: c.id, icon: 'research', actor: 'ai', title: c.objective, detail: total ? `Under way · ${done} of ${total} steps done` : 'Under way · reports back here', because: c.why?.trim() || null, plan: null });
+    steps.push({ key: `p:${c.id}`, kind: 'project', id: c.id, icon: 'research', actor: 'ai', title: c.objective, detail: total ? `Under way · ${done} of ${total} steps done` : 'Under way · reports back here', because: c.why?.trim() || null, plan: null, minutes: null });
   }
   return { steps: steps.slice(0, max), more: Math.max(0, steps.length - max), all: steps.map((x) => ({ key: x.key, title: x.title })) };
 }
@@ -718,12 +665,4 @@ export function pathWeek(input: { now: Date; timezone: string; sentAt: string[];
     else break;
   }
   return { days, streak, moved: days.filter((d) => d.moved).length };
-}
-
-/** The line under the greeting on Path: where you are, and what needs you. */
-export function pathStatus(ladder: { steps: PathStep[]; current: number }, asks: number, streak: number): string {
-  const parts = [`Step ${ladder.current + 1} of ${ladder.steps.length}`];
-  if (asks) parts.push(`${asks} need${asks === 1 ? 's' : ''} you`);
-  else if (streak >= 2) parts.push(`${streak} days in a row`);
-  return parts.join(' · ');
 }

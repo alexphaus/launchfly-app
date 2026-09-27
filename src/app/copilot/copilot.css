@@ -1198,112 +1198,150 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-week-read b { color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-x { font-size: 15px; line-height: 1; color: var(--dim); padding: 0 2px; margin-left: 4px; }
 
-/* ── Path: one stream — done above, you are here, next below ──────────────
-   Drawn like the path to money (.cp2-flow): a rail of 28px nodes inside a
-   white card, display-face names, who does each part in a pill. The rail is
-   drawn per row — a segment above and below each node — so it stays joined
-   whatever a row's height and ends at the first and last node instead of
-   dangling off the card. Ahead of you it is dashed: that part is the plan. */
-.cp-root[data-theme="soft"] .cp-card.cp2-stream { padding: 6px 0; }
-.cp-root[data-theme="soft"] .cp2-stream-row { display: flex; gap: 14px; width: 100%; padding: 0 20px 0 18px; text-align: left; color: var(--ink); }
-.cp-root[data-theme="soft"] :is(button.cp2-stream-row, .cp2-stream-tap):active { background: var(--line); }
-.cp-root[data-theme="soft"] .cp2-stream-rail { flex: none; width: 28px; display: flex; flex-direction: column; align-items: center; }
-.cp-root[data-theme="soft"] .cp2-stream-rail .ln { display: block; flex: 1; width: 2px; min-height: 6px; background: var(--line); }
-.cp-root[data-theme="soft"] .cp2-stream-rail .ln.top { flex: none; height: 12px; min-height: 0; }
-.cp-root[data-theme="soft"] .cp2-stream-rail .ln.dash { width: 0; background: none; border-left: 2px dashed var(--frame); }
-.cp-root[data-theme="soft"] .cp2-stream-rail .ln.blank { visibility: hidden; }
-.cp-root[data-theme="soft"] .cp2-stream-node {
-  flex: none; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-  background: var(--tint); color: var(--blue); font-family: var(--display); font-size: 12.5px; font-weight: 700;
-}
-.cp-root[data-theme="soft"] .cp2-stream-node svg { width: 15px; height: 15px; }
-.cp-root[data-theme="soft"] .cp2-stream-node.sm { width: 26px; height: 26px; margin: 1px 0; }
-.cp-root[data-theme="soft"] .cp2-stream-node.sm svg { width: 14px; height: 14px; }
-.cp-root[data-theme="soft"] .cp2-stream-node.ai { background: var(--ai-tint); color: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-stream-node.you { background: var(--tint); color: var(--blue); }
-/* Somebody outside answered or paid: the rows the whole app is for, so the darkest node. */
-.cp-root[data-theme="soft"] .cp2-stream-node.world { background: var(--ink); color: #fff; }
-.cp-root[data-theme="soft"] .cp2-stream-node.done { background: var(--ai); color: #fff; }
-.cp-root[data-theme="soft"] .cp2-stream-node.later { background: var(--surface); color: var(--muted); box-shadow: inset 0 0 0 2px var(--frame); }
-.cp-root[data-theme="soft"] .cp2-stream-node.goal { background: var(--ink); color: #fff; }
-.cp-root[data-theme="soft"] .cp2-stream-node.next { background: var(--surface); }
-.cp-root[data-theme="soft"] .cp2-stream-node.next.ai { color: var(--ai); box-shadow: inset 0 0 0 2px var(--ai); }
-.cp-root[data-theme="soft"] .cp2-stream-node.next.you { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue); }
-/* 16px down puts the first line's centre on the node's centre (12px segment + 14px). */
-.cp-root[data-theme="soft"] .cp2-stream-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 16px 0 12px; }
-.cp-root[data-theme="soft"] .cp2-stream-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.cp-root[data-theme="soft"] .cp2-stream-t { font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-stream-name { font-family: var(--display); font-size: 15px; font-weight: 700; line-height: 1.35; }
-.cp-root[data-theme="soft"] .cp2-stream-s { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-stream-when { flex: none; font-size: 11.5px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
-.cp-root[data-theme="soft"] .cp2-stream-frac { flex: none; font-family: var(--display); font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-stream-daylabel { padding: 14px 0 2px; font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-stream-row.later .cp2-stream-body { opacity: 0.78; }
-.cp-root[data-theme="soft"] .cp2-stream-track { display: block; height: 6px; margin-top: 4px; border-radius: 3px; background: var(--track); overflow: hidden; }
-.cp-root[data-theme="soft"] .cp2-stream-track i { display: block; height: 100%; border-radius: 3px; background: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-stream-earlier { display: block; width: 100%; padding: 12px 20px 4px; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-stream-more { padding: 8px 0 12px; }
-.cp-root[data-theme="soft"] .cp2-stream-act { align-self: flex-start; margin-top: 8px; }
-.cp-root[data-theme="soft"] .cp2-stream-notices { margin-top: 16px; }
+/* ── Path: a plan, not a log ─────────────────────────────────────────────
+   One line down the left of the screen, outside the cards: solid through the
+   evidence above "you are here", dashed through the plan below it, because
+   that half is a guess. The line is one element per half, so it runs unbroken
+   whatever height a row turns out to be; each node wears a ring of the page
+   colour, so the line stops short of it instead of running into it; and the
+   goal masks the line below its flag, so the plan ends where the goal is. Every
+   class is cp2-way-*: distinctive in a file this long, not merely prefixed. */
+.cp-root[data-theme="soft"] .cp2-way { padding-bottom: 44px; }
+.cp-root[data-theme="soft"] .cp2-way-past,
+.cp-root[data-theme="soft"] .cp2-way-ahead { position: relative; }
+.cp-root[data-theme="soft"] .cp2-way-past::before,
+.cp-root[data-theme="soft"] .cp2-way-ahead::before { content: ''; position: absolute; left: 35px; top: 0; bottom: 0; width: 0; }
+.cp-root[data-theme="soft"] .cp2-way-past::before { border-left: 2px solid var(--frame); }
+.cp-root[data-theme="soft"] .cp2-way-ahead::before { border-left: 2px dashed #C3CAD8; }
 
-/* You are here: on the page rather than in a card, with the call right under it. */
-.cp-root[data-theme="soft"] .cp2-stream-here { display: flex; gap: 14px; margin: 24px 22px 14px 20px; }
-.cp-root[data-theme="soft"] .cp2-stream-node.here { width: 34px; height: 34px; margin-top: 2px; background: var(--blue); color: #fff; box-shadow: 0 0 0 6px rgba(79, 99, 210, 0.16), var(--lift); }
-.cp-root[data-theme="soft"] .cp2-stream-node.here svg { width: 17px; height: 17px; }
-.cp-root[data-theme="soft"] .cp2-stream-herebody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.cp-root[data-theme="soft"] .cp2-stream-eyebrow { font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-stream-herename { font-family: var(--display); font-size: 18px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-stream-here .cp2-stream-track { background: #DDE1EA; }
-.cp-root[data-theme="soft"] .cp2-stream-week { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
-.cp-root[data-theme="soft"] .cp2-stream-week .dots { display: flex; gap: 4px; }
-.cp-root[data-theme="soft"] .cp2-stream-week .dots i {
+.cp-root[data-theme="soft"] .cp2-way-row { position: relative; display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 12px 20px 12px 66px; text-align: left; color: var(--ink); }
+.cp-root[data-theme="soft"] button.cp2-way-row:active,
+.cp-root[data-theme="soft"] .cp2-way-tap:active { background: rgba(31, 41, 68, 0.04); }
+.cp-root[data-theme="soft"] .cp2-way-node {
+  position: absolute; left: 22px; top: 8px; z-index: 2; width: 28px; height: 28px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface); color: var(--muted); font-family: var(--display); font-size: 13px; font-weight: 800;
+  box-shadow: 0 0 0 4px var(--bg);
+}
+.cp-root[data-theme="soft"] .cp2-way-node svg { width: 14px; height: 14px; }
+.cp-root[data-theme="soft"] .cp2-way-node.sm { left: 23px; top: 9px; width: 26px; height: 26px; }
+.cp-root[data-theme="soft"] .cp2-way-node.sm svg { width: 13px; height: 13px; }
+/* Who: the app's agents teal, you blue, somebody outside answering the darkest.
+   Opaque tints: a see-through node shows the line running under it. */
+.cp-root[data-theme="soft"] .cp2-way-node.ai { background: #E3F2EE; color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-way-node.you { background: #E7EAF9; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-way-node.world { background: var(--ink); color: #fff; }
+.cp-root[data-theme="soft"] .cp2-way-node.quiet { color: var(--dim); box-shadow: inset 0 0 0 2px var(--frame), 0 0 0 4px var(--bg); }
+.cp-root[data-theme="soft"] .cp2-way-node.warn { background: #F9F0E0; color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-way-node.moment { background: var(--blue); color: #fff; box-shadow: 0 0 0 4px rgba(79, 99, 210, 0.16), 0 0 0 7px var(--bg); }
+.cp-root[data-theme="soft"] .cp2-way-node.swap { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue), 0 0 0 4px var(--bg); }
+.cp-root[data-theme="soft"] .cp2-way-node.redraw { color: var(--muted); box-shadow: inset 0 0 0 2px var(--frame), 0 0 0 4px var(--bg); }
+.cp-root[data-theme="soft"] .cp2-way-node.step.ai { color: var(--ai); box-shadow: inset 0 0 0 2px var(--ai), 0 0 0 4px var(--bg); }
+.cp-root[data-theme="soft"] .cp2-way-node.step.you { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue), 0 0 0 4px var(--bg); }
+.cp-root[data-theme="soft"] .cp2-way-node.rung { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue), 0 0 0 4px var(--bg); }
+.cp-root[data-theme="soft"] .cp2-way-node.rung svg { width: 12px; height: 12px; }
+.cp-root[data-theme="soft"] .cp2-way-node.check { color: var(--muted); border: 2px dashed #B5BDCD; box-shadow: 0 0 0 4px var(--bg); }
+.cp-root[data-theme="soft"] .cp2-way-stop > .cp2-way-node { top: 10px; }
+.cp-root[data-theme="soft"] .cp2-way-node.goal { background: var(--ink); color: #fff; }
+.cp-root[data-theme="soft"] .cp2-way-node.now { top: 18px; background: var(--blue); color: #fff; box-shadow: 0 0 0 4px var(--bg), var(--lift); }
+.cp-root[data-theme="soft"] .cp2-way-node.now svg { transform: rotate(-90deg); }
+
+.cp-root[data-theme="soft"] .cp2-way-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-way-t { font-size: 14px; font-weight: 600; line-height: 20px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-name { font-family: var(--display); font-size: 15.5px; font-weight: 700; line-height: 21px; }
+.cp-root[data-theme="soft"] .cp2-way-s { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-time { flex: none; font-size: 11.5px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cp-root[data-theme="soft"] .cp2-way-frac { flex: none; font-family: var(--display); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-way-eyebrow { font-family: var(--display); font-size: 11px; font-weight: 700; line-height: 16px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-way-eyebrow.muted { color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-stepdone { font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--blue); }
+
+/* The evidence. */
+.cp-root[data-theme="soft"] .cp2-way-earlier { display: block; width: 100%; padding: 6px 20px 4px 66px; text-align: left; font-size: 12.5px; font-weight: 700; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-way-day { position: relative; padding: 16px 20px 0 66px; font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-swap { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-way-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.cp-root[data-theme="soft"] .cp2-way-week { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding-top: 16px; }
+.cp-root[data-theme="soft"] .cp2-way-week .dots { display: flex; gap: 4px; }
+.cp-root[data-theme="soft"] .cp2-way-week .dots i {
   width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-  font-style: normal; font-size: 9.5px; font-weight: 700; color: var(--muted); background: var(--surface); box-shadow: inset 0 0 0 2px var(--frame);
+  font-size: 10px; font-weight: 700; font-style: normal; color: var(--dim); background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--frame);
 }
-.cp-root[data-theme="soft"] .cp2-stream-week .dots i.moved { background: var(--ai); color: #fff; box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-stream-week .dots i.today { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue); }
-.cp-root[data-theme="soft"] .cp2-stream-week .dots i.moved.today { color: #fff; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--blue); }
-.cp-root[data-theme="soft"] .cp2-stream-weekline { font-size: 12px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-week .dots i.moved { background: var(--ai); color: #fff; box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-way-week .dots i.today { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue); }
+.cp-root[data-theme="soft"] .cp2-way-week .dots i.moved.today { color: #fff; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--blue); }
 
-/* A next step: the text is the tap target, so an offer's plan can open under it in place. */
-.cp-root[data-theme="soft"] .cp2-stream-tap { display: flex; flex-direction: column; gap: 5px; width: 100%; text-align: left; color: var(--ink); border-radius: 10px; }
-.cp-root[data-theme="soft"] .cp2-stream-tap .cp2-stream-top { align-items: flex-start; }
-.cp-root[data-theme="soft"] .cp2-stream-tap .cp2-chev { margin-top: 2px; }
-.cp-root[data-theme="soft"] .cp2-stream-who { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-stream-who .cp2-owner { flex: none; white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-stream-plan { display: block; margin-top: 10px; padding: 12px 14px; border-radius: 14px; background: var(--track); font-size: 13px; line-height: 1.55; color: var(--ink); white-space: pre-line; }
-.cp-root[data-theme="soft"] .cp2-stream-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-
-/* ── Path, part two: the path moves, and says so ─────────────────────────
-   A rung reached is a moment in the stream, in the path's own blue — not a
-   new colour, so a star is never mistaken for a warning. The plan says when it
-   was redrawn and what left it; the one suggestion sits in a tinted box under
-   the hours it is about; and "Back to now" floats while you are away from it. */
-.cp-root[data-theme="soft"] .cp2-stream-node.moment { background: var(--blue); color: #fff; box-shadow: 0 0 0 4px rgba(79, 99, 210, 0.14); }
-.cp-root[data-theme="soft"] .cp2-stream-node.moment svg { width: 13px; height: 13px; }
-.cp-root[data-theme="soft"] .cp2-stream-stepdone { font-family: var(--display); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-stream-node.swap { background: var(--surface); color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue); }
-.cp-root[data-theme="soft"] .cp2-stream-node.swap svg { width: 13px; height: 13px; }
-/* The box's first line level with its node: 4px down, then the box's own 12px. */
-.cp-root[data-theme="soft"] .cp2-stream-body.cp2-stream-swapbody { padding-top: 4px; }
-.cp-root[data-theme="soft"] .cp2-stream-swap { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 14px; border-radius: 16px; background: var(--tint); }
-.cp-root[data-theme="soft"] .cp2-stream-swap .cp2-stream-s { color: var(--ink); opacity: 0.8; }
-.cp-root[data-theme="soft"] .cp2-stream-swap .cp2-stream-acts { margin-top: 8px; }
-.cp-root[data-theme="soft"] .cp2-stream-node.redraw { background: var(--surface); color: var(--muted); box-shadow: inset 0 0 0 2px var(--frame); }
-.cp-root[data-theme="soft"] .cp2-stream-node.redraw svg { width: 13px; height: 13px; }
-.cp-root[data-theme="soft"] .cp2-stream-newcount { flex: none; font-family: var(--display); font-size: 12.5px; font-weight: 700; color: var(--blue); white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-stream-gone { font-size: 12.5px; line-height: 1.45; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-stream-gone s { color: var(--muted); text-decoration-color: var(--dim); }
-.cp-root[data-theme="soft"] .cp2-stream-new { flex: none; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; background: var(--blue); color: #fff; white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-stream-reached {
+/* You are here: the node the two halves of the line meet at. */
+.cp-root[data-theme="soft"] .cp2-way-here { position: relative; display: flex; flex-direction: column; gap: 3px; padding: 18px 20px 14px 66px; }
+.cp-root[data-theme="soft"] .cp2-way-here::before { content: ''; position: absolute; left: 35px; top: 0; height: 36px; border-left: 2px solid var(--frame); }
+.cp-root[data-theme="soft"] .cp2-way-here::after { content: ''; position: absolute; left: 35px; top: 36px; bottom: 0; border-left: 2px dashed #C3CAD8; }
+.cp-root[data-theme="soft"] .cp2-way-node.here { left: 16px; top: 16px; width: 40px; height: 40px; background: var(--blue); color: #fff; box-shadow: 0 0 0 5px rgba(79, 99, 210, 0.18), 0 0 0 9px var(--bg), var(--lift); }
+.cp-root[data-theme="soft"] .cp2-way-node.here svg { width: 18px; height: 18px; }
+.cp-root[data-theme="soft"] .cp2-way-heretitle { font-family: var(--display); font-size: 21px; font-weight: 700; line-height: 1.25; letter-spacing: -0.3px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-reached {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 5px 12px 5px 9px;
   border-radius: 999px; background: var(--blue); color: #fff; box-shadow: var(--lift);
   font-family: var(--display); font-size: 11.5px; font-weight: 700; animation: cp2-stream-pop .5s cubic-bezier(.2, 1.4, .4, 1) both;
 }
-.cp-root[data-theme="soft"] .cp2-stream-reached svg { width: 13px; height: 13px; }
-.cp-root[data-theme="soft"] .cp-note.cp2-stream-memo { padding-top: 0; }
-/* Room under Tell for the pill to float over at the end of the list, rather than over Tell. */
-.cp-root[data-theme="soft"] .cp2-stream-page { padding-bottom: 44px; }
+.cp-root[data-theme="soft"] .cp2-way-here .cp2-way-reached { margin: 8px 0 0; }
+.cp-root[data-theme="soft"] .cp2-way-reached svg { width: 13px; height: 13px; }
+
+/* The move: the one card on the line, to its right. */
+.cp-root[data-theme="soft"] .cp2-way-nowrow { padding: 6px 16px 8px 66px; }
+.cp-root[data-theme="soft"] .cp2-way-nowrow > .cp-card { margin: 0; }
+.cp-root[data-theme="soft"] .cp2-way-now { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
+.cp-root[data-theme="soft"] .cp2-way-nowtop { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-way-size { font-size: 11.5px; font-weight: 600; color: var(--muted); text-align: right; }
+.cp-root[data-theme="soft"] .cp2-way-nowtitle { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-why { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-go { margin-top: 6px; }
+.cp-root[data-theme="soft"] .cp2-way-also { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 4px; padding-bottom: 6px; }
+.cp-root[data-theme="soft"] .cp2-way-alsolabel { font-size: 12px; font-weight: 700; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-chip {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 7px 8px 7px 12px; border-radius: 999px;
+  background: var(--surface); box-shadow: var(--shadow-sm); font-size: 12px; font-weight: 600; color: var(--ink);
+}
+.cp-root[data-theme="soft"] .cp2-way-chip .cp2-chev { flex: none; width: 14px; height: 14px; color: var(--dim); }
+/* A breakage wears the warning colour; a question is the user's own business, not a fault. */
+.cp-root[data-theme="soft"] .cp2-way-chip.fix { color: var(--warn); }
+
+/* The plan. */
+.cp-root[data-theme="soft"] .cp2-way-head {
+  position: relative; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 22px 20px 2px 66px;
+  font-family: var(--display); font-size: 12px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink);
+}
+.cp-root[data-theme="soft"] .cp2-way-head .note { font-size: 11.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--dim); text-align: right; }
+.cp-root[data-theme="soft"] .cp2-way-sized { display: block; width: 100%; padding: 2px 20px 6px 66px; text-align: left; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-sized b { color: var(--blue); font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-way-memo { padding: 0 20px 6px 66px; font-size: 11.5px; line-height: 1.45; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-way-tap { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; color: var(--ink); border-radius: 10px; }
+.cp-root[data-theme="soft"] .cp2-way-tap .cp2-way-top { align-items: flex-start; }
+.cp-root[data-theme="soft"] .cp2-way-tap .cp2-chev { flex: none; margin-top: 2px; }
+.cp-root[data-theme="soft"] .cp2-way-who { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-way-who .cp2-owner { flex: none; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-way-pill { flex: none; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-way-pill.new { background: var(--blue); color: #fff; }
+.cp-root[data-theme="soft"] .cp2-way-pill.big { background: #F9F0E0; color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-way-pill.early { align-self: flex-start; margin-top: 4px; background: #E4E8F0; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-plan { display: block; margin-top: 8px; padding: 12px 14px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); font-size: 13px; line-height: 1.55; white-space: pre-line; }
+.cp-root[data-theme="soft"] .cp2-way-more { padding-top: 2px; padding-bottom: 6px; font-size: 12.5px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-newcount { flex: none; font-family: var(--display); font-size: 12.5px; font-weight: 700; color: var(--blue); white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-way-gone { font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-gone s { color: var(--muted); text-decoration-color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-way-stop { gap: 4px; padding-top: 14px; padding-bottom: 14px; }
+.cp-root[data-theme="soft"] .cp2-way-track { display: block; height: 6px; margin: 4px 0 2px; border-radius: 3px; background: #DDE1EA; overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-way-track i { display: block; height: 100%; border-radius: 3px; background: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-way-takes { font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-pace { font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-way-act { align-self: flex-start; margin-top: 8px; }
+/* The line ends at the goal: a strip of page colour below its flag. */
+.cp-root[data-theme="soft"] .cp2-way-row.end::after { content: ''; position: absolute; left: 28px; top: 44px; bottom: 0; width: 16px; background: var(--bg); z-index: 1; }
+.cp-root[data-theme="soft"] .cp2-way-beyond { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-way-beyondrow { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; }
+.cp-root[data-theme="soft"] .cp2-way-beyondrow .t { min-width: 0; font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-beyondrow .s { flex: none; max-width: 48%; font-size: 12px; color: var(--muted); text-align: right; }
+.cp-root[data-theme="soft"] .cp2-way-links { display: flex; gap: 16px; margin-top: 4px; }
+
 /* In the frame, above the floating nav, where the toast also sits. */
 .cp-root[data-theme="soft"] .cp2-stream-backwrap {
   position: absolute; left: 0; right: 0; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 15;
@@ -1319,6 +1357,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-stream-back svg { width: 15px; height: 15px; }
 .cp-root[data-theme="soft"] .cp2-stream-backwrap.on .cp2-stream-back { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s; }
 @media (prefers-reduced-motion: reduce) {
-  .cp-root[data-theme="soft"] .cp2-stream-reached { animation: none; }
+  .cp-root[data-theme="soft"] .cp2-way-reached { animation: none; }
   .cp-root[data-theme="soft"] .cp2-stream-back { transition: none; }
 }

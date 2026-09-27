@@ -85,6 +85,13 @@ export interface RecentLedger {
   outcomes: RecentOutcome[];
   answered: AnsweredMove[];
   focus: FocusLog[];
+  /**
+   * When each message in the window went out, read by date. The pipeline holds
+   * only the 200 best-scored businesses and each one's latest execution, so a
+   * send to anything ranked below that was invisible to the week it happened
+   * in. Absent on a payload from before this field existed.
+   */
+  sentAt?: string[];
   unreadable: string[];
 }
 

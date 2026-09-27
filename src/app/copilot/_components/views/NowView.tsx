@@ -35,7 +35,7 @@
 // record, because a finished job with an outcome IS a graded call and "did that
 // work" is the question that tab asks.
 import { useEffect, useState } from 'react';
-import { VERDICT_LABEL, movedBy, verdictOf, type Decision } from '@/lib/copilot/decision';
+import { VERDICT_LABEL, metricLabel, metricWords, movedBy, verdictOf, type Decision } from '@/lib/copilot/decision';
 import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
 import { PLANS } from '@/lib/copilot/plans';
 import { useShell } from '../shell';
@@ -456,6 +456,12 @@ export function QueueClear({ home, actions }: { home: HomeData; actions: Actions
  * The three buttons are the only place the app finds out whether it was right —
  * so "Wrong call" is offered as plainly as "I did it".
  */
+/** The currency a money metric is said in: the finances, else the money goal, else "$". */
+function currencyOf(home: HomeData): string {
+  return home.profile.finance?.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '$';
+}
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 export function CallCard({ decision, home, actions, noOffer }: { decision: Decision; home: HomeData; actions: Actions; noOffer: boolean }) {
   const [busy, setBusy] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
@@ -492,9 +498,9 @@ export function CallCard({ decision, home, actions, noOffer }: { decision: Decis
         <p className="cp-answered-head">{decision.headline}</p>
         <p className="cp-answered-note">
           {verdict === 'measuring' && decision.verify.metric !== 'none'
-            ? `Reading ${decision.verify.metric.replace('_', ' ')} back in a few days. It was ${decision.verify.baseline} when you decided.`
-            : verdict === 'worked' ? `${decision.verify.metric.replace('_', ' ')} moved by ${moved}.`
-            : verdict === 'no_movement' ? `${decision.verify.metric.replace('_', ' ')} did not move.`
+            ? `Reading ${metricWords(decision.verify.metric)} back in a few days. It was ${metricLabel(decision.verify.metric, decision.verify.baseline, currencyOf(home))} when you decided.`
+            : verdict === 'worked' ? `${capitalise(metricWords(decision.verify.metric))} moved by ${metricLabel(decision.verify.metric, moved ?? 0, currencyOf(home))}.`
+            : verdict === 'no_movement' ? `${capitalise(metricWords(decision.verify.metric))} did not move.`
             : verdict === 'wrong' ? 'Recorded. It will not make this call the same way again.'
             : 'Recorded. Turn the same call down enough times and it stops being offered.'}
         </p>
@@ -589,9 +595,9 @@ export function CallCard({ decision, home, actions, noOffer }: { decision: Decis
             <span className={`cp-chip verdict ${verdict}`}>{VERDICT_LABEL[verdict]}</span>
             <span className="cp-verdict-note">
               {verdict === 'measuring' && decision.verify.metric !== 'none'
-                ? `Reading ${decision.verify.metric.replace('_', ' ')} back in a few days. It was ${decision.verify.baseline} when you decided.`
-                : verdict === 'worked' ? `${decision.verify.metric.replace('_', ' ')} moved by ${moved}.`
-                : verdict === 'no_movement' ? `${decision.verify.metric.replace('_', ' ')} did not move.`
+                ? `Reading ${metricWords(decision.verify.metric)} back in a few days. It was ${metricLabel(decision.verify.metric, decision.verify.baseline, currencyOf(home))} when you decided.`
+                : verdict === 'worked' ? `${capitalise(metricWords(decision.verify.metric))} moved by ${metricLabel(decision.verify.metric, moved ?? 0, currencyOf(home))}.`
+                : verdict === 'no_movement' ? `${capitalise(metricWords(decision.verify.metric))} did not move.`
                 : verdict === 'wrong' ? 'Recorded. It will not make this call the same way again.'
                 : verdict === 'rejected' ? 'Recorded.'
                 : 'Recorded.'}

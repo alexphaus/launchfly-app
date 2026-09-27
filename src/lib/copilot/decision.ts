@@ -195,6 +195,22 @@ export const VERDICT_LABEL: Record<DecisionVerdict, string> = {
 };
 
 /** How far the named metric moved since the call. Null until it is read back. */
+/** A metric the way a person says it: "money won", "replies", "drafts waiting". */
+export function metricWords(metric: DecisionMetric): string {
+  return metric === 'won_amount' ? 'money won' : METRIC_LABEL[metric] || metric.replace(/_/g, ' ');
+}
+
+/**
+ * A value in its metric's own unit — "$2" for money, "3" for a count. The call
+ * card printed the raw number, so a goal line reading "$1,000 of $15,000" sat
+ * over "It was 2 when you decided", and the two read as a contradiction.
+ */
+export function metricLabel(metric: DecisionMetric, n: number, currency: string): string {
+  if (metric === 'won_amount') return `${n < 0 ? '-' : ''}${currency}${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
+  if (metric === 'runway_months') return String(Math.round(n * 10) / 10);
+  return String(Math.round(n));
+}
+
 export function movedBy(d: Pick<Decision, 'verify'>): number | null {
   const { after, baseline } = d.verify;
   return after == null ? null : after - baseline;

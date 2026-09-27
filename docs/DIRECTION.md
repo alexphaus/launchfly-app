@@ -213,6 +213,17 @@ numbers on You, its owner found the separation was the point: the Path is what
 to do and what moved, Work is the business being built — the offer, the
 machine, the team and the projects in full. Four tabs: Path · Matches · Work ·
 You. See COPILOT.md → **Four tabs**.
+**Then** — the Path as a plan, not a log. The stream put everything on one axis
+and weighted it evenly, so the part a person opens it for — what now, and where
+is this going — was a short list under a long log. Now the evidence above "you
+are here" is only what taught something, the centre is one move sized to the
+time the user set, and below it the plan walks their first goal back through
+their own funnel: money → clients at their price → sends at their rate → days
+at their capacity, each estimate marked early until the sample is real, and a
+checkpoint saying when the guesses become numbers. It passes the survival test
+for the same reason the rest does: an agent with memory can write a roadmap;
+"10 clients at your $150, about 45 sends at the rate your own 9 earned" needs
+the ledger. Goals past the first are named, not planned.
 
 ---
 

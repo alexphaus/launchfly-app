@@ -146,7 +146,7 @@ export interface NowInput {
    * selling is part of this person's path, so a blank offer is no longer the
    * move by default.
    */
-  planStep?: { item: string; title: string; milestone: string; why: string | null; size: string } | null;
+  planStep?: { item: string; title: string; milestone: string; why: string | null; size: string; sends?: boolean } | null;
   hasPlan?: boolean;
 }
 
@@ -187,29 +187,42 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
     };
   }
 
-  if (input.queue.count > 0) {
+  // The drafts, sized to the day. Said differently depending on who put them
+  // here: without a plan, sending is the path; with one, the plan asked for it
+  // or had nothing of yours that fits today.
+  const sendNow = (because: string) => {
     const n = sendBatch(input.capacity, input.queue.count);
     const rate = f.sent > 0 && f.replied > 0 ? f.replied / f.sent : null;
     const expect = rate ? Math.round(n * rate) : 0;
     const early = f.sent < RATE_SAMPLE ? ', early' : '';
     return {
       now: {
-        kind: 'send', key: 'send',
+        kind: 'send' as const, key: 'send',
         title: n >= input.queue.count ? `Send your ${plural(input.queue.count, 'draft')}` : `Send ${n} of your ${input.queue.count} drafts`,
         why: [
           input.queue.oldestDays > 0 ? `The oldest has waited ${plural(input.queue.oldestDays, 'day')}.` : 'Written and waiting.',
           rate
             ? `At your rate so far — ${plural(f.replied, 'reply', 'replies')} from ${plural(f.sent, 'send')}${early} — that is about ${expect ? plural(expect, 'reply', 'replies') : 'one reply, if any'}.`
-            : 'Nothing on this path moves until something goes out.',
+            : because,
         ].join(' '),
         size: `about ${n * SEND_MINUTES} min of your ${cap.minutes}`,
         cta: 'Open the drafts',
       },
       also: also('queue'),
     };
-  }
+  };
 
-  const ask = asks[0];
+  // Without a plan, on an outbound path nothing moves until something goes out.
+  if (!input.hasPlan && input.queue.count > 0) return sendNow('Nothing on this path moves until something goes out.');
+
+  // With a plan, the drafts are no longer first by default. They were: Alex's
+  // plan said to rewrite the opener before sending more, and the card over it
+  // said "Send 25 of your 56 drafts" — written with the old opener. Maria's said
+  // "nothing on this path moves until something goes out" about one stale sales
+  // draft, over a plan about market stalls. The plan is told the drafts exist
+  // and decides; until it asks for them they are a chip beside the move.
+  const blocking = input.hasPlan ? asks.filter((a) => a.kind !== 'send') : asks;
+  const ask = blocking[0];
   if (ask) {
     const k = ASK_NOW[ask.kind];
     return { now: { kind: ask.kind, key: ask.key, title: k.title(ask), why: ask.detail, size: k.size || null, cta: k.cta, id: ask.id }, also: also(ask.key) };
@@ -218,6 +231,7 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
   // The plan's step before the planner's Moves: the plan is ordered against the
   // person's goals, and a Move is one job's idea of a good next thing.
   const step = input.planStep;
+  if (step?.sends && input.queue.count > 0) return sendNow('Your plan puts sending them this week.');
   if (step) {
     return {
       now: {
@@ -229,6 +243,9 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
       also: also(),
     };
   }
+  // A plan with nothing of yours that fits today: finished drafts are the best
+  // use of the time, but the plan never said sending is the path, so neither does this.
+  if (input.queue.count > 0) return sendNow('Written and waiting, and nothing else on your plan fits today.');
 
   const fitting = input.moves.find((m) => (costMinutesOf(m.cost_label) ?? DEFAULT_COST_MINUTES) <= cap.minutes);
   const move = fitting ?? input.moves[0];

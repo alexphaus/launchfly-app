@@ -5851,3 +5851,203 @@ async function pathPlan() {
 }
 
 pathPlan().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Run again" runs the night: the pass, its row, and the report on You
+// ─────────────────────────────────────────────────────────────────────────────
+import { readFileSync as readNightlyFile } from 'node:fs';
+import {
+  CRON_REASON, NIGHTLY_NOW, NIGHTLY_STALE_MS, durationLabel, isNightlyPass, nightlyFromRow, nightlyHeadline,
+  nightlyInFlight, nightlyLines, nightlyToast, nightlyView, runAgo, type NightlyOutput, type NightlyRun,
+} from '../../src/lib/copilot/nightly';
+import { budgetForReason as nightlyBudget } from '../../src/lib/copilot/agent/llm';
+import { notifyPayload as nightlyNotify } from '../../src/lib/copilot/brief';
+
+async function nightlyPass() {
+  const now = new Date('2026-09-27T08:00:00Z');
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+
+  // 1. A tap must never be mistaken for the schedule. lastCronRun and /health
+  //    count 'cron' briefs as proof the scheduled task exists; if "Run again"
+  //    wrote that reason, pressing it would hide a schedule that never fires.
+  assert.notEqual(NIGHTLY_NOW, CRON_REASON);
+  assert.ok(isNightlyPass(CRON_REASON) && isNightlyPass(NIGHTLY_NOW));
+  for (const r of ['manual', 'daily', 'supply', '', null, undefined]) assert.equal(isNightlyPass(r), false, `${String(r)} is not the nightly pass`);
+
+  // 2. Both ways of running the pass are off the proxy, so both get the long
+  //    budget and both end in the push. Everything else stays a tap.
+  const env = { ...process.env };
+  delete process.env.COPILOT_AI_TIMEOUT_MS;
+  delete process.env.COPILOT_AI_CRON_TIMEOUT_MS;
+  assert.equal(nightlyBudget(NIGHTLY_NOW), nightlyBudget(CRON_REASON), 'the button runs after the response, so it can wait like the cron');
+  assert.ok(nightlyBudget(NIGHTLY_NOW) > nightlyBudget('manual'));
+  process.env = env;
+  const call = { headline: 'Send the 7 drafts already written.', because: [], verify_metric: 'sent' as const };
+  assert.equal(nightlyNotify({ decision: call }, NIGHTLY_NOW)?.body, call.headline, 'the push is part of what the night produces');
+  assert.equal(nightlyNotify({ decision: call }, 'manual'), null, 'a plain re-brief still does not notify');
+
+  // 3. Same code path, by construction. The cron and the button both call
+  //    runNightlyPass, neither calls runDaily around it, and the button never
+  //    borrows the cron's reason. The button shares the brief's daily cap, so
+  //    it is not a way round briefsPerDay.
+  const cronSrc = readNightlyFile(new URL('../../src/app/api/copilot/cron/daily/route.ts', import.meta.url), 'utf8');
+  const nowSrc = readNightlyFile(new URL('../../src/app/api/copilot/nightly/route.ts', import.meta.url), 'utf8');
+  const briefSrc = readNightlyFile(new URL('../../src/app/api/copilot/brief/route.ts', import.meta.url), 'utf8');
+  for (const [name, src] of [['cron', cronSrc], ['nightly', nowSrc]] as const) {
+    assert.match(src, /runNightlyPass\(/, `${name} route runs the shared pass`);
+    assert.doesNotMatch(src, /runDaily\(/, `${name} route must not run a copy of it`);
+  }
+  assert.doesNotMatch(nowSrc, /CRON_REASON|'cron'/, 'the button must never record itself as the schedule');
+  assert.match(nowSrc, /copilot:brief:\$\{auth\.pid\}/);
+  assert.match(briefSrc, /copilot:brief:\$\{auth\.pid\}/, 'one cap for every brief a tap can start');
+
+  // 4. In flight, and when "running" stops being believable.
+  const running = (startedMs: number, extra: Partial<NightlyRun> = {}): NightlyRun => ({
+    id: 'r1', status: 'running', reason: NIGHTLY_NOW, started_at: ago(startedMs), finished_at: null, output: null, error: null, ...extra,
+  });
+  assert.equal(nightlyInFlight(running(60_000), now), true);
+  assert.equal(nightlyInFlight(running(NIGHTLY_STALE_MS + 1), now), false, 'past the stale line the process that owned it is gone');
+  assert.equal(nightlyInFlight({ status: 'ok', started_at: ago(1000) }, now), false);
+  assert.equal(nightlyInFlight(null, now), false);
+  assert.equal(nightlyInFlight({ status: 'running', started_at: 'not a date' }, now), false, 'an unreadable start is not a live run');
+
+  // 5. Running: which step, how far, how long. Who started it is said, so a
+  //    pass the schedule has going is not taken for one you started.
+  const v1 = nightlyView(running(72_000, { output: { step: 'jobs' } }), now);
+  assert.equal(v1.state, 'running');
+  if (v1.state === 'running') {
+    assert.equal(v1.stepN, 3); assert.equal(v1.of, 4);
+    assert.equal(v1.doing, 'running the checks');
+    assert.equal(v1.elapsed, '1m 12s');
+    assert.equal(v1.by, 'you');
+  }
+  const v2 = nightlyView(running(5_000, { reason: CRON_REASON }), now);
+  assert.equal(v2.state === 'running' && v2.by, 'schedule');
+  assert.equal(v2.state === 'running' && v2.doing, 'starting', 'no step recorded yet is "starting", not a guess');
+  assert.equal(v2.state === 'running' && v2.stepN, 0);
+  const junkStep = nightlyView(running(5_000, { output: { step: 'teleport' as never } }), now);
+  assert.equal(junkStep.state === 'running' && junkStep.step, null, 'a step this code does not know is not rendered');
+
+  // 6. A row that died says so, and says what survived: every step writes as it
+  //    goes, so a pass cut off at the checks has already kept its matches.
+  const dead = nightlyView(running(20 * 60_000), now);
+  assert.equal(dead.state, 'stopped');
+  if (dead.state === 'stopped') {
+    assert.equal(dead.startedAgo, '20m ago');
+    assert.match(dead.line, /Stopped without finishing/);
+    assert.match(dead.line, /kept/);
+  }
+  assert.equal(nightlyToast(dead), 'The nightly run stopped without finishing.');
+
+  // 7. A pass that threw carries its reason, and an empty one is not "fine".
+  const failed = nightlyView({ ...running(60_000), status: 'error', finished_at: ago(30_000), error: 'profile not found' }, now);
+  assert.equal(failed.state === 'failed' && failed.line, 'profile not found');
+  const blank = nightlyView({ ...running(60_000), status: 'error', finished_at: ago(30_000), error: '  ' }, now);
+  assert.equal(blank.state === 'failed' && blank.line, 'It failed without saying why.');
+  assert.equal(nightlyToast(failed), 'Nightly run failed: profile not found');
+
+  // 8. What each step did, from the stored result.
+  const out: NightlyOutput = {
+    supply: {
+      found: 18, inserted: 4,
+      perAdapter: {
+        hunter: { found: 0, inserted: 0, skipped: 'not configured for this profile' },
+        web: { found: 6, inserted: 1 },
+        google_maps: { found: 12, inserted: 3 },
+        remote: { found: 0, inserted: 0, error: 'fetch failed' },
+      },
+    },
+    reconcile: { checked: 6, matched: 1 },
+    jobs: {
+      ran: 9, produced: 5, written: 3,
+      perJob: {
+        send_queue: { produced: 1, written: 1 },
+        watch: { produced: 0, written: 0, error: 'feed returned 403' },
+        repeat_customer: { produced: 0, written: 0, skipped: 'sensor not connected for this profile' },
+      },
+    },
+    brief: { agent: 'llm', fellBack: false, graded: { ignored: 1, verified: 1 }, pushed: 1 },
+    labels: { supply: { web: 'Web search', google_maps: 'Google Maps', remote: 'External supply agent' }, jobs: { watch: 'What your sources turned up' } },
+  };
+  const lines = nightlyLines(out);
+  const text = lines.map((l) => `${l.tone}|${l.name}|${l.text}`);
+  assert.deepEqual(text, [
+    'ok|Scout|Found 18 (Web search 6, Google Maps 12) · 4 new',
+    'broke|Scout|External supply agent: fetch failed',
+    'ok|Replies|Checked 6 sent messages · 1 new reply',
+    'ok|Checks|9 checks ran · 3 new next steps',
+    'broke|Checks|What your sources turned up: feed returned 403',
+    'ok|Call|Picked by the agent · 2 earlier calls graded · sent to your phone',
+  ]);
+  // Skips that are by design are not news: "not configured" and "sensor not
+  // connected" are the setup the Work tab already shows, not failures.
+  assert.ok(!text.some((t) => /not configured|not connected/.test(t)));
+
+  const done = nightlyView({ ...running(200_000), status: 'ok', finished_at: ago(70_000), output: out }, now);
+  assert.equal(done.state, 'done');
+  if (done.state === 'done') {
+    assert.equal(done.took, '2m 10s');
+    assert.equal(done.ago, '1m ago');
+    assert.equal(done.broke, 2);
+    assert.equal(done.headline, '4 new matches, 3 new next steps, call picked');
+  }
+  assert.equal(nightlyToast(done), 'Nightly run done, but 2 things broke. Details under You.');
+
+  // 9. The fallback is a failure even though a call came out of it; the rules
+  //    with no model set up are a note, not a fault; a missing label shows the key.
+  const fell = nightlyLines({ brief: { agent: 'starter', fellBack: true, graded: { ignored: 0, verified: 0 }, pushed: 0 } });
+  assert.deepEqual(fell.map((l) => [l.tone, l.text]), [
+    ['note', 'Did not search this run'],
+    ['broke', 'The agent failed, so the fallback rules picked it'],
+  ]);
+  const rules = nightlyLines({ supply: { found: 0, inserted: 0, perAdapter: { google_maps: { found: 0, inserted: 0, skipped: 'monthly match allowance used up' } } }, brief: { agent: 'starter', fellBack: false } });
+  assert.deepEqual(rules.map((l) => [l.tone, l.text]), [
+    ['ok', 'Searched · nothing turned up'],
+    ['note', 'google_maps: monthly match allowance used up'],
+    ['note', 'Picked by the rules, since no model is set up'],
+  ]);
+
+  // 10. A step that threw says why, in its own words.
+  const threw = nightlyLines({ supply: { error: 'profile not found' }, reconcile: { error: 'timeout' }, jobs: { error: 'boom' }, unrecorded: ['permission denied'] });
+  assert.deepEqual(threw.map((l) => `${l.tone}|${l.text}`), [
+    'broke|Could not search: profile not found',
+    'broke|Could not read replies: timeout',
+    'broke|Could not run the checks: boom',
+    'note|Progress could not be saved as it went: permission denied',
+  ]);
+  assert.equal(nightlyLines({ reconcile: { checked: 0, matched: 0 } })[1].text, 'No sent WhatsApp messages from the last 30 days to check');
+  assert.equal(nightlyLines({ supply: { found: 5, inserted: 0 } })[0].text, 'Found 5 · all already seen');
+
+  // 11. The headline counts only what is new, and says when nothing is.
+  assert.equal(nightlyHeadline({ supply: { found: 3, inserted: 0 }, jobs: { written: 0 }, brief: { agent: 'llm' } }), 'nothing new, call picked');
+  assert.equal(nightlyHeadline({ supply: { found: 1, inserted: 1 }, brief: { skipped: 'no time left' } }), '1 new match, no call picked');
+  assert.equal(nightlyToast(nightlyView({ ...running(90_000), status: 'ok', finished_at: ago(10_000), output: { brief: { agent: 'llm' } } }, now)), 'Nightly run done: nothing new, call picked.');
+  assert.equal(nightlyToast(v1), null, 'nothing to announce while it is still going');
+
+  // 12. The row as stored. The reason lives in input_summary; a status this
+  //     code does not know is read as a failure, never as fine.
+  const row = nightlyFromRow({ id: 'x', status: 'ok', started_at: ago(1000), finished_at: ago(0), output: { brief: { agent: 'llm' } }, error: null, input_summary: { reason: CRON_REASON } });
+  assert.equal(row.reason, CRON_REASON);
+  assert.equal(row.output?.brief?.agent, 'llm');
+  const odd = nightlyFromRow({ id: 'y', status: 'paused', started_at: ago(1000), finished_at: null, output: 'junk', error: null, input_summary: null });
+  assert.equal(odd.status, 'error');
+  assert.match(odd.error ?? '', /unknown status "paused"/);
+  assert.equal(odd.output, null);
+  assert.equal(odd.reason, null);
+  assert.equal(nightlyView(null, now).state, 'never');
+
+  // 13. Durations and ages.
+  assert.equal(durationLabel(48_000), '48s');
+  assert.equal(durationLabel(120_000), '2m');
+  assert.equal(durationLabel(130_000), '2m 10s');
+  assert.equal(durationLabel(3_840_000), '1h 4m');
+  assert.equal(durationLabel(-5), '0s');
+  assert.equal(runAgo(ago(30_000), now), 'just now');
+  assert.equal(runAgo(ago(4 * 60_000), now), '4m ago');
+  assert.equal(runAgo(ago(7 * 3_600_000), now), '7h ago');
+  assert.equal(runAgo(ago(49 * 3_600_000), now), '2d ago');
+
+  console.log('copilot-core: nightly pass checks passed');
+}
+
+nightlyPass().catch((e) => { console.error(e); process.exit(1); });

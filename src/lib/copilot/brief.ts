@@ -9,6 +9,7 @@ import { buildContextPack } from './context';
 import { copilotDb } from './db';
 import { promoteCall } from './call';
 import { metricValue, snapshotOf, starterDecision } from './decision';
+import { isNightlyPass } from './nightly';
 import { offerIsEmpty } from './offer';
 import { sendPush } from './push';
 import { scoreOpportunity } from './ranking';
@@ -169,7 +170,11 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
  *  - It fired from any brief, including the one that runs when the app is
  *    opened. A notification sent to somebody already looking at the screen is
  *    at best suppressed and at worst noise, so this now sends only from the
- *    cron: the one moment the user is definitionally not here.
+ *    nightly pass: the cron, the one moment the user is definitionally not
+ *    here, or "Run again", which is that same pass started early. That one
+ *    takes minutes and runs after the tap has returned, so whoever started it
+ *    has usually gone; and the push is part of what the night produces, which
+ *    is the thing the button exists to let you check.
  *  - It never carried the decision, which is the only thing in the app worth
  *    interrupting someone for. A count of nudges is not a reason to open a
  *    phone; "send the 7 drafts already written" is.
@@ -183,7 +188,7 @@ export function notifyPayload(
   out: { decision: { headline: string } | null },
   reason: string,
 ): { title: string; body: string } | null {
-  if (reason !== 'cron') return null;
+  if (!isNightlyPass(reason)) return null;
   // The call, or silence. The urgent-nudge fallback went with the nudges: it
   // fired when the run produced no decision, which is exactly the morning there
   // is nothing worth a notification — and it pushed a restatement of a card the

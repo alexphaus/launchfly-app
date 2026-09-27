@@ -1356,7 +1356,31 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 }
 .cp-root[data-theme="soft"] .cp2-stream-back svg { width: 15px; height: 15px; }
 .cp-root[data-theme="soft"] .cp2-stream-backwrap.on .cp2-stream-back { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s; }
+/* ── The nightly run, on You: the row that starts tonight's pass early and
+      then reports on it. A row like the others until it has something to
+      say, then a column: the head, a progress track while it runs, a line per
+      step when it is done. ──────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] .cp2-nightly { flex-direction: column; align-items: stretch; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-nightly-head { display: flex; align-items: center; gap: 12px; }
+.cp-root[data-theme="soft"] .cp2-nightly-head .cp-connect { flex: none; }
+/* Specific enough to beat .cp2-row-main .s, which is what kept this grey. */
+.cp-root[data-theme="soft"] .cp2-nightly .cp2-row-main .s.bad { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-nightly-track { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-nightly-track i { display: block; height: 100%; border-radius: inherit; background: var(--blue); transition: width .4s ease; }
+.cp-root[data-theme="soft"] .cp2-nightly-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.cp-root[data-theme="soft"] .cp2-nightly-lines li { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-nightly-lines li b { font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-nightly-mark { flex: none; width: 12px; text-align: center; font-weight: 700; color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-nightly-lines li.note,
+.cp-root[data-theme="soft"] .cp2-nightly-lines li.note .cp2-nightly-mark { color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-nightly-lines li.broke,
+.cp-root[data-theme="soft"] .cp2-nightly-lines li.broke .cp2-nightly-mark { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-nightly-text { min-width: 0; overflow-wrap: anywhere; }
+.cp-root[data-theme="soft"] .cp2-nightly-spoken { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-nightly-sched { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+
 @media (prefers-reduced-motion: reduce) {
   .cp-root[data-theme="soft"] .cp2-way-reached { animation: none; }
   .cp-root[data-theme="soft"] .cp2-stream-back { transition: none; }
+  .cp-root[data-theme="soft"] .cp2-nightly-track i { transition: none; }
 }

@@ -5,9 +5,11 @@
 // scheduled task that calls this endpoint instead:
 //   curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/copilot/cron/daily
 import { NextRequest } from 'next/server';
-import { runDaily } from '@/lib/copilot/daily';
+import { runNightlyPass } from '@/lib/copilot/daily';
 import { copilotDb } from '@/lib/copilot/db';
 import { fail, json } from '@/lib/copilot/http';
+import { CRON_REASON } from '@/lib/copilot/nightly';
+import { startNightlyRun } from '@/lib/copilot/store';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -39,16 +41,25 @@ export async function GET(request: NextRequest) {
   if (error) return fail(error.message, 500);
 
   const startedAt = Date.now();
-  const results: Array<{ id: string; ok: boolean; agent?: string; moves?: number; error?: string }> = [];
+  const results: Array<{ id: string; ok: boolean; agent?: string; moves?: number; error?: string; unrecorded?: string }> = [];
   let skipped = 0;
 
   for (const p of profiles ?? []) {
     if (Date.now() - startedAt > RUN_BUDGET_MS) { skipped += 1; continue; }
     try {
-      const r = await runDaily(p.id, { reason: 'cron' });
+      // The pass gets a row of its own so the account can see what last night
+      // did, the same report "Run again" leaves. A row that cannot be written
+      // does not stop the pass: this report carries the result either way, and
+      // says the row is missing.
+      const started = await startNightlyRun(p.id, CRON_REASON)
+        .catch((e): { error: string } => ({ error: e instanceof Error ? e.message : String(e) }));
+      const r = await runNightlyPass(p.id, { reason: CRON_REASON, runId: 'run' in started ? started.run.id : null });
       // moves is in the summary because it is the number that says whether the
       // non-outbound half of the loop did anything last night.
-      results.push({ id: p.id, ok: true, agent: r.brief.agent, moves: r.jobs && 'written' in r.jobs ? r.jobs.written : 0 });
+      results.push({
+        id: p.id, ok: true, agent: r.brief.agent, moves: r.jobs && 'written' in r.jobs ? r.jobs.written : 0,
+        ...('error' in started ? { unrecorded: started.error } : {}),
+      });
     } catch (e) {
       results.push({ id: p.id, ok: false, error: e instanceof Error ? e.message : String(e) });
     }

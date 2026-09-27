@@ -1395,6 +1395,8 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-plan-ms .cp2-way-links { margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-plan-undo { align-self: flex-start; }
 .cp-root[data-theme="soft"] .cp2-plan-aside { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 10px; padding-top: 4px; padding-bottom: 4px; }
+.cp-root[data-theme="soft"] .cp2-plan-waiting .cp2-way-tap { gap: 2px; }
+.cp-root[data-theme="soft"] .cp2-plan-waitlist { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .cp-root[data-theme="soft"] .cp2-link.muted { color: var(--muted); font-weight: 600; }
 .cp-root[data-theme="soft"] .cp2-link.strong { color: var(--blue); }
 

@@ -6345,3 +6345,50 @@ async function drawnPlan() {
 }
 
 drawnPlan().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The drawn plan, second pass: what the first live plans showed ─────── */
+import { goalLayout as rmGoalLayout, parseRoadmap as rmParse, planServesOneGoal as rmOneGoal, roadmapView as rmView, sourcedFrom as rmSourced, type RoadmapRun as RmRun } from '../../src/lib/copilot/roadmap';
+import { quietEvidence } from '../../src/lib/copilot/pathway';
+
+async function drawnPlanSecondPass() {
+  const src = rmSourced('Goal: €1,000 of €60,000 · within 180 days');
+  const parse = (direction: string) => rmParse({ direction, phases: [{ key: 'week', milestones: [{ id: 'm', title: 'A first sale' }] }] }, { allowed: src, goalIds: [], aiAvailable: false })!.roadmap.direction;
+
+  // 1. Reasoning is cut at the last whole sentence that fits, never mid-thought.
+  const long = `${'Income first, because the property needs a bigger source than stalls. '.repeat(5)}The renovation research you finished stays as reference; nothing new on renovation until the income is steady.`;
+  const cut = parse(long)!;
+  assert.ok(cut.endsWith('stalls.'), `ends on a sentence, got: …${cut.slice(-30)}`);
+  assert.ok(cut.length <= 420);
+  assert.equal(parse('Short and whole.'), 'Short and whole.');
+  const noStop = parse(`${'word '.repeat(120)}`)!;
+  assert.ok(noStop.endsWith('…') && !noStop.endsWith(' …'), 'with no sentence to end on, cut at a word and say so');
+
+  // 2. The goals: the first always, any the plan leads to, and the rest folded into one line.
+  const g = (id: string, toward: number) => ({ id, title: id, status: null, progress: null, horizon: null, toward });
+  const laid = rmGoalLayout([g('exit', 6), g('macbook', 1), g('job', 2), g('arr', 0), g('daily', 0), g('emergency', 0), g('app', 0)]);
+  assert.deepEqual(laid.shown.map((x) => x.id), ['exit', 'macbook', 'job']);
+  assert.deepEqual(laid.waiting.map((x) => x.id), ['arr', 'daily', 'emergency', 'app'], 'five "nothing leads here yet" rows became one line');
+  assert.deepEqual(rmGoalLayout([g('first', 0), g('second', 0)]).shown.map((x) => x.id), ['first'], 'the first goal shows even before a plan leads to it');
+  assert.deepEqual(rmGoalLayout([]), { shown: [], waiting: [] });
+
+  // 3. "For <goal>" only where milestones serve different goals.
+  const run = (goals: Array<string | null>): RmRun => ({
+    id: 'r', status: 'ok', reason: null, signature: 's', startedAt: '2026-09-27T00:00:00Z', finishedAt: '2026-09-27T00:01:00Z', error: null,
+    roadmap: { here: null, direction: null, changed: null, phases: [{ key: 'week', milestones: goals.map((goalId, i) => ({ id: `m${i}`, title: `M${i}`, why: null, doneWhen: null, goalId, steps: [] })) }] },
+  });
+  const view = (goals: Array<string | null>) => rmView({ enabled: true, latest: run(goals), current: run(goals), previous: null, marks: [], goals: [], capacity: 'deep', now: new Date('2026-09-27T12:00:00Z') });
+  assert.equal(rmOneGoal(view(['g1', 'g1', 'g1'])), true, 'Maria: seven milestones, one goal, one label would say it seven times');
+  assert.equal(rmOneGoal(view(['g1', 'g2', 'g1'])), false, 'Alex: the exit and the job, so each says which');
+  assert.equal(rmOneGoal(view(['g1', null])), false, 'a milestone serving no goal is worth telling apart');
+
+  // 4. The empty evidence agrees with the dots under it.
+  assert.equal(quietEvidence({ sentFortnight: 0, movedDays: 1, planned: true }).title, 'Nothing came back yet', 'a green Thursday is not "nothing recorded"');
+  assert.match(quietEvidence({ sentFortnight: 0, movedDays: 1, planned: true }).detail, /moved it forward on 1 day this week/);
+  assert.equal(quietEvidence({ sentFortnight: 0, movedDays: 0, planned: true }).title, 'Nothing recorded in the last two weeks');
+  assert.equal(quietEvidence({ sentFortnight: 9, movedDays: 3, planned: true }).detail, '9 sent in that time. Answers, payments and results show here as they arrive.');
+  assert.equal(quietEvidence({ sentFortnight: 0, movedDays: 0, planned: false }).detail, '0 sent in that time. Answers, payments and results show here as they arrive.', 'without a plan, the funnel copy stands');
+
+  console.log('copilot-core: drawn plan second pass checks passed');
+}
+
+drawnPlanSecondPass().catch((e) => { console.error(e); process.exit(1); });

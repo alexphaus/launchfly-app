@@ -66,6 +66,7 @@ export const MAX_STEPS_PER_MILESTONE = 3;
 export const SMALL_COUNT = 10;
 const TITLE_MAX = 110;
 const TEXT_MAX = 240;
+const DIRECTION_MAX = 420;
 const ID_MAX = 48;
 
 export type PhaseKey = 'week' | 'month' | 'quarter' | 'later';
@@ -188,7 +189,7 @@ Hard rules:
 - At most ${MAX_MILESTONES_PER_PHASE} milestones per phase and ${MAX_STEPS_PER_MILESTONE} steps per milestone. Fewer is better.
 - Plain words, second person, short. No filler, no motivation, no exclamation marks.
 
-here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence on what is true now and what matters next. changed is null on a first plan.
+here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence on what is true now and what matters next. why is one sentence. direction is at most two sentences, under 300 characters. changed is one sentence, and null on a first plan.
 
 Return only JSON:
 {"here":{"title":"...","line":"..."},"direction":"...","changed":null,"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":null,"steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
@@ -458,8 +459,15 @@ const text = (v: unknown, max: number): string | null => {
   if (typeof v !== 'string') return null;
   const t = v.replace(/\s+/g, ' ').trim();
   if (!t || /^(null|none|n\/a)$/i.test(t)) return null;
-  // Cut at a word, never mid-word: half a word reads as a typo in somebody's own plan.
-  return t.length <= max ? t : `${t.slice(0, max).replace(/\s+\S*$/, '')}…`;
+  if (t.length <= max) return t;
+  // Cut at the last whole sentence that fits. "…nothing new on renovation…" was
+  // the reasoning for the order stopped mid-thought, which reads as the app
+  // losing its train of thought about somebody's life. Only when no sentence
+  // ends early enough is it cut at a word, never mid-word.
+  const head = t.slice(0, max);
+  const end = Math.max(head.lastIndexOf('. '), head.lastIndexOf('? '), head.lastIndexOf('! '), /[.?!]$/.test(head) ? head.length - 1 : -1);
+  if (end >= max * 0.4) return head.slice(0, end + 1);
+  return `${head.replace(/\s+\S*$/, '')}…`;
 };
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[], dflt: T): T => (typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as T) : dflt);
 
@@ -541,8 +549,10 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
   return {
     roadmap: {
       here: hereTitle ? { title: hereTitle, line: clean(h.line, TEXT_MAX, 'claim') } : null,
-      direction: clean(r.direction, 320, 'claim'),
-      changed: clean(r.changed, 320, 'claim'),
+      // Room for the two sentences the prompt asks for, and a little over: a
+      // model that runs long loses a sentence, not half of one.
+      direction: clean(r.direction, DIRECTION_MAX, 'claim'),
+      changed: clean(r.changed, DIRECTION_MAX, 'claim'),
       phases,
     },
     withheld,
@@ -907,4 +917,23 @@ export function goalMarkers(goals: Array<Pick<Goal, 'id' | 'title' | 'metric' | 
       toward: toward.get(g.id) ?? 0,
     };
   });
+}
+
+/**
+ * The goals the plan is working on, and the ones it is not. The first goal by
+ * the person's order always shows; so does any goal a milestone leads to. The
+ * rest wait, folded into one line: Alex's plan ended in five goals in a row
+ * that each said "Nothing on the plan leads here yet", which is one fact —
+ * the plan put the exit first — said five times.
+ */
+export function goalLayout(goals: GoalMarker[]): { shown: GoalMarker[]; waiting: GoalMarker[] } {
+  const shown = goals.filter((g, i) => i === 0 || g.toward > 0);
+  return { shown, waiting: goals.filter((g) => !shown.includes(g)) };
+}
+
+/** Whether the plan serves one goal at most — then "For <goal>" on every milestone says nothing new. */
+export function planServesOneGoal(view: RoadmapView): boolean {
+  if (view.state !== 'ready') return true;
+  const ids = new Set(view.phases.flatMap((p) => p.milestones.map((m) => m.goalId ?? '')));
+  return ids.size <= 1;
 }

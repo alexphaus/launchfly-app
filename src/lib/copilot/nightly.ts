@@ -38,16 +38,17 @@ export function isNightlyPass(reason: string | null | undefined): boolean {
  */
 export const NIGHTLY_STALE_MS = 15 * 60_000;
 
-export type NightlyStep = 'supply' | 'reconcile' | 'jobs' | 'brief';
-export const NIGHTLY_STEPS: NightlyStep[] = ['supply', 'reconcile', 'jobs', 'brief'];
+export type NightlyStep = 'supply' | 'reconcile' | 'jobs' | 'brief' | 'roadmap';
+export const NIGHTLY_STEPS: NightlyStep[] = ['supply', 'reconcile', 'jobs', 'brief', 'roadmap'];
 
 /** The names the Work tab already uses, so the report and the team agree. */
-const STEP_NAME: Record<NightlyStep, string> = { supply: 'Scout', reconcile: 'Replies', jobs: 'Checks', brief: 'Call' };
+const STEP_NAME: Record<NightlyStep, string> = { supply: 'Scout', reconcile: 'Replies', jobs: 'Checks', brief: 'Call', roadmap: 'Plan' };
 const STEP_DOING: Record<NightlyStep, string> = {
   supply: 'finding new matches',
   reconcile: 'reading replies',
   jobs: 'running the checks',
   brief: 'picking today’s call',
+  roadmap: 'redrawing your plan',
 };
 
 /**
@@ -67,6 +68,8 @@ export interface NightlyOutput {
     perJob?: Record<string, { produced?: number; written?: number; skipped?: string; error?: string }>;
   } | null;
   brief?: { agent?: string; fellBack?: boolean; graded?: { ignored?: number; verified?: number }; pushed?: number; skipped?: string } | null;
+  /** The Path's plan: redrawn, left alone because nothing changed, or why it could not be. Absent on runs from before it existed. */
+  roadmap?: { drawn?: boolean; reason?: string; skipped?: string; error?: string } | null;
   /** Adapter and job labels at the time of the run, so the report can say "Google Maps" instead of "google_maps". */
   labels?: { supply?: Record<string, string>; jobs?: Record<string, string> };
   /** Progress writes that failed. The pass carried on, but what the screen showed while it ran was stale. */
@@ -215,9 +218,22 @@ export function nightlyLines(out: NightlyOutput | null | undefined): NightlyLine
     else push('brief', `Picked by the agent${tail}`, 'ok');
   }
 
+  // Plan. Left alone is said, not hidden: "nothing changed" and "never ran" must not look alike.
+  const rm = out.roadmap;
+  if (rm?.error) push('roadmap', `Could not redraw your plan: ${rm.error}`, 'broke');
+  else if (rm?.drawn) push('roadmap', ROADMAP_WHY[rm.reason ?? ''] ?? 'Redrew your plan', 'ok');
+  else if (rm?.skipped === 'nothing changed since the last plan') push('roadmap', 'Kept your plan · nothing changed since it was drawn', 'ok');
+
   if (out.unrecorded?.length) push('run', `Progress could not be saved as it went: ${out.unrecorded[0]}`, 'note');
   return lines;
 }
+
+const ROADMAP_WHY: Record<string, string> = {
+  first: 'Drew your plan for the first time',
+  changed: 'Redrew your plan from what you told it',
+  progress: 'Redrew your plan from what came back',
+  weekly: 'Redrew your plan · a week since the last',
+};
 
 /** The short version, for the row and the toast: only what is new. */
 export function nightlyHeadline(out: NightlyOutput | null | undefined): string {

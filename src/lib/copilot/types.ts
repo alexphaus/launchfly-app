@@ -19,6 +19,7 @@ import type { Commission, CommissionReport } from './commission';
 import type { PlanKey, PlanStatus } from './plans';
 import type { RecentLedger } from './review';
 import type { Hunt } from './hunts';
+import type { RoadmapMark, RoadmapRun } from './roadmap';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
 export type OpportunityType = 'client' | 'people' | 'service' | 'community' | 'signal';
@@ -470,6 +471,21 @@ export interface HomeData {
    * `unreadable` is the read's failure, kept apart from "never run".
    */
   nightly?: { run: NightlyRun | null; unreadable: string | null };
+  /**
+   * The Path's drawn plan: the newest draw of any status, the newest that
+   * produced a plan, the one before it (for what changed), and the person's
+   * ticks. `enabled` is whether this server can draw one at all — without a
+   * model the Path keeps the funnel plan and never mentions one it cannot
+   * draw. Optional because a payload cached before this existed has to render.
+   */
+  roadmap?: {
+    enabled: boolean;
+    latest: RoadmapRun | null;
+    current: RoadmapRun | null;
+    previous: RoadmapRun | null;
+    marks: RoadmapMark[];
+    unreadable: string | null;
+  };
   metrics: Metrics;
   /**
    * The last fortnight read back: outcomes logged, Moves answered, deep work

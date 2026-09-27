@@ -16,6 +16,7 @@ import type { ActionStatus, Capacity, Channel, Goal, HomeData, Offer, Opportunit
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { AskAnswer } from '@/lib/copilot/ask';
 import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/lib/copilot/nightly';
+import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
 import { api, del, get, post } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
@@ -55,6 +56,8 @@ const FINDER_NAME: Record<string, string> = { web: 'the web', google_maps: 'Goog
 const NIGHTLY_POLL_MS = 4_000;
 /** Consecutive failed checks before saying so. One is a blip; three is the connection. */
 const NIGHTLY_MISSES = 3;
+/** A draw is one model call, usually under a minute. */
+const ROADMAP_POLL_MS = 3_000;
 
 export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: CopilotConfig<T>) {
   const shell = useShell();
@@ -198,6 +201,49 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     return () => { over = true; clearInterval(timer); };
   }, [liveNightly, refresh, say]);
 
+  // The Path's plan. Drawing starts a row and returns; the model answers in
+  // after(), so this only records that it began. The effect below watches it.
+  const drawRoadmap = useCallback(async (reason = 'manual') => {
+    try {
+      const r = await post<{ run: RoadmapRun; already?: boolean }>('/roadmap', { action: 'draw', reason });
+      setHome((h) => (h.roadmap ? { ...h, roadmap: { ...h.roadmap, latest: r.run } } : h));
+      // Only when asked. A redraw started because something changed is shown
+      // on the plan itself, and a toast on opening the app is noise.
+      if (reason === 'manual') say(r.already ? 'Already redrawing.' : 'Redrawing your plan. It takes about a minute.');
+    } catch (e) { say(e instanceof Error ? e.message : 'Could not redraw the plan'); }
+  }, [say]);
+
+  // While a draw is in flight, follow it, and reload when it ends — the plan,
+  // the move it puts first and the header all change with it.
+  const liveRoadmap = home.roadmap?.latest && roadmapInFlight(home.roadmap.latest, new Date()) ? home.roadmap.latest.id : null;
+  useEffect(() => {
+    if (!liveRoadmap) return;
+    let over = false;
+    let misses = 0;
+    const tick = async () => {
+      let run: RoadmapRun | null;
+      try {
+        run = (await get<{ run: RoadmapRun | null }>('/roadmap')).run;
+        misses = 0;
+      } catch (e) {
+        misses += 1;
+        if (misses === NIGHTLY_MISSES) say(`Cannot check on the plan: ${e instanceof Error ? e.message : 'no connection'}. Still trying.`);
+        return;
+      }
+      if (over || (run && roadmapInFlight(run, new Date()))) return;
+      over = true;
+      clearInterval(timer);
+      try { await refresh(); } catch {
+        say('The plan was redrawn, but this screen could not reload. Reopen the app to see it.');
+        return;
+      }
+      // A failure is said here and stays on the plan; success shows itself.
+      if (run?.status === 'error') say(`Could not redraw the plan: ${run.error ?? 'no reason given'}`);
+    };
+    const timer = setInterval(() => { void tick(); }, ROADMAP_POLL_MS);
+    return () => { over = true; clearInterval(timer); };
+  }, [liveRoadmap, refresh, say]);
+
   // First open. A brand new account has nothing to look at, so the first thing
   // the app does is go and find some — the supply route runs the brief too, so
   // this replaces the daily brief rather than racing it. One or the other,
@@ -244,6 +290,21 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     setTab,
     runBrief,
     runNightly,
+    drawRoadmap,
+    async markRoadmap(item: string, state: MarkState) {
+      // Optimistic: a tick that waits on a round trip is a tick tapped twice.
+      const mark = { item, title: '', state, at: new Date().toISOString() };
+      setHome((h) => (h.roadmap ? { ...h, roadmap: { ...h.roadmap, marks: [mark, ...h.roadmap.marks] } } : h));
+      try {
+        const r = await post<{ home: HomeData }>('/roadmap', { action: 'mark', item, state });
+        setHome(r.home);
+        return true;
+      } catch (e) {
+        fail(e, 'Could not save that');
+        void refresh();
+        return false;
+      }
+    },
     async addNote(content, regenerate) {
       try {
         if (regenerate) setBriefing(true);

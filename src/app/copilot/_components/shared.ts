@@ -4,6 +4,7 @@ import type { WorkingSection } from '@/lib/copilot/working';
 import type { Authority } from '@/lib/copilot/commission';
 import type { WorthKind } from '@/lib/copilot/worth';
 import type { AskAnswer } from '@/lib/copilot/ask';
+import type { MarkState } from '@/lib/copilot/roadmap';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -92,6 +93,13 @@ export interface Actions {
   /** Tonight's whole pass, now: the cron's own code path for this account. It
    *  resolves once the pass has started; the result arrives minutes later. */
   runNightly(): Promise<void>;
+  /**
+   * Redraw the Path's plan now. Resolves once the draw has started; the plan
+   * arrives when the model answers, and the hook watches for it.
+   */
+  drawRoadmap(reason?: string): Promise<void>;
+  /** A step or milestone of the plan done, set aside, or back on. Resolves false when it did not save. */
+  markRoadmap(item: string, state: MarkState): Promise<boolean>;
   /** Resolves false when the save failed, so callers can keep the user's text. */
   addNote(content: string, regenerate: boolean): Promise<boolean>;
   setOppStatus(id: string, status: OpportunityStatus): Promise<void>;

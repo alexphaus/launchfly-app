@@ -231,6 +231,7 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 /* A rung reached on the Path. Here, not with the calm theme's rules: a keyframe's
    steps are not selectors and cannot carry its scope, and the name is used only
    from inside it. */
+@keyframes cp2-plan-turn { to { transform: rotate(360deg); } }
 @keyframes cp2-stream-pop { from { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } to { transform: none; } }
 
 /* Setup error */
@@ -1342,6 +1343,61 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-way-beyondrow .s { flex: none; max-width: 48%; font-size: 12px; color: var(--muted); text-align: right; }
 .cp-root[data-theme="soft"] .cp2-way-links { display: flex; gap: 16px; margin-top: 4px; }
 
+/* The drawn plan (PathPlan.tsx): phases on the dashed line, milestones as
+   waypoints, steps as a checklist under each. cp2-plan-*, checked unused
+   before it was chosen. */
+.cp-root[data-theme="soft"] .cp2-plan-redraw {
+  display: inline-flex; align-items: center; gap: 5px; font-family: var(--body, inherit); font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0; text-transform: none; color: var(--blue);
+}
+.cp-root[data-theme="soft"] .cp2-plan-redraw svg { width: 13px; height: 13px; }
+.cp-root[data-theme="soft"] .cp2-plan-redraw:disabled { color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-redraw:disabled svg { animation: cp2-plan-turn 1.2s linear infinite; }
+.cp-root[data-theme="soft"] .cp2-plan-spin svg { animation: cp2-plan-turn 1.2s linear infinite; }
+.cp-root[data-theme="soft"] .cp2-plan-direction { margin: 0; padding: 4px 20px 4px 66px; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-plan-direction .lbl { display: block; font-size: 11px; font-weight: 700; color: var(--dim); margin-bottom: 1px; }
+.cp-root[data-theme="soft"] .cp2-plan-phase {
+  position: relative; padding: 18px 20px 2px 66px;
+  font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue);
+}
+/* A tick on the line where a phase begins. */
+.cp-root[data-theme="soft"] .cp2-plan-phase::before { content: ''; position: absolute; left: 30px; top: 24px; width: 12px; height: 2px; border-radius: 1px; background: #C3CAD8; }
+.cp-root[data-theme="soft"] .cp2-plan-sub { padding: 10px 20px 0 66px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-ms { gap: 4px; }
+.cp-root[data-theme="soft"] .cp2-plan-ms .cp2-way-tap { gap: 3px; }
+.cp-root[data-theme="soft"] .cp2-plan-ms.reached .cp2-way-name { color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-for { font-size: 11.5px; font-weight: 600; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-plan-fold { font-size: 12px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-when { font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-plan-when b { font-weight: 700; color: var(--muted); margin-right: 4px; }
+.cp-root[data-theme="soft"] .cp2-plan-steps {
+  list-style: none; margin: 8px 0 2px; padding: 4px 0; display: flex; flex-direction: column;
+  border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm);
+}
+.cp-root[data-theme="soft"] .cp2-plan-step { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; }
+.cp-root[data-theme="soft"] .cp2-plan-step + .cp2-plan-step { border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-plan-tick {
+  flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px #C3CAD8; color: #fff;
+}
+.cp-root[data-theme="soft"] .cp2-plan-tick svg { width: 13px; height: 13px; }
+.cp-root[data-theme="soft"] .cp2-plan-step.done .cp2-plan-tick { background: var(--ai); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-plan-stepbody { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.cp-root[data-theme="soft"] .cp2-plan-steptext { text-align: left; font-size: 13.5px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-plan-step.done .cp2-plan-steptext { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-plan-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cp-root[data-theme="soft"] .cp2-plan-tag { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-plan-tag.quick_win { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-plan-tag.leverage { background: var(--tint); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-plan-tag.foundation { background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-size { font-size: 11.5px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-step .cp2-way-acts { margin-top: 4px; }
+.cp-root[data-theme="soft"] .cp2-plan-ms .cp2-way-links { margin-top: 6px; }
+.cp-root[data-theme="soft"] .cp2-plan-undo { align-self: flex-start; }
+.cp-root[data-theme="soft"] .cp2-plan-aside { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 10px; padding-top: 4px; padding-bottom: 4px; }
+.cp-root[data-theme="soft"] .cp2-link.muted { color: var(--muted); font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-link.strong { color: var(--blue); }
+
 /* In the frame, above the floating nav, where the toast also sits. */
 .cp-root[data-theme="soft"] .cp2-stream-backwrap {
   position: absolute; left: 0; right: 0; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 15;
@@ -1383,4 +1439,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
   .cp-root[data-theme="soft"] .cp2-way-reached { animation: none; }
   .cp-root[data-theme="soft"] .cp2-stream-back { transition: none; }
   .cp-root[data-theme="soft"] .cp2-nightly-track i { transition: none; }
+  .cp-root[data-theme="soft"] .cp2-plan-spin svg,
+  .cp-root[data-theme="soft"] .cp2-plan-redraw:disabled svg { animation: none; }
 }

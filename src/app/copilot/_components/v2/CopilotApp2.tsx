@@ -62,7 +62,8 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
   const status = d.status[tab];
   const nightly = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? nightlyView(home.nightly.run, new Date()) : null;
   // Which pill Matches shows. Held here so the Path can open it on the right one:
-  // "send the drafts" lands on To send, in context, rather than in a sheet.
+  // "send the drafts" lands on To send, in context, rather than in a sheet. You
+  // opens it too: a reply on the week's review is followed up on Replied.
   const [matchStage, setMatchStage] = useState<MatchStage>('new');
   const openMatches = (s: MatchStage) => { setMatchStage(s); setTab('matches'); };
 
@@ -90,7 +91,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
         {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
         {tab === 'matches' && <MatchesTab home={home} d={d} actions={actions} finding={finding} stage={matchStage} onStage={setMatchStage} />}
         {tab === 'work' && <WorkTab home={home} d={d} actions={actions} briefing={briefing} />}
-        {tab === 'you' && <YouTab home={home} d={d} actions={actions} />}
+        {tab === 'you' && <YouTab home={home} d={d} actions={actions} openMatches={openMatches} />}
       </main>
 
       <nav className="cp-nav cp2-nav" aria-label="Sections">

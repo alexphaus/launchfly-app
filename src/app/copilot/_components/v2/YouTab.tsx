@@ -14,20 +14,22 @@ import { useEffect, useState } from 'react';
 import { PLANS } from '@/lib/copilot/plans';
 import { hoursLabel } from '@/lib/copilot/focus';
 import { agoLabel } from '@/lib/copilot/machine';
+import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView, type NightlyLine } from '@/lib/copilot/nightly';
-import type { ReviewLine, ReviewTarget } from '@/lib/copilot/review';
+import type { PathIcon } from '@/lib/copilot/pathway';
+import type { ReviewChange, ReviewKind, ReviewLine, ReviewProgress, ReviewTarget } from '@/lib/copilot/review';
 import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { goalProgress, money } from '../format';
 import type { Actions } from '../shared';
 import { useShell } from '../shell';
 import type { Derived } from './derive';
-import { IconAlert, IconCheck, IconChevron } from './icons2';
+import { IconAlert, IconCheck, IconChevron, PathGlyph } from './icons2';
 
-export default function YouTab({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+export default function YouTab({ home, d, actions, openMatches }: { home: HomeData; d: Derived; actions: Actions; openMatches: (s: MatchStage) => void }) {
   return (
     <>
       <Numbers home={home} d={d} actions={actions} />
-      <Week home={home} d={d} actions={actions} />
+      <Week home={home} d={d} actions={actions} openMatches={openMatches} />
       <Goals home={home} actions={actions} />
       <Settings home={home} d={d} actions={actions} />
     </>
@@ -93,7 +95,7 @@ function Numbers({ home, d, actions }: { home: HomeData; d: Derived; actions: Ac
 
 /* ─── The week ────────────────────────────────────────────────────────────── */
 
-function Week({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+function Week({ home, d, actions, openMatches }: { home: HomeData; d: Derived; actions: Actions; openMatches: (s: MatchStage) => void }) {
   const r = d.review;
   const go = (t: ReviewTarget) => {
     if (t === 'queue') actions.openSheet({ kind: 'queue' });
@@ -102,6 +104,9 @@ function Week({ home, d, actions }: { home: HomeData; d: Derived; actions: Actio
     else if (t === 'focus') actions.openSheet({ kind: 'focus' });
     else if (t === 'matches') actions.setTab('matches');
     else if (t === 'record') actions.openSheet({ kind: 'ask' });
+    else if (t === 'won') actions.openSheet({ kind: 'stage', stage: 'won' });
+    // A reply is followed up where replies are: Matches, on its own pill.
+    else if (t === 'replied' || t === 'waiting') openMatches(t);
   };
   const unread = home.recent.unreadable;
   return (
@@ -116,55 +121,135 @@ function Week({ home, d, actions }: { home: HomeData; d: Derived; actions: Actio
       <div className="cp-card cp2-review value">
         <div className="cp2-review-head"><span className="cp2-mark done"><IconCheck /></span>What created value</div>
         {r.value.length
-          ? <Lines lines={r.value} go={go} />
+          ? <ReviewRows lines={r.value} go={go} tone="value" />
           : <p className="cp2-review-empty">{r.valueEmpty}</p>}
       </div>
 
       <div className="cp-card cp2-review waste">
         <div className="cp2-review-head"><span className="cp2-mark warn"><IconAlert /></span>What was wasted</div>
         {r.waste.length
-          ? <Lines lines={r.waste} go={go} />
+          ? <ReviewRows lines={r.waste} go={go} tone="waste" />
           : <p className="cp2-review-empty">Nothing counted as wasted: no stale drafts, no dead sources, no project closed with nothing to show.</p>}
       </div>
 
-      <div className="cp-card cp2-review change">
-        <div className="cp2-review-head"><span className="cp2-mark next">→</span>What has to change</div>
-        {r.change ? (
-          <>
-            <p className="cp2-change-head">{r.change.head}</p>
-            {r.change.because && <p className="cp2-change-because">{r.change.because}</p>}
-            <p className="cp2-change-body"><b>Try this week</b> {r.change.body}</p>
-            {r.change.target === 'queue' && d.queueCount > 0 && (
-              <button className="cp-btn primary block cp-call-do" onClick={() => go('queue')}>Open the queue</button>
-            )}
-          </>
-        ) : (
-          <p className="cp2-review-empty">Nothing measured points anywhere yet. Send something, log what comes back, and this fills in.</p>
-        )}
-      </div>
+      <ChangeCard change={r.change} go={go} />
 
       <button className="cp2-more" onClick={() => actions.openSheet({ kind: 'ask' })}>Ask your own record</button>
     </>
   );
 }
 
-function Lines({ lines, go }: { lines: ReviewLine[]; go: (t: ReviewTarget) => void }) {
+/** One glyph per kind of line, so the card reads at a glance: money, a reply, a thing done, hours. */
+const GLYPH: Record<ReviewKind, PathIcon> = {
+  money: 'money', worth: 'research', reply: 'reply', meeting: 'meeting', did: 'done', focus: 'focus',
+  queue: 'send', calls: 'call', projects: 'research', sources: 'watcher', binned: 'lost',
+};
+
+/** Where an opened line leads, said at its foot. */
+const OPEN_LABEL: Record<Exclude<ReviewTarget, null>, string> = {
+  queue: 'Open the queue', sources: 'Open your sources', projects: 'Open Work', matches: 'Open Matches',
+  focus: 'Log time', record: 'Ask your record about it', won: 'See every win', replied: 'Open your replies', waiting: 'See who you are waiting on',
+};
+
+function ReviewRows({ lines, go, tone }: { lines: ReviewLine[]; go: (t: ReviewTarget) => void; tone: 'value' | 'waste' }) {
+  return <ul className="cp2-rv-list">{lines.map((l) => <ReviewRow key={l.key} line={l} go={go} tone={tone} />)}</ul>;
+}
+
+/**
+ * One line of the week: a glance when closed — two lines at most, whatever it
+ * says — and the rows behind it when opened: the calls, the days, the drafts,
+ * the sources and why each failed. Opening never navigates; the way somewhere
+ * is at the foot, once you have seen what it is about. A line with nothing
+ * behind it that leads somewhere is a plain link, and one with neither is text.
+ *
+ * Keyed by the line's own key, so a line left open stays open when the week
+ * under it refreshes — logging an hour must not snap the card shut.
+ */
+function ReviewRow({ line, go, tone }: { line: ReviewLine; go: (t: ReviewTarget) => void; tone: 'value' | 'waste' }) {
+  const [open, setOpen] = useState(false);
+  const opens = line.detail.length > 0 || line.items.length > 0;
+  const head = (
+    <>
+      <span className={`cp2-rv-glyph ${tone}`}><PathGlyph icon={GLYPH[line.kind]} /></span>
+      <span className="cp2-rv-main">
+        <span className={`cp2-rv-text${open ? '' : ' cp2-clamp2'}`}>{line.text}</span>
+        {/* The day under the text, not beside it: beside it, the pill took a third of
+            the width and an opened line ran nine lines tall in what was left. */}
+        {(line.when || line.sub) && (
+          <span className="cp2-rv-meta">
+            {line.when && <span className="cp2-rv-when">{line.when}</span>}
+            {line.sub && <span className="cp2-rv-sub">{line.sub}</span>}
+          </span>
+        )}
+      </span>
+      {(opens || line.target) && <span className={`cp2-rv-chev${opens ? ' fold' : ''}${open ? ' open' : ''}`}><IconChevron /></span>}
+    </>
+  );
   return (
-    <ul className="cp2-lines">
-      {lines.map((l, i) => {
-        const inner = (
-          <>
-            <span className="tx">{l.text}</span>
-            {l.when && <span className="when">{l.when}</span>}
-          </>
-        );
-        return (
-          <li key={i}>
-            {l.target ? <button className="cp2-line" onClick={() => go(l.target)}>{inner}<IconChevron /></button> : <span className="cp2-line">{inner}</span>}
-          </li>
-        );
-      })}
-    </ul>
+    <li className="cp2-rv-row">
+      {opens
+        ? <button className="cp2-rv-tap" onClick={() => setOpen((v) => !v)} aria-expanded={open}>{head}</button>
+        : line.target
+        ? <button className="cp2-rv-tap" onClick={() => go(line.target)}>{head}</button>
+        : <div className="cp2-rv-tap">{head}</div>}
+      {open && (
+        <div className="cp2-rv-open">
+          {line.detail.map((t) => <p key={t} className="cp2-rv-detail">{t}</p>)}
+          {line.items.length > 0 && (
+            <ul className="cp2-rv-items">
+              {line.items.map((it, i) => (
+                <li key={`${i}:${it.text}`} className="cp2-rv-item">
+                  <span className="cp2-rv-itop"><span className="t">{it.text}</span>{it.when && <span className="w">{it.when}</span>}</span>
+                  {it.note && <span className="n">{it.note}</span>}
+                </li>
+              ))}
+              {line.more > 0 && <li className="cp2-rv-item cp2-rv-rest">and {line.more} more</li>}
+            </ul>
+          )}
+          {line.target && <button className="cp2-link cp2-rv-go" onClick={() => go(line.target)}>{OPEN_LABEL[line.target]} →</button>}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/**
+ * What has to change, and how far this week has got with it. The meter is the
+ * experiment's own count off the rows (review.ts) — the same sends the week's
+ * dots count — so it moves the moment something goes out; the button is the
+ * one tap that moves it, and once the count is met, the one that follows it up.
+ */
+function ChangeCard({ change, go }: { change: ReviewChange | null; go: (t: ReviewTarget) => void }) {
+  return (
+    <div className="cp-card cp2-review change">
+      <div className="cp2-review-head"><span className="cp2-mark next">→</span>What has to change</div>
+      {change ? (
+        <>
+          <p className="cp2-change-head">{change.head}</p>
+          {change.because && <p className="cp2-change-because">{change.because}</p>}
+          <p className="cp2-change-body"><b>Try this week</b> {change.body}</p>
+          {change.progress && <ChangeMeter progress={change.progress} />}
+          {change.next && <p className="cp2-rv-next">{change.next}</p>}
+          {change.action && (
+            <button className="cp-btn primary block cp-call-do" onClick={() => go(change.action!.target)}>{change.action.label}</button>
+          )}
+        </>
+      ) : (
+        <p className="cp2-review-empty">Nothing measured points anywhere yet. Send something, log what comes back, and this fills in.</p>
+      )}
+    </div>
+  );
+}
+
+/** One dot per send or reply the experiment asks for, and the words, which say it on their own. */
+function ChangeMeter({ progress: p }: { progress: ReviewProgress }) {
+  return (
+    <div className={`cp2-rv-meter${p.met ? ' met' : ''}`}>
+      <span className="cp2-rv-dots" aria-hidden>
+        {Array.from({ length: p.of }, (_, i) => <i key={i} className={i < p.done ? 'on' : ''} />)}
+      </span>
+      <span className="cp2-rv-mlabel">{p.met && <IconCheck />}{p.label}</span>
+    </div>
   );
 }
 

@@ -1204,6 +1204,9 @@ async function edge() {
   assert.doesNotMatch(stuck!.because[0], /where you lose most/, 'must not restate the card above it');
   assert.match(stuck!.because[0], /33 of 33 stopped at drafted/);
   assert.match(stuck!.experiment, /Send five/);
+  // "Above this line" meant the old Working tab's funnel; on You and on a Move it pointed at nothing.
+  assert.doesNotMatch(stuck!.experiment, /above this line/i);
+  assert.deepEqual(stuck!.measure, { metric: 'sent', target: 5 });
 
   // 2. Repeating something that does not work outranks the funnel: only the
   //    decision record can see it, and it is the more expensive gap.
@@ -1221,6 +1224,7 @@ async function edge() {
   assert.match(gap!.capability, /naming the "running facebook ads" problem/);
   assert.doesNotMatch(gap!.capability, /^selling /);
   assert.match(gap!.because[0], /40 of your matches have running facebook ads in common/);
+  assert.deepEqual(gap!.measure, { metric: 'sent', target: 10 }, '"the next ten" is counted in sends');
   for (const line of [gap!.capability, gap!.experiment, ...gap!.because]) {
     assert.doesNotMatch(line, /asking for|asked for|\bwants\b/i, `no demand language: ${line}`);
   }
@@ -1240,6 +1244,13 @@ async function edge() {
     const e = growthEdge({ findings: [bottleneck(label)], stages: all, openings });
     assert.ok(e, `${label} must produce an edge`);
     assert.ok(e!.capability.length > 3 && e!.experiment.length > 20, `${label} needs a real capability and experiment`);
+    // Counted only where a row can count it, and counted in the number the
+    // sentence says — otherwise the You tab's meter reads "2 of 5" under "the
+    // next ten".
+    assert.equal(!!e!.measure, ['Sent', 'Replied', 'Meeting', 'Won'].includes(label), `${label}: measured only where a row can count it`);
+    const word: Record<number, string> = { 3: 'three', 5: 'five', 10: 'ten' };
+    const measure = e!.measure;
+    if (measure) assert.match(e!.experiment, new RegExp(`\\b${word[measure.target]}\\b`, 'i'), `${label}: the experiment names the count it is measured by`);
   }
 
   console.log('copilot-core: growth-edge checks passed');
@@ -1836,7 +1847,7 @@ import {
   arbitrate, costMinutesOf, kindPrior, scoreMove, type Stake,
 } from '../../src/lib/copilot/stake';
 import { draftFrom, scorable } from '../../src/lib/copilot/call';
-import { coldIn, sendQueueJob } from '../../src/lib/copilot/jobs/send-queue';
+import { COLD_AFTER_DAYS, coldIn, sendQueueJob } from '../../src/lib/copilot/jobs/send-queue';
 import { STARTER_TOPIC_JOB, metricValue as mv, starterDecision as starter, statusLine, verdictOf as vo } from '../../src/lib/copilot/decision';
 import { STAND_DOWN_KEY, standingRefusals } from '../../src/lib/copilot/working';
 import type { Move as MoveRow } from '../../src/lib/copilot/types';
@@ -4554,7 +4565,7 @@ focusLog().catch((e) => { console.error(e); process.exit(1); });
 // currencies, calling a fresh queue waste, a blank block, a binned suggestion
 // counted as the user's failure when it was the app's.
 // ---------------------------------------------------------------------------
-import { MIN_BINNED, STALE_DRAFT_DAYS, localDay, weekReview, whenLabel, type ReviewInput, type RecentOutcome as RecentOutcomeV2 } from '../../src/lib/copilot/review';
+import { COLD_DRAFT_DAYS, MAX_DID_LINES, MAX_ITEMS, MIN_BINNED, STALE_DRAFT_DAYS, localDay, weekReview, whenLabel, type ReviewInput, type RecentOutcome as RecentOutcomeV2 } from '../../src/lib/copilot/review';
 
 async function weekInReview() {
   const now = new Date('2026-09-24T10:00:00Z');
@@ -4572,6 +4583,7 @@ async function weekInReview() {
     for_date, headline: 'Send 10 drafts', topic: 'send_queue', response: 'ignored',
     verify: { metric: 'queue', baseline: 0, after: null, verifiedAt: null }, source_move_id: null, ...o,
   });
+  const daysAgo = (n: number) => new Date(now.getTime() - n * 86_400_000).toISOString();
 
   // 1. An empty week is said, never blank — invariant 13 in the one tab whose
   //    job is telling the truth about the record.
@@ -4590,13 +4602,25 @@ async function weekInReview() {
     // Last month's win is not this week's value.
     outcome({ id: 'w3', kind: 'won', amount: 900, currency: '$', occurred_at: '2026-09-01T10:00:00Z' }),
   ] });
-  const win = mixed.value[0].text;
-  assert.match(win, /\$2/);
-  assert.match(win, /₱1,500/);
-  assert.doesNotMatch(win, /1,502|902/, 'no invented total');
-  assert.match(win, /across 2 deals/);
+  const win = mixed.value[0];
+  assert.match(win.text, /\$2/);
+  assert.match(win.text, /₱1,500/);
+  assert.doesNotMatch(win.text, /1,502|902/, 'no invented total');
+  assert.match(win.text, /across 2 deals/);
+  assert.equal(win.when, 'yesterday');
+  // Line by line: several wins name their clients when the line opens, one row
+  // each, each in its own currency. The line itself stays one glance.
+  assert.deepEqual(win.items.map((i) => i.text).sort(), ['Tubero Plumbing paid $2', 'X Out Pest paid ₱1,500']);
+  assert.equal(win.target, 'won');
   assert.equal(mixed.value[1].text, '2 replies — Great Eastern', 'one business replying twice is named once');
-  assert.equal(mixed.value[0].when, 'yesterday');
+  assert.equal(mixed.value[1].items.length, 2, 'but each reply is its own row when the line opens');
+  assert.equal(mixed.value[1].items[0].note, 'You logged it', 'a reply typed in is the person\'s own record, not a match');
+  assert.equal(mixed.value[1].target, 'replied', 'a reply is followed up where replies are, not in the record sheet');
+  // A group of one opens to its note, not to a list whose only row repeats the line.
+  const oneWin = weekReview({ ...base, outcomes: [outcome({ id: 'w9', kind: 'won', amount: 150, currency: '$', who: 'Casa Blanca', note: 'Paid by GCash' })] });
+  assert.equal(oneWin.value[0].text, 'Won $150 — Casa Blanca');
+  assert.deepEqual(oneWin.value[0].items, []);
+  assert.deepEqual(oneWin.value[0].detail, ['“Paid by GCash”']);
 
   // 3. A mandate's worth is the owner's answer, in the owner's category.
   const worth = weekReview({ ...base, outcomes: [
@@ -4610,16 +4634,49 @@ async function weekInReview() {
   //    are this morning's work.
   assert.equal(weekReview({ ...base, queue: { count: 51, oldestDays: STALE_DRAFT_DAYS - 1 } }).waste.length, 0);
   const stale = weekReview({ ...base, queue: { count: 51, oldestDays: 14 } });
-  assert.equal(stale.waste[0].text, '51 drafts written and never sent — the oldest 14 days');
+  assert.equal(stale.waste[0].text, '51 drafts written and never sent');
   assert.equal(stale.waste[0].target, 'queue');
+  // A payload with no sends and no drafts on it: the line says only what it can.
+  assert.equal(stale.waste[0].sub, 'The oldest has waited 14 days');
+
+  // The drafts line moves. Its count changes only when the pile does, so under
+  // it: what went out this week, and how many have sat past the point of
+  // sending as written — a number that grows every day nothing is sent and
+  // drops the moment something is. The same two weeks the send queue calls cold.
+  assert.equal(COLD_DRAFT_DAYS, COLD_AFTER_DAYS, 'one judgement of when a draft goes cold, in both places');
+  const drafts = [
+    { who: 'Tubero Plumbing', createdAt: daysAgo(2) },
+    { who: 'Triple A Pest', createdAt: daysAgo(18) },
+    { who: 'Rocar Excavation', createdAt: daysAgo(COLD_DRAFT_DAYS) },
+  ];
+  const piling = weekReview({ ...base, queue: { count: 3, oldestDays: 18, drafts }, sentAt: [daysAgo(12)] });
+  assert.equal(piling.waste[0].sub, 'None sent this week · 2 have sat two weeks or more', 'a send twelve days ago is not this week\'s');
+  assert.deepEqual(piling.waste[0].items.map((i) => `${i.text} · ${i.when}`), ['Triple A Pest · 18 days', 'Rocar Excavation · 14 days', 'Tubero Plumbing · 2 days'], 'oldest first: the one closest to having moved on');
+  const moving = weekReview({ ...base, queue: { count: 3, oldestDays: 18, drafts }, sentAt: [daysAgo(1), daysAgo(3), daysAgo(12)] });
+  assert.equal(moving.waste[0].sub, '2 sent this week · 2 have sat two weeks or more');
+  // Opened, it shows the first few and counts the rest of the queue, whatever the queue could render.
+  const deep = weekReview({ ...base, queue: { count: 57, oldestDays: 18, drafts: Array.from({ length: 8 }, (_, i) => ({ who: `B${i}`, createdAt: daysAgo(18 - i) })) } });
+  assert.equal(deep.waste[0].items.length, MAX_ITEMS);
+  assert.equal(deep.waste[0].more, 57 - MAX_ITEMS);
 
   const failing = weekReview({ ...base, sources: { total: 12, failing: 4 } });
   assert.match(failing.waste[0].text, /^4 of 12 sources failed/);
+  const named = weekReview({ ...base, sources: { total: 12, failing: 2, failed: [
+    { label: 'Freelancer', error: 'HTTP 403', checkedAt: '2026-09-24T01:00:00Z' },
+    { label: 'r/indiebiz', error: 'Timed out after 10s', checkedAt: null },
+  ] } });
+  assert.deepEqual(named.waste[0].items, [
+    { text: 'Freelancer', when: 'today', note: 'HTTP 403' },
+    { text: 'r/indiebiz', when: null, note: 'Timed out after 10s' },
+  ], 'each failing source by name, with the reason it gave: what to fix, or to drop');
+  assert.equal(named.waste[0].more, 0);
 
   // A handful of binned suggestions is taste; it only becomes a line past the floor.
   const bins = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `d${i}`, job: 'watch', kind: 'learn' as const, headline: 'h', status: 'dismissed' as const, acted_at: '2026-09-22T10:00:00Z' }));
   assert.equal(weekReview({ ...base, answered: bins(MIN_BINNED - 1) }).waste.length, 0);
-  assert.match(weekReview({ ...base, answered: bins(MIN_BINNED) }).waste[0].text, /^3 suggestions you binned/);
+  const binnedWeek = weekReview({ ...base, answered: bins(MIN_BINNED) });
+  assert.match(binnedWeek.waste[0].text, /^3 suggestions you binned/);
+  assert.equal(binnedWeek.waste[0].items.length, MIN_BINNED, 'opened, it names what was binned');
 
   // Projects that bought nothing: answered "worth nothing", or called off with
   // no answer. The ledger row's kind decides first; the sentence closeCommission
@@ -4641,7 +4698,12 @@ async function weekInReview() {
       { id: 'c6', objective: 'Supplier search', status: 'done', closed_at: '2026-09-22T10:00:00Z', outcome: null },
     ],
   });
-  assert.equal(dud.waste[0].text, '3 projects closed with nothing to show — Find jobs +2');
+  assert.equal(dud.waste[0].text, '3 projects closed with nothing to show');
+  assert.deepEqual(dud.waste[0].items.map((i) => `${i.text} · ${i.note}`), [
+    'Supplier search · You said it was worth nothing',
+    'Price check · You said it was worth nothing',
+    'Find jobs · Called off with no verdict',
+  ], 'newest first, each with how it ended');
 
   // The call record's two verdicts, said as waste rather than as a log — and
   // only this week's calls, under a heading that says "This week".
@@ -4649,6 +4711,8 @@ async function weekInReview() {
   // A job key is the database talking; the screen says it the way a person would.
   assert.match(record.waste[0].text, /^3 calls about sending the drafts and not one of them done/);
   assert.doesNotMatch(record.waste[0].text, /send_queue/);
+  assert.deepEqual(record.waste[0].items.map((i) => i.when), ['today', 'yesterday', 'Tue'], 'opened: the calls it counted, newest first');
+  assert.equal(record.waste[0].items[0].note, 'Left undone');
   const stale3 = weekReview({ ...base, decisions: [call('2026-09-01'), call('2026-09-02'), call('2026-09-03')] });
   assert.equal(stale3.waste.length, 0, 'three ignored calls from three weeks ago are not this week\'s waste');
 
@@ -4656,30 +4720,94 @@ async function weekInReview() {
   //    action, then runway — and nothing when nothing measured points anywhere.
   const edge = { capability: 'sending what you have already written', because: ['61 of 70 stopped at drafted.'], experiment: 'Send five before you open anything else.', source: 'funnel' as const };
   const withEdge = weekReview({ ...base, edge, bottleneck: { kind: 'bottleneck', headline: 'Drafted → Sent is where you lose most', detail: '', action: 'Send them' } });
-  assert.deepEqual(withEdge.change, { head: 'Sending what you have already written', because: '61 of 70 stopped at drafted.', body: 'Send five before you open anything else.', target: 'queue' });
+  assert.deepEqual(withEdge.change, {
+    head: 'Sending what you have already written', because: '61 of 70 stopped at drafted.', body: 'Send five before you open anything else.',
+    progress: null, next: null, action: null,
+  }, 'nothing it can count and nothing queued: no meter and no button');
   const noEdge = weekReview({ ...base, bottleneck: { kind: 'bottleneck', headline: 'Sent → Replied is where you lose most', detail: '', action: 'Change the first line' } });
   assert.equal(noEdge.change?.body, 'Change the first line');
   assert.match(weekReview({ ...base, runwayMonths: 2.4 }).change?.head ?? '', /^2.4 months of runway/);
   assert.equal(weekReview({ ...base, runwayMonths: 6 }).change, null);
 
+  // The change counts its own experiment, live, off this week's sends: it moves
+  // when something goes out, says when it is done, and then asks for the half a
+  // count cannot see. It used to print one sentence per funnel stage, the same
+  // sentence every week the funnel stayed stuck.
+  const counted = { ...edge, measure: { metric: 'sent' as const, target: 5 } };
+  const queued = { count: 57, oldestDays: 18 };
+  const started = weekReview({ ...base, edge: counted, queue: queued, sentAt: [daysAgo(1), daysAgo(2), daysAgo(9)] });
+  assert.deepEqual(started.change?.progress, { done: 2, of: 5, met: false, label: '2 of 5 sent this week' });
+  assert.equal(started.change?.next, null);
+  assert.deepEqual(started.change?.action, { label: 'Open the queue', target: 'queue' });
+  const finished = weekReview({ ...base, edge: counted, queue: queued, sentAt: Array.from({ length: 6 }, (_, i) => daysAgo(i)) });
+  assert.deepEqual(finished.change?.progress, { done: 6, of: 5, met: true, label: '6 sent this week — done' });
+  assert.match(finished.change?.next ?? '', /log what comes back/);
+  assert.deepEqual(finished.change?.action, { label: 'Log what came back', target: 'waiting' });
+  // No sends on the payload is not zero sends: no meter, rather than "0 of 5" over a week that had some.
+  const unread = weekReview({ ...base, edge: counted, queue: queued });
+  assert.equal(unread.change?.progress, null);
+  assert.deepEqual(unread.change?.action, { label: 'Open the queue', target: 'queue' });
+  // An experiment counted in replies counts this week's replies, and only this week's.
+  const booking = { ...edge, capability: 'turning a reply into a booked call', measure: { metric: 'replies' as const, target: 5 } };
+  const answering = weekReview({ ...base, edge: booking, outcomes: [outcome({ id: 'r1' }), outcome({ id: 'r2', occurred_at: '2026-09-01T10:00:00Z' })] });
+  assert.equal(answering.change?.progress?.label, '1 of 5 replies this week');
+  assert.deepEqual(answering.change?.action, { label: 'See your replies', target: 'replied' });
+
   // 6. What "you did" means. A call answered "I did it" is the reliable yes; a
   //    done Move is too, except a kept feed find (Keep and Did it both write
   //    done) and a handed-over proposal (delegated, not done). The Move behind
   //    a call counts once.
+  const busyDecisions = [call('2026-09-24', { headline: 'Apply to the Maintenance Coordinator role', topic: 'watch', response: 'did', source_move_id: 'mv-call' })];
+  const busyAnswered: ReviewInput['answered'] = [
+    { id: 'mv-call', job: 'watch', kind: 'earn', headline: 'Apply to the Maintenance Coordinator role', status: 'done', acted_at: '2026-09-24T02:00:00Z' },
+    { id: 'kept', job: 'watch', kind: 'earn', headline: 'A gig post somebody only kept', status: 'done', acted_at: '2026-09-24T02:00:00Z' },
+    { id: 'handed', job: 'propose', kind: 'build', headline: 'Shortlist ten property managers', status: 'done', acted_at: '2026-09-24T02:00:00Z' },
+    { id: 'goal', job: 'goal_gap', kind: 'decide', headline: 'Reset the revenue target', status: 'done', acted_at: '2026-09-23T02:00:00Z' },
+  ];
   const busy = weekReview({
     ...base,
     focus: [{ id: '1', minutes: 120, on: '2026-09-24', note: null, at: '2026-09-24T09:00:00Z' }, { id: '2', minutes: 90, on: '2026-09-21', note: null, at: '2026-09-21T09:00:00Z' }],
-    decisions: [call('2026-09-24', { headline: 'Apply to the Maintenance Coordinator role', topic: 'watch', response: 'did', source_move_id: 'mv-call' })],
-    answered: [
-      { id: 'mv-call', job: 'watch', kind: 'earn', headline: 'Apply to the Maintenance Coordinator role', status: 'done', acted_at: '2026-09-24T02:00:00Z' },
-      { id: 'kept', job: 'watch', kind: 'earn', headline: 'A gig post somebody only kept', status: 'done', acted_at: '2026-09-24T02:00:00Z' },
-      { id: 'handed', job: 'propose', kind: 'build', headline: 'Shortlist ten property managers', status: 'done', acted_at: '2026-09-24T02:00:00Z' },
-      { id: 'goal', job: 'goal_gap', kind: 'decide', headline: 'Reset the revenue target', status: 'done', acted_at: '2026-09-23T02:00:00Z' },
-    ],
+    decisions: busyDecisions,
+    answered: busyAnswered,
   });
-  assert.equal(busy.value[0].text, 'You did 2 things it put in front of you — Apply to the Maintenance Coordinator role +1');
+  // One line per thing done, newest first — never "You did 2 things … +1",
+  // which was six lines tall on a phone and named one of the two.
+  assert.equal(busy.value[0].text, 'Apply to the Maintenance Coordinator role');
   assert.equal(busy.value[0].when, 'today');
-  assert.equal(busy.value[1].text, '3.5h of deep work over 2 days');
+  assert.equal(busy.value[0].detail[0], 'Today’s call — you answered “I did it”');
+  assert.match(busy.value[0].detail[1] ?? '', /^Reading .+ back in a few days/, 'opened, it says what came of it');
+  assert.equal(busy.value[1].text, 'Reset the revenue target');
+  assert.deepEqual(busy.value[1].detail, ['A suggestion you marked done']);
+  assert.equal(busy.value.filter((l) => l.kind === 'did').length, 2, 'the kept find and the handed-over proposal are not things done');
+  assert.equal(busy.value[2].text, '3.5h of deep work over 2 days');
+  assert.deepEqual(busy.value[2].items.map((i) => `${i.when} ${i.text}`), ['today 2h', 'Mon 1.5h'], 'opened: every day worked, newest first');
+  assert.equal(busy.value[2].sub, null, 'nothing logged the week before, so nothing to compare with');
+
+  // A step ticked on the plan is a thing done. "I did it" on a call drawn from
+  // the plan ticks its step too, under the same words, so the two are one line.
+  // A step ticked and put back was not done.
+  const mark = (item: string, title: string, at: string, state: 'done' | 'open' = 'done') => ({ item, title, state, at });
+  const ticked = weekReview({ ...base, decisions: busyDecisions, answered: busyAnswered, marks: [
+    mark('s1', 'Apply to the Maintenance Coordinator role', '2026-09-24T03:00:00Z'),
+    mark('s2', 'Research the overstay fine', '2026-09-23T03:00:00Z'),
+    mark('s3', 'Ticked and put back', '2026-09-22T03:00:00Z'),
+    mark('s3', 'Ticked and put back', '2026-09-22T05:00:00Z', 'open'),
+    mark('s4', 'Ticked last month', '2026-09-01T03:00:00Z'),
+  ] });
+  assert.deepEqual(ticked.value.filter((l) => l.kind === 'did').map((l) => l.text), ['Apply to the Maintenance Coordinator role', 'Reset the revenue target', 'Research the overstay fine']);
+  assert.deepEqual(ticked.value.find((l) => l.text === 'Research the overstay fine')?.detail, ['Ticked off on your plan']);
+
+  // A busy week stays a card, not a wall: past MAX_DID_LINES the rest are one line that opens.
+  const many = weekReview({ ...base, answered: Array.from({ length: 6 }, (_, i) => ({ id: `m${i}`, job: 'goal_gap', kind: 'decide' as const, headline: `Thing ${i}`, status: 'done' as const, acted_at: daysAgo(i) })) });
+  const didLines = many.value.filter((l) => l.kind === 'did');
+  assert.equal(didLines.length, MAX_DID_LINES);
+  assert.equal(didLines[MAX_DID_LINES - 1].text, `${6 - (MAX_DID_LINES - 1)} more things you did`);
+  assert.equal(didLines[MAX_DID_LINES - 1].items.length, 6 - (MAX_DID_LINES - 1));
+
+  // Hours say whether they are more or fewer than the week before — the one comparison on the card.
+  const hours = (on: string, minutes: number) => ({ id: on, minutes, on, note: null, at: `${on}T09:00:00Z` });
+  assert.equal(weekReview({ ...base, focus: [hours('2026-09-24', 120), hours('2026-09-15', 60)] }).value[0].sub, 'Up from 1h the week before');
+  assert.equal(weekReview({ ...base, focus: [hours('2026-09-24', 30), hours('2026-09-15', 60)] }).value[0].sub, 'Down from 1h the week before');
   const onlyKept = weekReview({ ...base, answered: [{ id: 'kept', job: 'watch', kind: 'earn', headline: 'A gig post', status: 'done', acted_at: '2026-09-24T02:00:00Z' }] });
   assert.equal(onlyKept.value.length, 0, 'keeping a find is not doing it');
   assert.equal(localDay('2026-09-23T20:00:00Z', 'Asia/Manila'), '2026-09-24', 'late UTC evening is the next morning in Manila');

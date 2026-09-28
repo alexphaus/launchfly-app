@@ -5,6 +5,7 @@ import type { Authority } from '@/lib/copilot/commission';
 import type { WorthKind } from '@/lib/copilot/worth';
 import type { AskAnswer } from '@/lib/copilot/ask';
 import type { MarkState } from '@/lib/copilot/roadmap';
+import type { ExperimentState } from '@/lib/copilot/experiment';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -100,6 +101,10 @@ export interface Actions {
   drawRoadmap(reason?: string): Promise<void>;
   /** A step or milestone of the plan done, set aside, or back on. Resolves false when it did not save. */
   markRoadmap(item: string, state: MarkState): Promise<boolean>;
+  /** The plan's experiment: try it, set it aside, or say how it went. */
+  markExperiment(id: string, state: ExperimentState): Promise<void>;
+  /** A step the plan gave the agent, handed over and started in one tap. */
+  handOverStep(item: string): Promise<{ ok: boolean; error?: string }>;
   /** Resolves false when the save failed, so callers can keep the user's text. */
   addNote(content: string, regenerate: boolean): Promise<boolean>;
   setOppStatus(id: string, status: OpportunityStatus): Promise<void>;
@@ -107,7 +112,7 @@ export interface Actions {
   requestSource(key: SourceKey): Promise<void>;
   /** Send the user to Stripe's hosted billing portal. */
   openBilling(): Promise<void>;
-  saveGoal(patch: Partial<Goal> & { id?: string; title?: string }): Promise<void>;
+  saveGoal(patch: Partial<Goal> & { id?: string; title?: string; due_on?: string | null }): Promise<void>;
   setCapacity(c: Capacity): Promise<void>;
   resetDevice(): Promise<void>;
   // — closed loop —

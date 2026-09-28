@@ -1,11 +1,17 @@
 // src/app/api/copilot/commissions/[id]/route.ts
 // Grant authority, call it off, or mark the thread read.
 
+import { after } from 'next/server';
+import { runJobs } from '@/lib/copilot/jobs';
 import { approveCommission, closeCommission, loadHome, markCommissionSeen, unblockCommission } from '@/lib/copilot/store';
 import { WORTH, WORTH_NOTE_MAX, isWorthKind } from '@/lib/copilot/worth';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
+/** Room for the dispatch that approving starts in after(). */
+export const maxDuration = 120;
+/** The commission job's own synchronous ceiling for a worker's reply. */
+const DISPATCH_BUDGET_MS = 90_000;
 
 /**
  * The close-out answer, or undefined when the user skipped it.
@@ -44,7 +50,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // and lose when the mandate was actually granted, which is the one
         // timestamp that matters if anybody asks what the app was allowed to do.
         if (!c) return fail('That one is already running.');
-        return json({ ok: true, commission: c, home: await loadHome(auth.pid) });
+        // Started now rather than at 21:00: approved work that waits a day for
+        // the nightly pass reads, from the phone, exactly like work nobody took.
+        // after(), so the tap has its answer before a worker is heard from.
+        const started = !!process.env.COPILOT_JOBS_URL;
+        if (started) {
+          after(async () => {
+            await runJobs(auth.pid, { deadline: Date.now() + DISPATCH_BUDGET_MS, only: ['commission'] })
+              .catch((e: unknown) => console.error('[copilot/commissions] dispatch on approve failed; the nightly pass retries it', e));
+          });
+        }
+        return json({ ok: true, commission: c, started, home: await loadHome(auth.pid) });
       }
       case 'unblock': {
         // The answer is optional because not every needs_you is a question —

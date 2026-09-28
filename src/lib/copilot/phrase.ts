@@ -21,6 +21,11 @@ export const JOB_PHRASE: Record<string, string> = {
   silence: 'reading the openers that got no reply',
   propose: 'work it offers to take off you',
   commission: 'the jobs you handed over',
+  // A call drawn from the plan (roadmap.ts PLAN_TOPIC), and the starter's own topics.
+  plan: 'steps from your plan',
+  sending: 'sending',
+  opener: 'the opener',
+  offer: 'your offer',
 };
 
 export const phraseFor = (job: string) => JOB_PHRASE[job] ?? job.replace(/_/g, ' ');

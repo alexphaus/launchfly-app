@@ -18,6 +18,7 @@
 // Pure — no DB import — so copilot-core.test.ts covers the rendering. The route
 // loads the pack and the four things buildContextPack does not carry.
 
+import { daysPhrase } from './due';
 import { SECTION, SECTIONS, type WorkingEntry } from './working';
 import type { Commission } from './commission';
 import type { Obligation } from './obligations';
@@ -116,7 +117,7 @@ export function renderHandoff(input: HandoffInput): string {
     ]));
 
   section('Goals', pack.goals.map((g) => bullet(
-    `${g.title}: ${g.current_value ?? 0} of ${g.target_value ?? '?'}${g.unit ? ` ${g.unit}` : ''}${g.horizon_days ? `, ${g.horizon_days} days` : ''}`)));
+    `${g.title}: ${g.current_value ?? 0} of ${g.target_value ?? '?'}${g.unit ? ` ${g.unit}` : ''}${g.due_on && g.days_left != null ? `, due ${g.due_on} (${daysPhrase({ dueOn: g.due_on, daysLeft: g.days_left })})` : ''}`)));
 
   section(`Where I actually am (last ${m.window_days} days)`, [
     bullet(`${m.sent} messages sent, ${m.replies} replies${m.reply_rate != null ? ` (${Math.round(m.reply_rate * 100)}%)` : ''}, ${m.meetings} meetings, ${m.won} won`),

@@ -533,6 +533,79 @@ it — did you finish this?" with "Yes, tick it" and "Not yet". The model never
 ticks; the answer is the person's tap (rule 2). Before this, telling the app
 "booked two markets" left the step open until somebody found it and ticked it too.
 
+**Whether it can work, said first** (`outlook.ts`). The drawn plan put the
+goals in a sensible order and never said whether the order could get anywhere in
+time. "Ten sales at $150 before November, from nine sends and no rate yet" was
+the whole question, and the planner could not ask it: it may not do arithmetic,
+and it did not know how many days were left. So `goalOutlook` does the
+arithmetic from rows — gap, days left, the pace needed, and for a money goal
+somebody sells toward, sales at their price and sends at what their sends have
+*earned* (money per send, so two $1 wins are not two sales at $150) — and gives a
+word: on track, tight, off track, too early to tell, no date, no number. Before
+`RATE_SAMPLE` sends it is too early, and it says what would tell ("11 more and
+the rate is a number"). Never a probability (invariant 2). A goal with no number
+is measured by the plan's milestones for it. The lines go into the planner's
+prompt, which is what lets it cite them past the number guard, and the Path
+shows them live under **Will it work?**, first under The plan — the order below
+is the plan's answer to it. The planner is told that an off-track goal changes
+the approach, the size, the target or the date, not the effort.
+
+**What the record says** (`outlookSignals`). Stop-or-change evidence, computed
+from rows with thresholds that already mean something here: an opener with
+`RATE_SAMPLE` settled sends and fewer than `WORKING_REPLIES` replies (the
+funnel checkpoint's own rule, and silent below it — nine sends is a bad week,
+not a verdict); calls made again and again and never done, or done and nothing
+moved (`decisionReview`); a step carried `CARRIED_PLANS` plans in a row and never
+ticked. The planner must answer each, in `changed` or `direction`; the lines ride
+with the plan (`roadmap.signals`, never written by the model) so the Path shows
+the evidence beside the answer.
+
+**One experiment at a time** (`experiment.ts`). One sample from one prompt
+returns the most likely plan, and the most likely plan is the one the person
+already had — which is why the drawn plan read as their notes, reordered. So the
+planner is asked to weigh at least eight candidates across fixed angles (stop
+something, go where it is asked for, one move for two goals, change the size,
+test it fast, use what you have, ask one person, change the channel), throw out
+anything already in their notes, the plan or an earlier experiment, and offer the
+one with the most evidence and the cheapest test — or none: "a plain week beats a
+clever guess". It must carry evidence (a claim, number-guarded), a test sized to
+a day, what would show it worked, and a check date; `isNovel` rejects a
+restatement. An open experiment is carried unchanged by every redraw. One nobody
+started in `OFFER_DAYS` is recorded as not tried — inferred, never asked
+(invariant 5); two set aside in a row pause the offers for `PAUSE_DAYS`. The
+verdict is the person's tap (it worked, it did not, could not tell) as a
+`roadmap_experiment` event; it shows in the evidence, and the ledger by angle
+goes to the next draw — "change the channel: tried 2, worked 0" — which is told
+never to offer an angle that failed twice. A record, not a trained model, with
+one person; shaped so many people's could be pooled.
+
+**Real dates** (`due.ts`). `horizon_days` is written once — 90 by default, and
+the goal sheet had no date field — and six places read it as days left: the funnel
+plan, the goal-gap Move, the proposer, the per-source judge, the brief's pack and
+the Claude handoff, plus "Within 90 days, as you set it" on the Path. The date is
+`created_at + horizon_days`; the sheet's **By when** stores the horizon that lands
+on it (no migration), a new goal left undated is undated rather than defaulted,
+and every reader asks `goalDue` for the days left today. The planner is told
+when a date is the table's default rather than one the person picked.
+
+**The call follows the plan.** The call is picked once, by the brief; a plan can
+be redrawn after it. A redraw now re-picks today's call if it is still
+unanswered (`refreshCallFromPlan`, `replacesCall`), in place and conditional on
+`response = 'pending'` in the write itself, so an answer is never overwritten.
+Money due this week keeps its call. Until the server catches up, the Path does
+not put a call the new plan has overtaken over it — the same rule, in `derive`.
+A call that did not save says so (the nightly report, the brief route's toast,
+the run row) instead of going to `console.error`.
+
+**The agent's side.** `COPILOT_AGENT_CAN` says what the connected agent can
+finish alone; the planner hands it steps within that, never contacting, posting,
+applying, spending or signing. A step it can do carries **Hand it over** in plain
+sight: one tap writes the project with its goal and a plan ending in "report back
+with links, checked against" the milestone's done-when, approves it (read
+authority), and dispatches it in `after()` — not at 21:00. Approving a project on
+Work also starts it now. The step then says where the project stands and opens it;
+the tick stays the person's.
+
 Stored without a migration: the draw is a `copilot_agent_runs` row of kind
 `roadmap` (plan in `output.roadmap`, the signature in `input_summary`) and a tick
 is a `copilot_events` row of type `roadmap_marked`. With no model configured
@@ -782,9 +855,19 @@ COPILOT_INBOUND_SECRET=...          # what a worker posts results back with (fal
 #   `commit`: report what you WOULD do as needs_you rather than doing it.
 #   `answered` is NOT postable here — it is the user's line, written only when they
 #   answer in the app. A worker that could post one would clear its own gate.
+COPILOT_AGENT_CAN="..."             # what the agent at COPILOT_JOBS_URL can finish alone, in words
+#   The planner hands a step to the agent only within this ("research, a landing page
+#   draft, spreadsheets, code"). Unset: the reference n8n worker's reach — research,
+#   reading pages, comparisons, written drafts. Never contacting, posting, applying,
+#   spending or signing, whatever it says (invariants 4 and 11).
 #  or
 OPENAI_API_KEY=... / DEEPSEEK_API_KEY=...
 COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL
+# The plan's own model (optional; unset = the brief's). The plan is drawn in the
+# background, so it can take a slower, stronger model than the 30s brief.
+COPILOT_PLAN_MODEL / COPILOT_PLAN_API_KEY / COPILOT_PLAN_BASE_URL
+COPILOT_PLAN_TIMEOUT_MS=110000      # up to 240000; spent inside the nightly pass too
+COPILOT_PLAN_EXTRA_BODY / COPILOT_PLAN_MAX_OUTPUT_TOKENS   # e.g. a higher reasoning effort for the plan only
 
 # Real supply
 APIFY_API_TOKEN=...                 # Google Maps adapter (same token Launchfly uses)
@@ -1970,7 +2053,10 @@ npm run test:copilot
 
 Pure-module tests: ranking (sourced/inferred rule, capacity plan selection, outcome-weighted
 affinity), metrics, phone normalisation and heuristic fit, message templates, agent output
-normalisation, starter agent, session signing.
+normalisation, starter agent, session signing — and, for the plan's judgement, due dates
+counted down (`due.ts`), the will-it-work verdicts and the record's signals (`outlook.ts`),
+the experiment's parse, novelty, life and ledger (`experiment.ts`), and a call that
+follows a redrawn plan only while it is unanswered (`replacesCall`).
 
 Two of them read files rather than modules, and both exist because the same bug
 shipped twice. `OUTCOME_KINDS` is diffed against the `kind` CHECK in

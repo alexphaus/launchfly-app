@@ -8,6 +8,7 @@
 // a reply, and what this person's own matches keep asking for.
 
 import { copilotDb, todayIso } from './db';
+import { goalDue } from './due';
 import { changesSince, movedBy, snapshotOf } from './decision';
 import { openingTrend } from './diagnose';
 import { loadMetrics } from './outcomes';
@@ -29,7 +30,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
 
   const today = todayIso(profile.timezone);
   const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent, conversations, openingRows, workingRows, roadmapRuns, roadmapMarks] = await Promise.all([
-    db.from('copilot_goals').select('title, metric, unit, target_value, current_value, horizon_days, priority, note').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
+    db.from('copilot_goals').select('title, metric, unit, target_value, current_value, horizon_days, priority, note, created_at').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_context_items').select('source, kind, content, created_at, weight').eq('profile_id', profileId).order('created_at', { ascending: false }).limit(MAX_CONTEXT_ITEMS).then((r) => (r.data ?? []) as ContextItem[]),
     db.from('copilot_context_sources').select('source_key, status, last_synced_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as ContextSource[]),
     db.from('copilot_opportunities').select('type, title, status').eq('profile_id', profileId).order('updated_at', { ascending: false }).limit(60).then((r) => (r.data ?? []) as Opportunity[]),
@@ -83,7 +84,10 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
     // reading waiting on the person who lived it, and feeding it to a model
     // before they have seen it would make confirming it decorative.
     working: workingBrief(workingRows),
-    goals,
+    goals: goals.map(({ horizon_days: _h, created_at: _c, ...g }) => {
+      const due = goalDue({ horizon_days: _h, created_at: _c }, today);
+      return { ...g, due_on: due?.dueOn ?? null, days_left: due?.daysLeft ?? null };
+    }),
     context: context
       .sort((a, b) => (b.weight - a.weight) || (a.created_at < b.created_at ? 1 : -1))
       .map((c) => ({ source: c.source, kind: c.kind, content: c.content, created_at: c.created_at })),

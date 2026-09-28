@@ -17,7 +17,11 @@ import { matchCounts, matchFeed, matchesStatus, stageCards } from '@/lib/copilot
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
 import { pathAhead, pathHere, pathNow, planStatus, priceOf } from '@/lib/copilot/plan';
-import { SIZE_LABEL, goalMarkers, markMap, roadmapDue, roadmapFirstStep, roadmapSignature, roadmapView } from '@/lib/copilot/roadmap';
+import { SIZE_LABEL, goalLayout, goalMarkers, markMap, moneyWaiting, replacesCall, roadmapDue, roadmapFirstStep, roadmapSignature, roadmapView } from '@/lib/copilot/roadmap';
+import { VERDICT_WORDS, goalOutlooks } from '@/lib/copilot/outlook';
+
+/** Goals under "Will it work?" at most: the plan's first few, not a report on every goal. */
+const MAX_OUTLOOK = 3;
 import { weekReview } from '@/lib/copilot/review';
 import { doneForYou, needsYou, worthDoing } from '@/lib/copilot/today';
 import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
@@ -100,6 +104,7 @@ export function derive(home: HomeData) {
     firsts: d.firsts ?? null,
     currency,
     marks: home.roadmap?.marks ?? [],
+    experiments: home.roadmap?.experiments ?? [],
   };
   const ladder = pathLadder({
     offerSet: !noOffer,
@@ -111,8 +116,27 @@ export function derive(home: HomeData) {
   // before the first draw lands, the funnel plan below stands in unchanged.
   const rm = home.roadmap;
   const plan = rm
-    ? roadmapView({ enabled: rm.enabled, latest: rm.latest, current: rm.current, previous: rm.previous, marks: rm.marks, goals: home.goals, capacity: home.profile.capacity, now })
+    ? roadmapView({ enabled: rm.enabled, latest: rm.latest, current: rm.current, previous: rm.previous, marks: rm.marks, goals: home.goals, capacity: home.profile.capacity, now, experimentMarks: rm.experiments ?? [], today: home.recent.today })
     : { state: 'off' as const };
+  // Will it work, per goal, live: the same arithmetic the draw handed the
+  // planner (outlook.ts), from this morning's rows rather than last night's. A
+  // goal with no number is measured by the plan's milestones for it.
+  const byGoal: Record<string, { done: number; open: number }> = {};
+  if (plan.state === 'ready') for (const ph of plan.phases) for (const m of ph.milestones) {
+    if (!m.goalId || m.state === 'dropped') continue;
+    const e = byGoal[m.goalId] ?? { done: 0, open: 0 };
+    if (m.state === 'done') e.done += 1; else e.open += 1;
+    byGoal[m.goalId] = e;
+  }
+  const outlooks = goalOutlooks(home.goals, {
+    today: home.recent.today,
+    price: priceOf(home.profile.offer?.price_band),
+    selling: !noOffer,
+    currency,
+    capacity: home.profile.capacity,
+    funnel: { windowDays: home.metrics.window_days, sent: home.metrics.sent, won: home.metrics.won, wonAmount: home.metrics.won_amount },
+    milestones: byGoal,
+  });
   // Whether opening the app should draw: only for what the person said since
   // the last plan (roadmapDue), never over a read that failed.
   const planDue = rm?.enabled && !rm.unreadable
@@ -128,6 +152,16 @@ export function derive(home: HomeData) {
       })
     : null;
   const first = roadmapFirstStep(plan);
+  // A call picked before the plan on screen was drawn, and still unanswered:
+  // the server re-picks it once the redraw lands (refreshCallFromPlan), but the
+  // screen can reload first, and a card telling you to send the old drafts over
+  // a plan that says to rewrite them first is worse than either. So the plan's
+  // step is the move until the call catches up — the same rule, replacesCall.
+  const staleCall = plan.state === 'ready' && replacesCall(
+    home.decision,
+    first ? { headline: first.step.title } : null,
+    moneyWaiting(home.callMove?.stake),
+  );
   const counted = pathHere(ladder, funnel);
   // Where you are, in the plan's words when it has some, with the counts under
   // it only once something has been sent — "0 sent · 0 replied · 0 paid" says
@@ -142,7 +176,7 @@ export function derive(home: HomeData) {
   // The one move. What it takes from the lists below is not repeated in them.
   const move = pathNow({
     noOffer,
-    callPending: !!home.decision && home.decision.response === 'pending',
+    callPending: !!home.decision && home.decision.response === 'pending' && !staleCall,
     queue: { count: noOffer ? 0 : queueCount, oldestDays },
     asks,
     moves: worthDoing(home.moves, Number.POSITIVE_INFINITY).shown,
@@ -178,12 +212,19 @@ export function derive(home: HomeData) {
       capacity: home.profile.capacity,
       sentFortnight,
       bottleneck: bottleneck ? { headline: bottleneck.headline, action: bottleneck.action } : null,
+      today: home.recent.today,
     }),
     week: movedWeek,
     fortnight: sentFortnight,
     plan,
     planDue,
-    goals: goalMarkers(home.goals, plan, currency),
+    goals: goalMarkers(home.goals, plan, currency, home.recent.today, new Map(outlooks.map((o) => [o.goalId, VERDICT_WORDS[o.verdict]]))),
+    // The goals the plan works on — the same set its goal markers show in full —
+    // with their verdicts, at the top of the plan (PathPlan's WillItWork).
+    outlook: (() => {
+      const shown = new Set(goalLayout(goalMarkers(home.goals, plan, currency, home.recent.today)).shown.map((g) => g.id));
+      return outlooks.filter((o) => shown.has(o.goalId)).slice(0, MAX_OUTLOOK);
+    })(),
     // Drafts from a blank offer are not on To send (above), so they are not waiting to be sent either.
     swap: pathSwap({ now, timezone: home.profile.timezone, focus: home.recent.focus, sentAt, outcomes: home.recent.outcomes, queueCount: noOffer ? 0 : queueCount }),
   };

@@ -153,6 +153,7 @@ export const watcherJob: Job = {
     const brief = watchBrief({
       profile: ctx.profile,
       goals,
+      today: ctx.today,
       metrics,
       capacityMinutes: CAPACITY_META[ctx.profile.capacity].minutes,
       keeps,

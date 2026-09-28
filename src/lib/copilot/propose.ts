@@ -38,6 +38,7 @@
 // Pure — no DB import — so copilot-core.test.ts covers the gate, the reasons and
 // the parse. jobs/propose.ts does the reading and the one model call.
 
+import { daysPhrase, goalDue } from './due';
 import { MOVE_KINDS, type MoveDraft, type MoveKind } from './moves';
 import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX } from './commission';
 import type { BusinessMetric } from './stake';
@@ -208,8 +209,10 @@ export function parseProposal(raw: unknown): ProposalDraft | null {
 /* ─── The reasons, written here and never by a model ──────────────────────── */
 
 export interface ProposeFacts {
-  goal: Pick<Goal, 'title' | 'metric' | 'unit' | 'target_value' | 'current_value' | 'horizon_days'>;
+  goal: Pick<Goal, 'title' | 'metric' | 'unit' | 'target_value' | 'current_value' | 'horizon_days' | 'created_at'>;
   metrics: Metrics;
+  /** Their calendar day, for the days left to the goal's date. Absent: no days are claimed. */
+  today?: string;
   /** Mandates closed and graded so far, for "you have done this before". */
   worth?: WorthRecord;
 }
@@ -237,8 +240,10 @@ export function whyFor(f: ProposeFacts): string[] {
   const gap = target - current;
   if (target > 0 && gap > 0) {
     const unit = g.metric === 'currency' ? (g.unit || '') : '';
-    why.push(g.horizon_days
-      ? `${g.title} is ${unit}${Math.round(gap).toLocaleString()} short with ${g.horizon_days} days on it.`
+    // Days left to its date, never the horizon it was written with (due.ts).
+    const due = f.today ? goalDue(g, f.today) : null;
+    why.push(due
+      ? `${g.title} is ${unit}${Math.round(gap).toLocaleString()} short, ${daysPhrase(due)}.`
       : `${g.title} is ${unit}${Math.round(gap).toLocaleString()} short.`);
   } else {
     why.push(`It is meant to move ${g.title}.`);
@@ -312,7 +317,7 @@ export function proposalFrom(p: ProposalDraft, f: ProposeFacts, budgetMinutes: n
       metric: stakeMetricFor(f.goal.metric),
       direction: 'up',
       by: Math.max(0, (f.goal.target_value ?? 0) - (f.goal.current_value ?? 0)),
-      withinDays: f.goal.horizon_days ?? 30,
+      withinDays: (() => { const due = f.today ? goalDue(f.goal, f.today) : null; return due ? Math.max(1, due.daysLeft) : 30; })(),
     },
   } satisfies MoveDraft;
 }

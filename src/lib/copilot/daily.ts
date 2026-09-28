@@ -16,7 +16,7 @@ export interface DailyResult {
   reconcile: { checked: number; matched: number } | { error: string } | null;
   /** Every non-outbound job: what each found and what was new. */
   jobs: JobsResult | { error: string } | null;
-  brief: Pick<BriefResult, 'agent' | 'fellBack' | 'graded' | 'pushed'> & { skipped?: string };
+  brief: Pick<BriefResult, 'agent' | 'fellBack' | 'graded' | 'pushed' | 'unsaved'> & { skipped?: string };
   /** The Path's plan. Only the nightly pass redraws it; "Find new matches" leaves it alone. */
   roadmap?: NightlyRoadmap | null;
 }
@@ -106,7 +106,7 @@ export async function runDaily(
   }
   // Surfaced in the cron report: it is how you can tell from outside whether
   // the record is actually being graded, or just accumulating.
-  out.brief = { agent: ran.brief.agent, fellBack: ran.brief.fellBack, graded: ran.brief.graded, pushed: ran.brief.pushed };
+  out.brief = { agent: ran.brief.agent, fellBack: ran.brief.fellBack, graded: ran.brief.graded, pushed: ran.brief.pushed, ...(ran.brief.unsaved ? { unsaved: ran.brief.unsaved } : {}) };
   return out;
 }
 

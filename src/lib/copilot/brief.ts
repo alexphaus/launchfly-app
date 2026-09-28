@@ -6,19 +6,24 @@
 import { StarterAgent, getAgent } from './agent';
 import { budgetForReason } from './agent/llm';
 import { buildContextPack } from './context';
-import { copilotDb } from './db';
 import { promoteCall } from './call';
 import { metricValue, snapshotOf, starterDecision, type DecisionDraft } from './decision';
 import { isNightlyPass } from './nightly';
 import { offerIsEmpty } from './offer';
 import { sendPush } from './push';
 import { scoreOpportunity } from './ranking';
-import { moneyWaiting, planCall, roadmapFirstStep, roadmapView } from './roadmap';
-import { getProfile, gradeDecisions, loadRoadmapMarks, loadRoadmapRuns, loadStandingRefusals, saveDecision } from './store';
+import { moneyWaiting, planCall, replacesCall, roadmapFirstStep, roadmapView } from './roadmap';
+import { getProfile, gradeDecisions, loadDecisions, loadRoadmapMarks, loadRoadmapRuns, loadStandingRefusals, replaceTodayCall, saveDecision } from './store';
+import { loadMetrics } from './outcomes';
+import { copilotDb, todayIso } from './db';
 import type { DecisionSweep } from './store';
 import type { BriefOutput, OpportunityAgent, Profile, ContextPack } from './types';
 
-export interface BriefResult { runId: string; agent: OpportunityAgent['name']; output: BriefOutput; fellBack: boolean; graded: DecisionSweep; pushed: number }
+export interface BriefResult {
+  runId: string; agent: OpportunityAgent['name']; output: BriefOutput; fellBack: boolean; graded: DecisionSweep; pushed: number;
+  /** Why today's call did not save, when it did not. Reported by the night and the route, never only logged. */
+  unsaved?: string;
+}
 
 export async function runBrief(profileId: string, opts: { reason?: string } = {}): Promise<BriefResult> {
   const profile = await getProfile(profileId);
@@ -54,8 +59,39 @@ export async function runBrief(profileId: string, opts: { reason?: string } = {}
     output = await agent.generateBrief(pack);
     await finishRun(runId, 'ok', output);
   }
-  const pushed = await persistBrief(profile, pack, runId, output, reason);
-  return { runId, agent: agent.name, output, fellBack, graded, pushed };
+  const { pushed, unsaved } = await persistBrief(profile, pack, runId, output, reason);
+  return { runId, agent: agent.name, output, fellBack, graded, pushed, ...(unsaved ? { unsaved } : {}) };
+}
+
+/**
+ * Re-pick today's call from a plan that was just redrawn, if the call is still
+ * waiting on an answer. See replacesCall for why: the call is picked once, the
+ * plan can be redrawn after it, and a call that contradicts the plan under it
+ * is worse than either alone.
+ *
+ * Never throws — it runs in after(), once the redraw is already on screen —
+ * and says what it did, or why it could not.
+ */
+export async function refreshCallFromPlan(profileId: string): Promise<{ replaced: boolean; error?: string }> {
+  try {
+    const profile = await getProfile(profileId);
+    if (!profile) return { replaced: false };
+    const today = todayIso(profile.timezone);
+    const current = (await loadDecisions(profileId, 1)).find((d) => d.for_date === today) ?? null;
+    if (!current || current.response !== 'pending') return { replaced: false };
+    const metrics = await loadMetrics(profileId, profile);
+    const promoted = await promoteCall(profile, metrics).catch(() => null);
+    const moneyFirst = !!promoted && moneyWaiting(promoted.move.stake);
+    const planned = moneyFirst ? null : await planCallFor(profile, promoted?.move ?? null);
+    if (!planned || !replacesCall(current, planned, moneyFirst)) return { replaced: false };
+    const r = await replaceTodayCall(profileId, {
+      forDate: today, draft: planned, snapshot: snapshotOf(metrics), baseline: metricValue(metrics, planned.verify_metric ?? 'none'),
+    });
+    if (typeof r === 'string') return { replaced: false, error: `today's call could not be updated for the new plan: ${r}` };
+    return { replaced: r };
+  } catch (e) {
+    return { replaced: false, error: `today's call could not be updated for the new plan: ${e instanceof Error ? e.message : String(e)}` };
+  }
 }
 
 async function startRun(profileId: string, agent: OpportunityAgent, input_summary: Record<string, unknown>): Promise<string> {
@@ -92,7 +128,7 @@ async function planCallFor(profile: Profile, runnerUp: { headline: string } | nu
   }
 }
 
-async function persistBrief(profile: Profile, pack: ContextPack, runId: string, out: BriefOutput, reason: string): Promise<number> {
+async function persistBrief(profile: Profile, pack: ContextPack, runId: string, out: BriefOutput, reason: string): Promise<{ pushed: number; unsaved: string | null }> {
   const db = copilotDb();
   const pid = profile.id;
   const today = pack.today;
@@ -144,13 +180,19 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   // artifact, so a separate "not today" line beside it is a second opinion
   // nobody asked for. A plan step names its own: the Move it was chosen over.
   out.dont = planned || promoted ? null : useFloor ? floor.dont : out.dont;
+  let unsaved: string | null = null;
   if (out.decision) {
-    await saveDecision(pid, {
+    unsaved = await saveDecision(pid, {
       forDate: today, runId, draft: out.decision, dont: out.dont,
       changed: pack.changed,
       snapshot: snapshotOf(pack.metrics),
       baseline: metricValue(pack.metrics, out.decision.verify_metric ?? 'none'),
     });
+    // Recorded on the run row as well as returned: a call that never saved is a
+    // call that never existed, and the row is what is left to read afterwards.
+    if (unsaved) {
+      await copilotDb().from('copilot_agent_runs').update({ error: `The call did not save: ${unsaved}` }).eq('id', runId);
+    }
   }
 
   const candidateIds = new Set(pack.candidates.map((c) => c.id));
@@ -181,7 +223,7 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   // createDraftExecution in execution.ts links to it, so the table is load-bearing
   // for every draft in the queue. Only the model's rows are gone.
 
-  return notifyBrief(profile, out, reason, today);
+  return { pushed: await notifyBrief(profile, out, reason, today), unsaved };
 }
 
 /**

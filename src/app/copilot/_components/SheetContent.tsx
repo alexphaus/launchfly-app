@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { computeRunwayMonths } from '@/lib/copilot/metrics';
+import { goalDue } from '@/lib/copilot/due';
 import { OFFER_TASK_TITLE, addOpeningToOffer, offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, money, relTime, sourceLabel } from './format';
@@ -497,10 +498,19 @@ function GoalSheet({ goal, actions }: { goal: Goal | undefined; actions: Actions
   const [target, setTarget] = useState(goal?.target_value?.toString() ?? '');
   const [current, setCurrent] = useState(goal?.current_value?.toString() ?? '');
   const [note, setNote] = useState(goal?.note ?? '');
+  // The device's own calendar day: the earliest date worth offering. The date a
+  // goal already has does not depend on it (created + horizon, due.ts).
+  const today = new Date().toLocaleDateString('en-CA');
+  const initialDue = goal ? goalDue(goal, today)?.dueOn ?? '' : '';
+  const [due, setDue] = useState(initialDue);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
-    await actions.saveGoal({ id: goal?.id, title, metric, unit: metric === 'none' ? '' : unit, target_value: target === '' ? undefined : Number(target), current_value: current === '' ? undefined : Number(current), note });
+    // A new goal always says whether it has a date, so an empty field is "no
+    // date" rather than the ninety days the table would otherwise default to.
+    // An existing one only sends the date when it was changed.
+    const dated = !goal || due !== initialDue ? { due_on: due || null } : {};
+    await actions.saveGoal({ id: goal?.id, title, metric, unit: metric === 'none' ? '' : unit, target_value: target === '' ? undefined : Number(target), current_value: current === '' ? undefined : Number(current), note, ...dated });
     setBusy(false);
   };
   return (
@@ -520,6 +530,10 @@ function GoalSheet({ goal, actions }: { goal: Goal | undefined; actions: Actions
           </div>
         </div>
       )}
+      <div className="cp-field"><label className="cp-label">By when (optional)</label>
+        <input className="cp-input sm" type="date" min={today} value={due} onChange={(e) => setDue(e.target.value)} />
+        <div className="cp-help">The plan counts down to it and says whether your pace gets there.</div>
+      </div>
       <div className="cp-field"><label className="cp-label">Why it matters (optional)</label><input className="cp-input sm" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Close before relocation" /></div>
       <div className="cp-btn-row">
         <button className="cp-btn primary" disabled={busy || !title.trim()} onClick={save}>Save</button>

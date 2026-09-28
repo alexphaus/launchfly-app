@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 51 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 56 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -33,7 +33,10 @@ fails on a pre-existing duplicate registration in `src/lib/inngest/functions/ind
 (lines 77–78 register `enhancedColdEmailOutreach` twice). That is not your change.
 `.claude/hooks/bootstrap-env.sh` writes a usable `.env.local` if one is missing
 (and never overwrites a real one). The SessionStart hook runs it for you in a
-remote session.
+remote session. In a remote session also run the build (and any dev server) with
+`NODE_USE_ENV_PROXY=1`: `next/font/google` downloads Sora with Node's own fetch,
+which ignores `HTTPS_PROXY` without it, and the build fails with "next/font/google
+queries have exactly one entry" — a network failure, not your change.
 
 **There is no working linter.** `npm run lint` calls `next lint`, which Next 16
 removed — it fails with "Invalid project directory provided, no such directory:

@@ -157,7 +157,7 @@ export const proposeJob: Job = {
     // in every one that follows.
     if (!draft) return [];
 
-    const move = proposalFrom(draft, { goal, metrics, worth: worth.commission }, PROPOSAL_BUDGET_MINUTES);
+    const move = proposalFrom(draft, { goal, metrics, worth: worth.commission, today: ctx.today }, PROPOSAL_BUDGET_MINUTES);
     return move ? [move] : [];
   },
 };

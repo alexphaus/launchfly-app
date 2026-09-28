@@ -17,6 +17,17 @@ import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { AskAnswer } from '@/lib/copilot/ask';
 import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/lib/copilot/nightly';
 import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
+import type { ExperimentState } from '@/lib/copilot/experiment';
+
+/** What answering the experiment did, said back: the next plan is what changes. */
+const EXPERIMENT_SAID: Record<ExperimentState, string> = {
+  started: 'Started. It asks how it went on its check date.',
+  dropped: 'Set aside. The next plan knows.',
+  worked: 'Noted: it worked. The next plan builds on it.',
+  failed: 'Noted: it did not work. The next plan will not offer it again.',
+  unclear: 'Noted. The next plan knows it was not clear either way.',
+  ignored: 'Noted.',
+};
 import { api, del, get, post } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
@@ -105,9 +116,10 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
   const runBrief = useCallback(async (reason = 'manual') => {
     setBriefing(true);
     try {
-      const r = await post<{ home: HomeData; agent: string; fellBack: boolean }>('/brief', { reason });
+      const r = await post<{ home: HomeData; agent: string; fellBack: boolean; unsaved?: string | null }>('/brief', { reason });
       setHome(r.home);
-      if (r.fellBack) say('Agent unavailable, showed a starter brief');
+      if (r.unsaved) say(`Today’s call did not save: ${r.unsaved}`);
+      else if (r.fellBack) say('Agent unavailable, showed a starter brief');
       else if (reason === 'manual') say('Brief refreshed');
     } catch (e) {
       say(e instanceof Error ? e.message : 'Could not refresh');
@@ -305,6 +317,25 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         return false;
       }
     },
+    async markExperiment(id: string, state: ExperimentState) {
+      try {
+        const r = await post<{ home: HomeData }>('/roadmap', { action: 'experiment', id, state });
+        setHome(r.home);
+        say(EXPERIMENT_SAID[state]);
+      } catch (e) { fail(e, 'Could not save that'); }
+    },
+    async handOverStep(item: string) {
+      try {
+        const r = await post<{ home: HomeData; started: boolean }>('/roadmap', { action: 'handover', item });
+        setHome(r.home);
+        // Said as what happened: started now, or written and waiting on an approval
+        // that could not be given (three already running) — never "done".
+        say(r.started ? 'Handed over. It is starting now.' : 'Written. Approve it on Work to start it.');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
+      }
+    },
     async addNote(content, regenerate) {
       try {
         if (regenerate) setBriefing(true);
@@ -345,7 +376,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
       setHome((h) => ({ ...h, sources: h.sources.map((s) => (s.source_key === key ? { ...s, status: 'requested' } : s)) }));
       try { await post(`/sources/${key}`); say('Noted. Connectors land here once built.'); } catch (e) { fail(e, 'Could not update'); }
     },
-    async saveGoal(patch: Partial<Goal> & { id?: string; title?: string }) {
+    async saveGoal(patch: Partial<Goal> & { id?: string; title?: string; due_on?: string | null }) {
       try { await post('/goals', patch); closeSheet(); await refresh(); say('Goal saved'); } catch (e) { fail(e, 'Could not save goal'); }
     },
     async setCapacity(c: Capacity) {
@@ -475,11 +506,11 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async commissionAction(id, action, worth, answer) {
       try {
-        const r = await post<{ home?: HomeData; note?: string | null }>(`/commissions/${encodeURIComponent(id)}`, { action, answer, ...(worth ?? {}) });
+        const r = await post<{ home?: HomeData; note?: string | null; started?: boolean }>(`/commissions/${encodeURIComponent(id)}`, { action, answer, ...(worth ?? {}) });
         // 'seen' deliberately returns no home: rewriting the screen under
         // somebody who just opened the sheet moves the card out from under them.
         if (r.home) setHome(r.home);
-        if (action === 'approve') say('Approved. It runs tonight.');
+        if (action === 'approve') say(r.started ? 'Approved. It is starting now.' : 'Approved. It runs tonight.');
         // Two different things happened, and which one decides whether the
         // worker stops asking. Saying "carrying on" for both would hide it.
         if (action === 'unblock') say(answer?.trim() ? 'Sent. It gets your answer on the next run.' : 'Carrying on. It picks up tonight.');

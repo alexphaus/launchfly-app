@@ -15,6 +15,10 @@ export const IconMatches = () => (<svg {...base}><circle cx="12" cy="12" r="9" /
 export const IconWork = () => (<svg {...base}><path d="M12 3l9 5-9 5-9-5 9-5z" /><path d="M3 13l9 5 9-5" /></svg>);
 /** Path: from where you were to where you are going — two points and the way between. */
 export const IconPath = () => (<svg {...base}><circle cx="6" cy="19" r="2" /><circle cx="18" cy="5" r="2" /><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16" /></svg>);
+/** Will it work: a gauge — where the pace sits against what the goal needs. */
+export const IconGauge = () => (<svg {...base}><path d="M4 17a8 8 0 1 1 16 0" /><path d="M12 17l4-5" /><circle cx="12" cy="17" r="1" /></svg>);
+/** An experiment: one thing tried on purpose, to find something out. */
+export const IconFlask = () => (<svg {...base}><path d="M9 3h6" /><path d="M10 3v6.5L4.8 18.4A1.7 1.7 0 0 0 6.3 21h11.4a1.7 1.7 0 0 0 1.5-2.6L14 9.5V3" /><path d="M7.5 15h9" /></svg>);
 /** The goal at the end of the path. */
 export const IconFlag = () => (<svg {...base}><path d="M5 21V4" /><path d="M5 4h11l-2 4 2 4H5" /></svg>);
 /** You: the person the numbers are about. */

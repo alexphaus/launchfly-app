@@ -2097,7 +2097,8 @@ async function goalsAndArithmetic() {
        lost: 0, awaiting_approval: 45, pipeline: { new: 0, saved: 0, sourced: 0, inferred: 0 }, runway_months: 3.4, ...over }) as never;
   const goal = (over: Partial<GoalRow> = {}): GoalRow =>
     ({ id: 'g1', profile_id: 'p1', title: 'Emergency', metric: 'currency', unit: '$',
-       target_value: 15000, current_value: 1200, horizon_days: 90, priority: 1, status: 'active', note: null, ...over });
+       target_value: 15000, current_value: 1200, horizon_days: 90, priority: 1, status: 'active', note: null,
+       created_at: '2026-09-01T08:00:00Z', ...over });
 
   // 1. Only a goal with a meter behind it can be measured. "Monetize App — 0 of
   //    10 users" and "Get a job" are real goals this job must stay silent about,
@@ -2107,7 +2108,7 @@ async function goalsAndArithmetic() {
   assert.equal(measurable(goal({ metric: 'number', unit: 'users', target_value: 10, current_value: 0 })), false);
   assert.equal(measurable(goal({ target_value: null })), false, 'no target, nothing to be short of');
   assert.equal(measurable(goal({ current_value: 15000 })), false, 'already there');
-  assert.equal(goalMove(goal({ metric: 'number' }), met(), '2026-09'), null);
+  assert.equal(goalMove(goal({ metric: 'number' }), met(), '2026-09-01'), null);
 
   // 2. The user's own priority order decides which one speaks. Not a ranking
   //    this file invents on their behalf.
@@ -2120,7 +2121,7 @@ async function goalsAndArithmetic() {
   assert.equal(monthlyRate(met({ won_amount: 0 })), null, 'nothing closed is not a rate of zero to divide by');
 
   // 4. The arithmetic, and the sentence it produces.
-  const m = goalMove(goal(), met({ won_amount: 1000 }), '2026-09')!;
+  const m = goalMove(goal(), met({ won_amount: 1000 }), '2026-09-01')!;
   assert.equal(m.kind, 'decide');
   assert.equal(m.external_id, 'goal:g1:2026-09', 'once a month per goal');
   assert.match(m.headline, /Emergency is at \$1,200 of \$15,000/);
@@ -2130,8 +2131,22 @@ async function goalsAndArithmetic() {
   assert.equal(m.stake?.value, 13800);
   assert.ok(isDeliverable(m));
 
+  // The days count down from the goal's date. They were the horizon it was
+  // written with, so "not 90 days" was said on the day it was set and on every
+  // day after — a month later the goal still had ninety days to go.
+  const month = goalMove(goal(), met({ won_amount: 1000 }), '2026-10-01')!;
+  assert.match(month.headline, /not 60 days/, 'thirty days on, sixty are left');
+  assert.equal(month.stake?.withinDays, 60);
+  assert.match(month.why[0], /60 days to do it in/);
+  const late = goalMove(goal(), met({ won_amount: 1000 }), '2026-12-15')!;
+  assert.match(late.headline, /its date has passed/, 'a date gone by is said, not counted as a horizon');
+  assert.equal(late.stake?.withinDays, 1, 'a passed date is as urgent as a date can be');
+  // Without the day it was written there is no date to count to, and no days are claimed.
+  const undated = goalMove(goal({ created_at: undefined }), met({ won_amount: 1000 }), '2026-10-01')!;
+  assert.ok(!/days/.test(undated.headline) && !/days to do it in/.test(undated.why[0]), undated.headline);
+
   // Nothing closing says so, rather than dividing by zero into a number.
-  const dead = goalMove(goal(), met({ won: 0, won_amount: 0 }), '2026-09')!;
+  const dead = goalMove(goal(), met({ won: 0, won_amount: 0 }), '2026-09-01')!;
   assert.match(dead.headline, /nothing is closing it/);
   assert.match(dead.why[1], /not closing it at all|not closing at all/);
   assert.ok(!/NaN|Infinity/.test(JSON.stringify(dead)), 'no goal ever renders a NaN');
@@ -4243,7 +4258,7 @@ import {
 import { arbitrate as arbitrate2, scoreMove as score3 } from '../../src/lib/copilot/stake';
 
 async function proposals() {
-  const goal = { title: 'Monthly revenue', metric: 'currency' as const, unit: '₱', target_value: 120_000, current_value: 18_000, horizon_days: 30 };
+  const goal = { title: 'Monthly revenue', metric: 'currency' as const, unit: '₱', target_value: 120_000, current_value: 18_000, horizon_days: 30, created_at: '2026-09-10T02:00:00Z' };
   const metrics = { window_days: 30, sent: 44, replies: 1, reply_rate: 0.023, meetings: 0, won: 0, won_amount: 0, lost: 0, awaiting_approval: 61, pipeline: { new: 3, saved: 2, sourced: 9, inferred: 0 }, runway_months: 3.4 } as never;
 
   /* ─── 1. Whether to propose at all ──────────────────────────────────────── */
@@ -4318,8 +4333,11 @@ async function proposals() {
 
   /* ─── 3. The reasons are arithmetic, never a model's prose ──────────────── */
   {
-    const why = whyFor({ goal, metrics });
-    assert.match(why[0], /₱102,000 short with 30 days on it/, 'the gap is computed, not described');
+    const why = whyFor({ goal, metrics, today: '2026-09-10' });
+    assert.match(why[0], /₱102,000 short, 30 days left/, 'the gap is computed, not described');
+    // Counted down to the goal's date, not the horizon it was written with.
+    assert.match(whyFor({ goal, metrics, today: '2026-09-25' })[0], /short, 15 days left/);
+    assert.match(whyFor({ goal, metrics })[0], /₱102,000 short\.$/, 'without today no days are claimed');
     assert.match(why[1], /44 sent in 30 days for 1 reply\. This is not that\./);
     assert.match(why[2], /3\.4 months of runway/);
 
@@ -5761,11 +5779,11 @@ async function pathPlan() {
   // 5. The plan: the milestone you are on, what you will learn next, the goal.
   const others = [
     { id: 'g2', title: 'MacBook Air 15"', metric: 'currency' as const, target_value: 2000, current_value: 0, horizon_days: null },
-    { id: 'g5', title: 'Get a job', metric: 'none' as const, target_value: null, current_value: null, horizon_days: 90 },
+    { id: 'g5', title: 'Get a job', metric: 'none' as const, target_value: null, current_value: null, horizon_days: 90, created_at: '2026-09-01T00:00:00Z' },
     { id: 'g6', title: 'Ten retainers', metric: 'number' as const, target_value: 10, current_value: 1, horizon_days: null },
     { id: 'g7', title: '$1M ARR + 500K cash', metric: 'none' as const, target_value: null, current_value: null, horizon_days: null },
   ];
-  const input = { ladder: ladderOf(f), funnel: f, goal, others, price: 150, currency: '$', capacity: 'deep' as const, sentFortnight: 0, bottleneck: null };
+  const input = { ladder: ladderOf(f), funnel: f, goal, others, price: 150, currency: '$', capacity: 'deep' as const, sentFortnight: 0, bottleneck: null, today: '2026-09-28' };
   const { stops, beyond } = pathAhead(input);
   assert.deepEqual(stops.map((s) => s.key), ['rung:repeat', 'check:sample', 'goal:g1']);
   const [repeat, check, target] = stops;
@@ -5785,8 +5803,13 @@ async function pathPlan() {
   assert.equal(target.early, true);
   assert.equal(pathAhead({ ...input, sentFortnight: 6 }).stops[2].pace, null, 'said only when it is news');
   assert.equal(pathAhead({ ...input, capacity: 'low' }).stops[2].when, '9 days of sending at Low energy.', 'the same plan, at the time you set');
-  assert.equal(pathAhead({ ...input, capacity: 'low', goal: { ...goal, horizon_days: 30 } }).stops[2].when, '9 days of sending at Low energy. 30 days left: 2 sends a day gets there.');
-  assert.equal(pathAhead({ ...input, capacity: 'low', goal: { ...goal, horizon_days: 2 } }).stops[2].when, '9 days of sending at Low energy. 2 days left: 23 sends a day gets there, which is more than the time you set.');
+  // Days left to the goal's date — written on 28 Sep with 30 days on it — not the horizon itself.
+  const dated = (h: number, today = '2026-09-28') => pathAhead({ ...input, today, capacity: 'low', goal: { ...goal, horizon_days: h, created_at: '2026-09-28T03:00:00Z' } }).stops[2].when;
+  assert.equal(dated(30), '9 days of sending at Low energy. 30 days left: 2 sends a day gets there.');
+  assert.equal(dated(2), '9 days of sending at Low energy. 2 days left: 23 sends a day gets there, which is more than the time you set.');
+  assert.equal(dated(30, '2026-10-18'), '9 days of sending at Low energy. 10 days left: 5 sends a day gets there.', 'it counts down: twenty days on, ten are left');
+  assert.equal(dated(30, '2026-11-02'), '9 days of sending at Low energy. Its date has passed: 5 days past its date.');
+  assert.equal(pathAhead({ ...input, capacity: 'low', goal: { ...goal, horizon_days: 30 } }).stops[2].when, '9 days of sending at Low energy.', 'no day it was written, no days claimed');
 
   const noPrice = pathAhead({ ...input, price: null }).stops[2];
   assert.equal(noPrice.takes, '$1,500 to go. Put a price in your offer and this turns into clients and sends.');
@@ -5822,7 +5845,7 @@ async function pathPlan() {
 
   assert.deepEqual(beyond.map((b) => [b.title, b.status]), [
     ['MacBook Air 15"', '$0 of $2,000'],
-    ['Get a job', 'No target · 90 days'],
+    ['Get a job', 'No target · 63 days left'],
     ['Ten retainers', '1 of 10'],
     ['$1M ARR + 500K cash', 'No target'],
   ], 'the goals past the first, in your order, named with where they stand and no plan built on a plan');
@@ -6107,8 +6130,8 @@ async function drawnPlan() {
     today: '2026-09-27', name: 'Maria', headline: 'Jewellery seller', location: 'Valencia', capacity: 'moderate', currency: '€', runwayMonths: null,
     offer: { sells: 'Stainless steel jewellery', price_band: '€5 each' }, price: 5,
     goals: [
-      { id: 'g1', title: 'Property buy and renovation', metric: 'currency', unit: '€', target: 60000, current: 1000, horizonDays: 180, note: 'Want to flip it' },
-      { id: 'g2', title: 'Learn Spanish', metric: 'none', unit: null, target: null, current: null, horizonDays: null, note: null },
+      { id: 'g1', title: 'Property buy and renovation', metric: 'currency', unit: '€', target: 60000, current: 1000, dueOn: '2027-03-26', daysLeft: 180, note: 'Want to flip it' },
+      { id: 'g2', title: 'Learn Spanish', metric: 'none', unit: null, target: null, current: null, dueOn: null, daysLeft: null, note: null },
     ],
     working: 'How you deliver:\n- Market stalls on weekends',
     notes: ['I have an interview Thursday'],
@@ -6118,7 +6141,9 @@ async function drawnPlan() {
     aiAvailable: true,
   };
   const prompt = roadmapPrompt(input);
-  assert.match(prompt, /\[g1\] Property buy and renovation · €1,000 of €60,000 · within 180 days · their note: Want to flip it/);
+  // Its date and the days left today — never the horizon it was written with.
+  assert.match(prompt, /\[g1\] Property buy and renovation · €1,000 of €60,000 · due 2027-03-26, 180 days left · their note: Want to flip it/);
+  assert.match(prompt, /\[g2\] Learn Spanish · no date/);
   assert.match(prompt, /at their price of €5: €59,000 to go is 11800 clients/);
   assert.match(prompt, /Time each day: 60 minutes \(Moderate\)/);
   assert.match(prompt, /\[first-buyer\] \(week\) A first wholesale buyer — dropped/);
@@ -6327,12 +6352,15 @@ async function drawnPlan() {
 
   // 13. The goals where the plan ends: every one, in order, with what leads to it.
   const markers = goalMarkers([
-    { id: 'g1', title: 'Property buy and renovation', metric: 'currency', unit: '€', target_value: 60000, current_value: 1000, horizon_days: 180 },
+    { id: 'g1', title: 'Property buy and renovation', metric: 'currency', unit: '€', target_value: 60000, current_value: 1000, horizon_days: 180, created_at: '2026-06-01T10:00:00Z' },
     { id: 'g2', title: 'Learn Spanish', metric: 'none', unit: null, target_value: null, current_value: null, horizon_days: null },
-  ], view, '$');
-  assert.deepEqual(markers.map((g) => [g.status, g.horizon, g.toward]), [
-    ['€1,000 of €60,000', 'Within 180 days, as you set it', 1],
-    [null, null, 0],
+  ], view, '$', '2026-09-26', new Map([['g1', 'Off track']]));
+  // The date counted down (written 1 Jun with 180 days: 28 Nov), never "Within
+  // 180 days, as you set it" — which never moved, under goals whose sheet had no
+  // date field to set.
+  assert.deepEqual(markers.map((g) => [g.status, g.horizon, g.toward, g.verdict]), [
+    ['€1,000 of €60,000', 'By 28 Nov · 63 days left', 1, 'Off track'],
+    [null, null, 0, null],
   ], 'a reached milestone no longer leads anywhere; a goal nothing serves says so');
 
   // 14. The night reports the plan like any other step, and a skip that is news is said.
@@ -6525,3 +6553,348 @@ async function suggestedTicks() {
 }
 
 suggestedTicks().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Judgement: real dates, will it work, the record, one experiment ─────── */
+import { DEFAULT_HORIZON_DAYS, dateLabel, daysPhrase, dueLabel, goalDue, horizonFor } from '../../src/lib/copilot/due';
+import { CARRIED_PLANS, MAX_SIGNALS, VERDICT_WORDS, carriedSteps, goalOutlook, outlookLine, outlookSignals, type OutlookInput } from '../../src/lib/copilot/outlook';
+import { settledTally } from '../../src/lib/copilot/conversations';
+import {
+  ANGLES, CHECK_MAX, CHECK_MIN, OFFER_DAYS, PAUSE_DAYS, PERSON_STATES, angleLines, angleRecord, contentWords, experimentMarkFromEvent, experimentView, isNovel, isOpen,
+  ledgerLines, parseExperiment, paused, staleOffer, storedExperiment, type Experiment, type ExperimentMark,
+} from '../../src/lib/copilot/experiment';
+import {
+  DEFAULT_AGENT_CAN, ROADMAP_SYSTEM as J_SYSTEM, parseRoadmap as jParse, replacesCall, roadmapPrompt as jPrompt, roadmapRunFromRow as jRow, roadmapStep, roadmapView as jView,
+  sourcedFrom as jSourced, unsourced as jUnsourced,
+} from '../../src/lib/copilot/roadmap';
+import { pathPast as jPast } from '../../src/lib/copilot/pathway';
+import { nightlyLines as jNightly } from '../../src/lib/copilot/nightly';
+
+async function dueDates() {
+  // 1. The date is written + horizon, and the days count down from today.
+  const g = { horizon_days: 90, created_at: '2026-09-01T08:00:00Z' };
+  assert.deepEqual(goalDue(g, '2026-09-01'), { dueOn: '2026-11-30', daysLeft: 90 });
+  assert.deepEqual(goalDue(g, '2026-09-28'), { dueOn: '2026-11-30', daysLeft: 63 }, 'twenty-seven days on, sixty-three are left — not ninety');
+  assert.equal(goalDue(g, '2026-12-03')?.daysLeft, -3);
+  // Without the day it was written, or with no horizon, there is no date — never the horizon read as days left.
+  assert.equal(goalDue({ horizon_days: 90 }, '2026-09-28'), null);
+  assert.equal(goalDue({ horizon_days: null, created_at: g.created_at }, '2026-09-28'), null);
+  assert.equal(goalDue({ horizon_days: 0, created_at: g.created_at }, '2026-09-28'), null);
+
+  // 2. A date picked in the sheet is stored as the horizon that lands on it.
+  assert.equal(horizonFor('2026-11-30', '2026-09-01T08:00:00Z', '2026-09-28'), 90);
+  assert.equal(horizonFor('2026-10-28', null, '2026-09-28'), 30, 'a new goal counts from today');
+  assert.equal(horizonFor('2026-09-01', '2026-09-01T08:00:00Z', '2026-09-28'), null, 'not on or before the day it was written');
+  assert.equal(horizonFor('30 Nov', null, '2026-09-28'), null, 'only a real date');
+  assert.deepEqual(goalDue({ horizon_days: horizonFor('2026-11-30', '2026-09-01T08:00:00Z', '2026-09-28'), created_at: '2026-09-01T08:00:00Z' }, '2026-09-28')?.dueOn, '2026-11-30', 'round trip');
+
+  // 3. Said as a person says it.
+  assert.equal(dueLabel(goalDue(g, '2026-09-28'), '2026-09-28'), 'By 30 Nov · 63 days left');
+  assert.equal(dueLabel(goalDue(g, '2026-11-29'), '2026-11-29'), 'By 30 Nov · 1 day left');
+  assert.equal(dueLabel(goalDue(g, '2026-11-30'), '2026-11-30'), 'Due today');
+  assert.equal(dueLabel(goalDue(g, '2026-12-03'), '2026-12-03'), '3 days past its date');
+  assert.equal(dueLabel(null, '2026-09-28'), null);
+  assert.equal(dateLabel('2027-03-26', '2026-09-28'), '26 Mar 2027', 'another year says so');
+  assert.equal(daysPhrase({ dueOn: '2026-11-30', daysLeft: 63 }), '63 days left');
+  assert.equal(DEFAULT_HORIZON_DAYS, 90, 'the table default the planner is warned about');
+
+  console.log('copilot-core: due dates checks passed');
+}
+
+dueDates().catch((e) => { console.error(e); process.exit(1); });
+
+async function willItWork() {
+  const today = '2026-09-28';
+  const base: OutlookInput = {
+    today, price: 150, selling: true, currency: '$', capacity: 'deep',
+    funnel: { windowDays: 30, sent: 9, won: 0, wonAmount: 0 },
+  };
+  // Written 28 Sep with 63 days on it: due 30 Nov.
+  const exit = { id: 'g1', title: 'Save Exit PH [NOV]', metric: 'currency' as const, unit: '$', target_value: 1500, current_value: 0, horizon_days: 63, created_at: '2026-09-28T01:00:00Z' };
+
+  // 1. The account in the screenshots: ten sales needed, nine sends, no rate yet.
+  const early = goalOutlook(exit, base);
+  assert.equal(early.verdict, 'too_early');
+  assert.equal(early.line, '10 sales at your $150 in 63 days. 9 sends so far: 11 more and the rate is a number.');
+  assert.equal(outlookLine(early), 'Save Exit PH [NOV] — Too early to tell. 10 sales at your $150 in 63 days. 9 sends so far: 11 more and the rate is a number.');
+  assert.match(goalOutlook(exit, { ...base, funnel: { ...base.funnel, sent: 0 } }).line, /Nothing sent yet, so there is no rate to plan on/);
+
+  // 2. Enough sends and no sale: off track, and said as arithmetic, not an opinion.
+  const dry = goalOutlook(exit, { ...base, funnel: { windowDays: 30, sent: 24, won: 0, wonAmount: 0 } });
+  assert.equal(dry.verdict, 'off_track');
+  assert.match(dry.line, /no sale from 24 sends in the last 30 days\. At that rate nothing closes it\./);
+
+  // 3. A real rate: money per send, from what the sends actually earned.
+  const rated = (days: number) => goalOutlook({ ...exit, horizon_days: days }, { ...base, funnel: { windowDays: 30, sent: 40, won: 2, wonAmount: 300 } });
+  assert.equal(rated(63).verdict, 'on_track', '200 sends is 8 days of Deep focus, well inside 63');
+  assert.equal(rated(63).line, '10 sales at your $150 in 63 days: about 200 sends at what yours have earned ($300 from 40 sends), 8 days of sending at Deep focus.');
+  assert.equal(rated(10).verdict, 'tight', 'eight of ten days is no room for a bad week');
+  assert.equal(rated(5).verdict, 'off_track');
+
+  // 4. THE $1 WIN. Two "sales" worth $1 each are not two sales at $150: counted
+  //    by what they earned, the same sends are a plan that never gets there.
+  const junk = goalOutlook(exit, { ...base, funnel: { windowDays: 30, sent: 20, won: 2, wonAmount: 2 } });
+  assert.equal(junk.verdict, 'off_track');
+  assert.match(junk.line, /\$2 from 20 sends/);
+
+  // 5. The order of the early answers.
+  assert.equal(goalOutlook({ ...exit, current_value: 1500 }, base).verdict, 'reached');
+  const undated = goalOutlook({ ...exit, horizon_days: null }, base);
+  assert.equal(undated.verdict, 'no_date');
+  assert.equal(undated.line, '$1,500 to go. Give it a date and this says whether your pace gets there.', 'the chip says no date; the line says what would fix it');
+  const late = goalOutlook({ ...exit, created_at: '2026-06-01T00:00:00Z', horizon_days: 30 }, base);
+  assert.equal(late.verdict, 'off_track');
+  assert.match(late.line, /^Its date has passed with \$1,500 to go/);
+
+  // 6. Not every goal is a sale. A job, a skill: measured by the plan's milestones.
+  const job = { id: 'g5', title: 'Get a job', metric: 'none' as const, unit: null, target_value: null, current_value: null, horizon_days: 63, created_at: '2026-09-28T01:00:00Z' };
+  const jobOut = goalOutlook(job, { ...base, milestones: { g5: { done: 1, open: 2 } } });
+  assert.equal(jobOut.verdict, 'no_number');
+  assert.equal(jobOut.line, "The plan's milestones are the measure: 1 of 3 milestones reached, 63 days left.");
+  assert.match(goalOutlook(job, base).line, /^Nothing here can say whether it is on track/);
+
+  // 7. Money nobody is selling toward: the pace it needs, and the pace the app can see.
+  const savings = { ...exit, id: 'g2', title: 'MacBook fund', target_value: 2000 };
+  const noSelling = { ...base, selling: false, price: null };
+  const blind = goalOutlook(savings, noSelling);
+  assert.equal(blind.verdict, 'too_early');
+  assert.equal(blind.line, '$2,000 to go in 63 days: about $222 a week. Nothing in the app measures your pace on it yet.');
+  const paid = goalOutlook(savings, { ...noSelling, funnel: { windowDays: 30, sent: 0, won: 3, wonAmount: 1800 } });
+  assert.equal(paid.verdict, 'on_track', '$420 a week against $222 needed');
+  assert.match(paid.line, /You were paid \$1,800 in the last 30 days, about \$420 a week\./);
+  // A count, due inside two weeks: per day, rounded up — "0 a week" is never said.
+  const count = { id: 'g6', title: 'Applications sent', metric: 'number' as const, unit: 'applications', target_value: 10, current_value: 4, horizon_days: 10, created_at: '2026-09-28T01:00:00Z' };
+  assert.equal(goalOutlook(count, base).line, '6 applications to go in 10 days: about 1 a day. Nothing in the app measures your pace on it yet.');
+
+  // 8. No verdict ever carries a NaN, an Infinity or a probability.
+  for (const o of [early, dry, rated(63), junk, undated, late, jobOut, blind, paid]) {
+    assert.ok(!/NaN|Infinity|%/.test(o.line), o.line);
+    assert.ok(VERDICT_WORDS[o.verdict]);
+  }
+
+  console.log('copilot-core: will it work checks passed');
+}
+
+willItWork().catch((e) => { console.error(e); process.exit(1); });
+
+async function recordSignals() {
+  // 1. The opener: the funnel checkpoint's own rule, and silent below its sample.
+  assert.deepEqual(outlookSignals({ settled: { sends: 19, answered: 0 } }), [], 'nineteen sends is a bad week, not a verdict');
+  const dead = outlookSignals({ settled: { sends: 20, answered: 0 } });
+  assert.equal(dead[0].key, 'opener');
+  assert.match(dead[0].line, /^No reply from the last 20 messages that have had three days to answer\. Change the first line or the list/);
+  assert.match(outlookSignals({ settled: { sends: 24, answered: 1 } })[0].line, /^1 reply from the last 24 messages .* under the 2 in 20 this app plans on/);
+  assert.deepEqual(outlookSignals({ settled: { sends: 24, answered: 2 } }), [], 'two in twenty is working');
+
+  // 2. The call record, in people's words — never a job key.
+  const avoided = outlookSignals({ calls: { avoided: { topic: 'send_queue', count: 4 }, dead: null, total: 6 } });
+  assert.equal(avoided[0].line, '4 of the last 6 calls were about sending the drafts and none was done. Either it is the wrong move or something is in the way.');
+  assert.match(outlookSignals({ calls: { avoided: { topic: 'plan', count: 3 }, dead: null, total: 5 } })[0].line, /about steps from your plan/);
+  assert.match(outlookSignals({ calls: { avoided: null, dead: { topic: 'opener', count: 3 }, total: 8 } })[0].line, /about the opener; they were done and the number did not move/);
+
+  // 3. A step carried plan after plan, by id, and only while nobody has ticked it.
+  const plan = (ids: string[]) => ({ phases: [{ milestones: [{ steps: ids.map((id) => ({ id, title: `Step ${id}` })) }] }] });
+  const plans = [plan(['a', 'b', 'c']), plan(['a', 'b']), plan(['a']), plan(['x'])];
+  const carried = carriedSteps(plans, (id) => id !== 'c');
+  assert.deepEqual(carried, [{ title: 'Step a', plans: 3 }, { title: 'Step b', plans: 2 }], 'counted in a row, newest first, a ticked step left out');
+  assert.equal(carriedSteps([], () => true).length, 0);
+  const stuck = outlookSignals({ carried });
+  assert.deepEqual(stuck.map((x) => x.line), [`On ${CARRIED_PLANS} plans in a row and still not done: Step a. Drop it, make it smaller, or hand it over.`]);
+  assert.ok(outlookSignals({ settled: { sends: 30, answered: 0 }, calls: { avoided: { topic: 'plan', count: 3 }, dead: null, total: 3 }, carried: [1, 2, 3, 4, 5].map((n) => ({ title: `S${n}`, plans: 4 })) }).length <= MAX_SIGNALS);
+
+  // 4. The tally behind the opener line: silence counts only once it has had time to be silence.
+  const now = new Date('2026-09-28T12:00:00Z');
+  const rows = [
+    { id: 'old-quiet', sent_at: '2026-09-20T10:00:00Z' },
+    { id: 'old-answered', sent_at: '2026-09-19T10:00:00Z' },
+    { id: 'new-quiet', sent_at: '2026-09-27T10:00:00Z' },
+    { id: 'new-answered', sent_at: '2026-09-27T11:00:00Z' },
+    { id: 'never', sent_at: null },
+  ];
+  assert.deepEqual(settledTally(rows, new Set(['old-answered', 'new-answered']), now), { sends: 3, answered: 2 });
+
+  console.log('copilot-core: record signals checks passed');
+}
+
+recordSignals().catch((e) => { console.error(e); process.exit(1); });
+
+async function oneExperiment() {
+  const today = '2026-09-28';
+  const src = jSourced('Save Exit PH [NOV] · $0 of $1,500 · 9 sends · price $150');
+  const keep = (v: unknown, kind: 'target' | 'claim') => (typeof v === 'string' && v.trim() && !jUnsourced(v.trim(), src, kind) ? v.trim() : null);
+  const ctx = { keep, goalIds: ['g1'], today, known: ['Reply to the Tampa HVAC owner with your callback automation', 'Apply to two more remote automation or support roles'] };
+  const raw = {
+    id: 'Pitch the hiring coordinator',
+    title: 'Pitch booking automation to the company hiring a maintenance coordinator',
+    angle: 'merge_goals',
+    goal_id: 'g1',
+    why: 'They posted a role that is scheduling by hand, the problem you sell against.',
+    test: 'Send one message offering to automate the scheduling before they hire',
+    watch: 'A reply asking how it works',
+    check_days: 5,
+  };
+
+  // 1. Every part is required, and every part is held to the guard.
+  const x = parseExperiment(raw, ctx)!;
+  assert.equal(x.id, 'x-pitch-the-hiring-coordinator');
+  assert.equal(x.angle, 'merge_goals');
+  assert.equal(x.goalId, 'g1');
+  assert.equal(x.checkDays, 5);
+  assert.equal(x.offeredOn, today);
+  for (const k of ['title', 'why', 'test', 'watch'] as const) assert.equal(parseExperiment({ ...raw, [k]: '' }, ctx), null, `no ${k}, no experiment`);
+  assert.equal(parseExperiment({ ...raw, why: 'Businesses like this reply 40% of the time.' }, ctx), null, 'an unsourced number in the evidence throws it out');
+  assert.equal(parseExperiment({ ...raw, goal_id: 'nope', angle: 'vibes', check_days: 90 }, ctx)?.goalId, null);
+  assert.equal(parseExperiment({ ...raw, angle: 'vibes' }, ctx)?.angle, 'fast_test', 'an unknown angle lands on a known one');
+  assert.equal(parseExperiment({ ...raw, check_days: 90 }, ctx)?.checkDays, CHECK_MAX);
+  assert.equal(parseExperiment({ ...raw, check_days: 0 }, ctx)?.checkDays, CHECK_MIN);
+  assert.equal(parseExperiment(null, ctx), null);
+  assert.equal(ANGLES.length, 8);
+
+  // 2. Novelty: a restatement of what they already have is not an experiment.
+  assert.equal(parseExperiment({ ...raw, title: 'Reply to the Tampa HVAC owner about callback automation' }, ctx), null);
+  assert.ok(isNovel(raw.title, ctx.known));
+  assert.ok(!isNovel('Apply to two more remote support roles', ctx.known));
+  assert.ok(contentWords('Send the messages').size === 0, 'generic verbs are not what makes a move new');
+
+  // 3. Its life: offered, tried, due, answered.
+  const at = (d: string) => `${d}T09:00:00Z`;
+  const mark = (state: ExperimentMark['state'], d: string, extra: Partial<ExperimentMark> = {}): ExperimentMark => ({ id: x.id, title: x.title, angle: x.angle, state, at: at(d), ...extra });
+  assert.deepEqual(experimentView(x, [], today), { stage: 'offered', exp: x });
+  const trying = experimentView(x, [mark('started', '2026-09-28')], '2026-09-30');
+  assert.deepEqual(trying && trying.stage === 'trying' && [trying.checkOn, trying.due], ['2026-10-03', false]);
+  const due = experimentView(x, [mark('started', '2026-09-28')], '2026-10-03');
+  assert.equal(due && due.stage === 'trying' && due.due, true, 'its check date is here');
+  assert.equal(experimentView(x, [mark('started', '2026-09-28'), mark('worked', '2026-10-02')], '2026-10-03'), null, 'answered, it leaves the plan');
+  assert.ok(isOpen(x, []) && isOpen(x, [mark('started', today)]) && !isOpen(x, [mark('dropped', today)]));
+
+  // 4. Nobody started it in a week: not wanted — inferred, never asked.
+  assert.ok(!staleOffer(x, [], '2026-10-04'));
+  assert.ok(staleOffer(x, [], `2026-10-0${5}`), `${OFFER_DAYS} days offered and untouched`);
+  assert.ok(!staleOffer(x, [mark('started', '2026-09-29')], '2026-10-20'), 'something being tried is never stale');
+  assert.ok(!PERSON_STATES.includes('ignored'), 'nobody posts "ignored": it is inferred');
+
+  // 5. Two set aside in a row: the planner offers none for a while.
+  const drop = (id: string, d: string, inferred = false): ExperimentMark => ({ id, title: id, angle: 'resize', state: inferred ? 'ignored' : 'dropped', at: at(d), ...(inferred ? { inferred } : {}) });
+  assert.ok(paused([drop('a', '2026-09-20'), drop('b', '2026-09-26')], today));
+  assert.ok(!paused([drop('a', '2026-09-10'), drop('b', '2026-09-15')], today), `quiet for ${PAUSE_DAYS} days, then offered again`);
+  assert.ok(!paused([drop('a', '2026-09-20'), { ...drop('b', '2026-09-26'), state: 'worked' }], today));
+  assert.ok(!paused([drop('a', '2026-09-20'), drop('c', '2026-09-27', true)], today), 'an inferred mark is not the person saying no');
+
+  // 6. The ledger the next plan reads, and the record by angle.
+  const ledger: ExperimentMark[] = [
+    { id: 'e1', title: 'Email five of them instead', angle: 'change_channel', state: 'failed', at: at('2026-09-10') },
+    { id: 'e2', title: 'Offer one setup at the whole gap', angle: 'resize', state: 'worked', at: at('2026-09-20') },
+    { id: 'e3', title: 'Call the two warm leads', angle: 'change_channel', state: 'failed', at: at('2026-09-24') },
+    { id: 'e4', title: 'Tried once', angle: 'ask_one', state: 'started', at: at('2026-09-27') },
+  ];
+  assert.deepEqual(ledgerLines(ledger), [
+    '(Change the channel) Call the two warm leads — did not work, 2026-09-24',
+    '(Change the size) Offer one setup at the whole gap — worked, 2026-09-20',
+    '(Change the channel) Email five of them instead — did not work, 2026-09-10',
+  ], 'being tried is not an outcome yet');
+  assert.deepEqual(angleRecord(ledger).map((r) => [r.angle, r.tried, r.worked, r.failed]), [['change_channel', 2, 0, 2], ['resize', 1, 1, 0]]);
+  assert.deepEqual(angleLines(ledger), ['Change the channel: tried 2, worked 0', 'Change the size: tried 1, worked 1']);
+
+  // 7. Events in and out.
+  assert.deepEqual(experimentMarkFromEvent({ payload: { experiment: 'x-a', title: 'A', angle: 'resize', state: 'worked' }, created_at: at(today) }), { id: 'x-a', title: 'A', angle: 'resize', state: 'worked', at: at(today) });
+  assert.equal(experimentMarkFromEvent({ payload: { experiment: 'x-a', state: 'maybe' }, created_at: at(today) }), null);
+  assert.equal(storedExperiment({ id: 'x' }), null, 'a stored experiment missing its parts is none');
+  assert.deepEqual(storedExperiment(x), x);
+
+  // 8. Inside the plan: an open one is carried as it is; paused offers none.
+  const phases = [{ key: 'week', milestones: [{ id: 'm', title: 'Warm threads answered', steps: [{ id: 's', title: 'Reply to the appointment thread', who: 'ai' }] }] }];
+  const base = { allowed: src, goalIds: ['g1'], aiAvailable: true };
+  const fresh = jParse({ phases, experiment: raw }, { ...base, experiment: { carry: null, paused: false, known: ctx.known, today } })!;
+  assert.equal(fresh.roadmap.experiment?.id, x.id);
+  const carried = jParse({ phases, experiment: { ...raw, title: 'Something else entirely new to try' } }, { ...base, experiment: { carry: x, paused: false, known: [], today } })!;
+  assert.equal(carried.roadmap.experiment?.title, x.title, 'the open one is carried, whatever the model returns');
+  assert.equal(jParse({ phases, experiment: raw }, { ...base, experiment: { carry: null, paused: true, known: [], today } })!.roadmap.experiment, undefined);
+  assert.equal(jParse({ phases, experiment: { ...raw, title: 'Reply to the appointment thread today' } }, { ...base, experiment: { carry: null, paused: false, known: [], today } })!.roadmap.experiment, undefined, 'the experiment is never also a step');
+
+  // 9. Stored and read back with its signals and a call that could not follow; the view shows its stage.
+  const plan = { ...fresh.roadmap, signals: ['No reply from the last 20 messages that have had three days to answer.'] };
+  const run = jRow({ id: 'r', status: 'ok', started_at: at(today), finished_at: at(today), output: { roadmap: plan, callError: 'the row was locked' }, error: null, input_summary: {} });
+  assert.deepEqual(run.roadmap?.experiment, x);
+  assert.deepEqual(run.roadmap?.signals, plan.signals);
+  assert.equal(run.callError, 'the row was locked');
+  const view = jView({ enabled: true, latest: run, current: run, previous: null, marks: [], goals: [], capacity: 'deep', now: new Date(at(today)), experimentMarks: [], today });
+  assert.ok(view.state === 'ready' && view.experiment?.stage === 'offered' && view.signals.length === 1 && view.callError === 'the row was locked');
+  const old = jRow({ id: 'o', status: 'ok', started_at: at(today), finished_at: at(today), output: { roadmap: { phases } }, error: null, input_summary: {} });
+  assert.ok(old.roadmap?.experiment === null && old.roadmap?.signals?.length === 0 && old.callError === null, 'a plan from before any of this reads as none');
+  assert.deepEqual(roadmapStep(run.roadmap, 's')?.milestone.title, 'Warm threads answered');
+  assert.equal(roadmapStep(run.roadmap, 'nope'), null);
+
+  // 10. A verdict is evidence on the Path, in the person's own answer; trying one is not.
+  const past = jPast({
+    now: new Date('2026-09-30T12:00:00Z'), timezone: 'UTC', outcomes: [], focus: [], commissions: [], decisions: [],
+    experiments: [
+      { id: x.id, title: x.title, state: 'started', at: at('2026-09-28') },
+      { id: x.id, title: x.title, state: 'worked', at: at('2026-09-29') },
+      { id: 'x-b', title: 'Asked by the app', state: 'ignored', at: at('2026-09-29'), inferred: true },
+    ],
+  }, 99);
+  const rows = past.days.flatMap((dd) => dd.events);
+  assert.deepEqual(rows.map((e) => [e.title, e.detail]), [[`Experiment: ${x.title}`, 'It worked — your answer']]);
+
+  console.log('copilot-core: one experiment checks passed');
+}
+
+oneExperiment().catch((e) => { console.error(e); process.exit(1); });
+
+async function callFollowsThePlan() {
+  // 1. A call picked before the plan was redrawn moves to the plan's step — only while nobody has answered it.
+  const pending = { response: 'pending', headline: 'Send 10 of your 56 drafts' };
+  const step = { headline: 'Rewrite the opener around missed booking calls' };
+  assert.ok(replacesCall(pending, step, false));
+  assert.ok(!replacesCall({ ...pending, response: 'did' }, step, false), 'an answer is part of the record and stays');
+  assert.ok(!replacesCall(pending, step, true), 'money due this week keeps its call');
+  assert.ok(!replacesCall(pending, null, false), 'a plan with nothing of theirs that fits today takes nothing away');
+  assert.ok(!replacesCall({ ...pending, headline: step.headline }, step, false), 'already the plan\'s step');
+  assert.ok(!replacesCall(null, step, false));
+
+  // 2. A call that did not save is said, as broken — never only logged.
+  const lines = jNightly({ brief: { agent: 'llm', unsaved: 'new row violates check constraint' } });
+  assert.deepEqual(lines.filter((l) => l.step === 'brief').map((l) => [l.tone, l.text]), [['broke', 'Picked, but it did not save: new row violates check constraint']]);
+
+  // 3. The planner's contract: the honest read, the record, the experiment, and what the agent may do.
+  for (const rule of [/WILL IT WORK/, /WHAT THE RECORD SAYS/, /Never say one thing caused another/, /a plain week beats a clever guess/, /never offer an angle that failed twice/, /within what THE AGENT says it can do/, /never turn a goal that is not about selling into outreach/]) {
+    assert.match(J_SYSTEM, rule);
+  }
+  assert.ok(!/only for research or drafting a machine can do alone on the open web/.test(J_SYSTEM), 'the agent is no longer research-only by rule');
+
+  // 4. The prompt carries every new section, and the agent's reach only when there is an agent.
+  const input = {
+    today: '2026-09-28', name: 'Alex', headline: null, location: null, capacity: 'deep' as const, currency: '$', runwayMonths: 2, offer: { sells: 'Booking automation' }, price: 150,
+    goals: [{ id: 'g1', title: 'Save Exit PH [NOV]', metric: 'currency' as const, unit: '$', target: 1500, current: 0, dueOn: '2026-11-30', daysLeft: 63, defaultDate: true, note: null }],
+    working: '', notes: [], funnel: { windowDays: 30, sent: 9, replied: 2, won: 0, wonAmount: 0 }, happened: [], previous: [], aiAvailable: true,
+    outlook: ['Save Exit PH [NOV] — Too early to tell. 10 sales at your $150 in 63 days.'],
+    signals: ['On 3 plans in a row and still not done: Rewrite the opener.'],
+    openers: [{ text: 'Hi, Alex here', replied: false }, { text: 'Saw your post', replied: true }],
+    replies: [{ business: 'Tampa HVAC', text: 'How much?' }],
+    calls: ['2026-09-27: Send 10 of your 56 drafts — ignored'],
+    experiments: { ledger: ['(Change the size) One setup at the whole gap — worked, 2026-09-20'], angles: ['Change the size: tried 1, worked 1'], open: null, openState: null, paused: false },
+    agentCan: null,
+  };
+  const prompt = jPrompt(input);
+  for (const part of [
+    /due 2026-11-30, 63 days left \(the app gave it this date by default; they may not have chosen it\)/,
+    /WILL IT WORK, computed by the app from their rows:\n- Save Exit PH \[NOV\] — Too early to tell/,
+    /WHAT THE RECORD SAYS, act on each:\n- On 3 plans in a row/,
+    /- ignored: "Hi, Alex here"\n- answered: "Saw your post"/,
+    /- Tampa HVAC: "How much\?"/,
+    /CALLS THE APP MADE, newest first, and what happened:\n- 2026-09-27: Send 10 of your 56 drafts — ignored/,
+    /EXPERIMENTS SO FAR, newest first:\n- \(Change the size\)/,
+    /By angle: Change the size: tried 1, worked 1/,
+  ]) assert.match(prompt, part);
+  assert.ok(prompt.includes(`THE AGENT can do, alone: ${DEFAULT_AGENT_CAN}.`), 'no declaration: the reference worker\'s reach');
+  assert.match(jPrompt({ ...input, agentCan: 'build and deploy a landing page, spreadsheets, code' }), /THE AGENT can do, alone: build and deploy a landing page, spreadsheets, code\. It never contacts anyone/);
+  assert.ok(!/THE AGENT/.test(jPrompt({ ...input, aiAvailable: false })), 'no agent, nothing said about one');
+  const x: Experiment = { id: 'x-a', title: 'Offer one setup at the whole gap', angle: 'resize', goalId: 'g1', why: 'w', test: 't', watch: 'r', checkDays: 7, offeredOn: '2026-09-27' };
+  assert.match(jPrompt({ ...input, experiments: { ...input.experiments, open: x, openState: 'started' } }), /THE OPEN EXPERIMENT, carried as it is — offer no other: Offer one setup at the whole gap \(they are trying it\)/);
+  assert.match(jPrompt({ ...input, experiments: { ...input.experiments, paused: true } }), /EXPERIMENTS ARE PAUSED/);
+  // What the planner may cite: the verdict arithmetic is in its prompt, so the guard lets it through.
+  assert.equal(jUnsourced('Ten sales at $150 in 63 days is the whole question.', jSourced(prompt), 'claim'), null);
+
+  console.log('copilot-core: call follows the plan checks passed');
+}
+
+callFollowsThePlan().catch((e) => { console.error(e); process.exit(1); });

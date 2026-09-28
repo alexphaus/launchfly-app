@@ -1169,12 +1169,48 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-review { padding-top: 18px; padding-bottom: 14px; }
 .cp-root[data-theme="soft"] .cp2-review-head { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 14.5px; font-weight: 700; margin-bottom: 6px; }
 .cp-root[data-theme="soft"] .cp2-review-head .cp2-mark { width: 26px; height: 26px; align-self: center; }
-.cp-root[data-theme="soft"] .cp2-lines { list-style: none; display: flex; flex-direction: column; }
-.cp-root[data-theme="soft"] .cp2-line { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; padding: 9px 0; border-top: 1px solid var(--line); }
-.cp-root[data-theme="soft"] .cp2-lines li:first-child .cp2-line { border-top: 0; }
-.cp-root[data-theme="soft"] .cp2-line .tx { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-line .when { flex: none; margin-top: 1px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--line); border-radius: 999px; padding: 2px 8px; }
-.cp-root[data-theme="soft"] .cp2-line .cp2-chev { margin-top: 3px; }
+/* The week read back, line by line (review.ts). Closed, a line is one glance —
+   its glyph, two lines of text at most with its day and what moved under them,
+   and a chevron that turns. The day sits under the text, never beside it: a
+   pill beside it took a third of the width. Opened, the rows behind it sit under
+   the text rather than under the glyph, so the glyph column stays a column.
+   cp2-rv-*, not cp2-week-*: .cp2-week is the deep-work chart in the focus sheet. */
+.cp-root[data-theme="soft"] .cp2-rv-list { list-style: none; display: flex; flex-direction: column; }
+.cp-root[data-theme="soft"] .cp2-rv-row { border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-rv-row:first-child { border-top: 0; }
+.cp-root[data-theme="soft"] .cp2-rv-tap { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; padding: 10px 0; }
+.cp-root[data-theme="soft"] .cp2-rv-glyph { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; }
+.cp-root[data-theme="soft"] .cp2-rv-glyph svg { width: 14px; height: 14px; }
+.cp-root[data-theme="soft"] .cp2-rv-glyph.value { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-rv-glyph.waste { background: var(--warn-tint); color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-rv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 3px; }
+.cp-root[data-theme="soft"] .cp2-rv-text { font-size: 14px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-rv-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 8px; }
+.cp-root[data-theme="soft"] .cp2-rv-when { flex: none; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--line); border-radius: 999px; padding: 2px 8px; }
+.cp-root[data-theme="soft"] .cp2-rv-sub { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-rv-chev { flex: none; display: flex; margin-top: 6px; }
+.cp-root[data-theme="soft"] .cp2-rv-chev svg { transition: transform 0.18s ease; }
+.cp-root[data-theme="soft"] .cp2-rv-chev.fold svg { transform: rotate(90deg); }
+.cp-root[data-theme="soft"] .cp2-rv-chev.fold.open svg { transform: rotate(-90deg); }
+.cp-root[data-theme="soft"] .cp2-rv-open { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 0 12px 36px; }
+.cp-root[data-theme="soft"] .cp2-rv-detail { font-size: 13px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-rv-items { list-style: none; align-self: stretch; display: flex; flex-direction: column; gap: 8px; padding-left: 12px; border-left: 2px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-rv-item { display: flex; flex-direction: column; gap: 1px; }
+.cp-root[data-theme="soft"] .cp2-rv-itop { display: flex; align-items: baseline; gap: 8px; }
+.cp-root[data-theme="soft"] .cp2-rv-itop .t { flex: 1; min-width: 0; font-size: 13px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-rv-itop .w { flex: none; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-rv-item .n { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-rv-rest { font-size: 12.5px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-rv-go { padding: 6px 0; font-size: 13px; }
+/* What has to change, counted: one dot per send or reply the experiment asks for. */
+.cp-root[data-theme="soft"] .cp2-rv-meter { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 12px; }
+.cp-root[data-theme="soft"] .cp2-rv-dots { display: flex; gap: 6px; }
+.cp-root[data-theme="soft"] .cp2-rv-dots i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--frame); }
+.cp-root[data-theme="soft"] .cp2-rv-dots i.on { background: var(--blue); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-rv-meter.met .cp2-rv-dots i.on { background: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-rv-mlabel { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-rv-mlabel svg { width: 15px; height: 15px; color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-rv-next { margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-review-empty { font-size: 13px; line-height: 1.55; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-change-head { font-family: var(--display); font-size: 16.5px; font-weight: 700; line-height: 1.35; margin-bottom: 6px; }
 .cp-root[data-theme="soft"] .cp2-change-head::first-letter { text-transform: uppercase; }
@@ -1521,6 +1557,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 @media (prefers-reduced-motion: reduce) {
   .cp-root[data-theme="soft"] .cp2-way-reached { animation: none; }
   .cp-root[data-theme="soft"] .cp2-stream-back { transition: none; }
+  .cp-root[data-theme="soft"] .cp2-rv-chev svg { transition: none; }
   .cp-root[data-theme="soft"] .cp2-nightly-track i { transition: none; }
   .cp-root[data-theme="soft"] .cp2-plan-spin svg,
   .cp-root[data-theme="soft"] .cp2-plan-redraw:disabled svg { animation: none; }

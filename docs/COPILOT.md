@@ -749,9 +749,10 @@ summed across currencies; a queue is waste only once it has sat
 (`STALE_DRAFT_DAYS`); a job key is never printed (`phrase.ts`, which also fixed
 "calls about send_queue" on the old Working tab's export path). The call record
 is cut to the week here, not by the caller, because the section is headed "This
-week". "You did N things it put in front of you" counts calls answered "I did it"
-and Moves marked done, but not a feed find (Keep and Did it both write done and
-cannot be told apart) or a proposal (done there means handed over). A mandate
+week". A thing done is a call answered "I did it", a Move marked done — but not a
+feed find (Keep and Did it both write done and cannot be told apart) or a
+proposal (done there means handed over) — or a step ticked on the plan; a plan
+call's tick and the call are one line, said as the call. A mandate
 counts as closed with nothing to show when its ledger row says `nothing`, or when
 it was stopped with no verdict at all; the sentence `closeCommission` writes is
 read only when the ledger row is missing, matched against `worthSentence` itself. An empty block
@@ -759,6 +760,35 @@ says why it is empty, and `recent.unreadable` names any read that failed, so a
 broken read never renders as a quiet week (invariant 13). The funnel, openings
 and segments left the tab; the funnel is still one tap away as the path to money
 on Work, and "Ask your own record" still answers by counting.
+
+**Line by line, and the cards move.** The value card used to answer in sentences —
+"You did 2 things it put in front of you — Apply today to the Maintenance
+Coordinator role — it is scheduling and coordination for property maintenance,
+the same muscle as your booking automation work +1" was one line, six lines tall
+on a phone, naming one of the two things — and waste and change were, in their
+owner's word, static: standing counts that moved only when the pile did, and one
+sentence per funnel stage, the same every week the funnel stayed stuck. Now:
+- **Every line is a glance and opens** (`ReviewLine`): each thing done is its own
+  line (at most `MAX_DID_LINES`, the rest one line that opens), and a group — the
+  wins, the replies, the hours — is one line with its rows behind it. Opened, a
+  line shows where it came from and what came of it (a call's read-back, in its
+  metric's unit), or the rows it was counted from: each win, each reply, each day
+  worked with what it was on, the oldest drafts with their ages, each failing
+  source with its error, the calls a topic counted. Opening never navigates; the
+  way somewhere is at the foot. A group of one opens to its note rather than to a
+  list whose only row repeats the line.
+- **Waste says what moved** under what is standing: the drafts line carries sent
+  this week and how many have sat `COLD_DRAFT_DAYS` or more — send-queue.ts's
+  COLD_AFTER_DAYS, held equal by a test — a count that grows every day nothing is
+  sent and drops the moment something is. Deep work says whether it is up or down
+  on the week before, the one comparison on the card.
+- **The change counts its own experiment.** `GrowthEdge.measure` sits beside the
+  sentence it counts ("send five" is five sends, "the next ten" ten sends, "the
+  next five replies" five replies; a test reads the number word against the
+  target) and You reads it against this week's rows: "2 of 5 sent this week", then
+  "5 sent this week — done", then the half a count cannot see ("now log what comes
+  back") and a button to it. No sends on the payload is no meter, never "0 of 5".
+  Nothing is ticked for anybody: the count is the ledger's.
 
 **Deep work is the one new sensor.** It was asked for and nothing could supply
 it, so it is logged by hand (`POST /api/copilot/focus`) and stored as

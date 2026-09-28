@@ -329,17 +329,41 @@ const CAPABILITY: Record<FunnelStage['key'], string> = {
 const EXPERIMENT: Record<FunnelStage['key'], string> = {
   matched: 'Narrow to one segment for a week. A smaller list you believe in beats a longer one you skim.',
   drafted: 'Draft the top three today and notice which one you hesitate over. The hesitation is the targeting problem, not the writing.',
-  sent: 'Send five before you open anything else, and log what came back. Nothing above this line improves until something leaves the queue.',
+  // "Nothing above this line" meant the funnel on the old Working tab. On You
+  // the line is under the week's value and waste, and on a Move there is no line.
+  sent: 'Send five before you open anything else, and log what came back. Replies, meetings and money all wait on something leaving the queue.',
   replied: 'Change only the first line on the next ten. Keep the ask identical, so the comparison means something.',
   meeting: 'Replace "worth a call?" with one named time on the next five replies.',
   won: 'Put the price band in the first message on the next three, and see whether meetings drop or close faster.',
 };
+
+/**
+ * What an experiment is counted in, where a row can count it: "send five" is
+ * five sends, "the next ten" is ten sends, "the next five replies" is five
+ * replies. Beside the sentence it counts, so the number said and the number
+ * counted cannot drift apart — a test reads the two together. No entry where no
+ * row can tell: narrowing to a segment, a hesitation over a draft.
+ */
+const MEASURE: Partial<Record<FunnelStage['key'], NonNullable<GrowthEdge['measure']>>> = {
+  sent: { metric: 'sent', target: 5 },
+  replied: { metric: 'sent', target: 10 },
+  meeting: { metric: 'replies', target: 5 },
+  won: { metric: 'sent', target: 3 },
+};
+/** "Put it in the opening line of the next ten." */
+const OPENINGS_MEASURE: NonNullable<GrowthEdge['measure']> = { metric: 'sent', target: 10 };
 
 export interface GrowthEdge {
   capability: string;
   /** Evidence, from rows the user created. Every line carries a number. */
   because: string[];
   experiment: string;
+  /**
+   * The experiment's own count, read against this week's rows on You: "2 of 5
+   * sent this week", then done. Without it the card said the same sentence every
+   * week the funnel stayed stuck, and read as static because it was.
+   */
+  measure?: { metric: 'sent' | 'replies'; target: number };
   source: 'decisions' | 'funnel' | 'openings';
 }
 
@@ -380,6 +404,7 @@ export function growthEdge(
         ? `${prev.count - stage.count} of ${prev.count} stopped at ${prev.label.toLowerCase()}.`
         : `${stage.count} at ${stage.label.toLowerCase()}.`],
       experiment: EXPERIMENT[stage.key],
+      ...(MEASURE[stage.key] ? { measure: MEASURE[stage.key] } : {}),
       source: 'funnel',
     };
   }
@@ -393,6 +418,7 @@ export function growthEdge(
       capability: `naming the "${top.term}" problem in your first line`,
       because: [`${top.count} of your matches have ${top.term} in common and nothing you send mentions it.`],
       experiment: `Put it in the opening line of the next ten. Keep the ask identical, so the comparison means something.`,
+      measure: OPENINGS_MEASURE,
       source: 'openings',
     };
   }

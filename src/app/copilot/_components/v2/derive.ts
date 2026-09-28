@@ -283,13 +283,25 @@ export function derive(home: HomeData) {
     answered: home.recent.answered,
     focus: home.recent.focus,
     commissions: home.commissions.map((t) => t.commission),
-    queue: { count: queueCount, oldestDays },
-    sources: { total: home.watchSources.length, failing: home.watchSources.filter((s) => !!s.last_error).length },
+    queue: {
+      count: queueCount,
+      oldestDays,
+      // By name and age, for the waste line that opens: named the way the queue sheet names them.
+      drafts: home.queue.map((q) => ({ who: q.opp?.title || q.title.replace(/^Opener to /, '').replace(/, ready to review$/, ''), createdAt: q.execution.created_at })),
+    },
+    sources: {
+      total: home.watchSources.length,
+      failing: home.watchSources.filter((s) => !!s.last_error).length,
+      failed: home.watchSources.filter((s) => !!s.last_error).map((s) => ({ label: s.label || s.url, error: s.last_error!, checkedAt: s.last_checked_at })),
+    },
     decisions: home.decisionLog,
     edge: home.edge,
     bottleneck: d.findings.find((f) => f.kind === 'bottleneck') ?? null,
     runwayMonths: home.metrics.runway_months,
     currency,
+    // The same sends the week's dots count, so "2 of 5 sent this week" and the dots cannot disagree.
+    sentAt,
+    marks: home.roadmap?.marks ?? [],
   });
   const week = focusWeek(home.recent.focus, home.recent.today);
 

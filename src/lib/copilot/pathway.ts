@@ -44,7 +44,7 @@ import type { Firsts } from './diagnose';
 import type { FocusLog } from './focus';
 import { dayLetter, hoursLabel, shiftDay } from './focus';
 import { KIND_LABEL } from './moves';
-import { localDay, moneyLabel, whenLabel, type AnsweredMove, type RecentOutcome } from './review';
+import { FULL_DAY, callName, localDay, moneyLabel, whenLabel, type AnsweredMove, type RecentOutcome } from './review';
 import { costMinutesOf } from './stake';
 import { WORKER_CLOSE_MS, worthDoing } from './today';
 import type { CommissionThread, Move } from './types';
@@ -126,15 +126,9 @@ const inWindow = (iso: string | null | undefined, now: Date, days = EVIDENCE_DAY
   return Number.isFinite(t) && now.getTime() - t <= days * DAY_MS && t <= now.getTime() + 3_600_000;
 };
 
-const FULL_DAY: Record<string, string> = { Sun: 'Sunday', Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday' };
-
-/** "Monday's call" — how a person names a call they got earlier in the week. */
-export function callName(forDate: string, today: string): string {
-  const w = whenLabel(forDate, today);
-  if (w === 'today') return 'Today’s call';
-  if (w === 'yesterday') return 'Yesterday’s call';
-  return `${FULL_DAY[w] ?? w}’s call`;
-}
+// How a call is named lives with the review, which names calls too (a thing
+// you did, on You, says which day's call it was); re-exported for the evidence.
+export { callName };
 
 /** What the last fortnight taught, oldest first, as the rows prove it. */
 export function pathEvents(input: PastInput): PathEvent[] {

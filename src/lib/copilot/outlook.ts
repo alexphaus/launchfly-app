@@ -181,6 +181,8 @@ export interface Signal {
 /** A step on this many plans in a row, never done, is one the plan should stop carrying as it is. */
 export const CARRIED_PLANS = 3;
 export const MAX_SIGNALS = 4;
+/** Stuck steps named in the one line that says they are stuck, at most. */
+const MAX_STUCK_NAMED = 3;
 
 export interface SignalInput {
   /** Messages old enough to have been answered (NO_REPLY_AFTER_DAYS) or answered already, and how many were. */
@@ -217,8 +219,16 @@ export function outlookSignals(input: SignalInput): Signal[] {
   const c = input.calls;
   if (c?.avoided) out.push({ key: 'avoided', line: `${c.avoided.count} of the last ${c.total} calls were about ${phraseFor(c.avoided.topic)} and none was done. Either it is the wrong move or something is in the way.` });
   else if (c?.dead) out.push({ key: 'dead', line: `${c.dead.count} of the last ${c.total} calls were about ${phraseFor(c.dead.topic)}; they were done and the number did not move.` });
-  for (const step of (input.carried ?? []).filter((x) => x.plans >= CARRIED_PLANS)) {
-    out.push({ key: `carried:${step.title}`, line: `On ${step.plans} plans in a row and still not done: ${step.title}. Drop it, make it smaller, or hand it over.` });
+  // One line for every stuck step, not one each: Alex's plan printed three rows
+  // of "On 3 plans in a row and still not done", which is one fact — the plan
+  // keeps carrying what does not get done — said three times.
+  const stuck = (input.carried ?? []).filter((x) => x.plans >= CARRIED_PLANS);
+  if (stuck.length === 1) {
+    out.push({ key: 'carried', line: `On ${stuck[0].plans} plans in a row and still not done: ${stuck[0].title}. Drop it, make it smaller, or hand it over.` });
+  } else if (stuck.length > 1) {
+    const named = stuck.slice(0, MAX_STUCK_NAMED).map((x) => x.title).join('; ');
+    const more = stuck.length > MAX_STUCK_NAMED ? `; and ${stuck.length - MAX_STUCK_NAMED} more` : '';
+    out.push({ key: 'carried', line: `${stuck.length} steps on ${CARRIED_PLANS} or more plans in a row and still not done: ${named}${more}. Drop them, make them smaller, or hand them over.` });
   }
   return out.slice(0, MAX_SIGNALS);
 }

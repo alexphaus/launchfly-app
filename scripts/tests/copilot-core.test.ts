@@ -6293,11 +6293,11 @@ async function drawnPlan() {
 
   // 10. The move: after the drafts and whatever a person is blocking, before the planner's Moves.
   const f0 = { sent: 0, replied: 0, won: 0 };
-  const planStep = { item: 's', title: 'Ask shop 2', milestone: 'First sale', why: 'It proves somebody pays', size: 'Under 30 min' };
+  const planStep = { item: 's', title: 'Ask shop 2', milestone: 'First sale', size: 'Under 30 min' };
   const nowBase = { noOffer: false, callPending: false, queue: { count: 0, oldestDays: 0 }, asks: [], moves: [{ id: 'm', job: 'goal_gap', kind: 'decide', headline: 'A Move', why: [], artifact: { kind: 'text', label: 'x', value: 'y' }, cost_label: '10 min', status: 'open', created_at: ago(0) }] as never[], capacity: 'moderate' as const, funnel: f0, freshMatches: 0, planStep, hasPlan: true };
   const stepNow = roadmapPathNow(nowBase).now;
   assert.equal(stepNow.kind, 'step'); assert.equal(stepNow.item, 's'); assert.equal(stepNow.cta, 'Mark it done');
-  assert.equal(stepNow.why, 'Toward: First sale. It proves somebody pays');
+  assert.equal(stepNow.why, 'Toward: First sale.', 'the milestone\'s reason is on the plan under it, not said twice');
   assert.equal(stepNow.size, 'Under 30 min · you have 60 min');
   // With a plan the drafts are no longer first by default: the plan said to fix
   // the opener, and the card over it said to send 25 written with the old one.
@@ -6440,11 +6440,20 @@ async function onePlanner() {
   assert.deepEqual(planCall({ ...first, milestone: { ...first.milestone, why: null } }, null)!.because, ['It is the next step toward: First real reply that can become a $150 sale.']);
 
   // 2. Only money due soon outranks the plan for the call.
-  assert.equal(moneyWaiting({ value: 400, withinDays: 3 }), true, 'a deposit owed this week');
-  assert.equal(moneyWaiting({ value: 150, withinDays: MONEY_WAITING_DAYS }), true);
-  assert.equal(moneyWaiting({ value: 1500, withinDays: 90 }), false, 'a goal gap is due at its horizon, and it is what the plan is ordered against');
-  assert.equal(moneyWaiting({ value: undefined, withinDays: 1 }), false, 'urgent with no money is the plan’s to order');
+  const due = (job: string, value: number | undefined, withinDays: number) => ({ job, stake: { value, withinDays } });
+  assert.equal(moneyWaiting(due('obligations', 400, 3)), true, 'a deposit owed this week');
+  assert.equal(moneyWaiting(due('client_delivery', 150, MONEY_WAITING_DAYS)), true, 'a client who paid and is waiting');
+  assert.equal(moneyWaiting(due('goal_gap', 1500, 90)), false, 'a goal gap is due at its horizon, and it is what the plan is ordered against');
+  assert.equal(moneyWaiting(due('goal_gap', 1500, 3)), false, 'even three days out: the plan is ordered against that gap');
+  assert.equal(moneyWaiting(due('obligations', undefined, 1)), false, 'urgent with no money is the plan’s to order');
   assert.equal(moneyWaiting(null), false);
+  assert.equal(moneyWaiting({ job: 'obligations', stake: null }), false);
+  // The send queue values ten sends at what sends have earned and dates it by
+  // when the drafts go cold: an expected value due "tomorrow", every night. It
+  // kept "send 10 of your 57 drafts" as the call over a plan that said the
+  // opener behind them had never been answered.
+  assert.equal(moneyWaiting(due('send_queue', 12, 1)), false, 'what sends might earn is not money owed');
+  assert.equal(moneyWaiting(due('repeat_customer', 300, 3)), false, 'a past customer is an opening, not a debt');
 
   // 3. Answering the call finds its step by its words.
   const roadmap = { here: null, direction: null, changed: null, phases: [{ key: 'week' as const, milestones: [{ id: 'm', title: 'M', why: null, doneWhen: null, goalId: null, steps: [{ id: 'rewrite', title: first.step.title, size: 'sitting' as const, tag: 'leverage' as const, who: 'you' as const }] }] }] };
@@ -6699,6 +6708,11 @@ async function recordSignals() {
   assert.equal(carriedSteps([], () => true).length, 0);
   const stuck = outlookSignals({ carried });
   assert.deepEqual(stuck.map((x) => x.line), [`On ${CARRIED_PLANS} plans in a row and still not done: Step a. Drop it, make it smaller, or hand it over.`]);
+  // Several stuck steps are one fact, said once: Alex's plan printed three
+  // identical rows of "On 3 plans in a row and still not done".
+  const many = outlookSignals({ carried: [1, 2, 3, 4, 5].map((n) => ({ title: `S${n}`, plans: 7 - n })) });
+  assert.equal(many.length, 1, 'one line for every stuck step');
+  assert.equal(many[0].line, `4 steps on ${CARRIED_PLANS} or more plans in a row and still not done: S1; S2; S3; and 1 more. Drop them, make them smaller, or hand them over.`);
   assert.ok(outlookSignals({ settled: { sends: 30, answered: 0 }, calls: { avoided: { topic: 'plan', count: 3 }, dead: null, total: 3 }, carried: [1, 2, 3, 4, 5].map((n) => ({ title: `S${n}`, plans: 4 })) }).length <= MAX_SIGNALS);
 
   // 4. The tally behind the opener line: silence counts only once it has had time to be silence.
@@ -6898,3 +6912,53 @@ async function callFollowsThePlan() {
 }
 
 callFollowsThePlan().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The Path, lighter: what one redraw on Alex's account showed ────────── */
+import { ROADMAP_SYSTEM as LT_SYSTEM, parseRoadmap as ltParse, roadmapLeadGoal, roadmapView as ltView, sourcedFrom as ltSourced, type RoadmapRun as LtRun } from '../../src/lib/copilot/roadmap';
+import { UnreadableJson, extractJson as ltJson } from '../../src/lib/copilot/agent/schema';
+
+async function pathReadsLight() {
+  // 1. Every milestone names its goal. Left unassigned, every goal under the
+  //    plan said "Nothing on the plan leads here yet" — the one it put first too.
+  const src = ltSourced('GOALS:\n- [g1] Save Exit PH [NOV]\n- [g2] A remote support job');
+  const parse = (goal_id: unknown, goalIds: string[]) => ltParse({ phases: [{ key: 'week', milestones: [{ id: 'm', title: 'A first reply to the new opener', goal_id }] }] }, { allowed: src, goalIds, aiAvailable: false })!.roadmap.phases[0].milestones[0].goalId;
+  assert.equal(parse('g2', ['g1', 'g2']), 'g2');
+  assert.equal(parse('[g2]', ['g1', 'g2']), 'g2', 'the id as GOALS lists it, brackets and all');
+  assert.equal(parse(' g1 ', ['g1', 'g2']), 'g1');
+  assert.equal(parse('Save Exit PH [NOV]', ['g1', 'g2']), null, 'a title is not an id, and with two goals nothing says which');
+  assert.equal(parse(undefined, ['g1', 'g2']), null);
+  assert.equal(parse(undefined, ['g1']), 'g1', 'one goal: there is nothing to choose');
+  assert.equal(parse('nope', ['g1']), 'g1');
+  assert.equal(parse(undefined, []), null, 'no goals, no goal');
+  assert.match(LT_SYSTEM, /Give every milestone the goal_id of the goal it serves/);
+  assert.match(LT_SYSTEM, /"done_when":"\.\.\.","goal_id":"\.\.\."/, 'the example asks for one');
+
+  // 2. The lines are short and say each fact once, and here.line leaves the verdict to the app, which shows it beside it.
+  assert.match(LT_SYSTEM, /here\.line is one sentence of at most 25 words/);
+  assert.match(LT_SYSTEM, /Say each fact once/);
+  assert.match(LT_SYSTEM, /The app shows that verdict beside here, so do not restate it/);
+  assert.ok(!/here\.line says so plainly/.test(LT_SYSTEM), 'the verdict is no longer asked for twice');
+
+  // 3. The goal the plan leads with: its first open milestone's this week or month, else none.
+  const run = (phases: Array<{ key: 'week' | 'month' | 'quarter'; goals: Array<string | null> }>): LtRun => ({
+    id: 'r', status: 'ok', reason: null, signature: 's', startedAt: '2026-09-28T00:00:00Z', finishedAt: '2026-09-28T00:01:00Z', error: null,
+    roadmap: { here: null, direction: null, changed: null, phases: phases.map((p) => ({ key: p.key, milestones: p.goals.map((goalId, i) => ({ id: `${p.key}${i}`, title: `M${i}`, why: null, doneWhen: null, goalId, steps: [] })) })) },
+  });
+  const view = (r: LtRun, marks: Array<{ item: string; title: string; state: 'done' | 'dropped' | 'open'; at: string }> = []) =>
+    ltView({ enabled: true, latest: r, current: r, previous: null, marks, goals: [], capacity: 'deep', now: new Date('2026-09-28T12:00:00Z') });
+  assert.equal(roadmapLeadGoal(view(run([{ key: 'week', goals: [null, 'g2'] }, { key: 'month', goals: ['g1'] }]))), 'g2');
+  assert.equal(roadmapLeadGoal(view(run([{ key: 'week', goals: ['g2'] }, { key: 'month', goals: ['g1'] }]), [{ item: 'week0', title: 'M0', state: 'done', at: '2026-09-28T01:00:00Z' }])), 'g1', 'a milestone reached no longer leads');
+  assert.equal(roadmapLeadGoal(view(run([{ key: 'quarter', goals: ['g1'] }]))), null, 'a quarter away is not what it leads with');
+  assert.equal(roadmapLeadGoal({ state: 'off' }), null);
+
+  // 4. A reply that came back unreadable says so as its own kind, which is what earns it one more ask.
+  assert.deepEqual(ltJson('{"phases":[{"key":"week","milestones":[{"id":"m","title":"T",}],},]}'), { phases: [{ key: 'week', milestones: [{ id: 'm', title: 'T' }] }] }, 'a trailing comma does not cost a whole plan');
+  assert.deepEqual(ltJson('{"a":"x, ]"}'), { a: 'x, ]' }, 'valid JSON is never rewritten');
+  assert.throws(() => ltJson('{"phases":[{"key":"week" "milestones":[]}]}'), (e: unknown) => e instanceof UnreadableJson && /JSON/.test(e.message), 'the parser\'s own words, as UnreadableJson');
+  assert.throws(() => ltJson('{"phases":[{"key":"week","milestones":[{"id":"m","title":"cut sh'), (e: unknown) => e instanceof UnreadableJson);
+  assert.throws(() => ltJson('I could not draw a plan.'), (e: unknown) => e instanceof UnreadableJson && e.message === 'agent returned no JSON object');
+
+  console.log('copilot-core: path reads light checks passed');
+}
+
+pathReadsLight().catch((e) => { console.error(e); process.exit(1); });

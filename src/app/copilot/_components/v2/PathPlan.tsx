@@ -15,6 +15,13 @@
 //   planner decided it probably was.
 // - What the model said about itself is labelled as its own: "why this order"
 //   and "what changed" are its reasoning, not facts about the person.
+//
+// And one thing learned the hard way: everything above the steps is folded to
+// a line until tapped. The head once stacked a verdict card per goal, the
+// record's lines, the order's reasoning, a failed redraw's raw error, a
+// "Redrawn" list and the experiment in full before the first step. Its owner
+// called it heavy and overwhelming, and it was: each block was right, and
+// together they buried the one thing the plan is for.
 import { useState } from 'react';
 import { agoLabel } from '@/lib/copilot/machine';
 import {
@@ -26,14 +33,14 @@ import { ANGLE_LABEL, type ExperimentState, type ExperimentView } from '@/lib/co
 import { VERDICT_WORDS, type GoalOutlook } from '@/lib/copilot/outlook';
 import type { NextStep } from '@/lib/copilot/pathway';
 import type { Actions } from '../shared';
-import { IconAlert, IconCheck, IconFlag, IconFlask, IconGauge, IconRedraw } from './icons2';
+import { IconAlert, IconCheck, IconChevron, IconFlag, IconFlask, IconGauge, IconRedraw } from './icons2';
 
 /** A handed-over step's project, by the step's title: its id to open, and where it stands. */
 export type Handed = Map<string, { id: string; status: string }>;
 
 type Ready = Extract<RoadmapView, { state: 'ready' }>;
 
-export function DrawnPlanHead({ view, now, onRedraw, unreadable, actions, outlook = [] }: { view: RoadmapView; now: Date; onRedraw: () => void; unreadable: string | null; actions: Actions; outlook?: GoalOutlook[] }) {
+export function DrawnPlanHead({ view, now, onRedraw, unreadable, actions }: { view: RoadmapView; now: Date; onRedraw: () => void; unreadable: string | null; actions: Actions }) {
   const drawing = view.state !== 'off' && view.drawing;
   const failed = view.state !== 'off' ? view.failed : null;
   return (
@@ -44,14 +51,16 @@ export function DrawnPlanHead({ view, now, onRedraw, unreadable, actions, outloo
           <IconRedraw />{drawing ? 'Redrawing…' : view.state === 'ready' ? `Drawn ${agoLabel(view.drawnAt, now)}` : 'Draw it'}
         </button>
       </div>
-      {/* First, whether it can work: the order below is the plan's answer to it. */}
-      {view.state === 'ready' && <WillItWork outlook={outlook} signals={view.signals} />}
-      {view.state === 'ready' && view.direction && <p className="cp2-plan-direction"><span className="lbl">Why this order</span>{view.direction}</p>}
-      {/* Said beside the plan it could not replace, so an old plan is never read as a fresh one (invariant 13). */}
-      {failed && <WarnRow title={view.state === 'ready' ? 'The last redraw failed' : 'Could not draw your plan'} detail={view.state === 'ready' ? `${sentence(failed)} This is the plan from before.` : failed} />}
+      {view.state === 'ready' && view.direction && <Direction text={view.direction} />}
+      {/* Said beside the plan it could not replace, so an old plan is never read as a fresh one (invariant 13).
+          The reason is in view, two lines of it; a model's parse error runs to a paragraph, and the rest is a tap. */}
+      {failed && (view.state === 'ready'
+        ? <WarnRow title="The last redraw failed, so this is the plan from before" detail={sentence(failed)} onRetry={drawing ? undefined : onRedraw} />
+        : <WarnRow title="Could not draw your plan" detail={sentence(failed)} />)}
       {unreadable && <WarnRow title="Could not read your plan" detail={`${unreadable}. Ticks may be missing below.`} />}
       {/* The plan saved and the call could not follow it: said, so a card over the plan that disagrees with it is explained (invariant 13). */}
       {view.state === 'ready' && view.callError && <WarnRow title="Today's call was not updated for this plan" detail={sentence(view.callError)} />}
+      {view.state === 'ready' && view.signals.length > 0 && <RecordSays lines={view.signals} />}
       {view.state === 'ready' && view.suggested.length > 0 && <SuggestedDone items={view.suggested} actions={actions} />}
       {view.state === 'ready' && view.changes && <ChangesRow changes={view.changes} />}
     </>
@@ -59,28 +68,63 @@ export function DrawnPlanHead({ view, now, onRedraw, unreadable, actions, outloo
 }
 
 /**
- * Will it work: each goal the plan works on, with the verdict its rows give it
- * (outlook.ts), then what the record said to stop or change when the plan was
- * drawn. Counted, never estimated — the planner was handed these same lines and
- * had to answer them, so the plan below is its answer.
+ * Whether the goal the plan leads with gets there in time (outlook.ts), under
+ * "you are here": the verdict in a word, the goal, and the counts behind it —
+ * computed, never estimated, and the planner was handed the same line. A goal
+ * with no date or no number opens its sheet, since that is what it is missing.
  */
-export function WillItWork({ outlook, signals }: { outlook: GoalOutlook[]; signals: string[] }) {
-  if (!outlook.length && !signals.length) return null;
+export function HereVerdict({ o, actions }: { o: GoalOutlook; actions: Actions }) {
+  const body = (
+    <>
+      <span className="cp2-odds-top">
+        <span className={`cp2-odds-verdict ${o.verdict}`}>{VERDICT_WORDS[o.verdict]}</span>
+        <span className="cp2-odds-name cp2-clamp1">{o.title}</span>
+      </span>
+      {/* "Reached." under a "Reached" pill is the word twice. */}
+      {o.verdict !== 'reached' && <span className="cp2-odds-line">{o.line}</span>}
+    </>
+  );
+  return o.verdict === 'no_date' || o.verdict === 'no_number'
+    ? <button className="cp2-odds" onClick={() => actions.openSheet({ kind: 'goal', id: o.goalId })}>{body}</button>
+    : <span className="cp2-odds">{body}</span>;
+}
+
+/** The fold used above the steps: a chevron that turns when the thing under it is open. */
+const Fold = ({ open }: { open: boolean }) => <span className={`cp2-plan-chev ${open ? 'open' : ''}`}><IconChevron /></span>;
+
+/** Characters of "why this order" that fit in two lines at 390px; past it, the rest is a tap. */
+const DIRECTION_FOLD = 90;
+
+/** The planner's reason for the order, labelled as its own, two lines until tapped. */
+function Direction({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  if (text.length <= DIRECTION_FOLD) return <p className="cp2-plan-direction"><span className="lbl">Why this order</span>{text}</p>;
   return (
-    <div className="cp2-way-row cp2-odds">
+    <button className="cp2-plan-direction" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <span className="lbl">Why this order<Fold open={open} /></span>
+      <span className={open ? undefined : 'cp2-clamp2'}>{text}</span>
+    </button>
+  );
+}
+
+/**
+ * What the record said to stop or change when this plan was drawn (outlook.ts's
+ * signals). The planner had to answer each, so the plan below is the answer and
+ * these are its evidence: the first in view, the rest a tap away.
+ */
+function RecordSays({ lines }: { lines: string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="cp2-way-row">
       <span className="cp2-way-node sm quiet"><IconGauge /></span>
-      <span className="cp2-way-t">Will it work?</span>
-      {outlook.map((o) => (
-        <span key={o.goalId} className="cp2-odds-goal">
-          <span className="cp2-odds-top">
-            <span className="cp2-odds-name cp2-clamp2">{o.title}</span>
-            <span className={`cp2-odds-verdict ${o.verdict}`}>{VERDICT_WORDS[o.verdict]}</span>
-          </span>
-          <span className="cp2-odds-line">{o.line}</span>
+      <button className="cp2-way-tap" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="cp2-way-top">
+          <span className="cp2-way-t">What the record says{lines.length > 1 ? ` · ${lines.length}` : ''}</span>
+          <Fold open={open} />
         </span>
-      ))}
-      {signals.length > 0 && <span className="cp2-odds-said">The record says</span>}
-      {signals.map((line) => <span key={line} className="cp2-odds-signal">{line}</span>)}
+        {!open && <span className="cp2-way-s cp2-clamp2">{lines[0]}</span>}
+      </button>
+      {open && lines.map((line) => <span key={line} className="cp2-odds-signal">{line}</span>)}
     </div>
   );
 }
@@ -94,23 +138,29 @@ export function WillItWork({ outlook, signals }: { outlook: GoalOutlook[]; signa
  */
 export function ExperimentCard({ view, goalTitle, today, actions }: { view: ExperimentView; goalTitle: string | null; today: string; actions: Actions }) {
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const x = view.exp;
   const act = async (state: ExperimentState) => {
     setBusy(true);
     await actions.markExperiment(x.id, state);
     setBusy(false);
   };
+  // Folded to the line each stage turns on: offered, why it is worth a day;
+  // being tried, what would show it worked. The rest is a tap on the card.
+  const offered = view.stage === 'offered';
   return (
     <div className="cp2-way-row cp2-exp">
       <span className="cp2-way-node sm cp2-exp-node"><IconFlask /></span>
       <span className="cp2-exp-card">
-        <span className="cp2-exp-eyebrow">Experiment · {ANGLE_LABEL[x.angle]}</span>
-        <span className="cp2-way-name">{x.title}</span>
-        {goalTitle && <span className="cp2-plan-for cp2-clamp1">For {goalTitle}</span>}
-        <span className="cp2-exp-why">{x.why}</span>
-        <span className="cp2-exp-line"><b>Test</b>{x.test}</span>
-        <span className="cp2-exp-line"><b>It worked if</b>{x.watch}</span>
-        {view.stage === 'offered' ? (
+        <button className="cp2-exp-body" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          <span className="cp2-exp-eyebrow">Experiment · {ANGLE_LABEL[x.angle]}<Fold open={open} /></span>
+          <span className="cp2-way-name">{x.title}</span>
+          {(open || offered) && <span className={`cp2-exp-why ${open ? '' : 'cp2-clamp2'}`}>{x.why}</span>}
+          {open && <span className="cp2-exp-line"><b>Test</b>{x.test}</span>}
+          {(open || !offered) && <span className="cp2-exp-line"><b>It worked if</b>{x.watch}</span>}
+          {open && goalTitle && <span className="cp2-plan-for">For {goalTitle}</span>}
+        </button>
+        {offered ? (
           <span className="cp2-way-acts">
             <button className="cp-btn primary sm" disabled={busy} onClick={() => void act('started')}>Try it</button>
             <button className="cp-btn sm" disabled={busy} onClick={() => void act('dropped')}>Not for me</button>
@@ -164,26 +214,45 @@ function SuggestedDone({ items, actions }: { items: Array<{ id: string; title: s
 /** An error from a model or a driver rarely ends in a full stop; the sentence after it needs one. */
 const sentence = (t: string) => (/[.!?]$/.test(t.trim()) ? t.trim() : `${t.trim()}.`);
 
-function WarnRow({ title, detail }: { title: string; detail: string }) {
+/**
+ * Something that went wrong, said where it matters (invariant 13): what, in the
+ * title, and why, in two lines of the error — tap for the whole of it. A
+ * redraw that failed can be tried again from here.
+ */
+function WarnRow({ title, detail, onRetry }: { title: string; detail: string; onRetry?: () => void }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="cp2-way-row">
       <span className="cp2-way-node sm warn"><IconAlert /></span>
-      <span className="cp2-way-t">{title}</span>
-      <span className="cp2-way-s">{detail}</span>
+      <button className="cp2-way-tap" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="cp2-way-t">{title}</span>
+        <span className={`cp2-way-s ${open ? '' : 'cp2-clamp2'}`}>{detail}</span>
+      </button>
+      {onRetry && <span className="cp2-way-links"><button className="cp2-link" onClick={onRetry}>Try again</button></span>}
     </div>
   );
 }
 
+/** What the redraw changed: counts on one line, what left and the planner's note behind a tap. */
 function ChangesRow({ changes }: { changes: NonNullable<Ready['changes']> }) {
+  const [open, setOpen] = useState(false);
+  const counts = [
+    changes.added.length ? `${changes.added.length} new` : null,
+    changes.dropped.length ? `${changes.dropped.length} gone` : null,
+  ].filter(Boolean).join(' · ');
+  const more = changes.dropped.length > 0 || !!changes.note;
+  const head = (
+    <span className="cp2-way-top">
+      <span className="cp2-way-t">Redrawn{counts && <span className="cp2-way-newcount"> · {counts}</span>}</span>
+      {more && <Fold open={open} />}
+    </span>
+  );
   return (
     <div className="cp2-way-row">
       <span className="cp2-way-node sm redraw"><IconRedraw /></span>
-      <span className="cp2-way-top">
-        <span className="cp2-way-t">Redrawn</span>
-        {changes.added.length > 0 && <span className="cp2-way-newcount">{changes.added.length} new</span>}
-      </span>
-      {changes.dropped.map((t) => <span key={t} className="cp2-way-gone cp2-clamp2"><s>{t}</s></span>)}
-      {changes.note && <span className="cp2-way-s"><i>In its words:</i> {changes.note}</span>}
+      {more ? <button className="cp2-way-tap" onClick={() => setOpen((v) => !v)} aria-expanded={open}>{head}</button> : head}
+      {open && changes.dropped.map((t) => <span key={t} className="cp2-way-gone"><s>{t}</s></span>)}
+      {open && changes.note && <span className="cp2-way-s"><i>In its words:</i> {changes.note}</span>}
     </div>
   );
 }
@@ -215,12 +284,16 @@ export function PlanPending({ view, onDraw }: { view: Extract<RoadmapView, { sta
  * the same hours.
  */
 export function PhaseBlock({ phase, actions, workerConnected, handed, showGoal, children }: { phase: PhaseView; actions: Actions; workerConnected: boolean; handed: Handed; showGoal: boolean; children?: React.ReactNode }) {
-  const open = phase.key === 'week';
+  // One milestone open, the first still open this week: the rest of the week
+  // folds to its count of steps. Every milestone this week open at once put
+  // two reasons, two "done when"s and two checklists between the move and the
+  // month — the week read as a wall, not a next step.
+  const first = phase.key === 'week' ? phase.milestones.find((m) => m.state === 'open')?.id ?? null : null;
   return (
     <>
       <div className="cp2-plan-phase"><span>{phase.label}</span></div>
       {phase.milestones.filter((m) => m.state !== 'dropped').map((m) => (
-        <MilestoneRow key={m.id} m={m} startOpen={open} actions={actions} workerConnected={workerConnected} handed={handed} showGoal={showGoal} />
+        <MilestoneRow key={m.id} m={m} startOpen={m.id === first} actions={actions} workerConnected={workerConnected} handed={handed} showGoal={showGoal} />
       ))}
       {phase.milestones.filter((m) => m.state === 'dropped').map((m) => (
         <SetAsideRow key={m.id} m={m} actions={actions} />
@@ -242,7 +315,8 @@ function MilestoneRow({ m, startOpen, actions, workerConnected, handed, showGoal
         <span className="cp2-way-name">{m.title}</span>
         {/* Only where milestones serve different goals: Maria's plan said "For Property buy and renovation" under all seven. */}
         {showGoal && m.goalTitle && <span className="cp2-plan-for cp2-clamp1">For {m.goalTitle}</span>}
-        {!reached && m.why && <span className="cp2-way-s">{m.why}</span>}
+        {/* Its reason only while it is open: seven folded milestones each with a paragraph under them was most of the scroll. */}
+        {open && !reached && m.why && <span className="cp2-way-s">{m.why}</span>}
         {!open && !reached && visible.length > 0 && (
           <span className="cp2-plan-fold">{m.open ? `${m.open} step${m.open === 1 ? '' : 's'} to go` : 'Every step done'}</span>
         )}
@@ -316,16 +390,17 @@ function StepItem({ s, actions, workerConnected, project }: { s: StepView; actio
         <span className="cp2-plan-meta">
           <span className={`cp2-plan-tag ${s.tag}`}>{TAG_LABEL[s.tag]}</span>
           <span className="cp2-plan-size">{SIZE_LABEL[s.size]}{!s.fits && !done ? ' · bigger than today' : ''}</span>
-          {!project && agents && <span className="cp2-owner ai">Your agent can do this</span>}
         </span>
         {project && !done && (
           <button className="cp2-plan-project" onClick={() => actions.openSheet({ kind: 'commission', id: project.id })}>
             {PROJECT_STATE[project.status] ?? 'Handed over'} · open
           </button>
         )}
+        {/* Who does it, said once, on the button: a "Your agent can do this" pill over a
+            "Hand it over" button was the same fact in two rows. */}
         {agents && !project && !done && (
           <span className="cp2-plan-handoff">
-            <button className="cp-btn primary sm" disabled={busy} onClick={() => void handOver()}>{busy ? 'Handing it over…' : 'Hand it over'}</button>
+            <button className="cp-btn primary sm" disabled={busy} onClick={() => void handOver()}>{busy ? 'Handing it over…' : 'Hand it to your agent'}</button>
             <span className="cp2-plan-handoff-note">It starts now. It never contacts anyone or spends.</span>
           </span>
         )}
@@ -391,8 +466,10 @@ export function GoalMarkers({ goals, actions }: { goals: GoalMarker[]; actions: 
               {g.status && <span className="cp2-way-frac">{g.status}</span>}
             </span>
             {pct != null && <span className="cp2-way-track" aria-hidden><i style={{ width: `${pct}%` }} /></span>}
+            {/* What the plan does toward it is said only when it does something: "Nothing on the plan
+                leads here yet" under a goal the plan put first read as the plan ignoring it. */}
             <span className="cp2-way-s">
-              {[g.verdict, g.horizon, g.toward ? `${g.toward} milestone${g.toward === 1 ? '' : 's'} on the plan lead here` : 'Nothing on the plan leads here yet'].filter(Boolean).join(' · ')}
+              {[g.verdict, g.horizon, g.toward ? `${g.toward} milestone${g.toward === 1 ? ' leads' : 's lead'} here` : null].filter(Boolean).join(' · ')}
             </span>
             {last && links}
           </div>
@@ -402,8 +479,11 @@ export function GoalMarkers({ goals, actions }: { goals: GoalMarker[]; actions: 
         <div className="cp2-way-row cp2-way-stop goal end cp2-plan-waiting">
           <span className="cp2-way-node sm quiet"><IconFlag /></span>
           <button className="cp2-way-tap" onClick={() => setOpenWaiting((v) => !v)} aria-expanded={openWaiting}>
-            <span className="cp2-way-t">{waiting.length === 1 ? '1 more goal waits' : `${waiting.length} more goals wait`}</span>
-            <span className="cp2-way-s">Nothing on the plan leads to {waiting.length === 1 ? 'it' : 'them'} yet: it works on the ones above first. {openWaiting ? '' : 'Show them.'}</span>
+            <span className="cp2-way-top">
+              <span className="cp2-way-t">{waiting.length === 1 ? '1 more goal waits' : `${waiting.length} more goals wait`}</span>
+              <Fold open={openWaiting} />
+            </span>
+            <span className="cp2-way-s">The plan works on the ones above first.</span>
           </button>
           {openWaiting && (
             <span className="cp2-plan-waitlist">

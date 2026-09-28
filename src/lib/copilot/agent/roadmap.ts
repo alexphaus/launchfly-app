@@ -34,7 +34,7 @@ import {
 import type { Goal, Profile } from '../types';
 import { workingBrief } from '../working';
 import { planExtraBody, planMaxOutputTokens, planTimeoutMs, providerFor, resolvePlanConfig } from './llm';
-import { extractJson } from './schema';
+import { UnreadableJson, extractJson } from './schema';
 
 /**
  * A plan is a page of JSON, not a paragraph, and it now carries an experiment
@@ -49,6 +49,8 @@ const MAX_TOKENS_HINT = 6_000;
  * route's own five minutes.
  */
 const DRAW_MAX_MS = 240_000;
+/** A second answer is asked for only with at least this long left to give it. */
+const RETRY_MIN_MS = 30_000;
 /** Calls the plan is shown, newest first. */
 const MAX_CALLS = 6;
 /** Replies the plan is shown, and how much of each. */
@@ -255,24 +257,46 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
     };
     const prompt = roadmapPrompt(input);
 
-    let raw: unknown;
-    try {
+    // Each call gets the plan timeout; both together stay under DRAW_MAX_MS.
+    const began = Date.now();
+    const left = () => DRAW_MAX_MS - (Date.now() - began);
+    const ask = async (note: string | null) => {
       const { text } = await generateText({
         model: providerFor(cfg, planExtraBody())(cfg.model),
         system: ROADMAP_SYSTEM,
-        prompt,
+        // The note rides after the prompt the guard reads (sourcedFrom below),
+        // so a number in a parser's message is never a number the plan may use.
+        prompt: note ? `${prompt}\n\n${note}` : prompt,
         // Between the brief's 0.4 and the proposer's 0.5 would be arbitrary; a
         // plan should come out the same way twice from the same record, or a
         // redraw reads as the app changing its mind for no reason.
         temperature: 0.3,
         maxRetries: 0,
         maxOutputTokens: planMaxOutputTokens() ?? MAX_TOKENS_HINT,
-        abortSignal: AbortSignal.timeout(Math.min(planTimeoutMs(), DRAW_MAX_MS)),
+        abortSignal: AbortSignal.timeout(Math.min(planTimeoutMs(), left())),
       });
-      raw = extractJson(text);
+      return extractJson(text);
+    };
+    let raw: unknown;
+    let askedAgain = false;
+    try {
+      try {
+        raw = await ask(null);
+      } catch (e) {
+        // Asked once more when the model answered and the answer could not be
+        // read. A page of JSON broken by one quote or cut short was the
+        // commonest way a redraw failed, and it cost the whole plan until the
+        // next night; a second answer is usually whole. Only with time left
+        // for it to finish — a retry that cannot finish only hides the first error.
+        if (!(e instanceof UnreadableJson) || left() < RETRY_MIN_MS) throw e;
+        askedAgain = true;
+        raw = await ask(`Your last answer could not be read as JSON (${e.message.slice(0, 160)}). Answer again with only the JSON object, complete and valid. Keep every line short.`);
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      throw new Error(/abort|timeout/i.test(message)
+      throw new Error(e instanceof UnreadableJson
+        ? `the model's plan could not be read as JSON${askedAgain ? ', twice' : ''}: ${message}`
+        : /abort|timeout/i.test(message)
         ? `${cfg.model} did not answer in time — raise COPILOT_PLAN_TIMEOUT_MS or pick a faster model`
         : `the model did not answer: ${message}`);
     }

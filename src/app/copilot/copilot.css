@@ -1218,15 +1218,19 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-way-row { position: relative; display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 12px 20px 12px 66px; text-align: left; color: var(--ink); }
 .cp-root[data-theme="soft"] button.cp2-way-row:active,
 .cp-root[data-theme="soft"] .cp2-way-tap:active { background: rgba(31, 41, 68, 0.04); }
+/* Nodes are centred on the line (x = 36) and on the first line of text beside
+   them. 32px with a 16px glyph, 30/15 for the small ones: at 28/14 and 26/13
+   they read as specks beside a 20px title — the scale the owner said made the
+   screen hard to digest. */
 .cp-root[data-theme="soft"] .cp2-way-node {
-  position: absolute; left: 22px; top: 8px; z-index: 2; width: 28px; height: 28px; border-radius: 50%;
+  position: absolute; left: 20px; top: 7px; z-index: 2; width: 32px; height: 32px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--surface); color: var(--muted); font-family: var(--display); font-size: 13px; font-weight: 800;
+  background: var(--surface); color: var(--muted); font-family: var(--display); font-size: 14px; font-weight: 800;
   box-shadow: 0 0 0 4px var(--bg);
 }
-.cp-root[data-theme="soft"] .cp2-way-node svg { width: 14px; height: 14px; }
-.cp-root[data-theme="soft"] .cp2-way-node.sm { left: 23px; top: 9px; width: 26px; height: 26px; }
-.cp-root[data-theme="soft"] .cp2-way-node.sm svg { width: 13px; height: 13px; }
+.cp-root[data-theme="soft"] .cp2-way-node svg { width: 16px; height: 16px; }
+.cp-root[data-theme="soft"] .cp2-way-node.sm { left: 21px; top: 8px; width: 30px; height: 30px; }
+.cp-root[data-theme="soft"] .cp2-way-node.sm svg { width: 15px; height: 15px; }
 /* Who: the app's agents teal, you blue, somebody outside answering the darkest.
    Opaque tints: a see-through node shows the line running under it. */
 .cp-root[data-theme="soft"] .cp2-way-node.ai { background: #E3F2EE; color: var(--ai); }
@@ -1240,33 +1244,35 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-way-node.step.ai { color: var(--ai); box-shadow: inset 0 0 0 2px var(--ai), 0 0 0 4px var(--bg); }
 .cp-root[data-theme="soft"] .cp2-way-node.step.you { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue), 0 0 0 4px var(--bg); }
 .cp-root[data-theme="soft"] .cp2-way-node.rung { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue), 0 0 0 4px var(--bg); }
-.cp-root[data-theme="soft"] .cp2-way-node.rung svg { width: 12px; height: 12px; }
+.cp-root[data-theme="soft"] .cp2-way-node.rung svg { width: 14px; height: 14px; }
 .cp-root[data-theme="soft"] .cp2-way-node.check { color: var(--muted); border: 2px dashed #B5BDCD; box-shadow: 0 0 0 4px var(--bg); }
-.cp-root[data-theme="soft"] .cp2-way-stop > .cp2-way-node { top: 10px; }
+.cp-root[data-theme="soft"] .cp2-way-stop > .cp2-way-node { top: 8px; }
 .cp-root[data-theme="soft"] .cp2-way-node.goal { background: var(--ink); color: #fff; }
-.cp-root[data-theme="soft"] .cp2-way-node.now { top: 18px; background: var(--blue); color: #fff; box-shadow: 0 0 0 4px var(--bg), var(--lift); }
+.cp-root[data-theme="soft"] .cp2-way-node.now { top: 16px; background: var(--blue); color: #fff; box-shadow: 0 0 0 4px var(--bg), var(--lift); }
 .cp-root[data-theme="soft"] .cp2-way-node.now svg { transform: rotate(-90deg); }
 
+/* Two steps of text, not five: 15 for what a row is, 13.5 for what it says,
+   12–12.5 for labels and times. Everything under 12 is gone from the Path. */
 .cp-root[data-theme="soft"] .cp2-way-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.cp-root[data-theme="soft"] .cp2-way-t { font-size: 14px; font-weight: 600; line-height: 20px; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-way-name { font-family: var(--display); font-size: 15.5px; font-weight: 700; line-height: 21px; }
-.cp-root[data-theme="soft"] .cp2-way-s { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-way-time { flex: none; font-size: 11.5px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
-.cp-root[data-theme="soft"] .cp2-way-frac { flex: none; font-family: var(--display); font-size: 13px; font-weight: 700; white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-way-eyebrow { font-family: var(--display); font-size: 11px; font-weight: 700; line-height: 16px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-way-t { font-size: 15px; font-weight: 600; line-height: 22px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-name { font-family: var(--display); font-size: 16px; font-weight: 700; line-height: 22px; }
+.cp-root[data-theme="soft"] .cp2-way-s { font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-time { flex: none; font-size: 12.5px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cp-root[data-theme="soft"] .cp2-way-frac { flex: none; font-family: var(--display); font-size: 14px; font-weight: 700; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-way-eyebrow { font-family: var(--display); font-size: 12px; font-weight: 700; line-height: 18px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-way-eyebrow.muted { color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-way-stepdone { font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-way-stepdone { font-size: 13.5px; font-weight: 600; line-height: 1.5; color: var(--blue); }
 
 /* The evidence. */
-.cp-root[data-theme="soft"] .cp2-way-earlier { display: block; width: 100%; padding: 6px 20px 4px 66px; text-align: left; font-size: 12.5px; font-weight: 700; color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-way-day { position: relative; padding: 16px 20px 0 66px; font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-earlier { display: block; width: 100%; padding: 6px 20px 4px 66px; text-align: left; font-size: 13.5px; font-weight: 700; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-way-day { position: relative; padding: 16px 20px 0 66px; font-family: var(--display); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-way-swap { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .cp-root[data-theme="soft"] .cp2-way-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .cp-root[data-theme="soft"] .cp2-way-week { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding-top: 16px; }
 .cp-root[data-theme="soft"] .cp2-way-week .dots { display: flex; gap: 4px; }
 .cp-root[data-theme="soft"] .cp2-way-week .dots i {
-  width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700; font-style: normal; color: var(--dim); background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--frame);
+  width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; font-style: normal; color: var(--dim); background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--frame);
 }
 .cp-root[data-theme="soft"] .cp2-way-week .dots i.moved { background: var(--ai); color: #fff; box-shadow: none; }
 .cp-root[data-theme="soft"] .cp2-way-week .dots i.today { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue); }
@@ -1277,120 +1283,121 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-way-here::before { content: ''; position: absolute; left: 35px; top: 0; height: 36px; border-left: 2px solid var(--frame); }
 .cp-root[data-theme="soft"] .cp2-way-here::after { content: ''; position: absolute; left: 35px; top: 36px; bottom: 0; border-left: 2px dashed #C3CAD8; }
 .cp-root[data-theme="soft"] .cp2-way-node.here { left: 16px; top: 16px; width: 40px; height: 40px; background: var(--blue); color: #fff; box-shadow: 0 0 0 5px rgba(79, 99, 210, 0.18), 0 0 0 9px var(--bg), var(--lift); }
-.cp-root[data-theme="soft"] .cp2-way-node.here svg { width: 18px; height: 18px; }
-.cp-root[data-theme="soft"] .cp2-way-heretitle { font-family: var(--display); font-size: 21px; font-weight: 700; line-height: 1.25; letter-spacing: -0.3px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-node.here svg { width: 20px; height: 20px; }
+.cp-root[data-theme="soft"] .cp2-way-heretitle { font-family: var(--display); font-size: 20px; font-weight: 700; line-height: 1.3; letter-spacing: -0.3px; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-way-reached {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 5px 12px 5px 9px;
   border-radius: 999px; background: var(--blue); color: #fff; box-shadow: var(--lift);
-  font-family: var(--display); font-size: 11.5px; font-weight: 700; animation: cp2-stream-pop .5s cubic-bezier(.2, 1.4, .4, 1) both;
+  font-family: var(--display); font-size: 12.5px; font-weight: 700; animation: cp2-stream-pop .5s cubic-bezier(.2, 1.4, .4, 1) both;
 }
 .cp-root[data-theme="soft"] .cp2-way-here .cp2-way-reached { margin: 8px 0 0; }
-.cp-root[data-theme="soft"] .cp2-way-reached svg { width: 13px; height: 13px; }
+.cp-root[data-theme="soft"] .cp2-way-reached svg { width: 14px; height: 14px; }
 
 /* The move: the one card on the line, to its right. */
 .cp-root[data-theme="soft"] .cp2-way-nowrow { padding: 6px 16px 8px 66px; }
 .cp-root[data-theme="soft"] .cp2-way-nowrow > .cp-card { margin: 0; }
 .cp-root[data-theme="soft"] .cp2-way-now { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
 .cp-root[data-theme="soft"] .cp2-way-nowtop { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.cp-root[data-theme="soft"] .cp2-way-size { font-size: 11.5px; font-weight: 600; color: var(--muted); text-align: right; }
-.cp-root[data-theme="soft"] .cp2-way-nowtitle { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-way-why { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-size { font-size: 12.5px; font-weight: 600; color: var(--muted); text-align: right; }
+.cp-root[data-theme="soft"] .cp2-way-nowtitle { font-family: var(--display); font-size: 18px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-why { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-way-go { margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-way-also { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 4px; padding-bottom: 6px; }
-.cp-root[data-theme="soft"] .cp2-way-alsolabel { font-size: 12px; font-weight: 700; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-alsolabel { font-size: 13px; font-weight: 700; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-way-chip {
-  display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 7px 8px 7px 12px; border-radius: 999px;
-  background: var(--surface); box-shadow: var(--shadow-sm); font-size: 12px; font-weight: 600; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 8px 9px 8px 13px; border-radius: 999px;
+  background: var(--surface); box-shadow: var(--shadow-sm); font-size: 13px; font-weight: 600; color: var(--ink);
 }
-.cp-root[data-theme="soft"] .cp2-way-chip .cp2-chev { flex: none; width: 14px; height: 14px; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-way-chip .cp2-chev { flex: none; width: 15px; height: 15px; color: var(--dim); }
 /* A breakage wears the warning colour; a question is the user's own business, not a fault. */
 .cp-root[data-theme="soft"] .cp2-way-chip.fix { color: var(--warn); }
 
 /* The plan. */
 .cp-root[data-theme="soft"] .cp2-way-head {
-  position: relative; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 22px 20px 2px 66px;
-  font-family: var(--display); font-size: 12px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink);
+  position: relative; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 22px 20px 4px 66px;
+  font-family: var(--display); font-size: 13px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink);
 }
-.cp-root[data-theme="soft"] .cp2-way-head .note { font-size: 11.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--dim); text-align: right; }
-.cp-root[data-theme="soft"] .cp2-way-sized { display: block; width: 100%; padding: 2px 20px 6px 66px; text-align: left; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-head .note { font-size: 12.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--dim); text-align: right; }
+.cp-root[data-theme="soft"] .cp2-way-sized { display: block; width: 100%; padding: 2px 20px 6px 66px; text-align: left; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-way-sized b { color: var(--blue); font-weight: 700; }
-.cp-root[data-theme="soft"] .cp2-way-memo { padding: 0 20px 6px 66px; font-size: 11.5px; line-height: 1.45; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-way-memo { padding: 0 20px 6px 66px; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
 .cp-root[data-theme="soft"] .cp2-way-tap { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; color: var(--ink); border-radius: 10px; }
 .cp-root[data-theme="soft"] .cp2-way-tap .cp2-way-top { align-items: flex-start; }
-.cp-root[data-theme="soft"] .cp2-way-tap .cp2-chev { flex: none; margin-top: 2px; }
+.cp-root[data-theme="soft"] .cp2-way-tap .cp2-chev { flex: none; margin-top: 3px; }
 .cp-root[data-theme="soft"] .cp2-way-who { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .cp-root[data-theme="soft"] .cp2-way-who .cp2-owner { flex: none; white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-way-pill { flex: none; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-way-pill { flex: none; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
 .cp-root[data-theme="soft"] .cp2-way-pill.new { background: var(--blue); color: #fff; }
 .cp-root[data-theme="soft"] .cp2-way-pill.big { background: #F9F0E0; color: var(--warn); }
 .cp-root[data-theme="soft"] .cp2-way-pill.early { align-self: flex-start; margin-top: 4px; background: #E4E8F0; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-way-plan { display: block; margin-top: 8px; padding: 12px 14px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); font-size: 13px; line-height: 1.55; white-space: pre-line; }
-.cp-root[data-theme="soft"] .cp2-way-more { padding-top: 2px; padding-bottom: 6px; font-size: 12.5px; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-way-newcount { flex: none; font-family: var(--display); font-size: 12.5px; font-weight: 700; color: var(--blue); white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-way-gone { font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-plan { display: block; margin-top: 8px; padding: 12px 14px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); font-size: 14px; line-height: 1.55; white-space: pre-line; }
+.cp-root[data-theme="soft"] .cp2-way-more { padding-top: 2px; padding-bottom: 6px; font-size: 13.5px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-newcount { flex: none; font-family: var(--display); font-size: 13.5px; font-weight: 700; color: var(--blue); white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-way-gone { font-size: 13.5px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-way-gone s { color: var(--muted); text-decoration-color: var(--dim); }
 .cp-root[data-theme="soft"] .cp2-way-stop { gap: 4px; padding-top: 14px; padding-bottom: 14px; }
 .cp-root[data-theme="soft"] .cp2-way-track { display: block; height: 6px; margin: 4px 0 2px; border-radius: 3px; background: #DDE1EA; overflow: hidden; }
 .cp-root[data-theme="soft"] .cp2-way-track i { display: block; height: 100%; border-radius: 3px; background: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-way-takes { font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-way-pace { font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-way-takes { font-size: 14.5px; font-weight: 600; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-pace { font-size: 13.5px; font-weight: 600; line-height: 1.5; color: var(--warn); }
 .cp-root[data-theme="soft"] .cp2-way-act { align-self: flex-start; margin-top: 8px; }
 /* The line ends at the goal: a strip of page colour below its flag. */
 .cp-root[data-theme="soft"] .cp2-way-row.end::after { content: ''; position: absolute; left: 28px; top: 44px; bottom: 0; width: 16px; background: var(--bg); z-index: 1; }
 .cp-root[data-theme="soft"] .cp2-way-beyond { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
-.cp-root[data-theme="soft"] .cp2-way-beyondrow { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; }
+.cp-root[data-theme="soft"] .cp2-way-beyondrow { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 14px; }
 .cp-root[data-theme="soft"] .cp2-way-beyondrow .t { min-width: 0; font-weight: 600; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-way-beyondrow .s { flex: none; max-width: 48%; font-size: 12px; color: var(--muted); text-align: right; }
+.cp-root[data-theme="soft"] .cp2-way-beyondrow .s { flex: none; max-width: 48%; font-size: 13px; color: var(--muted); text-align: right; }
 .cp-root[data-theme="soft"] .cp2-way-links { display: flex; gap: 16px; margin-top: 4px; }
 
 /* The drawn plan (PathPlan.tsx): phases on the dashed line, milestones as
    waypoints, steps as a checklist under each. cp2-plan-*, checked unused
    before it was chosen. */
 .cp-root[data-theme="soft"] .cp2-plan-redraw {
-  display: inline-flex; align-items: center; gap: 5px; font-family: var(--body, inherit); font-size: 11.5px; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 6px; font-family: var(--body, inherit); font-size: 12.5px; font-weight: 700;
   letter-spacing: 0; text-transform: none; color: var(--blue);
 }
-.cp-root[data-theme="soft"] .cp2-plan-redraw svg { width: 13px; height: 13px; }
+.cp-root[data-theme="soft"] .cp2-plan-redraw svg { width: 15px; height: 15px; }
 .cp-root[data-theme="soft"] .cp2-plan-redraw:disabled { color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-plan-redraw:disabled svg { animation: cp2-plan-turn 1.2s linear infinite; }
 .cp-root[data-theme="soft"] .cp2-plan-spin svg { animation: cp2-plan-turn 1.2s linear infinite; }
-.cp-root[data-theme="soft"] .cp2-plan-direction { margin: 0; padding: 4px 20px 4px 66px; font-size: 13px; line-height: 1.5; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-plan-direction .lbl { display: block; font-size: 11px; font-weight: 700; color: var(--dim); margin-bottom: 1px; }
+/* A <p> when it fits in two lines, a <button> that unfolds when it does not. */
+.cp-root[data-theme="soft"] .cp2-plan-direction { display: block; width: 100%; margin: 0; padding: 4px 20px 6px 66px; text-align: left; font-size: 14px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-plan-direction .lbl { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
 .cp-root[data-theme="soft"] .cp2-plan-phase {
   position: relative; padding: 18px 20px 2px 66px;
-  font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue);
+  font-family: var(--display); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue);
 }
 /* A tick on the line where a phase begins. */
-.cp-root[data-theme="soft"] .cp2-plan-phase::before { content: ''; position: absolute; left: 30px; top: 24px; width: 12px; height: 2px; border-radius: 1px; background: #C3CAD8; }
-.cp-root[data-theme="soft"] .cp2-plan-sub { padding: 10px 20px 0 66px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-phase::before { content: ''; position: absolute; left: 30px; top: 25px; width: 12px; height: 2px; border-radius: 1px; background: #C3CAD8; }
+.cp-root[data-theme="soft"] .cp2-plan-sub { padding: 10px 20px 0 66px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-plan-ms { gap: 4px; }
 .cp-root[data-theme="soft"] .cp2-plan-ms .cp2-way-tap { gap: 3px; }
 .cp-root[data-theme="soft"] .cp2-plan-ms.reached .cp2-way-name { color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-plan-for { font-size: 11.5px; font-weight: 600; color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-plan-fold { font-size: 12px; font-weight: 600; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-plan-when { font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-plan-for { font-size: 12.5px; font-weight: 600; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-plan-fold { font-size: 13px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-when { font-size: 13.5px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-plan-when b { font-weight: 700; color: var(--muted); margin-right: 4px; }
 .cp-root[data-theme="soft"] .cp2-plan-steps {
   list-style: none; margin: 8px 0 2px; padding: 4px 0; display: flex; flex-direction: column;
   border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm);
 }
-.cp-root[data-theme="soft"] .cp2-plan-step { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; }
+.cp-root[data-theme="soft"] .cp2-plan-step { display: flex; align-items: flex-start; gap: 11px; padding: 11px 13px; }
 .cp-root[data-theme="soft"] .cp2-plan-step + .cp2-plan-step { border-top: 1px solid var(--line); }
 .cp-root[data-theme="soft"] .cp2-plan-tick {
-  flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%;
+  flex: none; width: 24px; height: 24px; margin-top: 0; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px #C3CAD8; color: #fff;
 }
-.cp-root[data-theme="soft"] .cp2-plan-tick svg { width: 13px; height: 13px; }
+.cp-root[data-theme="soft"] .cp2-plan-tick svg { width: 14px; height: 14px; }
 .cp-root[data-theme="soft"] .cp2-plan-step.done .cp2-plan-tick { background: var(--ai); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-plan-stepbody { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-.cp-root[data-theme="soft"] .cp2-plan-steptext { text-align: left; font-size: 13.5px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-plan-stepbody { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1; }
+.cp-root[data-theme="soft"] .cp2-plan-steptext { text-align: left; font-size: 15px; font-weight: 600; line-height: 1.45; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-plan-step.done .cp2-plan-steptext { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--dim); }
-.cp-root[data-theme="soft"] .cp2-plan-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.cp-root[data-theme="soft"] .cp2-plan-tag { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-plan-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.cp-root[data-theme="soft"] .cp2-plan-tag { font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
 .cp-root[data-theme="soft"] .cp2-plan-tag.quick_win { background: var(--ai-tint); color: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-plan-tag.leverage { background: var(--tint); color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-plan-tag.foundation { background: var(--line); color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-plan-size { font-size: 11.5px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-size { font-size: 12.5px; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-plan-step .cp2-way-acts { margin-top: 4px; }
 .cp-root[data-theme="soft"] .cp2-plan-ms .cp2-way-links { margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-plan-undo { align-self: flex-start; }
@@ -1399,7 +1406,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
    than a 390px card: the third ran 18px past its right edge. Wrapped, never cut. */
 .cp-root[data-theme="soft"] .cp-call .cp-btn-row { flex-wrap: wrap; }
 .cp-root[data-theme="soft"] .cp2-plan-suggest { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
-.cp-root[data-theme="soft"] .cp2-plan-suggest .t { font-size: 13.5px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-plan-suggest .t { font-size: 15px; font-weight: 600; line-height: 1.45; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-plan-suggest .cp2-way-acts { margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-plan-waiting .cp2-way-tap { gap: 2px; }
 .cp-root[data-theme="soft"] .cp2-plan-waitlist { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
@@ -1411,29 +1418,68 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
       before they were written — a reused one inherits whatever already styles
       it (.cp-steps sized every span inside it once). Verdict colours are the
       status tokens on .cp2-frame, always beside their word. ─────────────── */
-.cp-root[data-theme="soft"] .cp2-odds { gap: 6px; }
-.cp-root[data-theme="soft"] .cp2-odds-goal { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); }
-.cp-root[data-theme="soft"] .cp2-odds-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.cp-root[data-theme="soft"] .cp2-odds-name { min-width: 0; font-size: 13.5px; font-weight: 600; line-height: 1.35; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-odds-verdict { flex: none; font-size: 10.5px; font-weight: 700; line-height: 1.3; border-radius: 999px; padding: 3px 9px; white-space: nowrap; background: var(--line); color: var(--muted); }
+/* Will it work, under "you are here": a pill with the verdict, the goal, and
+   the line behind it — no card of its own. A button when it opens the goal. */
+.cp-root[data-theme="soft"] .cp2-odds { display: flex; flex-direction: column; gap: 3px; width: 100%; margin-top: 8px; text-align: left; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-odds-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-odds-name { min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+/* A verdict with no colour of its own (too early, no date, no number) is a white
+   pill with a hairline: the page's grey on the page's grey read as no pill at all. */
+.cp-root[data-theme="soft"] .cp2-odds-verdict { flex: none; font-size: 12px; font-weight: 700; line-height: 1.3; border-radius: 999px; padding: 3px 10px; white-space: nowrap; background: var(--surface); color: var(--muted); box-shadow: inset 0 0 0 1px var(--frame); }
 .cp-root[data-theme="soft"] .cp2-odds-verdict.on_track,
-.cp-root[data-theme="soft"] .cp2-odds-verdict.reached { background: var(--ai-tint); color: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-odds-verdict.tight { background: var(--warn-tint); color: var(--warn); }
-.cp-root[data-theme="soft"] .cp2-odds-verdict.off_track { background: var(--bad-tint); color: var(--bad); }
-.cp-root[data-theme="soft"] .cp2-odds-line { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-odds-said { margin-top: 4px; font-size: 11px; font-weight: 700; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-odds-signal { position: relative; padding-left: 14px; font-size: 12.5px; line-height: 1.45; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-odds-signal::before { content: ''; position: absolute; left: 2px; top: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-odds-verdict.reached { background: var(--ai-tint); color: var(--ai); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-odds-verdict.tight { background: var(--warn-tint); color: var(--warn); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-odds-verdict.off_track { background: var(--bad-tint); color: var(--bad); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-odds-line { font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-odds-signal { position: relative; padding-left: 15px; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-odds-signal::before { content: ''; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
+/* The fold's chevron: points right shut, down open. */
+.cp-root[data-theme="soft"] .cp2-plan-chev { flex: none; display: inline-flex; transition: transform .15s ease; }
+.cp-root[data-theme="soft"] .cp2-plan-chev.open { transform: rotate(90deg); }
 .cp-root[data-theme="soft"] .cp2-way-node.cp2-exp-node { color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue), 0 0 0 4px var(--bg); }
-.cp-root[data-theme="soft"] .cp2-exp-card { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
-.cp-root[data-theme="soft"] .cp2-exp-eyebrow { font-family: var(--display); font-size: 11px; font-weight: 700; line-height: 16px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-exp-why { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-exp-line { font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-exp-card { display: flex; flex-direction: column; gap: 4px; padding: 13px 15px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-exp-body { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-exp-eyebrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-family: var(--display); font-size: 12px; font-weight: 700; line-height: 18px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-exp-why { font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-exp-line { font-size: 13.5px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-exp-line b { font-weight: 700; color: var(--muted); margin-right: 6px; }
-.cp-root[data-theme="soft"] .cp2-exp-when { margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-plan-project { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--ai); text-align: left; }
+.cp-root[data-theme="soft"] .cp2-exp-when { margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-project { align-self: flex-start; font-size: 13px; font-weight: 700; color: var(--ai); text-align: left; }
 .cp-root[data-theme="soft"] .cp2-plan-handoff { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 4px; }
-.cp-root[data-theme="soft"] .cp2-plan-handoff-note { font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-plan-handoff-note { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+
+/* ── Shared classes at the Path's scale. Only under .cp2-frame, so /lifeos,
+      which wears the same theme, keeps its own. Labels at 12.5, reasons at 14
+      and the call's three answers at 13.5 — they were 10–12.5 under 19px
+      titles, the contrast in size the owner said made the screen hard to read.
+      The two answers that are not "I did it" lose their shadow: three raised
+      pills in a row read as three primary actions. ──────────────────────── */
+.cp-root[data-theme="soft"] .cp2-frame .cp-call-head { font-size: 18px; line-height: 1.3; margin: 2px 0 10px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-eyebrow { font-size: 12px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-chip { font-size: 12px; padding: 4px 10px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-because { gap: 6px; margin-bottom: 4px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-because li { font-size: 14px; line-height: 1.5; padding-left: 16px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-because li::before { top: 8px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call :is(.cp-instead, .cp-missing, .cp-notdo) { font-size: 13.5px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call :is(.cp-instead b, .cp-missing b, .cp-notdo b) { font-size: 12.5px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-reasoning { font-size: 13.5px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-btn-row .cp-btn { font-size: 13.5px; padding: 11px 12px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-btn-row .cp-btn:not(.primary) { background: var(--line); box-shadow: none; }
+/* Three answers do not fit one row at 390px, and wrapped two-and-one they read
+   as a stray. "I did it" gets its row; the other two share the next, equal —
+   "Wrong call" stays as plain a button as the rest. */
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-btn-row .cp-btn.primary { flex-basis: 100%; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-go { margin-top: 12px; font-size: 13.5px; font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-frame .cp-call .cp-help { font-size: 12.5px; }
+.cp-root[data-theme="soft"] .cp2-call-why { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.cp-root[data-theme="soft"] .cp2-call-why > * { margin: 0; }
+.cp-root[data-theme="soft"] .cp2-call-read { white-space: pre-wrap; }
+.cp-root[data-theme="soft"] .cp2-frame .cp2-way .cp-btn.sm { font-size: 13px; padding: 9px 14px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp2-way .cp2-link { font-size: 13.5px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp2-way .cp2-owner { font-size: 11.5px; padding: 3px 9px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp2-way .cp-section { font-size: 12.5px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp2-way .cp-tell .t { font-size: 15px; }
+.cp-root[data-theme="soft"] .cp2-frame .cp2-way .cp-tell .s { font-size: 13px; line-height: 1.45; }
 
 /* In the frame, above the floating nav, where the toast also sits. */
 .cp-root[data-theme="soft"] .cp2-stream-backwrap {

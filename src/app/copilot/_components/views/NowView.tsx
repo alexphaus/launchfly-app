@@ -462,7 +462,15 @@ function currencyOf(home: HomeData): string {
 }
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export function CallCard({ decision, home, actions, noOffer }: { decision: Decision; home: HomeData; actions: Actions; noOffer: boolean }) {
+/**
+ * `compact` is the Path's card at /copilot2: the call, its first reason, what to
+ * do and the three answers. The rest of the reasoning (the other reasons, what
+ * it was chosen over, what would change it, not today, the read) folds under
+ * "Why this call", below the answers. Every line of it was on the card at once,
+ * on a screen that also carries the plan, and the card was the tallest thing on
+ * it before the answers were in view.
+ */
+export function CallCard({ decision, home, actions, noOffer, compact = false }: { decision: Decision; home: HomeData; actions: Actions; noOffer: boolean; compact?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
   const [showArtifact, setShowArtifact] = useState(false);
@@ -532,6 +540,31 @@ export function CallCard({ decision, home, actions, noOffer }: { decision: Decis
     setBusy(false);
   };
 
+  // The card's parts, so the compact card can put the reasoning under the
+  // answers without the full card changing order.
+  const lead = compact ? decision.because.slice(0, 1) : decision.because;
+  const rest = compact ? decision.because.slice(1) : [];
+  const reasons = (
+    <>
+      {decision.instead_of && (
+        <div className="cp-instead"><b>Instead of</b> {decision.instead_of}</div>
+      )}
+      {decision.missing && (
+        <div className="cp-missing"><b>What would change this</b> {decision.missing}</div>
+      )}
+    </>
+  );
+  // One line, not a card. A `dont` that merely restates instead_of is not
+  // worth a second block; the starter no longer emits one at all.
+  const notToday = decision.dont && <div className="cp-notdo"><b>Not today</b> {decision.dont.title}{decision.dont.why ? ` — ${decision.dont.why}` : ''}</div>;
+  const read = home.insight && (
+    <div className="cp-reasoning">
+      {home.insight.body}
+      {home.insight.reasoning ? `\n\n${home.insight.reasoning}` : ''}
+    </div>
+  );
+  const folded = rest.length > 0 || !!decision.instead_of || !!decision.missing || !!decision.dont || !!home.insight;
+
   return (
     <>
       <div className="cp-card cp-call">
@@ -545,19 +578,13 @@ export function CallCard({ decision, home, actions, noOffer }: { decision: Decis
         </div>
         <h2 className="cp-call-head">{decision.headline}</h2>
 
-        {decision.because.length > 0 && (
+        {lead.length > 0 && (
           <ul className="cp-because">
-            {decision.because.map((b, i) => <li key={i}>{b}</li>)}
+            {lead.map((b, i) => <li key={i}>{b}</li>)}
           </ul>
         )}
 
-        {decision.instead_of && (
-          <div className="cp-instead"><b>Instead of</b> {decision.instead_of}</div>
-        )}
-
-        {decision.missing && (
-          <div className="cp-missing"><b>What would change this</b> {decision.missing}</div>
-        )}
+        {!compact && reasons}
 
         {/* The whole point of promoting a Move: the call arrives carrying the
             work. A Decision has no artifact of its own, which is why this used
@@ -586,9 +613,7 @@ export function CallCard({ decision, home, actions, noOffer }: { decision: Decis
           </button>
         )}
 
-        {/* One line, not a card. A `dont` that merely restates instead_of is not
-            worth a second block; the starter no longer emits one at all. */}
-        {decision.dont && <div className="cp-notdo"><b>Not today</b> {decision.dont.title}{decision.dont.why ? ` — ${decision.dont.why}` : ''}</div>}
+        {!compact && notToday}
 
         {answered ? (
           <div className="cp-verdict">
@@ -647,15 +672,29 @@ export function CallCard({ decision, home, actions, noOffer }: { decision: Decis
           )
         )}
 
-        {home.insight && (
+        {compact ? (folded && (
           <>
-            <button className="cp-go" onClick={() => setShowWhy((v) => !v)}>{showWhy ? 'Hide the read' : 'See the read →'}</button>
+            <button className="cp-go" onClick={() => setShowWhy((v) => !v)} aria-expanded={showWhy}>{showWhy ? 'Hide why' : 'Why this call'}</button>
             {showWhy && (
-              <div className="cp-reasoning">
-                {home.insight.body}
-                {home.insight.reasoning ? `\n\n${home.insight.reasoning}` : ''}
+              <div className="cp2-call-why">
+                {rest.length > 0 && <ul className="cp-because">{rest.map((b, i) => <li key={i}>{b}</li>)}</ul>}
+                {reasons}
+                {notToday}
+                {/* Labelled like the rest here: without its own button, the read is otherwise an unnamed paragraph. */}
+                {home.insight && (
+                  <div className="cp-instead cp2-call-read">
+                    <b>The read</b>
+                    {home.insight.body}
+                    {home.insight.reasoning ? `\n\n${home.insight.reasoning}` : ''}
+                  </div>
+                )}
               </div>
             )}
+          </>
+        )) : home.insight && (
+          <>
+            <button className="cp-go" onClick={() => setShowWhy((v) => !v)}>{showWhy ? 'Hide the read' : 'See the read →'}</button>
+            {showWhy && read}
           </>
         )}
       </div>

@@ -366,9 +366,10 @@ log of what already happened", in its owner's words). The rules are in `plan.ts`
   "10 clients at your $150, about 45 sends at the rate your own 9 sends earned,
   two days of Deep focus" needs the ledger.
 - **Capacity is visible.** The move's size, a milestone's days and whether a step
-  fits are all read from the time you set. The plan says "Sized for Deep focus,
-  150 min a day", a step longer than that says "Bigger than today", and changing
-  it redraws the plan.
+  fits are all read from the time you set. The header's pill says "Deep focus"
+  and opens the setting (the funnel plan also says "Sized for Deep focus, 150 min
+  a day"), a step longer than that says "Bigger than today", and changing it
+  redraws the plan.
 - **This week's steps are the planner's** (`pathNext`): the Moves it ranked
   (`worthDoing`'s split still holds), work it offers to do itself — opened in
   place with its plan on screen and one tap to hand it over, never approved
@@ -506,7 +507,12 @@ brief (`NIGHTLY_STEPS`: supply, reconcile, jobs, roadmap, brief), and the call i
 the plan's next step (`planCall`) — topic `plan`, no metric, graded done or not,
 with the Move arbitration would have promoted named as what it was chosen over
 and left open on the list. Only money due within `MONEY_WAITING_DAYS` (a deposit
-owed, a client who paid — `moneyWaiting`) still takes the call from the plan. A
+owed, a client who paid — `moneyWaiting`) still takes the call from the plan, and
+only from the jobs that mean it (`MONEY_DUE_JOBS`: `obligations`,
+`client_delivery`). A stake's value is not always money owed. The send queue
+values ten sends at what sends have earned and dates them by when the drafts go
+cold. It passed as money due tomorrow, every night, and kept "send 10 of your 57
+drafts" over a plan that said the opener behind them had never been answered. A
 blank offer no longer forces the offer call when there is a plan: that rung
 keeps drafts from being written from nothing, and a plan step is not a draft.
 "I did it" on a plan call ticks its step (`stepForCall`, found by its words —
@@ -545,20 +551,26 @@ word: on track, tight, off track, too early to tell, no date, no number. Before
 `RATE_SAMPLE` sends it is too early, and it says what would tell ("11 more and
 the rate is a number"). Never a probability (invariant 2). A goal with no number
 is measured by the plan's milestones for it. The lines go into the planner's
-prompt, which is what lets it cite them past the number guard, and the Path
-shows them live under **Will it work?**, first under The plan — the order below
-is the plan's answer to it. The planner is told that an off-track goal changes
-the approach, the size, the target or the date, not the effort.
+prompt, which is what lets it cite them past the number guard. The Path shows
+the verdict for the goal the plan leads with (`roadmapLeadGoal`: its first open
+milestone's goal, else the person's first) under **You are here**, as a pill,
+the goal and the line; every goal's verdict is also on its marker at the foot of
+the plan. It was a card per goal above the plan, which said each verdict twice.
+The planner is told that an off-track goal changes the approach, the size, the
+target or the date, not the effort, and that the verdict is shown beside
+`here`, so `here.line` does not restate it.
 
 **What the record says** (`outlookSignals`). Stop-or-change evidence, computed
 from rows with thresholds that already mean something here: an opener with
 `RATE_SAMPLE` settled sends and fewer than `WORKING_REPLIES` replies (the
 funnel checkpoint's own rule, and silent below it — nine sends is a bad week,
 not a verdict); calls made again and again and never done, or done and nothing
-moved (`decisionReview`); a step carried `CARRIED_PLANS` plans in a row and never
-ticked. The planner must answer each, in `changed` or `direction`; the lines ride
-with the plan (`roadmap.signals`, never written by the model) so the Path shows
-the evidence beside the answer.
+moved (`decisionReview`); steps carried `CARRIED_PLANS` plans in a row and never
+ticked — one line for all of them, since three rows of "On 3 plans in a row and
+still not done" were one fact said three times. The planner must answer each, in
+`changed` or `direction`; the lines ride with the plan (`roadmap.signals`, never
+written by the model) so the Path shows the evidence beside the answer, folded
+to **What the record says** with the first line in view.
 
 **One experiment at a time** (`experiment.ts`). One sample from one prompt
 returns the most likely plan, and the most likely plan is the one the person
@@ -599,12 +611,49 @@ the run row) instead of going to `console.error`.
 
 **The agent's side.** `COPILOT_AGENT_CAN` says what the connected agent can
 finish alone; the planner hands it steps within that, never contacting, posting,
-applying, spending or signing. A step it can do carries **Hand it over** in plain
-sight: one tap writes the project with its goal and a plan ending in "report back
+applying, spending or signing. A step it can do carries **Hand it to your agent**
+in plain sight: one tap writes the project with its goal and a plan ending in "report back
 with links, checked against" the milestone's done-when, approves it (read
 authority), and dispatches it in `after()` — not at 21:00. Approving a project on
 Work also starts it now. The step then says where the project stands and opens it;
 the tick stays the person's.
+
+**The Path reads light.** Each block above was right, and together they buried
+the steps: its owner called the Path heavy and overwhelming, with text at 10–12.5px
+beside 19–21px titles. At 390×844, with a fixture shaped like his account, the
+tab was 4,526px tall and the first step sat 2,353px below "You are here". Now
+it is 3,423px, and the first step is 1,126px down. The rules that did it:
+- Everything above the steps folds to a line: **Why this order** (two lines),
+  a failed redraw (what happened, two lines of why, **Try again**), **What the
+  record says** (a count and the first line), **Redrawn** (the counts). Each
+  opens on a tap, so nothing is hidden, only folded. Invariant 13 holds: a
+  failure's title and reason stay in view.
+- This week opens one milestone, the first still open; the rest fold to their
+  count of steps. A milestone's reason shows only while it is open. The
+  experiment sits after this week's steps, not in front of them.
+- The call card on the Path is `CallCard compact`: the call, its first reason,
+  what to do and the three answers. The rest (other reasons, what it was chosen
+  over, what would change it, not today, the read) folds under **Why this
+  call**. /lifeos and /copilot render the full card, unchanged.
+- The Now card for a plan step says which milestone it is toward, not why: the
+  reason is on that milestone, open, a few rows down.
+- The swap is not shown over a drawn plan. It only ever says "send the drafts"
+  or "move hours to sending", and with a plan that is the plan's call.
+- Type: 15px for what a row is, 13.5px for what it says, 12–12.5px for labels,
+  times and pills; nodes 32px with 16px glyphs (30/15 small). Shared classes are
+  resized only under `.cp2-frame`, so the calm theme at /lifeos does not move.
+
+**What the planner writes is shorter, tied to goals, and read twice.**
+`ROADMAP_SYSTEM` caps each line (here.line 25 words, a milestone's why 20,
+direction 240 characters), asks for each fact once, and does not ask `here.line`
+to restate the verdict. Every milestone carries the `goal_id` of the goal it
+serves. The parse accepts the id with its brackets, and with a single goal an
+unassigned milestone serves it; unassigned milestones were why every goal under
+a plan said nothing led to it. A reply that came back and does not parse
+(`UnreadableJson`, from `extractJson`, which also forgives a trailing comma for
+every caller) is asked for once more, with the parser's message, when there is
+still `RETRY_MIN_MS` of the draw's budget left. A broken page of JSON was the
+commonest way a redraw failed, and it cost the plan until the next night.
 
 Stored without a migration: the draw is a `copilot_agent_runs` row of kind
 `roadmap` (plan in `output.roadmap`, the signature in `input_summary`) and a tick

@@ -81,7 +81,7 @@ export async function refreshCallFromPlan(profileId: string): Promise<{ replaced
     if (!current || current.response !== 'pending') return { replaced: false };
     const metrics = await loadMetrics(profileId, profile);
     const promoted = await promoteCall(profile, metrics).catch(() => null);
-    const moneyFirst = !!promoted && moneyWaiting(promoted.move.stake);
+    const moneyFirst = !!promoted && moneyWaiting(promoted.move);
     const planned = moneyFirst ? null : await planCallFor(profile, promoted?.move ?? null);
     if (!planned || !replacesCall(current, planned, moneyFirst)) return { replaced: false };
     const r = await replaceTodayCall(profileId, {
@@ -173,7 +173,7 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   // planCall for why one planner and not three. A blank offer does not force
   // the offer call over it: that rung exists so nothing is drafted from
   // nothing, and a plan step is not a draft; the draft routes still refuse.
-  const planned = promoted && moneyWaiting(promoted.move.stake) ? null : await planCallFor(profile, promoted?.move ?? null);
+  const planned = promoted && moneyWaiting(promoted.move) ? null : await planCallFor(profile, promoted?.move ?? null);
   const useFloor = !planned && (blankOffer || (!promoted && !out.decision));
   out.decision = planned ?? (blankOffer ? floor.decision : promoted ? promoted.draft : (out.decision ?? floor.decision));
   // A promoted Move brings its own trade-off (the runner-up) and its own

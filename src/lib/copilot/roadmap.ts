@@ -224,6 +224,7 @@ You get who they are, the goals they wrote in their own priority order with thei
 How to draw it:
 - Start from what is achievable now. "week" holds quick wins that make the next phase possible, sized to the minutes they have each day. Do not put more in "week" than those minutes hold.
 - A milestone is an outcome, not an activity: "A first paying client for the renovation work", not "Work on marketing". Give each a done_when a person can check without arguing: "One person has paid", "The listing is live", "Three offers compared side by side".
+- Give every milestone the goal_id of the goal it serves: the id in brackets in GOALS, never its title. null only for a milestone that serves no goal on the list.
 - Steps are the next concrete actions under a milestone, each one person can do. Start each with a verb. Size each: quick (under 30 minutes), sitting (one focused sitting), days (several days of work).
 - Tag each step: quick_win (small, fast, a visible result), leverage (one action that unlocks or compounds several later ones), foundation (unglamorous and necessary).
 - Order by dependency and leverage: what has to be true before the next thing is possible. Say the reasoning for the order once, in direction.
@@ -236,7 +237,7 @@ How to draw it:
 - Later phases can be one milestone with no steps. A plan past the next quarter is a direction, not a schedule.
 
 Tell the truth about whether it works:
-- WILL IT WORK says, for each goal, whether the pace the record shows gets there by its date. When a goal is off track or too early to tell, here.line says so plainly, and the plan changes something that could change the answer — the approach, the size of the offer, the target, the date, or a fast test of the thing it all rests on — instead of asking for more of the same effort. Never call a goal on track when that block does not.
+- WILL IT WORK says, for each goal, whether the pace the record shows gets there by its date. The app shows that verdict beside here, so do not restate it. When a goal is off track or too early to tell, the plan changes something that could change the answer — the approach, the size of the offer, the target, the date, or a fast test of the thing it all rests on — instead of asking for more of the same effort. Never call a goal on track when that block does not.
 - Each line under WHAT THE RECORD SAYS is evidence to act on. Change the plan because of it and say so in changed, or keep going and say why in direction. Never leave one unanswered.
 - Never say one thing caused another unless the record shows it. A message never sent caused nothing.
 - Messages that were answered and ones that were ignored are listed when there are any. Plan around the difference; with fewer than three on either side, say the sample is small instead of drawing a rule from it.
@@ -258,10 +259,10 @@ Hard rules:
 
 probably_done lists the ids of steps or milestones from the last plan, still open, that their own recent words say they have already done — "booked two markets" for a step about booking markets. Only from their words, never from silence or a guess. Keep those items in the plan: the person ticks them, you do not. Empty when nothing they wrote says so.
 
-here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence: what is true now, and whether the pace gets their first goal there in time. why is one sentence. direction is at most two sentences, under 300 characters. changed is one sentence, and null on a first plan.
+It is read on a phone, so every line is short. here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence of at most 25 words: what is true now and what this plan does about it. A milestone's why is one sentence of at most 20 words. direction is at most two sentences, under 240 characters. changed is one sentence of at most 20 words, and null on a first plan. Say each fact once: a count or finding used in one of these lines is not repeated in another, and none copies WILL IT WORK or WHAT THE RECORD SAYS, which the app shows beside the plan — answer them, do not restate them.
 
-Return only JSON:
-{"here":{"title":"...","line":"..."},"direction":"...","changed":null,"probably_done":[],"experiment":{"id":"...","title":"...","angle":"fast_test","goal_id":null,"why":"...","test":"...","watch":"...","check_days":7},"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":null,"steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
+Return only JSON, with no text before or after it:
+{"here":{"title":"...","line":"..."},"direction":"...","changed":null,"probably_done":[],"experiment":{"id":"...","title":"...","angle":"fast_test","goal_id":null,"why":"...","test":"...","watch":"...","check_days":7},"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":"...","steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
 Phase keys, in order: week, month, quarter, later.`;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -661,6 +662,16 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
     return id;
   };
 
+  // Which goal a milestone serves, as the id GOALS lists — tolerating the
+  // brackets it is listed in. With one goal there is nothing to choose, so a
+  // milestone the model left unassigned serves it. Unassigned milestones are
+  // what left every goal under Alex's plan saying nothing led to it.
+  const onlyGoal = ctx.goalIds.length === 1 ? ctx.goalIds[0] : null;
+  const goalOf = (v: unknown): string | null => {
+    const id = typeof v === 'string' ? v.trim().replace(/^\[(.*)\]$/, '$1').trim() : '';
+    return ctx.goalIds.includes(id) ? id : onlyGoal;
+  };
+
   const byKey = new Map<PhaseKey, RoadmapMilestone[]>();
   for (const p of arr(r.phases)) {
     const po = obj(p);
@@ -680,8 +691,7 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
         const who = so.who === 'ai' && ctx.aiAvailable ? 'ai' : 'you';
         steps.push({ id: uniqueId(so.id, st), title: st, size: oneOf(so.size, SIZES, 'sitting'), tag: oneOf(so.tag, TAGS, 'foundation'), who });
       }
-      const goal = typeof mo.goal_id === 'string' && ctx.goalIds.includes(mo.goal_id) ? mo.goal_id : null;
-      list.push({ id: uniqueId(mo.id, title), title, why: clean(mo.why, TEXT_MAX, 'claim'), doneWhen: clean(mo.done_when, TEXT_MAX, 'target'), goalId: goal, steps });
+      list.push({ id: uniqueId(mo.id, title), title, why: clean(mo.why, TEXT_MAX, 'claim'), doneWhen: clean(mo.done_when, TEXT_MAX, 'target'), goalId: goalOf(mo.goal_id), steps });
     }
     byKey.set(key, list);
   }
@@ -1084,6 +1094,20 @@ export function roadmapFirstStep(view: RoadmapView): { step: StepView; milestone
   return null;
 }
 
+/**
+ * The goal the plan leads with: the goal of its first open milestone this week
+ * or this month, when the planner said which. Null when none does, and the
+ * caller falls back to the person's own first goal.
+ */
+export function roadmapLeadGoal(view: RoadmapView): string | null {
+  if (view.state !== 'ready') return null;
+  for (const p of view.phases) {
+    if (p.key !== 'week' && p.key !== 'month') continue;
+    for (const m of p.milestones) if (m.state === 'open' && m.goalId) return m.goalId;
+  }
+  return null;
+}
+
 /** "3 of 7 milestones" — counted from taps, never estimated. */
 export function roadmapProgress(view: RoadmapView): string | null {
   if (view.state !== 'ready' || !view.total) return null;
@@ -1172,13 +1196,27 @@ export const PLAN_TOPIC = 'plan';
 export const MONEY_WAITING_DAYS = 7;
 
 /**
+ * The jobs whose value is money already agreed: a debt or a bill with a date
+ * (obligations), a client who paid and is waiting for the work (client_delivery).
+ */
+export const MONEY_DUE_JOBS: ReadonlySet<string> = new Set(['obligations', 'client_delivery']);
+
+/**
  * Real money, due soon: a deposit owed, a client who paid and is waiting for
  * the work. A job computes both from rows, and a plan drawn last night may not
- * have seen it yet. A goal's gap carries a value too, but it is due at the
- * goal's horizon, weeks out, and it is exactly what the plan is ordered against.
+ * have seen it yet.
+ *
+ * By job as well as by stake, because a stake's value is not always money
+ * owed. The send queue values ten sends at what sends have earned so far, and
+ * its deadline is the day the drafts go cold — so "send 10 of your 57 drafts"
+ * read as money due tomorrow and kept the call every night, over a plan that
+ * said the opener behind those drafts had never been answered. An expected
+ * value is the plan's to weigh. A goal's gap is the same: it is what the plan
+ * is ordered against.
  */
-export function moneyWaiting(stake: Pick<Stake, 'value' | 'withinDays'> | null | undefined): boolean {
-  return !!stake && (stake.value ?? 0) > 0 && stake.withinDays <= MONEY_WAITING_DAYS;
+export function moneyWaiting(move: { job?: string | null; stake?: Pick<Stake, 'value' | 'withinDays'> | null } | null | undefined): boolean {
+  const stake = move?.stake;
+  return !!stake && !!move.job && MONEY_DUE_JOBS.has(move.job) && (stake.value ?? 0) > 0 && stake.withinDays <= MONEY_WAITING_DAYS;
 }
 
 /**

@@ -147,7 +147,7 @@ export interface NowInput {
    * selling is part of this person's path, so a blank offer is no longer the
    * move by default.
    */
-  planStep?: { item: string; title: string; milestone: string; why: string | null; size: string; sends?: boolean } | null;
+  planStep?: { item: string; title: string; milestone: string; size: string; sends?: boolean } | null;
   hasPlan?: boolean;
 }
 
@@ -237,7 +237,9 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
     return {
       now: {
         kind: 'step', key: `rm:${step.item}`, item: step.item, title: step.title,
-        why: [`Toward: ${step.milestone}.`, step.why].filter(Boolean).join(' '),
+        // The milestone, not its reason: the reason is under the milestone on the
+        // plan, open, a few rows down. Both on one screen was the same sentence twice.
+        why: `Toward: ${step.milestone}.`,
         size: `${step.size} · you have ${cap.minutes} min`,
         cta: 'Mark it done',
       },

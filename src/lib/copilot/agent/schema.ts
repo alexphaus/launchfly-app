@@ -51,14 +51,28 @@ export function userPrompt(pack: ContextPack): string {
   return `Context pack for today (${pack.today}):\n${JSON.stringify(pack, null, 2)}\n\nProduce the daily brief JSON.`;
 }
 
+/**
+ * A reply that came back and holds no readable JSON object, with what the
+ * parser said. Its own type so a caller can tell "answered, unreadably" — worth
+ * asking again — from "never answered".
+ */
+export class UnreadableJson extends Error {}
+
 /** Pull a JSON object out of a model reply that may contain fences or prose. */
 export function extractJson(text: string): unknown {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   try { return JSON.parse(trimmed); } catch { /* fall through */ }
   const start = trimmed.indexOf('{');
   const end = trimmed.lastIndexOf('}');
-  if (start >= 0 && end > start) return JSON.parse(trimmed.slice(start, end + 1));
-  throw new Error('agent returned no JSON object');
+  if (start < 0 || end <= start) throw new UnreadableJson('agent returned no JSON object');
+  const body = trimmed.slice(start, end + 1);
+  try { return JSON.parse(body); } catch (e) {
+    // A trailing comma is the commonest way a model breaks a page of JSON, and
+    // one character should not cost the whole answer. Tried only after the
+    // strict parse failed, so JSON that was valid is never rewritten.
+    try { return JSON.parse(body.replace(/,(\s*[}\]])/g, '$1')); } catch { /* the first error says more */ }
+    throw new UnreadableJson(e instanceof Error ? e.message : String(e));
+  }
 }
 
 const str = (v: unknown, max = 600): string | undefined => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);

@@ -43,7 +43,7 @@ import { CallCard, FirstRun } from '../views/NowView';
 import type { Derived } from './derive';
 import { IconAlert, IconArrow, IconCheck, IconChevron, IconFlag, IconRedraw, IconStar, IconSwap, IconYou, PathGlyph } from './icons2';
 import { planServesOneGoal } from '@/lib/copilot/roadmap';
-import { AlsoThisWeek, DrawnPlanHead, ExperimentCard, GoalMarkers, IconMilestone, PhaseBlock, PlanPending, type Handed } from './PathPlan';
+import { AlsoThisWeek, DrawnPlanHead, ExperimentCard, GoalMarkers, HereVerdict, IconMilestone, PhaseBlock, PlanPending, type Handed } from './PathPlan';
 
 export default function PathTab({ home, d, actions, briefing, finding, openMatches }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean; finding: boolean; openMatches: (s: MatchStage) => void }) {
   const hereRef = useRef<HTMLDivElement>(null);
@@ -120,6 +120,8 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
         <span className="cp2-way-heretitle">{d.path.here.title}</span>
         {d.path.here.line && <span className="cp2-way-s">{d.path.here.line}</span>}
         {d.path.here.counts && <span className="cp2-way-s">{d.path.here.counts}</span>}
+        {/* Whether it gets there, for the goal the plan leads with. Only beside a drawn plan: the funnel plan says the same under its own goal. */}
+        {plan.state !== 'off' && d.path.verdict && <HereVerdict o={d.path.verdict} actions={actions} />}
         {/* Since this device last showed the path; the step itself is in the evidence, where it happened.
             Under the fact rather than over it, so the node stays level with "You are here". */}
         {reached && <span className="cp2-way-reached"><IconStar />Reached: {REACHED[reached.key]}</span>}
@@ -129,7 +131,7 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
         <div className="cp2-way-row cp2-way-nowrow">
           <span className="cp2-way-node now"><IconArrow /></span>
           {d.path.now.kind === 'call' && home.decision
-            ? <CallCard decision={home.decision} home={home} actions={actions} noOffer={d.noOffer} />
+            ? <CallCard decision={home.decision} home={home} actions={actions} noOffer={d.noOffer} compact />
             : d.path.now.kind === 'rest' && !home.decision && !briefing
             ? <NoCallYet home={home} actions={actions} />
             : <NowCard now={d.path.now} actions={actions} openMatches={openMatches} />}
@@ -143,18 +145,21 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
 
         {plan.state !== 'off' ? (
           <>
-            <DrawnPlanHead view={plan} now={d.now} onRedraw={() => void actions.drawRoadmap('manual')} unreadable={home.roadmap?.unreadable ?? null} actions={actions} outlook={d.path.outlook} />
-            {/* Before the steps: the one thing worth trying that is not more of the same. */}
-            {experiment && <ExperimentCard view={experiment} goalTitle={experimentGoal} today={home.recent.today} actions={actions} />}
-            <button className="cp2-way-sized" onClick={() => actions.openSheet({ kind: 'capacity' })}>
-              Sized for <b>{cap.label}</b>, {cap.minutes} min a day. It redraws when you change that, when you tell it something, and as results come back.
-            </button>
+            <DrawnPlanHead view={plan} now={d.now} onRedraw={() => void actions.drawRoadmap('manual')} unreadable={home.roadmap?.unreadable ?? null} actions={actions} />
+            {/* No "Sized for …" paragraph here: the capacity pill in the header says it and opens the same sheet,
+                and each step already says whether it fits today. */}
             {plan.state === 'none' && <PlanPending view={plan} onDraw={() => void actions.drawRoadmap('manual')} />}
             {plan.state === 'ready'
               ? plan.phases.map((ph) => (
                   <PhaseBlock key={ph.key} phase={ph} actions={actions} workerConnected={home.workerConnected} handed={handed} showGoal={!planServesOneGoal(plan)}>
                     {ph.key === plan.phases[0].key && (
-                      <AlsoThisWeek steps={next.steps} render={(s) => <NextRow key={s.key} step={s} actions={actions} isNew={added.has(s.key)} capMinutes={cap.minutes} />} />
+                      <>
+                        <AlsoThisWeek steps={next.steps} render={(s) => <NextRow key={s.key} step={s} actions={actions} isNew={added.has(s.key)} capMinutes={cap.minutes} />} />
+                        {/* After the first phase's steps, not before them: the one thing worth trying that is
+                            not more of the same sits beside the week it would change. In front of it, a card
+                            this size pushed the steps a screen further from the move. */}
+                        {experiment && <ExperimentCard view={experiment} goalTitle={experimentGoal} today={home.recent.today} actions={actions} />}
+                      </>
                     )}
                   </PhaseBlock>
                 ))

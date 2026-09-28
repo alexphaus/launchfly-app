@@ -17,11 +17,8 @@ import { matchCounts, matchFeed, matchesStatus, stageCards } from '@/lib/copilot
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
 import { pathAhead, pathHere, pathNow, planStatus, priceOf } from '@/lib/copilot/plan';
-import { SIZE_LABEL, goalLayout, goalMarkers, markMap, moneyWaiting, replacesCall, roadmapDue, roadmapFirstStep, roadmapSignature, roadmapView } from '@/lib/copilot/roadmap';
+import { SIZE_LABEL, goalMarkers, markMap, moneyWaiting, replacesCall, roadmapDue, roadmapFirstStep, roadmapLeadGoal, roadmapSignature, roadmapView } from '@/lib/copilot/roadmap';
 import { VERDICT_WORDS, goalOutlooks } from '@/lib/copilot/outlook';
-
-/** Goals under "Will it work?" at most: the plan's first few, not a report on every goal. */
-const MAX_OUTLOOK = 3;
 import { weekReview } from '@/lib/copilot/review';
 import { doneForYou, needsYou, worthDoing } from '@/lib/copilot/today';
 import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
@@ -160,7 +157,7 @@ export function derive(home: HomeData) {
   const staleCall = plan.state === 'ready' && replacesCall(
     home.decision,
     first ? { headline: first.step.title } : null,
-    moneyWaiting(home.callMove?.stake),
+    moneyWaiting(home.callMove),
   );
   const counted = pathHere(ladder, funnel);
   // Where you are, in the plan's words when it has some, with the counts under
@@ -185,7 +182,7 @@ export function derive(home: HomeData) {
     freshMatches: good.filter((i) => i.from === 'business' && i.fresh).length,
     hasPlan: plan.state === 'ready',
     planStep: first ? {
-      item: first.step.id, title: first.step.title, milestone: first.milestone.title, why: first.milestone.why, size: SIZE_LABEL[first.step.size],
+      item: first.step.id, title: first.step.title, milestone: first.milestone.title, size: SIZE_LABEL[first.step.size],
       // "Send the waiting drafts": the plan asked for the drafts, so the move is the send card, sized to the day, with its one tap to them.
       sends: /\bdrafts?\b/i.test(first.step.title),
     } : null,
@@ -219,14 +216,22 @@ export function derive(home: HomeData) {
     plan,
     planDue,
     goals: goalMarkers(home.goals, plan, currency, home.recent.today, new Map(outlooks.map((o) => [o.goalId, VERDICT_WORDS[o.verdict]]))),
-    // The goals the plan works on — the same set its goal markers show in full —
-    // with their verdicts, at the top of the plan (PathPlan's WillItWork).
-    outlook: (() => {
-      const shown = new Set(goalLayout(goalMarkers(home.goals, plan, currency, home.recent.today)).shown.map((g) => g.id));
-      return outlooks.filter((o) => shown.has(o.goalId)).slice(0, MAX_OUTLOOK);
+    // Whether the goal the plan leads with gets there in time, said under "you
+    // are here" — the goal of its first open milestone, else the person's first.
+    // It was a block of its own above the plan, one card per goal, and every
+    // verdict in it was said again on the goal markers at the foot of the plan:
+    // the most important line on the screen, in a box, twice. The rest of the
+    // goals carry theirs on their markers.
+    verdict: (() => {
+      const lead = roadmapLeadGoal(plan) ?? home.goals[0]?.id ?? null;
+      return outlooks.find((o) => o.goalId === lead) ?? null;
     })(),
     // Drafts from a blank offer are not on To send (above), so they are not waiting to be sent either.
-    swap: pathSwap({ now, timezone: home.profile.timezone, focus: home.recent.focus, sentAt, outcomes: home.recent.outcomes, queueCount: noOffer ? 0 : queueCount }),
+    // Not over a drawn plan: the swap only ever says "send the drafts" or "move
+    // hours to sending", and with a plan that is the plan's call to make. Alex's
+    // Path said "send the drafts first" in the evidence while the plan under it
+    // said to rewrite the opener before sending more like them.
+    swap: plan.state === 'ready' ? null : pathSwap({ now, timezone: home.profile.timezone, focus: home.recent.focus, sentAt, outcomes: home.recent.outcomes, queueCount: noOffer ? 0 : queueCount }),
   };
 
   /* Work — the path to money and the team running it */

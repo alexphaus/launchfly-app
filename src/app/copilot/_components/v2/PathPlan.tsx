@@ -21,13 +21,19 @@ import {
   TAG_LABEL, SIZE_LABEL, goalLayout,
   type GoalMarker, type MarkState, type MilestoneView, type PhaseView, type RoadmapView, type StepView,
 } from '@/lib/copilot/roadmap';
+import { dateLabel } from '@/lib/copilot/due';
+import { ANGLE_LABEL, type ExperimentState, type ExperimentView } from '@/lib/copilot/experiment';
+import { VERDICT_WORDS, type GoalOutlook } from '@/lib/copilot/outlook';
 import type { NextStep } from '@/lib/copilot/pathway';
 import type { Actions } from '../shared';
-import { IconAlert, IconCheck, IconFlag, IconRedraw } from './icons2';
+import { IconAlert, IconCheck, IconFlag, IconFlask, IconGauge, IconRedraw } from './icons2';
+
+/** A handed-over step's project, by the step's title: its id to open, and where it stands. */
+export type Handed = Map<string, { id: string; status: string }>;
 
 type Ready = Extract<RoadmapView, { state: 'ready' }>;
 
-export function DrawnPlanHead({ view, now, onRedraw, unreadable, actions }: { view: RoadmapView; now: Date; onRedraw: () => void; unreadable: string | null; actions: Actions }) {
+export function DrawnPlanHead({ view, now, onRedraw, unreadable, actions, outlook = [] }: { view: RoadmapView; now: Date; onRedraw: () => void; unreadable: string | null; actions: Actions; outlook?: GoalOutlook[] }) {
   const drawing = view.state !== 'off' && view.drawing;
   const failed = view.state !== 'off' ? view.failed : null;
   return (
@@ -38,13 +44,91 @@ export function DrawnPlanHead({ view, now, onRedraw, unreadable, actions }: { vi
           <IconRedraw />{drawing ? 'Redrawing…' : view.state === 'ready' ? `Drawn ${agoLabel(view.drawnAt, now)}` : 'Draw it'}
         </button>
       </div>
+      {/* First, whether it can work: the order below is the plan's answer to it. */}
+      {view.state === 'ready' && <WillItWork outlook={outlook} signals={view.signals} />}
       {view.state === 'ready' && view.direction && <p className="cp2-plan-direction"><span className="lbl">Why this order</span>{view.direction}</p>}
       {/* Said beside the plan it could not replace, so an old plan is never read as a fresh one (invariant 13). */}
       {failed && <WarnRow title={view.state === 'ready' ? 'The last redraw failed' : 'Could not draw your plan'} detail={view.state === 'ready' ? `${sentence(failed)} This is the plan from before.` : failed} />}
       {unreadable && <WarnRow title="Could not read your plan" detail={`${unreadable}. Ticks may be missing below.`} />}
+      {/* The plan saved and the call could not follow it: said, so a card over the plan that disagrees with it is explained (invariant 13). */}
+      {view.state === 'ready' && view.callError && <WarnRow title="Today's call was not updated for this plan" detail={sentence(view.callError)} />}
       {view.state === 'ready' && view.suggested.length > 0 && <SuggestedDone items={view.suggested} actions={actions} />}
       {view.state === 'ready' && view.changes && <ChangesRow changes={view.changes} />}
     </>
+  );
+}
+
+/**
+ * Will it work: each goal the plan works on, with the verdict its rows give it
+ * (outlook.ts), then what the record said to stop or change when the plan was
+ * drawn. Counted, never estimated — the planner was handed these same lines and
+ * had to answer them, so the plan below is its answer.
+ */
+export function WillItWork({ outlook, signals }: { outlook: GoalOutlook[]; signals: string[] }) {
+  if (!outlook.length && !signals.length) return null;
+  return (
+    <div className="cp2-way-row cp2-odds">
+      <span className="cp2-way-node sm quiet"><IconGauge /></span>
+      <span className="cp2-way-t">Will it work?</span>
+      {outlook.map((o) => (
+        <span key={o.goalId} className="cp2-odds-goal">
+          <span className="cp2-odds-top">
+            <span className="cp2-odds-name cp2-clamp2">{o.title}</span>
+            <span className={`cp2-odds-verdict ${o.verdict}`}>{VERDICT_WORDS[o.verdict]}</span>
+          </span>
+          <span className="cp2-odds-line">{o.line}</span>
+        </span>
+      ))}
+      {signals.length > 0 && <span className="cp2-odds-said">The record says</span>}
+      {signals.map((line) => <span key={line} className="cp2-odds-signal">{line}</span>)}
+    </div>
+  );
+}
+
+/**
+ * The plan's one experiment (experiment.ts): a move the person would probably
+ * not have written, with the evidence for it, a test sized to a day, and what
+ * would show it worked. Offered, it asks to be tried or set aside; being tried,
+ * it asks how it went — hardest on its check date, but answerable any day.
+ * Nothing here is graded for them: the verdict is their tap.
+ */
+export function ExperimentCard({ view, goalTitle, today, actions }: { view: ExperimentView; goalTitle: string | null; today: string; actions: Actions }) {
+  const [busy, setBusy] = useState(false);
+  const x = view.exp;
+  const act = async (state: ExperimentState) => {
+    setBusy(true);
+    await actions.markExperiment(x.id, state);
+    setBusy(false);
+  };
+  return (
+    <div className="cp2-way-row cp2-exp">
+      <span className="cp2-way-node sm cp2-exp-node"><IconFlask /></span>
+      <span className="cp2-exp-card">
+        <span className="cp2-exp-eyebrow">Experiment · {ANGLE_LABEL[x.angle]}</span>
+        <span className="cp2-way-name">{x.title}</span>
+        {goalTitle && <span className="cp2-plan-for cp2-clamp1">For {goalTitle}</span>}
+        <span className="cp2-exp-why">{x.why}</span>
+        <span className="cp2-exp-line"><b>Test</b>{x.test}</span>
+        <span className="cp2-exp-line"><b>It worked if</b>{x.watch}</span>
+        {view.stage === 'offered' ? (
+          <span className="cp2-way-acts">
+            <button className="cp-btn primary sm" disabled={busy} onClick={() => void act('started')}>Try it</button>
+            <button className="cp-btn sm" disabled={busy} onClick={() => void act('dropped')}>Not for me</button>
+          </span>
+        ) : (
+          <>
+            <span className="cp2-exp-when">
+              {view.due ? 'Its check date is here. Did it work?' : `Trying it · check on ${dateLabel(view.checkOn, today)}`}
+            </span>
+            <span className="cp2-way-acts">
+              <button className={`cp-btn sm ${view.due ? 'primary' : ''}`} disabled={busy} onClick={() => void act('worked')}>It worked</button>
+              <button className="cp-btn sm" disabled={busy} onClick={() => void act('failed')}>It didn&rsquo;t</button>
+              <button className="cp-btn sm" disabled={busy} onClick={() => void act('unclear')}>Can&rsquo;t tell</button>
+            </span>
+          </>
+        )}
+      </span>
+    </div>
   );
 }
 
@@ -130,7 +214,7 @@ export function PlanPending({ view, onDraw }: { view: Extract<RoadmapView, { sta
  * steps (Moves, projects under way) sit under this week, where they compete for
  * the same hours.
  */
-export function PhaseBlock({ phase, actions, workerConnected, handed, showGoal, children }: { phase: PhaseView; actions: Actions; workerConnected: boolean; handed: Set<string>; showGoal: boolean; children?: React.ReactNode }) {
+export function PhaseBlock({ phase, actions, workerConnected, handed, showGoal, children }: { phase: PhaseView; actions: Actions; workerConnected: boolean; handed: Handed; showGoal: boolean; children?: React.ReactNode }) {
   const open = phase.key === 'week';
   return (
     <>
@@ -146,7 +230,7 @@ export function PhaseBlock({ phase, actions, workerConnected, handed, showGoal, 
   );
 }
 
-function MilestoneRow({ m, startOpen, actions, workerConnected, handed, showGoal }: { m: MilestoneView; startOpen: boolean; actions: Actions; workerConnected: boolean; handed: Set<string>; showGoal: boolean }) {
+function MilestoneRow({ m, startOpen, actions, workerConnected, handed, showGoal }: { m: MilestoneView; startOpen: boolean; actions: Actions; workerConnected: boolean; handed: Handed; showGoal: boolean }) {
   const [open, setOpen] = useState(startOpen && m.state === 'open');
   const reached = m.state === 'done';
   const visible = m.steps.filter((s) => s.state !== 'dropped');
@@ -168,7 +252,7 @@ function MilestoneRow({ m, startOpen, actions, workerConnected, handed, showGoal
         <>
           {m.doneWhen && <span className="cp2-plan-when"><b>Done when</b> {m.doneWhen}</span>}
           <ul className="cp2-plan-steps">
-            {visible.map((s) => <StepItem key={s.id} s={s} milestone={m} actions={actions} workerConnected={workerConnected} handedOver={handed.has(s.title)} />)}
+            {visible.map((s) => <StepItem key={s.id} s={s} actions={actions} workerConnected={workerConnected} project={handed.get(s.title) ?? null} />)}
           </ul>
           <span className="cp2-way-links">
             <button className={`cp2-link ${allDone ? 'strong' : ''}`} onClick={() => void actions.markRoadmap(m.id, 'done')}>{allDone ? 'Mark it reached' : 'Reached it already'}</button>
@@ -192,22 +276,34 @@ function SetAsideRow({ m, actions }: { m: MilestoneView; actions: Actions }) {
 
 /**
  * A step: the tick, what it is, and what kind of step it is. Tapping the words
- * shows the rest — set it aside, or hand research to the worker, which writes a
- * draft project that still has to be approved (invariant 11's cousin: nothing
- * starts because a plan said so).
+ * shows the rest — set it aside.
+ *
+ * A step the plan gave the agent says so and carries its button in plain sight:
+ * one tap hands it over and starts it (handOverStep). It used to sit behind a
+ * tap on the step's words, write a draft with no goal and no plan, and wait to
+ * be approved on Work and then for 21:00 — so work the plan had already judged a
+ * machine could do waited a day unless somebody went looking. Once handed over,
+ * the row says where the project stands and opens it. Handing over is not
+ * doing: the tick stays the person's.
  */
-function StepItem({ s, milestone, actions, workerConnected, handedOver }: { s: StepView; milestone: MilestoneView; actions: Actions; workerConnected: boolean; handedOver: boolean }) {
+const PROJECT_STATE: Record<string, string> = {
+  draft: 'Waiting for your approval on Work',
+  active: 'With your agent',
+  blocked: 'Your agent needs you',
+  done: 'Your agent finished it',
+};
+
+function StepItem({ s, actions, workerConnected, project }: { s: StepView; actions: Actions; workerConnected: boolean; project: { id: string; status: string } | null }) {
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const done = s.state === 'done';
   const toggle = (state: MarkState) => void actions.markRoadmap(s.id, state);
+  const agents = s.who === 'ai' && workerConnected;
   const handOver = async () => {
     setBusy(true); setError(null);
-    const r = await actions.createCommission({ objective: s.title, why: `A step toward: ${milestone.title}` });
+    const r = await actions.handOverStep(s.id);
     setBusy(false);
-    // Not ticked: handing it over is not doing it. The project it wrote is how
-    // the row knows (handedOver), and its result lands in the evidence itself.
     if (!r.ok) setError(r.error ?? 'Could not hand that over');
   };
   return (
@@ -220,13 +316,21 @@ function StepItem({ s, milestone, actions, workerConnected, handedOver }: { s: S
         <span className="cp2-plan-meta">
           <span className={`cp2-plan-tag ${s.tag}`}>{TAG_LABEL[s.tag]}</span>
           <span className="cp2-plan-size">{SIZE_LABEL[s.size]}{!s.fits && !done ? ' · bigger than today' : ''}</span>
-          {handedOver ? <span className="cp2-owner ai">Handed over</span> : s.who === 'ai' && workerConnected && <span className="cp2-owner ai">AI can do it</span>}
+          {!project && agents && <span className="cp2-owner ai">Your agent can do this</span>}
         </span>
+        {project && !done && (
+          <button className="cp2-plan-project" onClick={() => actions.openSheet({ kind: 'commission', id: project.id })}>
+            {PROJECT_STATE[project.status] ?? 'Handed over'} · open
+          </button>
+        )}
+        {agents && !project && !done && (
+          <span className="cp2-plan-handoff">
+            <button className="cp-btn primary sm" disabled={busy} onClick={() => void handOver()}>{busy ? 'Handing it over…' : 'Hand it over'}</button>
+            <span className="cp2-plan-handoff-note">It starts now. It never contacts anyone or spends.</span>
+          </span>
+        )}
         {more && !done && (
           <span className="cp2-way-acts">
-            {s.who === 'ai' && workerConnected && !handedOver && (
-              <button className="cp-btn primary sm" disabled={busy} onClick={() => void handOver()}>{busy ? 'Handing it over…' : 'Hand it over'}</button>
-            )}
             <button className="cp-btn sm" onClick={() => toggle('dropped')}>Not for me</button>
           </span>
         )}
@@ -288,7 +392,7 @@ export function GoalMarkers({ goals, actions }: { goals: GoalMarker[]; actions: 
             </span>
             {pct != null && <span className="cp2-way-track" aria-hidden><i style={{ width: `${pct}%` }} /></span>}
             <span className="cp2-way-s">
-              {[g.horizon, g.toward ? `${g.toward} milestone${g.toward === 1 ? '' : 's'} on the plan lead here` : 'Nothing on the plan leads here yet'].filter(Boolean).join(' · ')}
+              {[g.verdict, g.horizon, g.toward ? `${g.toward} milestone${g.toward === 1 ? '' : 's'} on the plan lead here` : 'Nothing on the plan leads here yet'].filter(Boolean).join(' · ')}
             </span>
             {last && links}
           </div>

@@ -11,6 +11,7 @@
 // Uses no model. It is division: a gap, a rate read off logged wins, and whether
 // the second closes the first before the date the user set.
 
+import { goalDue } from '../due';
 import { money } from './runway-guard';
 import type { MoveDraft } from '../moves';
 import type { Goal, Metrics } from '../types';
@@ -50,21 +51,31 @@ export function pickGoal(goals: Goal[]): Goal | null {
   return [...goals].filter(measurable).sort((a, b) => a.priority - b.priority)[0] ?? null;
 }
 
-/** One goal becomes one decision. Pure, so the arithmetic is under test. */
-export function goalMove(goal: Goal, m: Metrics, month: string): MoveDraft | null {
+/**
+ * One goal becomes one decision. Pure, so the arithmetic is under test.
+ *
+ * `today` is the person's calendar day: the days left are counted from it to the
+ * goal's date (due.ts). They used to be the horizon the goal was written with,
+ * which never counts down — "not 90 days" on the day it was set and every day after.
+ */
+export function goalMove(goal: Goal, m: Metrics, today: string): MoveDraft | null {
   if (!measurable(goal)) return null;
+  const month = today.slice(0, 7);
   const target = goal.target_value as number;
   const current = goal.current_value ?? 0;
   const gap = target - current;
   const cur = goal.unit || '$';
   const rate = monthlyRate(m);
-  const horizonDays = goal.horizon_days && goal.horizon_days > 0 ? goal.horizon_days : null;
+  const due = goalDue(goal, today);
+  // A date already gone has no days to spread the gap over; the headline says so.
+  const horizonDays = due && due.daysLeft > 0 ? due.daysLeft : null;
   const months = rate ? Math.min(MAX_PROJECTED_MONTHS, Math.ceil(gap / rate)) : null;
   const neededPerMonth = horizonDays ? gap / (horizonDays / DAYS_PER_MONTH) : null;
 
   const verdict = months == null
     ? 'nothing is closing it'
     : months >= MAX_PROJECTED_MONTHS ? 'the rate does not reach it'
+    : due && due.daysLeft <= 0 ? `${months} month${months === 1 ? '' : 's'} away, and its date has passed`
     : horizonDays && months > horizonDays / DAYS_PER_MONTH ? `${months} months away, not ${horizonDays} days`
     : `${months} month${months === 1 ? '' : 's'} away at your current rate`;
 
@@ -105,7 +116,8 @@ export function goalMove(goal: Goal, m: Metrics, month: string): MoveDraft | nul
     cost_label: '10 min',
     stake: {
       metric: 'won_amount', direction: 'up', by: Math.round(gap),
-      withinDays: horizonDays ?? 90,
+      // A date that has passed is as urgent as a date can be, not "no date".
+      withinDays: due ? Math.max(1, due.daysLeft) : 90,
       value: gap,
     },
   };
@@ -126,7 +138,7 @@ export const goalGapJob: Job = {
     const { goals, metrics } = await ctx.sense();
     const goal = pickGoal(goals);
     if (!goal) return [];
-    const move = goalMove(goal, metrics, ctx.today.slice(0, 7));
+    const move = goalMove(goal, metrics, ctx.today);
     return move ? [move] : [];
   },
 };

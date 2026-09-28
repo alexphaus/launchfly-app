@@ -241,6 +241,21 @@ ticked, and what came back from them, needs the rows. The funnel plan stays
 where there is no model to draw with. See COPILOT.md → **The plan is drawn, not
 walked back**.
 
+**Then** — the plan as a judgement, not a reordering. Its owner's verdict on the
+drawn plan: a well-made copy of their own notes, nothing they could not have
+written themselves, and no word on whether it could work in time. Three changes,
+one PR. The app does the arithmetic the planner may not — will it work, per goal,
+from the ledger and the goal's real date — and the record's stop-or-change
+signals, and the plan must answer both in its own words. One experiment at a time
+is searched for across fixed angles, held to evidence and novelty, graded by the
+person's tap and read back to the next draw by angle: a record of which kinds of
+bet pay off for this person, the first half of anything that could later be
+called a value network. And the agent is handed what it says it can do, in one
+tap that starts it. The survival test holds for all three for the usual reason:
+the verdict needs the ledger and the dates, the signals need the sends and the
+call record, the experiment ledger needs verdicts over weeks — rows, not
+recollection. See COPILOT.md → **Whether it can work, said first**.
+
 ---
 
 ## Where it actually stands

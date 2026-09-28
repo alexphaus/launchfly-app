@@ -46,6 +46,11 @@
 // write; copilot-core.test.ts covers everything here.
 
 import type { DecisionDraft } from './decision';
+import { dueLabel, goalDue } from './due';
+import {
+  ANGLES, ANGLE_PROMPT, experimentView, parseExperiment, storedExperiment,
+  type Experiment, type ExperimentMark, type ExperimentState, type ExperimentView,
+} from './experiment';
 import { hoursLabel, type FocusLog } from './focus';
 import type { Stake } from './stake';
 import { moneyLabel, type AnsweredMove, type RecentOutcome } from './review';
@@ -121,6 +126,14 @@ export interface Roadmap {
    * plans drawn before it existed.
    */
   suggestedDone?: string[];
+  /** The one experiment, or none (experiment.ts). Carried unchanged while it is open. */
+  experiment?: Experiment | null;
+  /**
+   * What the record said when this was drawn — an opener nobody answers, a step
+   * carried plan after plan — computed from rows (outlook.ts), never written by
+   * the model. Shown beside the plan that had to answer it.
+   */
+  signals?: string[];
 }
 
 /* ─── What goes in ────────────────────────────────────────────────────────── */
@@ -132,7 +145,11 @@ export interface RoadmapGoal {
   unit: string | null;
   target: number | null;
   current: number | null;
-  horizonDays: number | null;
+  /** Its date and the days left to it (due.ts) — never the horizon it was written with, which does not count down. */
+  dueOn: string | null;
+  daysLeft: number | null;
+  /** The date is the table's default rather than one they picked, so the planner is told it may not be theirs. */
+  defaultDate?: boolean;
   note: string | null;
 }
 
@@ -177,11 +194,32 @@ export interface RoadmapInput {
    * is not fed another model's view (rule 3).
    */
   found?: string[];
+  /** Will it work, per goal, computed from rows (outlook.ts): the arithmetic the planner may not do itself. */
+  outlook?: string[];
+  /** What the record says to stop or change (outlook.ts). The plan must answer each. */
+  signals?: string[];
+  /** Messages they sent and whether each was answered — both halves, as the brief is shown them. */
+  openers?: Array<{ text: string; replied: boolean }>;
+  /** What people wrote back, in their own words. */
+  replies?: Array<{ business: string | null; text: string }>;
+  /** The calls the app made, newest first, and what happened to each. */
+  calls?: string[];
+  /** The experiments so far and the open one (experiment.ts). */
+  experiments?: {
+    ledger: string[];
+    angles: string[];
+    open: Experiment | null;
+    openState: ExperimentState | null;
+    /** They set the last ones aside: offer none this time. */
+    paused: boolean;
+  };
+  /** What the connected agent can do alone (COPILOT_AGENT_CAN), when one is connected. */
+  agentCan?: string | null;
 }
 
-export const ROADMAP_SYSTEM = `You draw one person's plan: from where they are now to the goals they set, over weeks and months. You are the planner who decides the order, not a coach writing encouragement.
+export const ROADMAP_SYSTEM = `You draw one person's plan, from where they are now to the goals they set, over weeks and months, and you say honestly whether it can get there. You are the planner who decides the order and the judge who tells the truth about it, not a coach writing encouragement.
 
-You get who they are, the goals they wrote in their own priority order, what they told the app in their own words, the time they have each day, and what the record shows actually happened — replies, payments, hours logged, and what they did with each step of the last plan.
+You get who they are, the goals they wrote in their own priority order with their dates, what they told the app in their own words, the time they have each day, and what the record shows actually happened: replies, payments, hours logged, messages sent and which were answered, the calls the app made and what they did with them, the experiments they ran and how each came out, and what they did with each step of the last plan. Two blocks are computed by the app from their rows, not guessed: WILL IT WORK and WHAT THE RECORD SAYS.
 
 How to draw it:
 - Start from what is achievable now. "week" holds quick wins that make the next phase possible, sized to the minutes they have each day. Do not put more in "week" than those minutes hold.
@@ -190,28 +228,40 @@ How to draw it:
 - Tag each step: quick_win (small, fast, a visible result), leverage (one action that unlocks or compounds several later ones), foundation (unglamorous and necessary).
 - Order by dependency and leverage: what has to be true before the next thing is possible. Say the reasoning for the order once, in direction.
 - Goals compete for the same hours. When two pull against each other, say which comes first and why in direction, and put the other later.
-- Plan for what the goals actually need. It is not always selling: a job search, learning a skill, building a product, getting money under control, a move, a qualification.
+- Plan for what each goal actually needs: a job search, a skill, a move, savings, a qualification, a product, a business. Selling is one path among several. Plan outreach only for a goal that needs it, and never turn a goal that is not about selling into outreach.
 - If they seem lost — goals vague, nothing working — the first milestone is getting clear: a small experiment or one conversation that produces a fact. Do not make the decision for them.
 - What the app's checks found is real and computed from their records: money owed, a client waiting, a goal falling behind. Plan around it; money due soon belongs in "week".
 - Drafts already written are listed when there are any. If sending them serves this week, make it a step ("Send the waiting drafts"). If the record says the opener or the list is wrong, the step is to fix that first — never send more of what is not working.
 - Use what happened. A step marked done is done: build on it, never repeat it. A step marked dropped stays out in that form. When something has brought results, lean into it; when the record shows effort and nothing back, change the approach and say what you changed in changed.
 - Later phases can be one milestone with no steps. A plan past the next quarter is a direction, not a schedule.
 
+Tell the truth about whether it works:
+- WILL IT WORK says, for each goal, whether the pace the record shows gets there by its date. When a goal is off track or too early to tell, here.line says so plainly, and the plan changes something that could change the answer — the approach, the size of the offer, the target, the date, or a fast test of the thing it all rests on — instead of asking for more of the same effort. Never call a goal on track when that block does not.
+- Each line under WHAT THE RECORD SAYS is evidence to act on. Change the plan because of it and say so in changed, or keep going and say why in direction. Never leave one unanswered.
+- Never say one thing caused another unless the record shows it. A message never sent caused nothing.
+- Messages that were answered and ones that were ignored are listed when there are any. Plan around the difference; with fewer than three on either side, say the sample is small instead of drawing a rule from it.
+
+One experiment:
+- experiment is one move they would probably not have written themselves that could change a goal's outcome more than steady effort would. Search before you choose. Weigh at least eight candidates across these angles: ${ANGLES.map((a) => `${a} (${ANGLE_PROMPT[a]})`).join('; ')}. Throw out anything already in their notes, in this plan or the last one, anything the record contradicts, and anything that needs money or time they do not have. Keep the one with the most evidence behind it and the cheapest test.
+- why cites their record or their own words. test is what to do, sized to one day's minutes. watch is the result that would show it worked, visible within check_days (2 to 14). Lean into angles the experiments so far say worked; never offer an angle that failed twice.
+- Most weeks the plan itself is plain, and the experiment is where a considered risk goes. If nothing clears that bar, experiment is null: a plain week beats a clever guess.
+- When an experiment is open, or experiments are paused, return experiment null: the open one is carried as it is. The experiment is never also a step.
+
 Hard rules:
-- Never invent a number about them. Use only numbers that appear in the input: their targets, prices, counts, days. Do not estimate rates, percentages, income, costs or durations, in digits or in words, and do not multiply the input's numbers into new ones. A line with a number not in the input is thrown away. In a step or a milestone a small count of things to do ("send three", "two calls") is fine; in why, here, direction and changed it is not.
+- Never invent a number about them. Use only numbers that appear in the input: their targets, prices, counts, days, and the arithmetic under WILL IT WORK. Do not estimate rates, percentages, income, costs or durations, in digits or in words, and do not multiply the input's numbers into new ones. A line with a number not in the input is thrown away. In a step or a milestone a small count of things to do ("send three", "two calls") is fine; in why, here, direction and changed it is not.
 - Never name a month or a date the input does not contain. "By mid-October" is a promise nobody made.
 - Never state as fact anything the input does not say.
 - Reuse the id of an earlier milestone or step when it is the same thing, even reworded. New things get a new short id in kebab-case.
-- who is "ai" only for research or drafting a machine can do alone on the open web, and only when ai_available is true. Everything else is "you".
+- who is "ai" only for a step the connected agent can finish alone, within what THE AGENT says it can do, and only when ai_available is true. Never for contacting anyone, sending, posting, applying, spending, signing, or anything that needs their accounts or their name. Everything else is "you".
 - At most ${MAX_MILESTONES_PER_PHASE} milestones per phase and ${MAX_STEPS_PER_MILESTONE} steps per milestone. Fewer is better.
 - Plain words, second person, short. No filler, no motivation, no exclamation marks.
 
 probably_done lists the ids of steps or milestones from the last plan, still open, that their own recent words say they have already done — "booked two markets" for a step about booking markets. Only from their words, never from silence or a guess. Keep those items in the plan: the person ticks them, you do not. Empty when nothing they wrote says so.
 
-here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence on what is true now and what matters next. why is one sentence. direction is at most two sentences, under 300 characters. changed is one sentence, and null on a first plan.
+here.title is where they stand in at most eight words ("Job search, two interviews in"). here.line is one sentence: what is true now, and whether the pace gets their first goal there in time. why is one sentence. direction is at most two sentences, under 300 characters. changed is one sentence, and null on a first plan.
 
 Return only JSON:
-{"here":{"title":"...","line":"..."},"direction":"...","changed":null,"probably_done":[],"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":null,"steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
+{"here":{"title":"...","line":"..."},"direction":"...","changed":null,"probably_done":[],"experiment":{"id":"...","title":"...","angle":"fast_test","goal_id":null,"why":"...","test":"...","watch":"...","check_days":7},"phases":[{"key":"week","milestones":[{"id":"...","title":"...","why":"...","done_when":"...","goal_id":null,"steps":[{"id":"...","title":"...","size":"quick","tag":"quick_win","who":"you"}]}]}]}
 Phase keys, in order: week, month, quarter, later.`;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -238,7 +288,14 @@ export function roadmapPrompt(input: RoadmapInput): string {
     const fmt = (n: number) => (g.metric === 'currency' ? moneyLabel(n, unit) : `${n}${g.unit ? ` ${g.unit}` : ''}`);
     const parts = [`- [${g.id}] ${g.title}`];
     if (g.target != null && g.target > 0) parts.push(`${fmt(g.current ?? 0)} of ${fmt(g.target)}`);
-    if (g.horizonDays) parts.push(`within ${g.horizonDays} days`);
+    // The date and the days left today — never the horizon it was written with,
+    // which a model reads as "ninety days left" every day (due.ts).
+    if (g.dueOn && g.daysLeft != null) {
+      const left = g.daysLeft > 0 ? `${g.daysLeft} days left` : g.daysLeft === 0 ? 'due today' : `${-g.daysLeft} days past its date`;
+      parts.push(`due ${g.dueOn}, ${left}${g.defaultDate ? ' (the app gave it this date by default; they may not have chosen it)' : ''}`);
+    } else {
+      parts.push('no date');
+    }
     if (g.note?.trim()) parts.push(`their note: ${g.note.trim()}`);
     lines.push(parts.join(' · '));
     // The one piece of arithmetic worth handing over: a money goal said in
@@ -267,6 +324,17 @@ export function roadmapPrompt(input: RoadmapInput): string {
     lines.push('');
   }
 
+  if (input.outlook?.length) {
+    lines.push('WILL IT WORK, computed by the app from their rows:');
+    for (const o of input.outlook) lines.push(`- ${o}`);
+    lines.push('');
+  }
+  if (input.signals?.length) {
+    lines.push('WHAT THE RECORD SAYS, act on each:');
+    for (const sig of input.signals) lines.push(`- ${sig}`);
+    lines.push('');
+  }
+
   const f = input.funnel;
   lines.push(`THE RECORD (last ${f.windowDays} days): ${f.sent} messages sent · ${f.replied} replies · ${f.won} won${f.wonAmount > 0 ? ` for ${money(f.wonAmount)}` : ''}`);
   lines.push('WHAT HAPPENED IN THE LAST TWO WEEKS:');
@@ -291,9 +359,51 @@ export function roadmapPrompt(input: RoadmapInput): string {
   if (input.drafts && input.drafts.count > 0) {
     lines.push(`DRAFTS WRITTEN AND WAITING: ${input.drafts.count}, the oldest ${input.drafts.oldestDays} days old`);
   }
+  // Both halves or neither (conversations.ts): shown only the answered ones, a
+  // model concludes that everything works. "Rewrite the opener" was written by
+  // a planner that had never seen the opener.
+  if (input.openers?.length) {
+    lines.push('');
+    lines.push('MESSAGES THEY SENT, and whether each was answered (silence counts after three days):');
+    for (const o of input.openers) lines.push(`- ${o.replied ? 'answered' : 'ignored'}: "${o.text}"`);
+  }
+  if (input.replies?.length) {
+    lines.push('');
+    lines.push('WHAT PEOPLE WROTE BACK, in their words:');
+    for (const r of input.replies) lines.push(`- ${r.business ? `${r.business}: ` : ''}"${r.text}"`);
+  }
+  if (input.calls?.length) {
+    lines.push('');
+    lines.push('CALLS THE APP MADE, newest first, and what happened:');
+    for (const c of input.calls) lines.push(`- ${c}`);
+  }
+  const x = input.experiments;
+  if (x) {
+    lines.push('');
+    if (x.ledger.length) {
+      lines.push('EXPERIMENTS SO FAR, newest first:');
+      for (const l of x.ledger) lines.push(`- ${l}`);
+      if (x.angles.length) lines.push(`By angle: ${x.angles.join(' · ')}`);
+    } else {
+      lines.push('EXPERIMENTS SO FAR: none yet.');
+    }
+    if (x.open) lines.push(`THE OPEN EXPERIMENT, carried as it is — offer no other: ${x.open.title} (${x.openState === 'started' ? 'they are trying it' : 'offered, not started yet'})`);
+    else if (x.paused) lines.push('EXPERIMENTS ARE PAUSED: they set the last ones aside. Offer none this time.');
+  }
+  lines.push('');
   lines.push(`ai_available: ${input.aiAvailable}`);
+  if (input.aiAvailable) lines.push(`THE AGENT can do, alone: ${input.agentCan?.trim() || DEFAULT_AGENT_CAN}. It never contacts anyone, posts, applies, spends or signs.`);
   return lines.join('\n');
 }
+
+/**
+ * What a connected agent is assumed to do when COPILOT_AGENT_CAN does not say:
+ * the reference n8n worker's reach — it searches, reads pages, compares and
+ * writes. An agent that can build, code or fill a spreadsheet says so in that
+ * variable, and the planner hands it those steps too (invariant 7: nothing is
+ * handed to it that it has not said it can do).
+ */
+export const DEFAULT_AGENT_CAN = 'research on the open web, reading pages, comparisons, written drafts and documents';
 
 /** Open findings the plan is shown, at most. */
 export const MAX_FOUND = 8;
@@ -510,6 +620,12 @@ export interface ParseContext {
   previousIds?: Map<string, string>;
   /** The last plan's items still open, the only ones probably_done may name. */
   previousOpen?: Set<string>;
+  /**
+   * The experiment rules for this draw (experiment.ts): the open one, carried as
+   * it is whatever the model returns; whether offering one is paused; and what
+   * the person already has, which a new one must not restate.
+   */
+  experiment?: { carry: Experiment | null; paused: boolean; known: string[]; today: string };
 }
 
 export interface Parsed { roadmap: Roadmap; withheld: number }
@@ -572,6 +688,22 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
   const phases = PHASES.map((key) => ({ key, milestones: byKey.get(key) ?? [] })).filter((p) => p.milestones.length > 0);
   if (!phases.length) return null;
 
+  // One experiment at a time. An open one is carried as it was offered, so a
+  // redraw cannot swap out what somebody is in the middle of trying; otherwise
+  // the model's, held to the same guard as every line, and to being new.
+  const x = ctx.experiment;
+  let experiment: Experiment | null = null;
+  if (x?.carry) experiment = x.carry;
+  else if (x && !x.paused && r.experiment) {
+    const steps = phases.flatMap((p) => p.milestones.flatMap((m) => [m.title, ...m.steps.map((st) => st.title)]));
+    experiment = parseExperiment(r.experiment, {
+      keep: (v, kind) => clean(v, TEXT_MAX, kind),
+      goalIds: ctx.goalIds,
+      today: x.today,
+      known: [...x.known, ...steps],
+    });
+  }
+
   const h = obj(r.here);
   const hereTitle = clean(h.title, 60, 'claim');
   // Only ids that were open on the last plan and are on this one: a suggestion
@@ -582,6 +714,7 @@ export function parseRoadmap(raw: unknown, ctx: ParseContext): Parsed | null {
   return {
     roadmap: {
       ...(suggestedDone.length ? { suggestedDone } : {}),
+      ...(experiment ? { experiment } : {}),
       here: hereTitle ? { title: hereTitle, line: clean(h.line, TEXT_MAX, 'claim') } : null,
       // Room for the two sentences the prompt asks for, and a little over: a
       // model that runs long loses a sentence, not half of one.
@@ -604,6 +737,8 @@ export interface RoadmapRun {
   finishedAt: string | null;
   roadmap: Roadmap | null;
   error: string | null;
+  /** The plan saved, and today's call could not be moved to follow it (refreshCallFromPlan). */
+  callError?: string | null;
 }
 
 export const ROADMAP_COLUMNS = 'id, status, started_at, finished_at, output, error, input_summary';
@@ -626,6 +761,8 @@ export function roadmapRunFromRow(row: Record<string, unknown>): RoadmapRun {
         changed: typeof plan.changed === 'string' ? plan.changed : null,
         phases,
         suggestedDone: arr(plan.suggestedDone).filter((x): x is string => typeof x === 'string'),
+        experiment: storedExperiment(plan.experiment),
+        signals: arr(plan.signals).filter((x): x is string => typeof x === 'string' && !!x.trim()).slice(0, 6),
       }
     : null;
   const unreadable = status === 'ok' && !roadmap;
@@ -640,6 +777,7 @@ export function roadmapRunFromRow(row: Record<string, unknown>): RoadmapRun {
     error: typeof row.error === 'string' && row.error ? row.error
       : unreadable ? 'The stored plan could not be read.'
       : status === 'error' && row.status !== 'error' ? `unknown status "${String(row.status)}"` : null,
+    callError: typeof out.callError === 'string' && out.callError ? out.callError : null,
   };
 }
 
@@ -827,6 +965,12 @@ export type RoadmapView =
       total: number;
       /** Items the person's own words say are done and nobody has ticked: asked about, one tap each. */
       suggested: Array<{ id: string; title: string }>;
+      /** The experiment, offered or being tried; null once answered, set aside, or never offered. */
+      experiment: ExperimentView | null;
+      /** What the record said when this plan was drawn (outlook.ts). */
+      signals: string[];
+      /** Today's call could not be moved to follow this plan, and why. */
+      callError: string | null;
     };
 
 export interface ViewInput {
@@ -839,6 +983,10 @@ export interface ViewInput {
   goals: Array<Pick<Goal, 'id' | 'title'>>;
   capacity: Capacity;
   now: Date;
+  /** The experiment marks, for its stage. Absent: an offered one reads as offered. */
+  experimentMarks?: ExperimentMark[];
+  /** Their calendar day, for an experiment's check date. */
+  today?: string;
 }
 
 export function roadmapView(input: ViewInput): RoadmapView {
@@ -890,7 +1038,19 @@ export function roadmapView(input: ViewInput): RoadmapView {
       const item = roadmapItem(plan, id);
       return item ? [{ id, title: item.title }] : [];
     }),
+    experiment: experimentView(plan.experiment, input.experimentMarks ?? [], input.today ?? input.now.toISOString().slice(0, 10)),
+    signals: plan.signals ?? [],
+    callError: input.current.callError ?? null,
   };
+}
+
+/** A step of this plan and the milestone it sits under, by id: what a handover is written from. */
+export function roadmapStep(roadmap: Roadmap | null, id: string): { step: RoadmapStep; milestone: RoadmapMilestone } | null {
+  for (const p of roadmap?.phases ?? []) for (const m of p.milestones) {
+    const step = m.steps.find((x) => x.id === id);
+    if (step) return { step, milestone: m };
+  }
+  return null;
 }
 
 /** Milestones new in this plan and ones that left it, by id. The model's own sentence rides along, labelled as its own. */
@@ -938,10 +1098,16 @@ export interface GoalMarker {
   /** "€1,000 of €60,000", "2 of 10" — only where the person gave a target. */
   status: string | null;
   progress: { done: number; of: number } | null;
-  /** "Within 180 days, as you set it". Their number, said as theirs. */
+  /**
+   * "By 30 Nov · 63 days left": the goal's date, counted down (due.ts). It said
+   * "Within 90 days, as you set it" — the horizon it was written with, which
+   * never moved, under goals whose sheet had no date field to set.
+   */
   horizon: string | null;
   /** Milestones on the plan that point at it and are not reached yet. */
   toward: number;
+  /** Will it work, in a word, from outlook.ts: "Off track", "Too early to tell". */
+  verdict?: string | null;
 }
 
 /**
@@ -950,7 +1116,13 @@ export interface GoalMarker {
  * shown anyway, because a goal the plan quietly dropped is a goal the person
  * should be able to see was dropped.
  */
-export function goalMarkers(goals: Array<Pick<Goal, 'id' | 'title' | 'metric' | 'unit' | 'target_value' | 'current_value' | 'horizon_days'>>, view: RoadmapView, currency: string): GoalMarker[] {
+export function goalMarkers(
+  goals: Array<Pick<Goal, 'id' | 'title' | 'metric' | 'unit' | 'target_value' | 'current_value' | 'horizon_days' | 'created_at'>>,
+  view: RoadmapView,
+  currency: string,
+  today: string,
+  verdicts?: Map<string, string>,
+): GoalMarker[] {
   const toward = new Map<string, number>();
   if (view.state === 'ready') {
     for (const p of view.phases) for (const m of p.milestones) {
@@ -966,8 +1138,9 @@ export function goalMarkers(goals: Array<Pick<Goal, 'id' | 'title' | 'metric' | 
       title: g.title,
       status: target ? `${fmt(current)} of ${fmt(target)}` : null,
       progress: target ? { done: Math.min(current, target), of: target } : null,
-      horizon: g.horizon_days ? `Within ${g.horizon_days} days, as you set it` : null,
+      horizon: dueLabel(goalDue(g, today), today),
       toward: toward.get(g.id) ?? 0,
+      verdict: verdicts?.get(g.id) ?? null,
     };
   });
 }
@@ -1034,6 +1207,30 @@ export function planCall(first: { step: Pick<StepView, 'title'>; milestone: Pick
     topic: PLAN_TOPIC,
     verify_metric: 'none',
   };
+}
+
+/**
+ * Whether a call drawn from a plan just redrawn takes today's place.
+ *
+ * The call is picked once, by the brief; the plan can be redrawn after it —
+ * when the app is opened, when somebody tells it something. Nothing re-picked
+ * the call, so a plan drawn "just now" sat under a call picked before it: the
+ * card said to send ten of the old drafts while the plan below it said the old
+ * opener had never been answered and to rewrite it first.
+ *
+ * Only an unanswered call moves — an answer is part of the record and stays
+ * where it was given. Money due this week keeps the call it has, the same rule
+ * persistBrief follows. And a plan with no step of the person's that fits today
+ * leaves the call alone rather than taking it away.
+ */
+export function replacesCall(
+  current: { response: string; headline: string } | null,
+  planned: { headline: string } | null,
+  moneyFirst: boolean,
+): boolean {
+  if (!current || current.response !== 'pending') return false;
+  if (moneyFirst || !planned) return false;
+  return planned.headline.trim() !== current.headline.trim();
 }
 
 /** The step a call was drawn from, found by its words: the call carries no column for it, and needs none. */

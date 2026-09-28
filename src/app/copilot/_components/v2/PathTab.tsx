@@ -43,7 +43,7 @@ import { CallCard, FirstRun } from '../views/NowView';
 import type { Derived } from './derive';
 import { IconAlert, IconArrow, IconCheck, IconChevron, IconFlag, IconRedraw, IconStar, IconSwap, IconYou, PathGlyph } from './icons2';
 import { planServesOneGoal } from '@/lib/copilot/roadmap';
-import { AlsoThisWeek, DrawnPlanHead, GoalMarkers, IconMilestone, PhaseBlock, PlanPending } from './PathPlan';
+import { AlsoThisWeek, DrawnPlanHead, ExperimentCard, GoalMarkers, IconMilestone, PhaseBlock, PlanPending, type Handed } from './PathPlan';
 
 export default function PathTab({ home, d, actions, briefing, finding, openMatches }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean; finding: boolean; openMatches: (s: MatchStage) => void }) {
   const hereRef = useRef<HTMLDivElement>(null);
@@ -72,8 +72,11 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
   // A step reached since this device last showed the path, named — never numbered.
   const reached = redraw?.stepUp ? d.path.ladder.steps[redraw.stepUp.to - 2] : null;
   const plan = d.path.plan;
-  // A step handed to the worker is known by the project it wrote, whose objective is the step's title.
-  const handed = new Set(home.commissions.filter((t) => t.commission.status !== 'stopped').map((t) => t.commission.objective));
+  // A step handed to the worker is known by the project it wrote, whose objective is the step's title:
+  // the row opens that project and says where it stands.
+  const handed: Handed = new Map(home.commissions.filter((t) => t.commission.status !== 'stopped').map((t) => [t.commission.objective, { id: t.commission.id, status: t.commission.status }]));
+  const experiment = plan.state === 'ready' ? plan.experiment : null;
+  const experimentGoal = experiment?.exp.goalId ? home.goals.find((g) => g.id === experiment.exp.goalId)?.title ?? null : null;
   useAutoDraw(home, d, actions);
 
   // A brand new account has no evidence, no plan to speak of and nothing to
@@ -140,7 +143,9 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
 
         {plan.state !== 'off' ? (
           <>
-            <DrawnPlanHead view={plan} now={d.now} onRedraw={() => void actions.drawRoadmap('manual')} unreadable={home.roadmap?.unreadable ?? null} actions={actions} />
+            <DrawnPlanHead view={plan} now={d.now} onRedraw={() => void actions.drawRoadmap('manual')} unreadable={home.roadmap?.unreadable ?? null} actions={actions} outlook={d.path.outlook} />
+            {/* Before the steps: the one thing worth trying that is not more of the same. */}
+            {experiment && <ExperimentCard view={experiment} goalTitle={experimentGoal} today={home.recent.today} actions={actions} />}
             <button className="cp2-way-sized" onClick={() => actions.openSheet({ kind: 'capacity' })}>
               Sized for <b>{cap.label}</b>, {cap.minutes} min a day. It redraws when you change that, when you tell it something, and as results come back.
             </button>

@@ -3,8 +3,9 @@
 // has already been authenticated by the session cookie.
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
-import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, trimMessage, type PackReply, type PackSentExample } from './conversations';
+import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, settledTally, trimMessage, type PackReply, type PackSentExample } from './conversations';
 import { addDays, copilotDb, describeDbError, todayIso } from './db';
+import { horizonFor } from './due';
 import { FOCUS_EVENT, focusFromEvents, type FocusInput } from './focus';
 import { RECENT_DAYS, type AnsweredMove, type RecentLedger, type RecentOutcome } from './review';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
@@ -46,8 +47,9 @@ import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans'
 import { computeOutcomeAffinity, rankOpportunities, selectPlan } from './ranking';
 import { getUsage, periodKey } from './usage';
 import { NIGHTLY_COLUMNS, nightlyFromRow, type NightlyOutput, type NightlyRun, type NightlyStep } from './nightly';
-import { resolveLlmConfig } from './agent/llm';
+import { resolveLlmConfig, resolvePlanConfig } from './agent/llm';
 import { ROADMAP_COLUMNS, ROADMAP_MARK_EVENT, ROADMAP_RUN_KIND, markFromEvent, roadmapRunFromRow, type RoadmapMark, type RoadmapRun } from './roadmap';
+import { EXPERIMENT_EVENT, experimentMarkFromEvent, type ExperimentMark } from './experiment';
 
 export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
@@ -335,6 +337,40 @@ export async function handOverMove(profileId: string, moveId: string): Promise<{
   return { commission: approved ?? commission };
 }
 
+/**
+ * Hand a step of the plan to the connected agent, in one tap, and start it.
+ *
+ * The step used to write a draft with no goal and no plan (PathPlan's StepItem
+ * called createCommission with a title), which then waited to be found on Work,
+ * read and approved there, and then waited again for 21:00. So work the plan
+ * had already judged a machine could do sat untouched for a day unless somebody
+ * went looking for it.
+ *
+ * Now the tap is the approval, as it is on a proposal card (handOverMove): the
+ * step, the milestone it serves and what the agent may do are all on screen
+ * when it is tapped, and `approved_at` records the moment. Authority is `read`
+ * — make and find things, never contact anyone or spend (invariants 4 and 11).
+ * If approving fails the draft stays, and Work's own Approve finishes it.
+ */
+export async function handOverStep(profileId: string, input: { objective: string; why: string | null; goalId: string | null; steps: string[] }): Promise<{ commission: Commission; started: boolean }> {
+  const objective = input.objective.slice(0, OBJECTIVE_MAX);
+  // A second tap — a phone that timed out and was tapped again — gets the first.
+  const live = (await loadCommissions(profileId)).find((c) => c.status !== 'done' && c.status !== 'stopped' && c.objective === objective);
+  if (live) return { commission: live, started: live.status === 'active' };
+  const commission = await createCommission(profileId, {
+    objective,
+    why: input.why,
+    goal_id: input.goalId,
+    authority: 'read',
+    budget_minutes: PROPOSAL_BUDGET_MINUTES,
+    plan: input.steps.map((d, i) => ({ n: i + 1, do: d, state: 'todo' as const })),
+  });
+  if (!commission) throw new Error('Could not hand that over.');
+  const approved = await approveCommission(profileId, commission.id);
+  await logEvent(profileId, 'step_handed_over', { commission_id: commission.id, approved: !!approved });
+  return { commission: approved ?? commission, started: !!approved };
+}
+
 export async function setMoveStatus(profileId: string, id: string, status: 'done' | 'dismissed'): Promise<void> {
   // Read job and kind back so the event can be learned from. The first version
   // logged only the id and the status, which made move_answered a write nothing
@@ -400,7 +436,7 @@ export async function loadOpeningRows(profileId: string): Promise<DiagnoseInput[
  * in the other person's own words. Both were already in the database and
  * neither had ever reached the agent.
  */
-export async function loadConversations(profileId: string, now = new Date()): Promise<{ replies: PackReply[]; sent: PackSentExample[] }> {
+export async function loadConversations(profileId: string, now = new Date()): Promise<{ replies: PackReply[]; sent: PackSentExample[]; tally: { sends: number; answered: number } }> {
   const db = copilotDb();
   // Read wider than the pack carries: selectReplies drops rows with no body
   // (every reply matched before the body was captured), and selectSentExamples
@@ -442,6 +478,7 @@ export async function loadConversations(profileId: string, now = new Date()): Pr
   return {
     replies: selectReplies(replyRows.map((r) => ({ note: r.note, occurred_at: r.occurred_at, business: r.opportunity_id ? titles.get(r.opportunity_id) ?? null : null }))),
     sent: selectSentExamples(sentRows, repliedExecutionIds, { now }),
+    tally: settledTally(sentRows, repliedExecutionIds, now),
   };
 }
 
@@ -548,8 +585,15 @@ export interface SaveDecisionInput {
   baseline: number;
 }
 
-/** One call per day: a re-run of the brief replaces today's rather than stacking. */
-export async function saveDecision(profileId: string, input: SaveDecisionInput): Promise<void> {
+/**
+ * One call per day: a re-run of the brief replaces today's rather than stacking.
+ *
+ * Returns why it did not save, or null. It used to log to console.error and
+ * return nothing, which is the failure docs/COPILOT.md already tells once: a
+ * constraint rejected every promoted call, Today rendered the insight instead,
+ * and nothing anyone could read said a call had been lost (invariant 13).
+ */
+export async function saveDecision(profileId: string, input: SaveDecisionInput): Promise<string | null> {
   const d = input.draft;
   const row: Record<string, unknown> = {
     profile_id: profileId,
@@ -578,7 +622,40 @@ export async function saveDecision(profileId: string, input: SaveDecisionInput):
     const { source_move_id: _dropped, ...rest } = row;
     ({ error } = await write(rest));
   }
-  if (error) console.error('[copilot] saveDecision failed', error.message);
+  return error ? describeDbError(error) : null;
+}
+
+/**
+ * Put a call drawn from a new plan in place of today's, while it is still
+ * unanswered. The `pending` condition is in the write itself, so an answer that
+ * lands between the read and this update is never overwritten. True when a row
+ * changed; a string when the write failed.
+ */
+export async function replaceTodayCall(profileId: string, input: Omit<SaveDecisionInput, 'dont' | 'changed' | 'runId'>): Promise<boolean | string> {
+  const d = input.draft;
+  const cols: Record<string, unknown> = {
+    headline: d.headline,
+    because: d.because ?? [],
+    instead_of: d.instead_of ?? null,
+    confidence: d.confidence === 'low' ? 'low' : 'high',
+    missing: d.missing ?? null,
+    topic: d.topic ?? null,
+    dont_title: null,
+    dont_why: null,
+    snapshot: input.snapshot,
+    verify_metric: d.verify_metric ?? 'none',
+    verify_baseline: input.baseline,
+    source_move_id: d.source_move_id ?? null,
+  };
+  const write = (c: Record<string, unknown>) => copilotDb().from('copilot_decisions').update(c)
+    .eq('profile_id', profileId).eq('for_date', input.forDate).eq('response', 'pending').select('id');
+  let { data, error } = await write(cols);
+  if (error) {
+    const { source_move_id: _dropped, ...rest } = cols;
+    ({ data, error } = await write(rest));
+  }
+  if (error) return describeDbError(error);
+  return (data?.length ?? 0) > 0;
 }
 
 /**
@@ -955,11 +1032,12 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     lastCronRun,
     nightly,
     roadmap: {
-      enabled: !!resolveLlmConfig(),
+      enabled: !!resolvePlanConfig(),
       latest: roadmapRuns.latest,
       current: roadmapRuns.current,
       previous: roadmapRuns.previous,
       marks: roadmapMarks.marks,
+      experiments: roadmapMarks.experiments,
       // Either read failing is said on the Path; a plan without its ticks would show done steps as open.
       unreadable: roadmapRuns.unreadable ?? roadmapMarks.unreadable,
     },
@@ -988,11 +1066,29 @@ export async function setOpportunityStatus(profileId: string, id: string, status
   return data;
 }
 
-export async function upsertGoal(profileId: string, goal: Partial<Goal> & { title?: string; id?: string }) {
+export async function upsertGoal(profileId: string, goal: Partial<Goal> & { title?: string; id?: string; due_on?: string | null }) {
   const db = copilotDb();
+  let horizon = goal.horizon_days;
+  // A date, stored as the horizon that lands on it from the day the goal was
+  // written (due.ts) — no column to migrate, and every reader counts down from
+  // the same two fields. Null clears it: a goal with no date says so, rather
+  // than carrying the ninety days the table defaults to.
+  if (goal.due_on !== undefined) {
+    if (goal.due_on === null) horizon = null;
+    else {
+      const profile = await getProfile(profileId);
+      const today = todayIso(profile?.timezone);
+      if (goal.due_on < today) throw new Error('Pick a date from today on.');
+      const { data: row } = goal.id
+        ? await db.from('copilot_goals').select('created_at').eq('id', goal.id).eq('profile_id', profileId).maybeSingle()
+        : { data: null };
+      horizon = horizonFor(goal.due_on, (row as { created_at?: string } | null)?.created_at ?? null, today);
+      if (horizon == null) throw new Error('Pick a date after the day this goal was written.');
+    }
+  }
   const patch = {
     title: goal.title, metric: goal.metric, unit: goal.unit, target_value: goal.target_value, current_value: goal.current_value,
-    horizon_days: goal.horizon_days, priority: goal.priority, status: goal.status, note: goal.note,
+    horizon_days: horizon, priority: goal.priority, status: goal.status, note: goal.note,
   };
   Object.keys(patch).forEach((k) => (patch as Record<string, unknown>)[k] === undefined && delete (patch as Record<string, unknown>)[k]);
   if (goal.id) {
@@ -1380,25 +1476,63 @@ const ROADMAP_READ = 8;
  * what changed). A failed read is said, never returned as "no plan": that would
  * put the funnel plan back on screen and draw a fresh one over a read error.
  */
-export async function loadRoadmapRuns(profileId: string): Promise<{ latest: RoadmapRun | null; current: RoadmapRun | null; previous: RoadmapRun | null; unreadable: string | null }> {
+export async function loadRoadmapRuns(profileId: string): Promise<{ latest: RoadmapRun | null; current: RoadmapRun | null; previous: RoadmapRun | null; plans: RoadmapRun[]; unreadable: string | null }> {
   const { data, error } = await copilotDb().from('copilot_agent_runs').select(ROADMAP_COLUMNS)
     .eq('profile_id', profileId).eq('kind', ROADMAP_RUN_KIND)
     .order('started_at', { ascending: false }).limit(ROADMAP_READ);
-  if (error) return { latest: null, current: null, previous: null, unreadable: describeDbError(error) };
+  if (error) return { latest: null, current: null, previous: null, plans: [], unreadable: describeDbError(error) };
   const runs = ((data ?? []) as Record<string, unknown>[]).map(roadmapRunFromRow);
   const plans = runs.filter((r) => r.status === 'ok' && r.roadmap);
-  return { latest: runs[0] ?? null, current: plans[0] ?? null, previous: plans[1] ?? null, unreadable: null };
+  // `plans` newest first: how many draws in a row carried a step (outlook.ts carriedSteps).
+  return { latest: runs[0] ?? null, current: plans[0] ?? null, previous: plans[1] ?? null, plans, unreadable: null };
+}
+
+/**
+ * Add a note to a finished draw's output — what happened after the plan saved,
+ * like a call that could not follow it. Read, merged, written: the output is
+ * one jsonb value and the plan inside it must survive.
+ */
+export async function noteRoadmapRun(runId: string, note: Record<string, unknown>): Promise<void> {
+  const db = copilotDb();
+  const { data, error } = await db.from('copilot_agent_runs').select('output').eq('id', runId).maybeSingle();
+  if (error || !data) { console.error('[copilot/roadmap] could not read run to note it', runId, error?.message); return; }
+  const output = (data.output && typeof data.output === 'object' ? data.output : {}) as Record<string, unknown>;
+  const { error: werr } = await db.from('copilot_agent_runs').update({ output: { ...output, ...note } }).eq('id', runId);
+  if (werr) console.error('[copilot/roadmap] could not note run', runId, werr.message);
 }
 
 /** Enough marks to cover every item of the last few plans. */
 const ROADMAP_MARKS_READ = 300;
 
-export async function loadRoadmapMarks(profileId: string): Promise<{ marks: RoadmapMark[]; unreadable: string | null }> {
-  const { data, error } = await copilotDb().from('copilot_events').select('payload, created_at')
-    .eq('profile_id', profileId).eq('event_type', ROADMAP_MARK_EVENT)
+/**
+ * The plan's ticks and the experiments' marks, in one read: both are events the
+ * person wrote about the plan, and both are needed wherever the plan is shown.
+ */
+export async function loadRoadmapMarks(profileId: string): Promise<{ marks: RoadmapMark[]; experiments: ExperimentMark[]; unreadable: string | null }> {
+  const { data, error } = await copilotDb().from('copilot_events').select('event_type, payload, created_at')
+    .eq('profile_id', profileId).in('event_type', [ROADMAP_MARK_EVENT, EXPERIMENT_EVENT])
     .order('created_at', { ascending: false }).limit(ROADMAP_MARKS_READ);
-  if (error) return { marks: [], unreadable: describeDbError(error) };
-  return { marks: ((data ?? []) as Array<{ payload: unknown; created_at: string }>).map(markFromEvent).filter((m): m is RoadmapMark => !!m), unreadable: null };
+  if (error) return { marks: [], experiments: [], unreadable: describeDbError(error) };
+  const rows = (data ?? []) as Array<{ event_type: string; payload: unknown; created_at: string }>;
+  return {
+    marks: rows.filter((r) => r.event_type === ROADMAP_MARK_EVENT).map(markFromEvent).filter((m): m is RoadmapMark => !!m),
+    experiments: rows.filter((r) => r.event_type === EXPERIMENT_EVENT).map(experimentMarkFromEvent).filter((m): m is ExperimentMark => !!m),
+    unreadable: null,
+  };
+}
+
+/**
+ * The person trying an experiment, setting it aside or saying how it went — or,
+ * with `inferred`, the app recording an offer nobody took up (invariant 5).
+ * Throws, like insertRoadmapMark: a verdict that did not save must not read as saved.
+ */
+export async function insertExperimentMark(profileId: string, mark: Omit<ExperimentMark, 'at'>): Promise<void> {
+  const { error } = await copilotDb().from('copilot_events').insert({
+    profile_id: profileId,
+    event_type: EXPERIMENT_EVENT,
+    payload: { experiment: mark.id, title: mark.title, angle: mark.angle, state: mark.state, ...(mark.inferred ? { inferred: true } : {}) },
+  });
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
 }
 
 /**

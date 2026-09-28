@@ -23,6 +23,7 @@
 //
 // Pure: no DB import.
 
+import { daysPhrase, goalDue } from './due';
 import type { PathStep } from './pathway';
 import { REPEAT_WINS } from './pathway';
 import { moneyLabel } from './review';
@@ -297,9 +298,11 @@ export interface AheadInput {
   ladder: { steps: PathStep[]; current: number };
   funnel: Funnel;
   /** The goal the path points at: the first by your priority, a money one when there is one. */
-  goal: Pick<Goal, 'id' | 'title' | 'metric' | 'target_value' | 'current_value' | 'horizon_days'> | null;
+  goal: Pick<Goal, 'id' | 'title' | 'metric' | 'target_value' | 'current_value' | 'horizon_days' | 'created_at'> | null;
   /** Every other active goal, in your priority order. */
-  others: Array<Pick<Goal, 'id' | 'title' | 'metric' | 'target_value' | 'current_value' | 'horizon_days'>>;
+  others: Array<Pick<Goal, 'id' | 'title' | 'metric' | 'target_value' | 'current_value' | 'horizon_days' | 'created_at'>>;
+  /** Their calendar day, for the days left to a goal's date (due.ts). */
+  today: string;
   price: number | null;
   currency: string;
   capacity: Capacity;
@@ -376,7 +379,7 @@ export function pathAhead(input: AheadInput): { stops: Stop[]; beyond: Beyond[] 
       ? `${money(g.current_value ?? 0)} of ${money(g.target_value)}`
       : g.target_value && g.target_value > 0
       ? `${Math.round(g.current_value ?? 0)} of ${Math.round(g.target_value)}`
-      : g.horizon_days ? `No target · ${g.horizon_days} days` : 'No target',
+      : goalDue(g, input.today) ? `No target · ${daysPhrase(goalDue(g, input.today)!)}` : 'No target',
   }));
   return { stops, beyond };
 }
@@ -428,13 +431,17 @@ function goalStop(input: AheadInput, perClient: number | null, early: boolean, m
   }
   const clients = Math.ceil(gap / input.price);
   const sends = perClient ? Math.ceil(clients * perClient) : null;
-  const horizon = g.horizon_days && g.horizon_days > 0 ? g.horizon_days : null;
+  // Days left to its date, not the horizon it was written with: that number
+  // never counted down, so this said "90 days left" for ninety days.
+  const due = goalDue(g, input.today);
   const whenParts: string[] = [];
   if (sends == null) whenParts.push('Your first paying client turns this into sends and days.');
   if (sends != null) whenParts.push(`${capital(daysOf(sends, input.capacity))} of sending at ${label}.`);
-  if (sends != null && horizon) {
-    const perDay = Math.ceil(sends / horizon);
-    whenParts.push(`${horizon} days left: ${plural(perDay, 'send')} a day ${perDay <= sendsPerDay(input.capacity) ? 'gets there' : 'gets there, which is more than the time you set'}.`);
+  if (sends != null && due && due.daysLeft > 0) {
+    const perDay = Math.ceil(sends / due.daysLeft);
+    whenParts.push(`${capital(daysPhrase(due))}: ${plural(perDay, 'send')} a day ${perDay <= sendsPerDay(input.capacity) ? 'gets there' : 'gets there, which is more than the time you set'}.`);
+  } else if (sends != null && due) {
+    whenParts.push(`Its date has passed: ${daysPhrase(due)}.`);
   }
   return {
     ...base,

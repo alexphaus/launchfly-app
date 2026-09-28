@@ -20,6 +20,7 @@ import type { PlanKey, PlanStatus } from './plans';
 import type { RecentLedger } from './review';
 import type { Hunt } from './hunts';
 import type { RoadmapMark, RoadmapRun } from './roadmap';
+import type { ExperimentMark } from './experiment';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
 export type OpportunityType = 'client' | 'people' | 'service' | 'community' | 'signal';
@@ -127,6 +128,8 @@ export interface Goal {
   priority: number;
   status: 'active' | 'done' | 'paused';
   note: string | null;
+  /** When it was written. With horizon_days, the goal's date (due.ts); absent on a narrow select. */
+  created_at?: string | null;
 }
 
 export interface ContextItem {
@@ -484,6 +487,8 @@ export interface HomeData {
     current: RoadmapRun | null;
     previous: RoadmapRun | null;
     marks: RoadmapMark[];
+    /** The experiments' marks (experiment.ts). Absent on a payload from before they existed. */
+    experiments?: ExperimentMark[];
     unreadable: string | null;
   };
   metrics: Metrics;
@@ -527,7 +532,12 @@ export interface HomeData {
 export interface ContextPack {
   today: string; // ISO date
   profile: Pick<Profile, 'name' | 'headline' | 'location' | 'timezone' | 'capacity' | 'hunt_types' | 'target_segments' | 'target_area' | 'offer'>;
-  goals: Array<Pick<Goal, 'title' | 'metric' | 'unit' | 'target_value' | 'current_value' | 'horizon_days' | 'priority' | 'note'>>;
+  /**
+   * The goals, with their date and the days left to it computed for today
+   * (due.ts). The raw horizon is not carried: a model shown "horizon_days: 90"
+   * reads it as ninety days left, every day.
+   */
+  goals: Array<Pick<Goal, 'title' | 'metric' | 'unit' | 'target_value' | 'current_value' | 'priority' | 'note'> & { due_on: string | null; days_left: number | null }>;
   context: Array<Pick<ContextItem, 'source' | 'kind' | 'content' | 'created_at'>>;
   /**
    * The working file, as the block from workingBrief. Live entries only.

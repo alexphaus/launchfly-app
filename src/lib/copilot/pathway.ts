@@ -112,6 +112,12 @@ export interface PastInput {
    * is not.
    */
   marks?: Array<{ item: string; title: string; state: 'done' | 'dropped' | 'open'; at: string }>;
+  /**
+   * The experiments' marks (experiment.ts). A verdict is exactly what the
+   * evidence is for — something tried on purpose and what came of it, in the
+   * person's own answer. Trying one, or setting it aside, teaches nothing yet.
+   */
+  experiments?: Array<{ id: string; title: string; state: string; at: string; inferred?: boolean }>;
 }
 
 const inWindow = (iso: string | null | undefined, now: Date, days = EVIDENCE_DAYS) => {
@@ -204,6 +210,18 @@ export function pathEvents(input: PastInput): PathEvent[] {
   for (const m of latest.values()) {
     if (m.state !== 'done' || !m.title || !inWindow(m.at, now)) continue;
     out.push({ timed: true, key: `rm:${m.item}`, day: localDay(m.at, tz), at: m.at, actor: 'you', icon: 'done', title: m.title, detail: 'Ticked off on your plan', target: null });
+  }
+
+  // An experiment's verdict, the newest per experiment, as the person gave it.
+  const answerWords: Record<string, string> = { worked: 'It worked — your answer', failed: 'It did not work — your answer', unclear: 'Could not tell — your answer' };
+  const lastExp = new Map<string, NonNullable<PastInput['experiments']>[number]>();
+  for (const m of input.experiments ?? []) {
+    const was = lastExp.get(m.id);
+    if (!was || Date.parse(m.at) >= Date.parse(was.at)) lastExp.set(m.id, m);
+  }
+  for (const m of lastExp.values()) {
+    if (m.inferred || !answerWords[m.state] || !m.title || !inWindow(m.at, now)) continue;
+    out.push({ timed: true, key: `x:${m.id}`, day: localDay(m.at, tz), at: m.at, actor: 'you', icon: m.state === 'worked' ? 'star' : 'done', title: `Experiment: ${m.title}`, detail: answerWords[m.state], target: null });
   }
 
   const sorted = out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));

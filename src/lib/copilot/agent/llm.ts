@@ -87,14 +87,14 @@ export function maxOutputTokens(): number | undefined {
 
 /** Extra request-body fields, parsed once. Bad JSON is ignored with a warning
  *  rather than taking the brief down with it. */
-export function extraBody(): Record<string, unknown> | null {
-  const raw = process.env.COPILOT_AI_EXTRA_BODY;
+export function extraBody(name = 'COPILOT_AI_EXTRA_BODY'): Record<string, unknown> | null {
+  const raw = process.env[name];
   if (!raw?.trim()) return null;
   try {
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
   } catch {
-    console.error('[copilot] COPILOT_AI_EXTRA_BODY is not valid JSON; ignoring it');
+    console.error(`[copilot] ${name} is not valid JSON; ignoring it`);
     return null;
   }
 }
@@ -113,12 +113,51 @@ export function resolveLlmConfig(): LlmConfig | null {
 }
 
 /**
+ * The plan's model, when it should not be the brief's.
+ *
+ * The brief runs where a tap may be waiting on it, so it is sized to a 30s
+ * budget; the plan is drawn in the background — after() on a tap, inside the
+ * container at night — and it is the one call whose judgement the whole Path
+ * rests on. So it can take a slower, stronger model: COPILOT_PLAN_MODEL names
+ * it, and COPILOT_PLAN_API_KEY / COPILOT_PLAN_BASE_URL point it at another
+ * endpoint. Unset, the plan uses the brief's model, as before.
+ */
+export function resolvePlanConfig(): LlmConfig | null {
+  const base = resolveLlmConfig();
+  const key = process.env.COPILOT_PLAN_API_KEY?.trim();
+  const model = process.env.COPILOT_PLAN_MODEL?.trim();
+  if (key) return { apiKey: key, baseURL: process.env.COPILOT_PLAN_BASE_URL?.trim() || base?.baseURL, model: model || base?.model || 'gpt-4o-mini' };
+  if (!base) return null;
+  return model ? { ...base, model } : base;
+}
+
+/**
+ * How long a draw may take. 110s, as before, unless COPILOT_PLAN_TIMEOUT_MS says
+ * otherwise — a reasoning model at high effort can need more. It is spent inside
+ * the nightly pass too, which has five minutes for every profile, so raise it
+ * knowing that.
+ */
+export function planTimeoutMs(): number {
+  return envMs('COPILOT_PLAN_TIMEOUT_MS', 110_000);
+}
+
+/** The plan's reply cap: COPILOT_PLAN_MAX_OUTPUT_TOKENS, else the shared one. A reasoning model's thinking counts against it. */
+export function planMaxOutputTokens(): number | undefined {
+  const raw = Number(process.env.COPILOT_PLAN_MAX_OUTPUT_TOKENS);
+  return Number.isFinite(raw) && raw > 0 ? raw : maxOutputTokens();
+}
+
+/** Body knobs for the plan's endpoint — e.g. a higher reasoning effort — else the shared ones. */
+export function planExtraBody(): Record<string, unknown> | null {
+  return process.env.COPILOT_PLAN_EXTRA_BODY?.trim() ? extraBody('COPILOT_PLAN_EXTRA_BODY') : extraBody();
+}
+
+/**
  * A provider for one call outside the brief, with COPILOT_AI_EXTRA_BODY merged
  * in the same way, so a knob set for the endpoint applies to every call this
  * app makes rather than only to the one written first.
  */
-export function providerFor(cfg: LlmConfig) {
-  const extra = extraBody();
+export function providerFor(cfg: LlmConfig, extra: Record<string, unknown> | null = extraBody()) {
   return createOpenAI({
     apiKey: cfg.apiKey,
     baseURL: cfg.baseURL,

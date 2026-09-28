@@ -15,6 +15,7 @@
 // their area, their runway. Nothing here asks a model what the user wants. That
 // distinction is the whole difference between a watcher and a feed reader.
 
+import { daysPhrase, goalDue } from '../due';
 import { MOVE_KINDS, type KeepRates, type MoveDraft, type MoveKind, keepSummary } from '../moves';
 import type { Stake } from '../stake';
 import type { FeedItem } from './feed';
@@ -79,6 +80,8 @@ const money = (n: number, unit?: string | null) => `${unit || '$'}${Math.round(n
 export function watchBrief(input: {
   profile: Pick<Profile, 'headline' | 'location' | 'target_area' | 'offer' | 'capacity'>;
   goals: Goal[];
+  /** Their calendar day, for the days left to a goal's date. Absent: no days are claimed. */
+  today?: string;
   metrics: Pick<Metrics, 'runway_months'>;
   capacityMinutes: number;
   keeps?: KeepRates;
@@ -93,7 +96,9 @@ export function watchBrief(input: {
     const target = g.target_value;
     if (g.metric === 'currency' && typeof target === 'number' && target > 0) {
       const now = g.current_value ?? 0;
-      return `${g.title} — ${money(now, g.unit)} of ${money(target, g.unit)}${g.horizon_days ? `, ${g.horizon_days} days left` : ''}`;
+      // Days left to its date (due.ts): the horizon alone never counted down.
+      const due = input.today ? goalDue(g, input.today) : null;
+      return `${g.title} — ${money(now, g.unit)} of ${money(target, g.unit)}${due ? `, ${daysPhrase(due)}` : ''}`;
     }
     // A goal with no meter is still the most important sentence here. It is the
     // one that turns a job board into a job board worth reading.

@@ -68,7 +68,7 @@ export interface NightlyOutput {
     ran?: number; produced?: number; written?: number; error?: string;
     perJob?: Record<string, { produced?: number; written?: number; skipped?: string; error?: string }>;
   } | null;
-  brief?: { agent?: string; fellBack?: boolean; graded?: { ignored?: number; verified?: number }; pushed?: number; skipped?: string } | null;
+  brief?: { agent?: string; fellBack?: boolean; graded?: { ignored?: number; verified?: number }; pushed?: number; skipped?: string; unsaved?: string } | null;
   /** The Path's plan: redrawn, left alone because nothing changed, or why it could not be. Absent on runs from before it existed. */
   roadmap?: { drawn?: boolean; reason?: string; skipped?: string; error?: string } | null;
   /** Adapter and job labels at the time of the run, so the report can say "Google Maps" instead of "google_maps". */
@@ -220,7 +220,9 @@ export function nightlyLines(out: NightlyOutput | null | undefined): NightlyLine
     const tail = extra ? ` · ${extra}` : '';
     // The fallback is a failure even though a call came out of it: the agent
     // died and the rules stood in, and a report that reads "picked" hides that.
-    if (brief.fellBack) push('brief', `The agent failed, so the fallback rules picked it${tail}`, 'broke');
+    // A call that did not save is not a call: said first, and as broken.
+    if (brief.unsaved) push('brief', `Picked, but it did not save: ${brief.unsaved}`, 'broke');
+    else if (brief.fellBack) push('brief', `The agent failed, so the fallback rules picked it${tail}`, 'broke');
     else if (brief.agent === 'starter') push('brief', `Picked by the rules, since no model is set up${tail}`, 'note');
     else push('brief', `Picked by the agent${tail}`, 'ok');
   }

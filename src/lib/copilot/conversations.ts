@@ -110,3 +110,25 @@ export function selectSentExamples(
     ...ignored.map((r) => ({ text: r.text, replied: false, sent_at: r.sent_at })),
   ];
 }
+
+/**
+ * How many of these messages have had time to be answered, and how many were.
+ *
+ * The count behind the plan's "change the first line" signal (outlook.ts). A
+ * message sent inside NO_REPLY_AFTER_DAYS and not yet answered is left out, the
+ * same rule selectSentExamples and gradeDecisions follow: silence only counts
+ * once it has had time to be silence. An answered one counts however new it is.
+ */
+export function settledTally(rows: Array<Pick<SentRow, 'id' | 'sent_at'>>, repliedExecutionIds: Set<string>, now = new Date()): { sends: number; answered: number } {
+  const silenceBefore = now.getTime() - NO_REPLY_AFTER_DAYS * 86_400_000;
+  let sends = 0;
+  let answered = 0;
+  for (const r of rows) {
+    if (!r.sent_at) continue;
+    const got = repliedExecutionIds.has(r.id);
+    if (!got && at(r.sent_at) >= silenceBefore) continue;
+    sends += 1;
+    if (got) answered += 1;
+  }
+  return { sends, answered };
+}

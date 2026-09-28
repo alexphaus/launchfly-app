@@ -10,7 +10,12 @@ export async function POST(req: Request) {
   const auth = await profileIdOr401();
   if ('res' in auth) return auth.res;
   const b = await readJson(req);
-  const patch: Partial<Goal> & { id?: string } = {
+  // A date the person picked, or '' / null to take it off. Stored as the
+  // horizon that lands on it (upsertGoal), so nothing needs a new column.
+  const due = b.due_on === null || b.due_on === '' ? null
+    : typeof b.due_on === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.due_on) ? b.due_on
+    : undefined;
+  const patch: Partial<Goal> & { id?: string; due_on?: string | null } = {
     id: typeof b.id === 'string' ? b.id : undefined,
     title: typeof b.title === 'string' ? b.title.trim().slice(0, 120) || undefined : undefined,
     metric: (['currency', 'number', 'percent', 'none'] as GoalMetric[]).includes(b.metric as GoalMetric) ? (b.metric as GoalMetric) : undefined,
@@ -20,6 +25,7 @@ export async function POST(req: Request) {
     horizon_days: num(b.horizon_days),
     status: (['active', 'done', 'paused'] as Goal['status'][]).includes(b.status as Goal['status']) ? (b.status as Goal['status']) : undefined,
     note: typeof b.note === 'string' ? b.note.trim().slice(0, 400) : undefined,
+    due_on: due,
   };
   try {
     return json({ ok: true, goal: await upsertGoal(auth.pid, patch) });

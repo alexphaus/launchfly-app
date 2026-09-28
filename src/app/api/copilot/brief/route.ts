@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     });
     if (!ran.brief) return fail('The agent could not produce a brief right now.', 502);
     const home = await loadHome(auth.pid);
-    return json({ ok: true, agent: ran.brief.agent, fellBack: ran.brief.fellBack, home });
+    return json({ ok: true, agent: ran.brief.agent, fellBack: ran.brief.fellBack, unsaved: ran.brief.unsaved ?? null, home });
   } catch (e) {
     console.error('[copilot] brief failed', e);
     return fail('The agent could not produce a brief right now.', 502);

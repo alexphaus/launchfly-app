@@ -21,7 +21,8 @@ import type { ReviewChange, ReviewKind, ReviewLine, ReviewProgress, ReviewTarget
 import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { money } from '../format';
 import { creditedGoalId, goalCard } from '@/lib/copilot/goalcard';
-import { dayLabel } from '@/lib/copilot/money/ledger';
+import { currencyMark, dayLabel, recentLabel } from '@/lib/copilot/money/ledger';
+import { mainCurrency } from '@/lib/copilot/money/fx';
 import { HOW_LABEL, sensorViews } from '@/lib/copilot/sensors';
 import type { Actions } from '../shared';
 import { useShell } from '../shell';
@@ -32,7 +33,6 @@ export default function YouTab({ home, d, actions, openMatches }: { home: HomeDa
   return (
     <>
       <Numbers home={home} d={d} actions={actions} />
-      <Money home={home} actions={actions} />
       <Week home={home} d={d} actions={actions} openMatches={openMatches} />
       <Goals home={home} actions={actions} />
       <Records home={home} d={d} actions={actions} />
@@ -44,34 +44,54 @@ export default function YouTab({ home, d, actions, openMatches }: { home: HomeDa
 /* ─── The numbers ─────────────────────────────────────────────────────────── */
 
 /**
- * Four stat tiles, each a figure off rows the user made: money logged as won,
- * runway from cash and burn they typed, deep work they logged, replies matched
- * to what they sent. A tile with nothing behind it says what would fill it,
- * rather than showing a zero that looks like a measurement.
+ * Four stat tiles, each a figure off rows the user made: money in, runway,
+ * deep work they logged, replies matched to what they sent. A tile with
+ * nothing behind it says what would fill it, rather than showing a zero that
+ * looks like a measurement.
+ *
+ * With statements on file, Money in is what their bank shows came in over the
+ * last thirty days of rows, and Runway is the finance row the rows settle. The
+ * money card that sat under these repeated both in prose; it went, and the
+ * questions it carried ("2 to name") went to the Bank statements row in Records.
  */
 function Numbers({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
   const m = home.metrics;
   const f = home.forecast;
   const fin = home.profile.finance;
+  const read = home.money?.read ?? null;
+  // Runway is in the finance row's currency, which follows the bank; d.currency is the sales one.
+  const runCur = fin?.currency || d.currency;
+  const burnOnly = m.runway_months == null && !!fin?.monthly_burn && fin.cash == null;
   const week = d.week;
   const peak = Math.max(...week.days.map((x) => x.minutes), 60);
   return (
     <div className="cp2-tiles" aria-label="Your numbers">
-      <button className="cp2-tile" onClick={() => actions.openSheet({ kind: 'stage', stage: 'won' })}>
-        <span className="l">Money in</span>
-        <span className="v">{m.won_amount ? money(m.won_amount, d.currency) : m.won ? `${m.won} won` : '—'}</span>
-        <span className="s">{m.won ? `${m.won} win${m.won === 1 ? '' : 's'} · last ${m.window_days} days` : `Nothing logged as won in ${m.window_days} days`}</span>
-      </button>
+      {read ? (
+        <button className="cp2-tile" onClick={() => actions.openSheet({ kind: 'moneyin' })}>
+          <span className="l">Money in</span>
+          <span className="v">{read.recent.in > 0 ? money(Math.round(read.recent.in), read.currencyKnown ? currencyMark(read.currency) : '') : '—'}</span>
+          <span className="s">{recentLabel(read.recent, home.recent.today).replace(/^./, (c) => c.toLowerCase())} · from your bank</span>
+        </button>
+      ) : (
+        <button className="cp2-tile" onClick={() => actions.openSheet({ kind: 'moneyin' })}>
+          <span className="l">Money in</span>
+          <span className="v">{m.won_amount ? money(m.won_amount, d.currency) : m.won ? `${m.won} won` : '—'}</span>
+          <span className="s">{m.won ? `${m.won} win${m.won === 1 ? '' : 's'} · last ${m.window_days} days` : `Nothing logged as won in ${m.window_days} days`}</span>
+        </button>
+      )}
 
       <button className="cp2-tile" onClick={() => actions.openSheet({ kind: 'finance' })}>
         <span className="l">Runway</span>
-        <span className="v">{m.runway_months != null ? `${m.runway_months} mo` : 'Set it'}</span>
+        <span className="v">{m.runway_months != null ? `${m.runway_months} mo` : burnOnly ? 'Add cash' : 'Set it'}</span>
         <span className="s">
-          {m.runway_months == null ? (home.money?.ready ? 'Upload a statement, or type two numbers' : 'Cash and monthly burn — two numbers')
+          {/* The rows gave the burn and no balance (a budget export prints none): the one number left to type. */}
+          {burnOnly ? `${money(fin?.monthly_burn ?? 0, runCur)}/mo spent · type your cash`
+            : m.runway_months == null && read && !read.currencyKnown ? 'Say your statement’s currency'
+            : m.runway_months == null ? (home.money?.ready ? 'Upload a statement, or type two numbers' : 'Cash and monthly burn — two numbers')
             : f?.changesTheAnswer ? `${f.forecastMonths} mo with what is owed`
             // Where the number came from, when it came off a statement: a balance from 25 Sep is not today's.
-            : fin?.source?.cash === 'statement' && fin.cash_on ? `${money(fin.cash ?? 0, d.currency)} on ${dayLabel(fin.cash_on)} · from your bank`
-            : `${money(fin?.cash ?? 0, d.currency)} cash · ${money(fin?.monthly_burn ?? 0, d.currency)}/mo`}
+            : fin?.source?.cash === 'statement' && fin.cash_on ? `${money(fin.cash ?? 0, runCur)} on ${dayLabel(fin.cash_on)} · from your bank`
+            : `${money(fin?.cash ?? 0, runCur)} cash · ${money(fin?.monthly_burn ?? 0, runCur)}/mo`}
         </span>
       </button>
 
@@ -288,56 +308,6 @@ function Goals({ home, actions }: { home: HomeData; actions: Actions }) {
   );
 }
 
-/* ─── Money, from the bank ────────────────────────────────────────────────── */
-
-/**
- * What the statements say, in the lines ledger.ts wrote from the rows, with
- * the payers still to name one tap away. Before any statement, one card that
- * says what uploading one does; on a server without the tables, nothing —
- * Records says it is not set up, and a card offering an upload that cannot
- * save would be a capability with no route behind it (invariant 7).
- */
-function Money({ home, actions }: { home: HomeData; actions: Actions }) {
-  const m = home.money;
-  if (!m?.ready) return null;
-  const read = m.read;
-  const reading = m.imports.filter((i) => i.status === 'reading').length;
-  const review = m.imports.filter((i) => i.status === 'review').length;
-  if (!read) {
-    return (
-      <div className="cp-card cp2-money cp2-money-empty">
-        <div className="cp2-money-head"><span className="t">Start from your real numbers</span></div>
-        {reading
-          ? <p>Reading your statement. It lands here when it is done.</p>
-          : review
-          ? <p>Your statement is read and waiting on you to check its totals.</p>
-          : <p>Upload a bank statement — the CSV from your bank, a PDF, or a screenshot — and runway, income and repeat bills are read off it instead of typed.</p>}
-        <button className="cp-btn primary" onClick={() => actions.openSheet({ kind: 'bank' })}>{review ? 'Check it' : reading ? 'See it' : 'Upload a statement'}</button>
-      </div>
-    );
-  }
-  const ask = read.toName.length + read.ownCheck.length;
-  return (
-    <button className="cp-card cp2-money" onClick={() => actions.openSheet({ kind: 'bank' })}>
-      <span className="cp2-money-head">
-        <span className="t">Your money, from your bank</span>
-        <span className="s">to {dayLabel(read.to)}</span>
-      </span>
-      {/* Spans, not a list: the card is one button, and a list is not allowed inside one. */}
-      <span className="cp2-money-lines">
-        {read.lines.slice(0, 5).map((l) => <span key={l} className="cp2-money-line">{l}</span>)}
-      </span>
-      {(ask > 0 || review > 0 || reading > 0) && (
-        <span className="cp2-money-foot">
-          {review > 0 && <span className="cp2-link">{review} statement{review === 1 ? '' : 's'} to check</span>}
-          {reading > 0 && <span className="cp2-link">Reading {reading}…</span>}
-          {ask > 0 && <span className="cp2-link">{ask} to name, one tap each</span>}
-        </span>
-      )}
-    </button>
-  );
-}
-
 /* ─── Records ─────────────────────────────────────────────────────────────── */
 
 /**
@@ -356,6 +326,8 @@ function Records({ home, d, actions }: { home: HomeData; d: Derived; actions: Ac
       review: m.imports.filter((i) => i.status === 'review').length,
       failed: m.imports.filter((i) => i.status === 'failed').length,
       unreadable: m.unreadable,
+      toName: (m.read?.toName.length ?? 0) + (m.read?.ownCheck.length ?? 0),
+      unlabelled: m.imports.filter((i) => (i.status === 'ready' || i.status === 'review') && !i.currency).length,
     } : null,
     owed: { open: home.obligations.length },
     focus: { minutesWeek: d.week.total },
@@ -390,6 +362,8 @@ function Settings({ home, d, actions }: { home: HomeData; d: Derived; actions: A
     { key: 'offer', l: 'Your offer', s: p.offer?.sells || 'Not set — nothing is drafted without it', onClick: () => actions.openSheet({ kind: 'offer' }) },
     { key: 'targeting', l: 'Who it looks for', s: p.target_segments.length ? `${p.target_segments.join(', ')}${p.target_area || p.location ? ` · ${p.target_area || p.location}` : ''}` : 'Not set', onClick: () => actions.openSheet({ kind: 'targeting' }) },
     { key: 'working', l: 'How you work', s: `${home.workingProgress?.filled ?? 0} of ${home.workingProgress?.total ?? 6} written${home.workingProgress?.proposals ? ` · ${home.workingProgress.proposals} to check` : ''}`, onClick: () => actions.openSheet({ kind: 'working' }) },
+    // The currency every figure is counted in; statements in others are converted into it.
+    { key: 'currency', l: 'Currency', s: 'Everything is counted in it · other currencies converted', onClick: () => actions.openSheet({ kind: 'currency' }), right: mainCurrency(p.finance, home.goals) },
     { key: 'capacity', l: 'Capacity', s: CAPACITY_META[p.capacity].sub, onClick: () => actions.openSheet({ kind: 'capacity' }), right: CAPACITY_META[p.capacity].label },
     { key: 'account', l: 'Account & notifications', s: home.account.email ? `${home.account.email}${home.account.verified ? ' · verified' : ' · not verified'}${home.push.enabled ? ' · push on' : ''}` : 'This device only — add an email to sign in elsewhere', onClick: () => actions.openSheet({ kind: 'account' }) },
     b.effective === 'free'

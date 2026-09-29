@@ -7,7 +7,7 @@
 // waiting on their eye, the read itself, the questions, then the record of
 // what is on file and the way to delete all of it.
 import { useState } from 'react';
-import { PAYEE_ROLES, ROLE_LABEL, currencyCodeOf, dayLabel, moneyText, type MoneyImport, type PayeeRole } from '@/lib/copilot/money/ledger';
+import { PAYEE_ROLES, ROLE_LABEL, currencyCodeOf, currencyForZone, dayLabel, moneyText, plainMoney, type MoneyImport, type PayeeRole } from '@/lib/copilot/money/ledger';
 import { STATEMENT_ACCEPT } from '@/lib/copilot/money/statement';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Actions } from './shared';
@@ -20,7 +20,9 @@ export default function BankSheet({ home, actions }: { home: HomeData; actions: 
   const m = home.money;
   const [uploading, setUploading] = useState(false);
   const currency = m?.read?.currency || home.profile.finance?.currency || '$';
-  const money = (n: number | null | undefined, cur = currency) => (n == null ? '—' : moneyText(n, cur));
+  // A read no row has named a currency for prints bare numbers: a $ on them would be a guess.
+  const bare = !!m?.read && !m.read.currencyKnown;
+  const money = (n: number | null | undefined, cur?: string) => (n == null ? '—' : cur ? moneyText(n, cur) : bare ? plainMoney(n) : moneyText(n, currency));
 
   if (!m || !m.ready) {
     return (
@@ -50,6 +52,7 @@ export default function BankSheet({ home, actions }: { home: HomeData; actions: 
   // its whole account, so the next export of the same app needs no question.
   const unlabelled = [...review, ...onFile].find((i) => !i.currency) ?? null;
   const currencyOptions = [...new Set([
+    currencyForZone(home.profile.timezone),
     currencyCodeOf(home.profile.finance?.currency),
     ...m.imports.map((i) => i.currency),
     ...(read?.otherCurrencies.map((o) => o.currency) ?? []),

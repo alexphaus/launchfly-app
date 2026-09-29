@@ -126,6 +126,13 @@ export function renderHandoff(input: HandoffInput): string {
     bullet(`${m.pipeline.sourced} real matches in the pipeline`),
   ].filter(Boolean));
 
+  // Counted off their own bank statements, so it goes in as they read — the
+  // one section a model pasted this cannot ask a follow-up about.
+  section('My money, from my bank statements', [
+    ...(pack.money ?? []).map(bullet),
+    pack.moneyError ? bullet(pack.moneyError) : '',
+  ].filter(Boolean));
+
   // The section nothing general can reconstruct, and the reason this export is
   // worth making at all.
   section('What has already been suggested, and what I did about it',

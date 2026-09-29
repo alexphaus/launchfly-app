@@ -25,6 +25,7 @@ import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
 import type { HomeData } from '@/lib/copilot/types';
 import { moneyForPlan } from '@/lib/copilot/money/ledger';
 import type { Tab2 } from '../shared';
+import { salesCurrency } from '@/lib/copilot/metrics';
 
 export function derive(home: HomeData) {
   const now = new Date(home.generatedAt);
@@ -32,7 +33,8 @@ export function derive(home: HomeData) {
   const queueCount = home.queue.length;
   const oldestDays = oldestWaitDays(home.queue.map((q) => q.execution.created_at), now);
   const queueBacked = queueIsBacked(queueCount, oldestDays);
-  const currency = home.profile.finance?.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '$';
+  // Sales money: the goal's currency. Runway's is the finance row's, which follows the bank.
+  const currency = salesCurrency(home.profile.finance, home.goals);
 
   /* Matches — first, because Today reports how many of last night's finds are still waiting there. */
   const feed = matchFeed({ now, pipeline: home.pipeline, triage: home.triage, moves: home.moves, targetSegments: home.profile.target_segments });

@@ -93,6 +93,22 @@ export interface Finance {
   updated_at?: string;
   /** Where each number came from. Absent on rows written before statements existed: typed. */
   source?: { cash?: 'typed' | 'statement'; monthly_burn?: 'typed' | 'statement' };
+  /**
+   * The currency the whole app counts in, chosen in Settings (money/fx.ts
+   * mainCurrency). Absent: the money goal's, else this row's, else USD.
+   * `currency` above is then always that one, written as its mark.
+   */
+  main_currency?: string;
+  /**
+   * Numbers typed in another currency than the main one, as typed — ₱71,804 of
+   * cash in a dollar app. cash and monthly_burn hold them converted at the
+   * newest rate (`rate`, `day`), redone each time runway settles, so the dollar
+   * figure follows the peso. No rate yet: the converted figure is absent.
+   */
+  typed_in?: {
+    cash?: { amount: number; currency: string; rate?: number; day?: string };
+    monthly_burn?: { amount: number; currency: string; rate?: number; day?: string };
+  };
   /** The day the statement balance behind `cash` is from. */
   cash_on?: string;
   /** The last day of statement rows `monthly_burn` was averaged over. */
@@ -626,6 +642,18 @@ export interface ContextPack {
   openings: PackOpening[];
   /** Real numbers. The insight must cite at least one. */
   metrics: Metrics;
+  /**
+   * Their money as their bank statements show it (money/ledger.ts
+   * moneyForPlan): who pays them, what they spend a month, what repeats. Every
+   * figure counted from rows. Empty with no statements, or when they could not
+   * be read — the brief is written without money rather than not at all, as it
+   * always was. The plan has had these since statements existed; the brief,
+   * which writes the call, did not, so a call could name a $70 test while the
+   * rows said ₱37,708 a month goes out and 95% of what comes in is family help.
+   */
+  money?: string[];
+  /** Why `money` is empty when statements exist and could not be read. The brief says it rather than implying there is no money. */
+  moneyError?: string;
 }
 
 /**

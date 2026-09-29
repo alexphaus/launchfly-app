@@ -23,6 +23,7 @@
 // Pure: no DB import. store reads the rows, this reads them back.
 
 import type { Finance } from '../types';
+import { FX_SOURCE, currencyCodeOf, currencyMark, rateLine, rateOn, toCode, type FxTable } from './fx';
 import { displayName } from './statement';
 
 /* ─── Shapes ──────────────────────────────────────────────────────────────── */
@@ -97,8 +98,15 @@ export interface PartyLine {
 }
 
 export interface MoneyRead {
-  /** The currency every figure is in: the person's own when rows carry it, else the one most rows carry. */
+  /** The currency every figure is in: the one the person chose when rows carry it, else the one most rows carry. */
   currency: string;
+  /**
+   * False when no row on file names a currency — a budget export nobody has
+   * said the currency of yet. The figures are then printed as bare numbers and
+   * kept out of runway: counted as "the person's currency" they were written
+   * into a dollar runway as $37,708 a month of peso spending.
+   */
+  currencyKnown: boolean;
   /** Rows behind the figures: in that currency, and not between the person's own accounts. */
   rows: number;
   from: string;
@@ -112,6 +120,17 @@ export interface MoneyRead {
   payees: PartyLine[];
   /** Averaged over the last `over` days of rows; null under MIN_SPAN_DAYS of history. */
   perMonth: { in: number; out: number; over: number } | null;
+  /**
+   * The last RECENT_DAYS of rows, ending on the last row — not on today: a
+   * statement that ends on 30 Jun has nothing in "the last 30 days" in
+   * September, and a tile reading ₱0 would be a zero that measures nothing.
+   * `from` is later than the read's own `from` when there is less history.
+   */
+  recent: { from: string; to: string; in: number; out: number; payers: PartyLine[] };
+  /** Calendar months with rows, newest first. `partial` when the rows start or stop inside it. */
+  months: Array<{ month: string; label: string; in: number; out: number; partial: boolean }>;
+  /** Where the money goes a month, over the same days perMonth averages, biggest first. Empty when perMonth is null. */
+  spend: Array<{ key: string; name: string; perMonth: number; share: number }>;
   /** Money in by what the payer is, over the whole span. */
   byRole: { client: number; employer: number; other: number; unnamed: number };
   lastIn: { name: string; amount: number; on: string; days: number } | null;
@@ -119,8 +138,12 @@ export interface MoneyRead {
   recurringPerMonth: number;
   cash: { amount: number; on: string; accounts: number; missing: number } | null;
   runwayMonths: number | null;
-  /** Rows in another currency than `currency`, kept out of every figure and said. '' is rows whose file named none. */
-  otherCurrencies: Array<{ currency: string; rows: number }>;
+  /** Rows kept out of every figure and said: '' is rows whose file named no currency; a code is one with no rate to convert it. */
+  otherCurrencies: Array<{ currency: string; rows: number; why?: string }>;
+  /** True when the figures are in the main currency — the only read runway takes (financeFromRead). */
+  inMain: boolean;
+  /** Currencies converted into the main one, and how many rows each. */
+  converted: Array<{ currency: string; rows: number }>;
   /** The read, one sentence each, every number off the rows above. */
   lines: string[];
   /** Payers nobody has named yet, biggest first — the questions. */
@@ -159,22 +182,35 @@ export function dayLabel(d: string): string {
 
 /* ─── Money, written ──────────────────────────────────────────────────────── */
 
-const SYMBOL: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', PHP: '₱', JPY: '¥', INR: '₹', NGN: '₦', KRW: '₩', TRY: '₺', THB: '฿', VND: '₫', MXN: '$', CAD: '$', AUD: '$', NZD: '$', SGD: '$', HKD: '$', COP: '$', ARS: '$', CLP: '$' };
+// The marks live with the rates (fx.ts), so the two can never disagree about what "$" is.
+export { currencyCodeOf, currencyMark } from './fx';
 
-/** The currency as it should be printed: the symbol for a known code, the code otherwise, whatever was typed as a last resort. */
-export function currencyMark(c: string | null | undefined): string {
-  const raw = (c ?? '').trim();
-  if (!raw) return '$';
-  const code = raw.toUpperCase();
-  return SYMBOL[code] ?? raw;
+/**
+ * The currency a time zone most likely spends, offered as the first chip when
+ * a file names none — never applied without the tap. A person in Manila was
+ * offered USD and EUR and had to type PHP. Only zones that map to one currency.
+ */
+const ZONE_CURRENCY: Array<[RegExp, string]> = [
+  [/^Asia\/Manila$/, 'PHP'], [/^Asia\/(Kolkata|Calcutta)$/, 'INR'], [/^Asia\/Singapore$/, 'SGD'], [/^Asia\/Tokyo$/, 'JPY'],
+  [/^Asia\/Bangkok$/, 'THB'], [/^Asia\/(Ho_Chi_Minh|Saigon)$/, 'VND'], [/^Asia\/Jakarta$/, 'IDR'], [/^Asia\/Seoul$/, 'KRW'],
+  [/^Europe\/London$/, 'GBP'], [/^Europe\/(Madrid|Paris|Berlin|Rome|Amsterdam|Brussels|Lisbon|Vienna|Dublin|Athens|Helsinki|Bratislava|Ljubljana|Tallinn|Riga|Vilnius|Luxembourg|Valletta|Zagreb)$/, 'EUR'],
+  [/^America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Detroit)$|^Pacific\/Honolulu$/, 'USD'],
+  [/^America\/(Toronto|Vancouver|Edmonton|Winnipeg|Halifax)$/, 'CAD'], [/^America\/Mexico_City$/, 'MXN'], [/^America\/Sao_Paulo$/, 'BRL'],
+  [/^America\/Bogota$/, 'COP'], [/^America\/Argentina\//, 'ARS'], [/^Australia\//, 'AUD'], [/^Pacific\/Auckland$/, 'NZD'], [/^Africa\/Lagos$/, 'NGN'],
+];
+export function currencyForZone(tz: string | null | undefined): string | null {
+  return ZONE_CURRENCY.find(([re]) => re.test(tz ?? ''))?.[1] ?? null;
 }
 
-/** The code for a mark only one currency uses: ₱ is PHP, $ is a dozen of them and says nothing. */
-export function currencyCodeOf(c: string | null | undefined): string | null {
-  const raw = (c ?? '').trim();
-  if (/^[A-Za-z]{3}$/.test(raw)) return raw.toUpperCase();
-  const codes = Object.entries(SYMBOL).filter(([, mark]) => mark === raw).map(([code]) => code);
-  return codes.length === 1 ? codes[0] : null;
+/** A figure with no currency to put on it: the same rounding as moneyText, no mark. */
+export function plainMoney(n: number): string {
+  const abs = Math.abs(n);
+  return `${n < 0 ? '-' : ''}${abs >= 100 ? Math.round(abs).toLocaleString('en-US') : abs.toFixed(2).replace(/\.00$/, '')}`;
+}
+
+/** The printer for a read's own figures: its currency when a row names one, bare numbers until then. */
+export function readMoney(read: Pick<MoneyRead, 'currency' | 'currencyKnown'>): (n: number) => string {
+  return (n) => (read.currencyKnown ? moneyText(n, read.currency) : plainMoney(n));
 }
 
 /** "$1,200", "$5.50", "USD 1,200" — whole units at 100 and over, cents under it. */
@@ -261,6 +297,14 @@ export const STALE_DAYS = 10;
 export const NEXT_BILL_DAYS = 21;
 /** Questions asked at once. More is a form; the rest come after. */
 export const MAX_QUESTIONS = 5;
+/** An account whose last row is further than this before the newest row is not averaged into what is spent now. */
+export const LIVE_ACCOUNT_DAYS = 31;
+/** How far back Money in looks: the thirty days every other tile counts. */
+export const RECENT_DAYS = 30;
+/** Calendar months the sheets show: a quarter, and the month before it to compare. */
+const MONTHS_SHOWN = 4;
+/** Lines of where the money goes. Past eight it is a statement again, not an answer. */
+const SPEND_SHOWN = 8;
 
 export interface MoneyReadInput {
   txs: LedgerTx[];
@@ -270,35 +314,66 @@ export interface MoneyReadInput {
   today: string;
   /** Printed when the rows carry none: the currency on their finance, else a goal's. */
   currency: string;
+  /**
+   * The currency the whole app counts in (fx.ts mainCurrency). Every row in
+   * another is converted into it at the rate for its own day. Absent, nothing
+   * is converted and the figures are in the pile with the most rows.
+   */
+  main?: string;
+  fx?: FxTable;
+  /** Why a currency has no rate (fxstore.ts), said beside the rows it leaves out. Lower case, no full stop. */
+  fxMissing?: Record<string, string>;
 }
 
 /** Null when there are no rows: an empty read is not a read. */
 export function moneyRead(input: MoneyReadInput): MoneyRead | null {
   if (!input.txs.length) return null;
 
-  // One currency per figure: the person's own when rows carry it — their
-  // runway is typed in it — else the one most rows carry. A file that names
-  // none (a budgeting app's export, most often) is the person's own currency
-  // only while nothing else names one. Beside a statement that does, it is a
-  // separate pile until they say which: 264 unlabelled peso rows used to be
-  // summed into a euro account's figures and printed with its €.
+  // One currency per figure. With a main currency, every row in another is
+  // converted into it at the ECB rate for its own day; a row whose currency
+  // has no rate is left out and said — never converted at a guess. A file that
+  // named no currency is its own pile until the person says which: counted as
+  // "their currency", it once wrote ₱37,708 a month of spending into a dollar
+  // runway. With no main currency, or nothing that converts (the rate service
+  // down on a first load), the figures are in the pile with the most rows.
+  const codeOf = (c: string | null) => (c ? toCode(c) ?? c.toUpperCase() : '');
   const tally = new Map<string, number>();
-  for (const t of input.txs) {
-    const c = (t.currency || '').toUpperCase();
-    tally.set(c, (tally.get(c) ?? 0) + 1);
+  for (const t of input.txs) tally.set(codeOf(t.currency), (tally.get(codeOf(t.currency)) ?? 0) + 1);
+  const main = input.main ? toCode(input.main) ?? input.main.toUpperCase() : null;
+  const why = new Map<string, string>();
+  const converted = new Map<string, number>();
+  let pool: LedgerTx[] = [];
+  let figures = '';
+  if (main) {
+    for (const t of input.txs) {
+      const c = codeOf(t.currency);
+      if (!c) continue;
+      if (c === main) { pool.push(t); continue; }
+      const r = input.fx ? rateOn(input.fx, c, main, t.on) : null;
+      if (r) { pool.push({ ...t, amount: t.amount * r.rate, currency: main }); converted.set(c, (converted.get(c) ?? 0) + 1); }
+      else why.set(c, input.fxMissing?.[c] ?? `no ${c} to ${main} rate for those days`);
+    }
+    if (pool.length) figures = main;
   }
-  const named = [...tally.entries()].filter(([c]) => c).sort((a, b) => b[1] - a[1]);
-  const own = currencyCodeOf(input.currency);
-  const main = own && tally.has(own) ? own : named[0]?.[0] ?? '';
-  const inMain = (c: string | null) => (c || '').toUpperCase() === main;
-  const otherCurrencies = [...tally.entries()].filter(([c]) => c !== main).sort((a, b) => b[1] - a[1]).map(([currency, rows]) => ({ currency, rows }));
-  const currency = main || input.currency;
+  if (!figures) {
+    converted.clear();
+    figures = [...tally.entries()].filter(([c]) => c).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+    pool = input.txs.filter((t) => codeOf(t.currency) === figures);
+  }
+  // With no main currency asked for, the figures' own currency is the main one.
+  const inMain = main ? figures === main : figures !== '';
+  const currencyKnown = figures !== '';
+  const currency = figures || input.currency;
+  const otherCurrencies = [...tally.entries()]
+    .filter(([c]) => c !== figures && !converted.has(c))
+    .sort((a, b) => b[1] - a[1])
+    .map(([c, rows]) => ({ currency: c, rows, ...(why.has(c) ? { why: why.get(c)! } : {}) }));
 
   const payee = new Map(input.payees.map((p) => [p.key, p]));
   const roleOf = (key: string) => payee.get(key)?.role ?? null;
   const nameOf = (key: string) => payee.get(key)?.name || displayName(key);
   // The person's own accounts are neither income nor spending: money moved, nothing happened.
-  const txs = input.txs.filter((t) => inMain(t.currency) && roleOf(t.key) !== 'self');
+  const txs = pool.filter((t) => roleOf(t.key) !== 'self');
   if (!txs.length) return null;
 
   const from = txs.reduce((a, t) => (t.on < a ? t.on : a), txs[0].on);
@@ -307,9 +382,9 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
   const inTotal = txs.filter((t) => t.amount > 0).reduce((a, t) => a + t.amount, 0);
   const outTotal = txs.filter((t) => t.amount < 0).reduce((a, t) => a - t.amount, 0);
 
-  const parties = (sign: 1 | -1): PartyLine[] => {
+  const partiesOf = (list: LedgerTx[], sign: 1 | -1): PartyLine[] => {
     const by = new Map<string, { total: number; count: number; last: string; lastAmount: number }>();
-    for (const t of txs) {
+    for (const t of list) {
       if (Math.sign(t.amount) !== sign) continue;
       const e = by.get(t.key) ?? { total: 0, count: 0, last: t.on, lastAmount: 0 };
       e.total += Math.abs(t.amount);
@@ -317,13 +392,36 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
       if (t.on >= e.last) { e.last = t.on; e.lastAmount = Math.abs(t.amount); }
       by.set(t.key, e);
     }
-    const whole = sign > 0 ? inTotal : outTotal;
+    const whole = list.filter((t) => Math.sign(t.amount) === sign).reduce((a, t) => a + Math.abs(t.amount), 0);
     return [...by.entries()]
       .map(([key, e]) => ({ key, name: nameOf(key), ...e, share: whole > 0 ? e.total / whole : 0, role: roleOf(key), opportunityId: payee.get(key)?.opportunityId ?? null }))
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   };
-  const payers = parties(1);
-  const payees = parties(-1);
+  const payers = partiesOf(txs, 1);
+  const payees = partiesOf(txs, -1);
+  const sumIn = (list: LedgerTx[]) => list.filter((t) => t.amount > 0).reduce((a, t) => a + t.amount, 0);
+  const sumOut = (list: LedgerTx[]) => list.filter((t) => t.amount < 0).reduce((a, t) => a - t.amount, 0);
+
+  const recentFrom = addDay(to, -(RECENT_DAYS - 1));
+  const recentTxs = txs.filter((t) => t.on >= recentFrom);
+  const recent = { from: recentFrom < from ? from : recentFrom, to, in: sumIn(recentTxs), out: sumOut(recentTxs), payers: partiesOf(recentTxs, 1) };
+
+  const monthly = new Map<string, LedgerTx[]>();
+  for (const t of txs) monthly.set(t.on.slice(0, 7), [...(monthly.get(t.on.slice(0, 7)) ?? []), t]);
+  const months = [...monthly.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, MONTHS_SHOWN)
+    .map(([month, list]) => {
+      const [y, mm] = month.split('-').map(Number);
+      return {
+        month,
+        label: `${MONTH_ABBR[mm - 1]}${String(y) === to.slice(0, 4) ? '' : ` ${y}`}`,
+        in: sumIn(list),
+        out: sumOut(list),
+        // Rows that start after the 1st, or stop before the month's last day: a half month is not a month.
+        partial: (month === from.slice(0, 7) && from.slice(8) !== '01') || (month === to.slice(0, 7) && addDay(to, 1).slice(0, 7) === month),
+      };
+    });
 
   const byRole = { client: 0, employer: 0, other: 0, unnamed: 0 };
   for (const p of payers) {
@@ -334,17 +432,29 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
   }
 
   // Averages over the latest AVERAGE_DAYS, or the whole span when it is shorter.
+  // Averaged over the accounts still being written. One whose rows stop a
+  // month before the newest does not speak for this month: a Wise quarter
+  // ending 30 Jun beside a budget export starting 15 Jul averaged 90 days across
+  // a fortnight nobody recorded, and $648 a month read as $554.
+  const firstBy = new Map<string, string>();
+  const lastBy = new Map<string, string>();
+  for (const t of txs) {
+    const a = t.accountId ?? '';
+    if (!firstBy.has(a) || t.on < firstBy.get(a)!) firstBy.set(a, t.on);
+    if (!lastBy.has(a) || t.on > lastBy.get(a)!) lastBy.set(a, t.on);
+  }
+  const live = new Set([...lastBy.entries()].filter(([, last]) => daysBetween(last, to) <= LIVE_ACCOUNT_DAYS).map(([a]) => a));
+  const liveFrom = [...live].reduce((d, a) => (firstBy.get(a)! < d ? firstBy.get(a)! : d), to);
+  const liveDays = daysBetween(liveFrom, to) + 1;
   let perMonth: MoneyRead['perMonth'] = null;
-  if (days >= MIN_SPAN_DAYS) {
-    const over = Math.min(days, AVERAGE_DAYS);
+  let spend: MoneyRead['spend'] = [];
+  if (liveDays >= MIN_SPAN_DAYS) {
+    const over = Math.min(liveDays, AVERAGE_DAYS);
     const start = addDay(to, -(over - 1));
-    const inWindow = txs.filter((t) => t.on >= start);
+    const inWindow = txs.filter((t) => t.on >= start && live.has(t.accountId ?? ''));
     const scale = 30.44 / over;
-    perMonth = {
-      in: inWindow.filter((t) => t.amount > 0).reduce((a, t) => a + t.amount, 0) * scale,
-      out: inWindow.filter((t) => t.amount < 0).reduce((a, t) => a - t.amount, 0) * scale,
-      over,
-    };
+    perMonth = { in: sumIn(inWindow) * scale, out: sumOut(inWindow) * scale, over };
+    spend = partiesOf(inWindow, -1).slice(0, SPEND_SHOWN).map((p) => ({ key: p.key, name: p.name, perMonth: p.total * scale, share: p.share }));
   }
 
   // The last payment from somebody who pays them: refunds and "something else" are not being paid.
@@ -354,15 +464,26 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
   const recurring = recurringOut(txs, nameOf, to);
   const recurringPerMonth = recurring.reduce((a, r) => a + r.perMonth, 0);
 
-  // Cash is the balance each account last printed, summed — only accounts in the main currency.
-  const accounts = input.accounts.filter((a) => inMain(a.currency));
+  // Cash is the balance each account last printed, summed: in the figures'
+  // currency, or converted into the main one at the rate on the balance's day.
+  const accounts = input.accounts.flatMap((a): AccountBalance[] => {
+    const c = codeOf(a.currency);
+    if (c === figures) return [a];
+    if (!inMain || !c) return [];
+    if (a.balance == null || !a.on) return [a];
+    const r = input.fx ? rateOn(input.fx, c, figures, a.on) : null;
+    return r ? [{ ...a, balance: a.balance * r.rate, currency: figures }] : [];
+  });
   const known = accounts.filter((a) => a.balance != null && a.on);
   const cash = known.length
     ? { amount: known.reduce((s, a) => s + (a.balance as number), 0), on: known.reduce((d, a) => (a.on! > d ? a.on! : d), known[0].on!), accounts: known.length, missing: accounts.length - known.length }
     : null;
-  const runwayMonths = cash && perMonth && perMonth.out > 0 ? Math.max(0, round1(cash.amount / perMonth.out)) : null;
+  // Runway off the rows only when every account printed a balance: a budget
+  // export prints none, and "0 months of runway on $5.50" was one euro account's
+  // balance standing in for all the money there is.
+  const runwayMonths = cash && !cash.missing && perMonth && perMonth.out > 0 ? Math.max(0, round1(cash.amount / perMonth.out)) : null;
 
-  const money = (n: number) => moneyText(n, currency);
+  const money = (n: number) => (currencyKnown ? moneyText(n, currency) : plainMoney(n));
   const lines: string[] = [];
   const label = days >= 330 ? 'Last 12 months' : `Since ${dayLabel(from)}`;
   const payerCount = payers.length;
@@ -375,6 +496,9 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
     byRole.employer > 0 ? `your job ${money(byRole.employer)}` : null,
   ].filter(Boolean);
   if (namedParts.length) lines.push(`Of that: ${namedParts.join(' · ')}${byRole.unnamed > 0 ? ` · not named yet ${money(byRole.unnamed)}` : ''}.`);
+  // The month as the tiles count it — what "Money in" shows — once there is more history than a month.
+  // After the shares, which are of the whole span: between them, "it" would read as the month.
+  if (days > RECENT_DAYS) lines.push(`${recentLabel(recent, input.today)}: ${money(recent.in)} in, ${money(recent.out)} out.`);
   if (lastIn) {
     const tail = daysBetween(to, input.today) > 2 ? ` to ${dayLabel(to)}` : '';
     if (lastIn.days >= QUIET_DAYS) lines.push(`Nobody has paid you in the ${lastIn.days} days${tail}.`);
@@ -385,76 +509,183 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
   }
   if (perMonth) lines.push(`You spend ${money(perMonth.out)} a month${recurringPerMonth >= 1 ? `, ${money(recurringPerMonth)} of it on repeat bills` : ''}.`);
   if (cash && runwayMonths != null) lines.push(`That is ${runwayMonths} month${runwayMonths === 1 ? '' : 's'} of runway on ${money(cash.amount)} (${dayLabel(cash.on)}).`);
+  else if (cash && cash.missing) lines.push(`Balance: ${money(cash.amount)} on ${dayLabel(cash.on)} in ${cash.accounts} of ${cash.accounts + cash.missing} accounts — the other${cash.missing === 1 ? ' prints' : 's print'} no balance, so type your cash for runway.`);
   else if (cash) lines.push(`Balance: ${money(cash.amount)} on ${dayLabel(cash.on)}.`);
   const next = recurring
     .filter((r) => r.next >= input.today && daysBetween(input.today, r.next) <= NEXT_BILL_DAYS)
     .sort((a, b) => a.next.localeCompare(b.next))[0];
   if (next) lines.push(`Next: ${next.name} ${money(next.amount)} around ${dayLabel(next.next)}.`);
   if (daysBetween(to, input.today) > STALE_DAYS) lines.push(`Your statement ends ${dayLabel(to)}. Add a newer one to keep this current.`);
+  // Said, because a converted figure is a claim about a rate as well as the rows.
+  if (converted.size) lines.push(`Converted to ${figures} from ${[...converted.entries()].map(([c, n]) => `${c} (${n} row${n === 1 ? '' : 's'})`).join(' and ')} at ${FX_SOURCE}.`);
+  if (main && !inMain && currencyKnown) lines.push(`Shown in ${figures}, not ${main}: ${why.get(figures) ?? `no ${figures} to ${main} rate yet`}.`);
   for (const o of otherCurrencies) {
     const n = `${o.rows} row${o.rows === 1 ? '' : 's'}`;
-    lines.push(o.currency ? `${n} in ${o.currency} are not in these numbers.` : `${n} with no currency are not in these numbers. Say which on Bank statements.`);
+    lines.push(!o.currency ? `${n} with no currency are not in these numbers. Say which on Bank statements.`
+      : `${n} in ${o.currency} are not in these numbers${o.why && o.currency !== figures ? `: ${o.why}` : ''}.`);
   }
 
   return {
-    currency, rows: txs.length, from, to, days, inTotal, outTotal, payers, payees: payees.slice(0, 12), perMonth, byRole,
+    currency, currencyKnown, inMain, converted: [...converted.entries()].map(([c, rows]) => ({ currency: c, rows })), rows: txs.length, from, to, days, inTotal, outTotal, recent, months, spend, payers, payees: payees.slice(0, 12), perMonth, byRole,
     lastIn, recurring, recurringPerMonth, cash, runwayMonths, otherCurrencies, lines,
     toName: payers.filter((p) => p.role == null).slice(0, MAX_QUESTIONS),
     ownCheck: payees.filter((p) => p.role == null && OWN_ACCOUNT.test(p.key)).slice(0, MAX_QUESTIONS),
   };
 }
 
+/**
+ * How the Money in window is named: "Last 30 days" while the rows reach today,
+ * "30 days to 30 Jun" once they stop short of it — a month that ended in June
+ * is not the last thirty days in September — and "Since 15 Jul" under a month.
+ */
+export function recentLabel(recent: Pick<MoneyRead['recent'], 'from' | 'to'>, today: string): string {
+  if (daysBetween(recent.from, recent.to) + 1 < RECENT_DAYS) return `Since ${dayLabel(recent.from)}`;
+  return daysBetween(recent.to, today) <= 2 ? `Last ${RECENT_DAYS} days` : `${RECENT_DAYS} days to ${dayLabel(recent.to)}`;
+}
+
 /* ─── Into the finance every other part reads ─────────────────────────────── */
 
+/** The newest rate from one currency to another, for a number typed today. */
+export type LatestRate = (from: string, to: string) => { rate: number; day: string } | null;
+
 /**
- * The finance row, with cash and burn from the statement where the statement
- * is the newer evidence. A number the person typed after the statement's own
- * date stands: they know something the file does not. `source` says where each
- * number came from, so the sheet can say it.
- *
- * Runway is cash over burn, so both have to be one currency. A read in another
- * currency than a number the person typed stays on the money card and out of
- * the row — euro spending under typed pesos made 179 months of runway — and
- * what an earlier read left in the row goes: moneyRead reads the person's own
- * currency whenever any row carries it, so a read in another means no row in
- * theirs is left to stand behind those figures. With nothing typed, the row
- * follows the read.
+ * How the main currency is written in the finance row: its mark when the mark
+ * says only it ("$" is USD, "₱" is PHP), its code when it does not ("CAD"), so
+ * the row always reads back as the currency it was written in.
  */
-export function financeFromRead(prev: Finance, read: MoneyRead | null, nowIso: string): Finance {
-  if (!read) return prev;
-  const mark = currencyMark(read.currency);
-  const switching = !!prev.currency && currencyMark(prev.currency) !== mark;
-  const typed = (f: 'cash' | 'monthly_burn') => prev[f] != null && prev.source?.[f] !== 'statement';
-  if (switching && (typed('cash') || typed('monthly_burn'))) return financeWithoutStatements(prev, nowIso);
-  const base = switching ? financeWithoutStatements(prev, nowIso) : prev;
-  const next: Finance = { ...base, source: { ...(base.source ?? {}) } };
-  const typedOn = prev.typed_at?.slice(0, 10) ?? null;
-  const newer = (field: 'cash' | 'monthly_burn', on: string) => prev.source?.[field] !== 'typed' || !typedOn || on >= typedOn;
-  let changed = false;
-  if (read.cash && newer('cash', read.cash.on)) {
-    next.cash = Math.round(read.cash.amount * 100) / 100;
-    next.cash_on = read.cash.on;
-    next.source!.cash = 'statement';
-    changed = true;
+export function financeMark(code: string): string {
+  const mark = currencyMark(code);
+  return toCode(mark) === code ? mark : code;
+}
+
+/**
+ * The finance row, in the main currency. Everything else reads cash and burn
+ * off it — metrics, the forecast, the runway guard, scoreMove, the plan — and
+ * none of them converts, so this is where it happens.
+ *
+ * Statement figures arrive converted (moneyRead) and are written where the
+ * statement is the newer evidence: a number the person typed after the
+ * statement's own date stands, because they know something the file does not.
+ * A read that is not in the main currency (no rate yet, or nothing but a file
+ * whose currency nobody has said) writes nothing, and a figure an earlier read
+ * left behind goes with it.
+ *
+ * Typed numbers are kept as typed (`typed_in`) whenever they were typed in
+ * another currency — ₱71,804 of cash in a dollar app — and converted at the
+ * newest rate each time this runs, so the dollar figure follows the peso as it
+ * moves. Without a rate the number is left out, not guessed, and the Runway
+ * sheet says so.
+ *
+ * Returns `prev` itself when nothing changes, so the home screen can settle the
+ * row on every load and write only when it moved.
+ */
+export function financeFromRead(prev: Finance, read: MoneyRead | null, nowIso: string, opts: { main?: string; latest?: LatestRate } = {}): Finance {
+  const main = opts.main ?? toCode(prev.currency) ?? (read ? toCode(read.currency) : null) ?? 'USD';
+  const prevCode = toCode(prev.currency) ?? main;
+  const next: Finance = { ...prev, source: { ...(prev.source ?? {}) } };
+
+  const typedIn: NonNullable<Finance['typed_in']> = { ...(prev.typed_in ?? {}) };
+  for (const f of ['cash', 'monthly_burn'] as const) {
+    if (prev.source?.[f] === 'statement') { delete typedIn[f]; continue; }
+    const orig = typedIn[f] ?? (prev[f] != null ? { amount: prev[f] as number, currency: prevCode } : null);
+    if (!orig) continue;
+    if (orig.currency === main) { next[f] = orig.amount; delete typedIn[f]; continue; }
+    const r = opts.latest?.(orig.currency, main) ?? null;
+    typedIn[f] = { amount: orig.amount, currency: orig.currency, ...(r ? { rate: r.rate, day: r.day } : {}) };
+    if (r) next[f] = Math.round(orig.amount * r.rate * 100) / 100;
+    else delete next[f];
   }
-  if (read.perMonth && read.perMonth.out > 0 && newer('monthly_burn', read.to)) {
-    next.monthly_burn = Math.round(read.perMonth.out);
-    next.burn_to = read.to;
-    next.source!.monthly_burn = 'statement';
-    changed = true;
+  if (Object.keys(typedIn).length) next.typed_in = typedIn;
+  else delete next.typed_in;
+
+  const usable = !!read && read.currencyKnown && read.inMain && toCode(read.currency) === main;
+  if (!usable) {
+    if (next.source?.cash === 'statement') { delete next.cash; delete next.cash_on; delete next.source.cash; }
+    if (next.source?.monthly_burn === 'statement') { delete next.monthly_burn; delete next.burn_to; delete next.source.monthly_burn; }
+  } else {
+    const typedOn = prev.typed_at?.slice(0, 10) ?? null;
+    const newer = (f: 'cash' | 'monthly_burn', on: string) => next.source?.[f] !== 'typed' || !typedOn || on >= typedOn;
+    // Only a balance for every account: one account's is not what there is.
+    if (read.cash && !read.cash.missing && newer('cash', read.cash.on)) {
+      next.cash = Math.round(read.cash.amount * 100) / 100;
+      next.cash_on = read.cash.on;
+      next.source!.cash = 'statement';
+      delete next.typed_in?.cash;
+    }
+    if (read.perMonth && read.perMonth.out > 0 && newer('monthly_burn', read.to)) {
+      next.monthly_burn = Math.round(read.perMonth.out);
+      next.burn_to = read.to;
+      next.source!.monthly_burn = 'statement';
+      delete next.typed_in?.monthly_burn;
+    }
+    if (next.typed_in && !Object.keys(next.typed_in).length) delete next.typed_in;
   }
-  if (!changed) return base;
-  if (!next.currency || switching) next.currency = mark;
+  next.currency = financeMark(main);
+  if (sameFinance(next, prev)) return prev;
   next.updated_at = nowIso;
   return next;
 }
 
-/** Why runway is not using the statements, when that is the reason: a typed number in another currency. Null otherwise. */
-export function currencyClash(finance: Finance, read: Pick<MoneyRead, 'currency'> | null): string | null {
-  if (!read || !finance.currency || currencyMark(finance.currency) === currencyMark(read.currency)) return null;
-  const typed = (['cash', 'monthly_burn'] as const).some((f) => finance[f] != null && finance.source?.[f] !== 'statement');
-  if (!typed) return null;
-  return `Your statements are in ${read.currency} and the runway you typed is in ${finance.currency}, so runway does not use them.`;
+/** Equal in everything runway and the sheet read — `updated_at` aside, which differs on every write. */
+function sameFinance(a: Finance, b: Finance): boolean {
+  const shape = (f: Finance) => JSON.stringify([
+    f.cash ?? null, f.cash_on ?? null, f.monthly_burn ?? null, f.burn_to ?? null, f.currency ?? null, f.typed_at ?? null,
+    f.source?.cash ?? null, f.source?.monthly_burn ?? null, f.typed_in ?? null, f.main_currency ?? null,
+  ]);
+  return shape(a) === shape(b);
+}
+
+/**
+ * What the person typed on the Runway sheet, into the row. In the main
+ * currency it is the figure; in another it is kept as typed and converted by
+ * financeFromRead at the newest rate. A number equal to the statement's, typed
+ * in the main currency, stays the statement's — saving the sheet unchanged
+ * must not turn the bank's figure into a guess.
+ */
+export function financeFromTyped(
+  prev: Finance,
+  input: { cash?: number; monthly_burn?: number; currencies?: { cash?: string; monthly_burn?: string } },
+  nowIso: string,
+  main: string,
+): Finance {
+  const codeOf = (f: 'cash' | 'monthly_burn') => toCode(input.currencies?.[f]) ?? main;
+  const source: NonNullable<Finance['source']> = {};
+  const next: Finance = { currency: financeMark(main), updated_at: nowIso, source };
+  if (prev.main_currency) next.main_currency = prev.main_currency;
+  const typedIn: NonNullable<Finance['typed_in']> = {};
+  let typed = false;
+  for (const f of ['cash', 'monthly_burn'] as const) {
+    const v = input[f];
+    if (v == null) continue;
+    const code = codeOf(f);
+    if (code === main && v === prev[f] && prev.source?.[f] === 'statement') {
+      next[f] = v;
+      source[f] = 'statement';
+      if (f === 'cash') next.cash_on = prev.cash_on; else next.burn_to = prev.burn_to;
+      continue;
+    }
+    source[f] = 'typed';
+    typed = true;
+    if (code === main) next[f] = v;
+    else typedIn[f] = { amount: v, currency: code };
+  }
+  if (Object.keys(typedIn).length) next.typed_in = typedIn;
+  next.typed_at = typed ? nowIso : prev.typed_at;
+  return next;
+}
+
+/** What a number typed in another currency became, said on the Runway sheet: "₱71,804 → $1,238 (₱58.0 = $1 on 29 Sep)". */
+export function typedInLines(finance: Finance): string[] {
+  const out: string[] = [];
+  const main = toCode(finance.currency) ?? 'USD';
+  for (const [f, label] of [['cash', 'Cash'], ['monthly_burn', 'Burn']] as const) {
+    const t = finance.typed_in?.[f];
+    if (!t) continue;
+    out.push(t.rate != null && finance[f] != null
+      ? `${label}: you typed ${moneyText(t.amount, t.currency)}, which is ${moneyText(finance[f]!, main)} (${rateLine(t.currency, main, { rate: t.rate, day: t.day ?? '' }, dayLabel)}, ${FX_SOURCE}).`
+      : `${label}: you typed ${moneyText(t.amount, t.currency)}, and there is no ${t.currency} to ${main} rate yet, so runway leaves it out until there is.`);
+  }
+  return out;
 }
 
 /** Statements gone: the numbers read off them go too. What was typed stays — and a row with nothing read off a statement is returned as it is. */
@@ -640,6 +871,8 @@ export interface MoneyHome {
   rows: number;
   /** A read that failed, said instead of rendering as an account with no statements. */
   unreadable: string | null;
+  /** Runway could not be written from the rows (loadHome's settle): said on the Runway sheet. */
+  settleError: string | null;
 }
 
 export function moneyHome(input: {
@@ -651,10 +884,14 @@ export function moneyHome(input: {
   accounts: AccountBalance[];
   today: string;
   currency: string;
+  /** The main currency and its rates: see MoneyReadInput. */
+  main?: string;
+  fx?: FxTable;
+  fxMissing?: Record<string, string>;
   opportunities: Array<{ id: string; title: string }>;
   unreadable: string | null;
 }): MoneyHome {
-  const read = moneyRead({ txs: input.txs, payees: input.payees, accounts: input.accounts, today: input.today, currency: input.currency });
+  const read = moneyRead({ txs: input.txs, payees: input.payees, accounts: input.accounts, today: input.today, currency: input.currency, main: input.main, fx: input.fx, fxMissing: input.fxMissing });
   const suggest: MoneyHome['suggest'] = {};
   for (const p of read?.toName ?? []) {
     const s = suggestOpportunity(p.name, input.opportunities);
@@ -665,7 +902,7 @@ export function moneyHome(input: {
     canRead: input.canRead,
     imports: input.imports,
     // The payload crosses the wire on every mutation: the lists are cut to what a screen shows.
-    read: read ? { ...read, payers: read.payers.slice(0, 30), recurring: read.recurring.slice(0, 10) } : null,
+    read: read ? { ...read, payers: read.payers.slice(0, 30), recurring: read.recurring.slice(0, 10), recent: { ...read.recent, payers: read.recent.payers.slice(0, 20) } } : null,
     suggest,
     named: input.payees
       .filter((p): p is Payee & { role: PayeeRole } => p.role != null)
@@ -674,6 +911,7 @@ export function moneyHome(input: {
       .map((p) => ({ key: p.key, name: p.name, role: p.role, linked: !!p.opportunityId })),
     rows: input.txs.length,
     unreadable: input.unreadable,
+    settleError: null,
   };
 }
 

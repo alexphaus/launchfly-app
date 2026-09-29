@@ -21,9 +21,11 @@ import { copilotDb, describeDbError, todayIso } from '../db';
 import { recordOutcome } from '../outcomes';
 import type { Finance, Profile } from '../types';
 import {
-  WIN_MATCH_DAYS, WIN_RECORD_DAYS, financeFromRead, financeWithoutStatements, importView, matchWin, moneyRead,
+  WIN_MATCH_DAYS, WIN_RECORD_DAYS, dayLabel, financeFromRead, financeMark, financeWithoutStatements, importView, matchWin, moneyRead, moneyText,
   winsToRecord, type AccountBalance, type LedgerTx, type MoneyImport, type MoneyRead, type Payee, type PayeeRole,
 } from './ledger';
+import { latestRate, mainCurrency, rateLine, rateOn, ratesNeeded, toCode } from './fx';
+import { loadRates, type LoadedRates } from './fxstore';
 import {
   accountKey, cents, checkBalances, displayName, rowFingerprints, rowKey,
   type BalanceCheck, type Statement, type StatementFormat, type StatementRow,
@@ -137,14 +139,6 @@ export async function loadImports(profileId: string): Promise<MoneyImport[]> {
   if (error) throw new Error(describeDbError(error, 'Could not check on your statements.'));
   const now = new Date();
   return ((data ?? []) as Array<Record<string, unknown>>).map((r) => importView(r, now));
-}
-
-/** The currency a read is printed in when the rows carry none: the finance row's, else a money goal's, else "$". */
-export async function moneyCurrency(profileId: string, profile?: Profile | null): Promise<string> {
-  const p = profile ?? await getProfile(profileId);
-  if (p?.finance?.currency) return p.finance.currency;
-  const { data } = await copilotDb().from('copilot_goals').select('unit').eq('profile_id', profileId).eq('metric', 'currency').eq('status', 'active').order('priority').limit(1).maybeSingle();
-  return (data?.unit as string | undefined) || '$';
 }
 
 /* ─── A statement in ──────────────────────────────────────────────────────── */
@@ -319,7 +313,6 @@ async function commitRows(profileId: string, importId: string, p: Pending): Prom
       .upsert(keys.slice(i, i + 500).map((key) => ({ profile_id: profileId, key, name: displayName(key) })), { onConflict: 'profile_id,key', ignoreDuplicates: true });
     if (error) throw new Error(describeDbError(error, 'Could not save who the statement names.'));
   }
-  await recomputeBalances(profileId);
   return inserted;
 }
 
@@ -357,6 +350,10 @@ async function recomputeBalances(profileId: string): Promise<void> {
  */
 async function afterRowsLanded(profileId: string, importId: string | null, source: 'manual' | 'system'): Promise<void> {
   const problems: string[] = [];
+  // Here, after the import is marked ready, not as the rows go in: the
+  // statement's own closing balance only counts once it is ready, and a first
+  // Wise upload read €5 — its second-to-last row — for a closing of €0.00.
+  try { await recomputeBalances(profileId); } catch (e) { problems.push(`Balances were not updated: ${e instanceof Error ? e.message : String(e)}`); }
   try { await refreshFinance(profileId); } catch (e) { problems.push(`Runway was not updated: ${e instanceof Error ? e.message : String(e)}`); }
   const wins = await recordClientWins(profileId, { source });
   if (wins.error) problems.push(wins.error);
@@ -370,6 +367,42 @@ async function afterRowsLanded(profileId: string, importId: string | null, sourc
 /* ─── The finance row ─────────────────────────────────────────────────────── */
 
 /**
+ * The money read the way loadHome computes it for the screen, for everything
+ * that reads money without drawing it: the plan, the brief. One loader, so the
+ * three can never disagree about a figure. Null without statements; throws
+ * only on a read that failed, which the caller says rather than drawing blind.
+ */
+export async function loadMoneyRead(profile: Profile): Promise<MoneyRead | null> {
+  const rows = await loadMoneyRows(profile.id);
+  if (!rows.ready) return null;
+  if (rows.unreadable) throw new Error(rows.unreadable);
+  const today = todayIso(profile.timezone);
+  const main = mainCurrency(profile.finance, await moneyGoals(profile.id));
+  const fx = await ratesFor({ main, rows, finance: profile.finance ?? {}, today });
+  return moneyRead({ txs: rows.txs, payees: rows.payees, accounts: rows.accounts, today, currency: main, main, fx: fx.table, fxMissing: fx.missing });
+}
+
+/** The goals mainCurrency reads, when the caller has not loaded them. */
+export async function moneyGoals(profileId: string): Promise<Array<{ metric: string; unit: string | null; priority: number }>> {
+  const { data } = await copilotDb().from('copilot_goals').select('metric, unit, priority').eq('profile_id', profileId).eq('status', 'active');
+  return (data ?? []) as Array<{ metric: string; unit: string | null; priority: number }>;
+}
+
+/**
+ * The rates every figure needs to be in the main currency: each row's day for
+ * its currency, each balance's, and the newest for a number typed in another
+ * — or for runway itself, the day Settings moves the main currency under it.
+ */
+export async function ratesFor(input: { main: string; rows: Pick<MoneyRows, 'txs' | 'accounts'>; finance: Finance; today: string }): Promise<LoadedRates> {
+  const typed = [
+    ...Object.values(input.finance.typed_in ?? {}).map((t) => t?.currency ?? null),
+    toCode(input.finance.currency),
+  ].filter((c): c is string => !!c && c !== input.main);
+  const needs = ratesNeeded({ main: input.main, txs: input.rows.txs, accounts: input.rows.accounts, typed, today: input.today });
+  return loadRates(needs, input.today);
+}
+
+/**
  * Cash and burn from the rows, into the finance row — where metrics, the
  * forecast, the runway guard, scoreMove and the plan already read them. A
  * number the person typed after the statement's own date is left alone.
@@ -378,13 +411,15 @@ export async function refreshFinance(profileId: string): Promise<MoneyRead | nul
   const profile = await getProfile(profileId);
   if (!profile) return null;
   const rows = await loadMoneyRows(profileId);
-  if (!rows.ready) return null;
   if (rows.unreadable) throw new Error(rows.unreadable);
-  const read = moneyRead({ txs: rows.txs, payees: rows.payees, accounts: rows.accounts, today: todayIso(profile.timezone), currency: await moneyCurrency(profileId, profile) });
+  const today = todayIso(profile.timezone);
   const prev: Finance = profile.finance ?? {};
-  const now = new Date().toISOString();
-  const next = read ? financeFromRead(prev, read, now) : financeWithoutStatements(prev, now);
-  if (next === prev || JSON.stringify(next) === JSON.stringify(prev)) return read;
+  const main = mainCurrency(prev, await moneyGoals(profileId));
+  // Rates even without statements: a number typed in pesos in a dollar app needs one.
+  const fx = await ratesFor({ main, rows, finance: prev, today });
+  const read = rows.ready ? moneyRead({ txs: rows.txs, payees: rows.payees, accounts: rows.accounts, today, currency: main, main, fx: fx.table, fxMissing: fx.missing }) : null;
+  const next = financeFromRead(prev, read, new Date().toISOString(), { main, latest: (from, to) => latestRate(fx.table, from, to) });
+  if (next === prev) return read;
   const { error } = await copilotDb().from('copilot_profiles').update({ finance: next }).eq('id', profileId);
   if (error) throw new Error(describeDbError(error, 'Could not update runway.'));
   return read;
@@ -417,21 +452,30 @@ export async function recordClientWins(profileId: string, opts: { keys?: string[
   if (wins.error || linked.error) return { recorded: 0, attached: 0, error: `Wins were not recorded: ${describeDbError(wins.error ?? linked.error)}` };
   const taken = new Set(((linked.data ?? []) as Array<{ outcome_id: string }>).map((x) => x.outcome_id));
   const payee = new Map(rows.payees.map((p) => [p.key, p]));
-  const currency = profile.finance?.currency ?? null;
+  // A win credits a goal counted in the main currency: a ₱5,000 deposit
+  // recorded as 5,000 would have moved a dollar goal by $5,000.
+  const main = mainCurrency(profile.finance, await moneyGoals(profileId));
+  const fx = await ratesFor({ main, rows, finance: profile.finance ?? {}, today });
 
   let recorded = 0;
   let attached = 0;
   const failures: string[] = [];
   for (const tx of due) {
     try {
-      let outcomeId = matchWin(tx, (wins.data ?? []) as Array<{ id: string; amount: number | null; occurred_at: string }>, taken);
+      const from = toCode(tx.currency);
+      if (!from) { failures.push(`a ${tx.on} deposit is in a statement that does not say its currency — say which on Bank statements`); continue; }
+      const r = rateOn(fx.table, from, main, tx.on);
+      if (!r) { failures.push(`no ${from} to ${main} rate for ${tx.on}${fx.missing[from] ? ` (${fx.missing[from]})` : ''}`); continue; }
+      const amount = Math.round(tx.amount * r.rate * 100) / 100;
+      const said = from === main ? '' : ` (${moneyText(tx.amount, from)}, ${rateLine(from, main, r, dayLabel)})`;
+      let outcomeId = matchWin({ ...tx, amount }, (wins.data ?? []) as Array<{ id: string; amount: number | null; occurred_at: string }>, taken);
       if (outcomeId) attached++;
       else {
         const o = await recordOutcome(profileId, {
           kind: 'won',
-          amount: tx.amount,
-          currency: tx.currency ?? currency,
-          note: `From your bank: ${(tx.description ?? payee.get(tx.key)?.name ?? tx.key).slice(0, 200)}`,
+          amount,
+          currency: financeMark(main),
+          note: `From your bank: ${(tx.description ?? payee.get(tx.key)?.name ?? tx.key).slice(0, 160)}${said}`,
           opportunity_id: payee.get(tx.key)?.opportunityId ?? null,
           source: opts.source,
           // Noon on the day it posted: a date, not an instant, and never tomorrow in anybody's timezone.

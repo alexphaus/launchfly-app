@@ -287,7 +287,9 @@ export function roadmapPrompt(input: RoadmapInput): string {
   // Their money as their bank shows it — every figure counted from rows, so the
   // plan may cite them: who pays, what repeats, how long the cash lasts.
   if (input.money?.length) {
-    lines.push('THEIR MONEY, counted by the app from their bank statements:');
+    // Said, because the lines are already converted into one currency (money/fx.ts)
+    // and a model that converts them again double-counts the exchange rate.
+    lines.push('THEIR MONEY, counted by the app from their bank statements, every figure already in their main currency — statements in other currencies were converted at ECB daily rates, so never convert again:');
     for (const m of input.money) lines.push(`- ${m}`);
     lines.push('');
   }

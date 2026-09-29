@@ -9,6 +9,7 @@ import { redrawIfDue, type NightlyRoadmap } from './agent/roadmap';
 import { isNightlyPass, type NightlyOutput, type NightlyStep } from './nightly';
 import { reconcileReplies } from './outcomes';
 import { finishNightlyRun, markNightlyStep } from './store';
+import { refreshFinance } from './money/store';
 import { ADAPTERS, runSupply, type SupplyResult } from './supply';
 
 export interface DailyResult {
@@ -19,6 +20,8 @@ export interface DailyResult {
   brief: Pick<BriefResult, 'agent' | 'fellBack' | 'graded' | 'pushed' | 'unsaved'> & { skipped?: string };
   /** The Path's plan. Only the nightly pass redraws it; "Find new matches" leaves it alone. */
   roadmap?: NightlyRoadmap | null;
+  /** Runway settled from the statements before anything reads it. An error here is also said on the Runway sheet, whose load retries the same write. */
+  money?: { settled: boolean } | { error: string };
 }
 
 export interface JobsThenBrief {
@@ -75,6 +78,11 @@ export async function runDaily(
   opts: { reason: string; supply?: boolean; reconcile?: boolean; deadline?: number; onStep?: (step: NightlyStep) => Promise<void> },
 ): Promise<DailyResult> {
   const out: DailyResult = { supply: null, reconcile: null, jobs: null, brief: { agent: 'starter', fellBack: false, graded: { ignored: 0, verified: 0 }, pushed: 0 } };
+  // Runway first: the plan and the brief both read it off the finance row, and
+  // a row left behind by its statements drew a plan with no runway in it while
+  // the bank card beside it knew the burn to the peso.
+  try { out.money = { settled: !!(await refreshFinance(profileId)) }; }
+  catch (e) { out.money = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] money settle failed', e); }
   if (opts.supply !== false) {
     await opts.onStep?.('supply');
     try { out.supply = await runSupply(profileId, { reason: opts.reason, deadline: opts.deadline }); }

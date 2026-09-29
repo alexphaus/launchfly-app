@@ -113,6 +113,15 @@ and OFX. PDFs and screenshots are read by a model: the brief's, or
 the migration the Bank statements sheet says it is not set up and
 `/api/copilot/health` names the file.
 
+Every money figure is counted in one main currency (Settings → Currency), and
+statements in others are converted at ECB daily rates fetched from
+`api.frankfurter.dev` (`COPILOT_FX_URL` overrides). That needs outbound HTTPS
+from the container, and `20260930_copilot_fx.sql` to cache the rates — without
+the table they are kept in memory and fetched again after each restart; without
+the network, rows in other currencies are left out of the figures and the
+screen says why. The remote dev sandbox's network policy blocks that host: test
+conversion against a local stand-in on `COPILOT_FX_URL`.
+
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —
 a missing column shows up as a runtime error like `column "plan" does not exist`,

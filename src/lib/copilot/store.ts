@@ -40,6 +40,7 @@ import { canTriage, oldestWaitDays, orderTriage, queueIsBacked, segmentKeepRate,
 import type { JobsRunSummary, Move, WatchSource } from './types';
 import type { MoveKind } from './moves';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType, recordOutcome } from './outcomes';
+import { computeRunwayMonths, salesCurrency } from './metrics';
 import { WORTH_NOTE_MAX, worthSentence, type WorthKind } from './worth';
 import { PROPOSAL_BUDGET_MINUTES } from './propose';
 import { hasSubscription, vapidPublicKey } from './push';
@@ -50,8 +51,9 @@ import { NIGHTLY_COLUMNS, nightlyFromRow, type NightlyOutput, type NightlyRun, t
 import { resolveLlmConfig, resolvePlanConfig } from './agent/llm';
 import { ROADMAP_COLUMNS, ROADMAP_MARK_EVENT, ROADMAP_RUN_KIND, markFromEvent, roadmapRunFromRow, type RoadmapMark, type RoadmapRun } from './roadmap';
 import { EXPERIMENT_EVENT, experimentMarkFromEvent, type ExperimentMark } from './experiment';
-import { loadMoneyRows } from './money/store';
-import { moneyHome } from './money/ledger';
+import { loadMoneyRows, moneyGoals, ratesFor, refreshFinance } from './money/store';
+import { financeFromRead, financeFromTyped, moneyHome } from './money/ledger';
+import { latestRate, mainCurrency } from './money/fx';
 import { resolveStatementConfig } from './money/extract';
 
 export { getProfile, logEvent, setActionStatus, touchProfile };
@@ -896,6 +898,49 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   const unresolved = repliesAwaitingOutcome(replyRows2, nowTs);
   const capture = captureAsk({ opened, replies: unresolved, sentInWindow: metrics.sent, windowDays: metrics.window_days });
 
+  // One currency for every figure (money/fx.ts), and the rates to put the
+  // others into it: from the cache, fetched only for days it does not reach.
+  const main = mainCurrency(profile.finance, goals);
+  const fx = moneyRows.unreadable ? null : await ratesFor({ main, rows: moneyRows, finance: profile.finance ?? {}, today });
+
+  // The money read, computed here from this load's rows so every figure on the
+  // screen and the payer questions agree with one another. Payers are matched
+  // against the businesses already in the pipeline, as suggestions only.
+  const money = moneyHome({
+    ready: moneyRows.ready,
+    canRead: !!resolveStatementConfig(),
+    imports: moneyRows.imports,
+    txs: moneyRows.txs,
+    payees: moneyRows.payees,
+    accounts: moneyRows.accounts,
+    today,
+    currency: main,
+    main,
+    fx: fx?.table,
+    fxMissing: fx?.missing,
+    opportunities: pipelineRows.map((o) => ({ id: o.id, title: o.title })),
+    unreadable: moneyRows.unreadable,
+  });
+  // Runway settles from the rows on every load, not only when a statement
+  // lands. A rule change, a payer named on another device, a currency answered:
+  // each left a finance row that no longer followed its rows, and the tile read
+  // "Set it" beside a card that knew the burn to the peso. Written only when it
+  // moved (financeFromRead returns the row itself otherwise), and a failed write
+  // is said on the Runway sheet rather than shown as a runway that never came.
+  let settleError: string | null = null;
+  if (fx) {
+    const was: Finance = profile.finance ?? {};
+    const settled = financeFromRead(was, moneyRows.ready ? money.read : null, new Date().toISOString(), { main, latest: (from, to) => latestRate(fx.table, from, to) });
+    if (settled !== was) {
+      const { error } = await db.from('copilot_profiles').update({ finance: settled }).eq('id', profileId);
+      if (error) settleError = describeDbError(error, 'Runway could not be updated from your statements.');
+      else {
+        profile.finance = settled;
+        metrics.runway_months = computeRunwayMonths(settled);
+      }
+    }
+  }
+
   // Runway stops being a snapshot that assumes nothing is owed in either
   // direction — which is never true of somebody running on invoices.
   const fin = profile.finance ?? {};
@@ -933,21 +978,6 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
 
   const diagnosis = diagnose({ ...diagRows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now: new Date() });
 
-  // The money read, computed here from this load's rows so every figure on the
-  // screen and the payer questions agree with one another. Payers are matched
-  // against the businesses already in the pipeline, as suggestions only.
-  const money = moneyHome({
-    ready: moneyRows.ready,
-    canRead: !!resolveStatementConfig(),
-    imports: moneyRows.imports,
-    txs: moneyRows.txs,
-    payees: moneyRows.payees,
-    accounts: moneyRows.accounts,
-    today,
-    currency: profile.finance?.currency || goals.find((g) => g.metric === 'currency')?.unit || '$',
-    opportunities: pipelineRows.map((o) => ({ id: o.id, title: o.title })),
-    unreadable: moneyRows.unreadable,
-  });
   // The record is what makes "you keep doing this and it does not work"
   // possible; nothing else in the app can see it.
   const edge = growthEdge(diagnosis, { deadTopic: decisionReview(decisionLog).deadTopic });
@@ -1065,7 +1095,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     metrics,
     recent,
     hunting,
-    money,
+    money: { ...money, settleError },
     generatedAt: nowTs.toISOString(),
     supplyLastRun: supplyRun,
     account: { email: profile.email, verified: !!profile.email_verified_at },
@@ -1138,24 +1168,22 @@ export async function requestSource(profileId: string, key: SourceKey) {
  * financeFromRead); a number left as it was keeps where it came from, so saving
  * the currency does not turn a balance read off the bank into a typed guess.
  */
-export async function setFinance(profileId: string, finance: Finance) {
+export async function setFinance(profileId: string, finance: Finance & { cash_currency?: string; burn_currency?: string }) {
   const prev: Finance = (await getProfile(profileId))?.finance ?? {};
-  const now = new Date().toISOString();
-  const source: NonNullable<Finance['source']> = {};
-  const clean: Finance = { cash: finance.cash, monthly_burn: finance.monthly_burn, currency: finance.currency ?? prev.currency, updated_at: now, source };
-  let typed = false;
-  if (finance.cash != null) {
-    if (finance.cash === prev.cash && prev.source?.cash === 'statement') { source.cash = 'statement'; clean.cash_on = prev.cash_on; }
-    else { source.cash = 'typed'; typed = true; }
-  }
-  if (finance.monthly_burn != null) {
-    if (finance.monthly_burn === prev.monthly_burn && prev.source?.monthly_burn === 'statement') { source.monthly_burn = 'statement'; clean.burn_to = prev.burn_to; }
-    else { source.monthly_burn = 'typed'; typed = true; }
-  }
-  clean.typed_at = typed ? now : prev.typed_at;
+  const goals = await moneyGoals(profileId);
+  // A main currency chosen here is the whole app's; the numbers typed with it
+  // are in whichever currency the person typed them in.
+  const withMain: Finance = finance.main_currency ? { ...prev, main_currency: finance.main_currency } : prev;
+  const main = mainCurrency(withMain, goals);
+  const clean = finance.cash === undefined && finance.monthly_burn === undefined && finance.main_currency
+    ? { ...withMain, updated_at: new Date().toISOString() }
+    : financeFromTyped(withMain, { cash: finance.cash, monthly_burn: finance.monthly_burn, currencies: { cash: finance.cash_currency, monthly_burn: finance.burn_currency } }, new Date().toISOString(), main);
   const { error } = await copilotDb().from('copilot_profiles').update({ finance: clean }).eq('id', profileId);
   if (error) throw new Error(describeDbError(error, 'Could not save runway.'));
-  await logEvent(profileId, 'finance_updated', { monthly_burn: clean.monthly_burn ?? null, cash: clean.cash ?? null });
+  await logEvent(profileId, 'finance_updated', { monthly_burn: clean.monthly_burn ?? null, cash: clean.cash ?? null, currency: clean.currency ?? null, main });
+  // Converted now, not on the next load: a number typed in pesos in a dollar
+  // app, or a main currency just changed, needs the newest rate to mean anything.
+  await refreshFinance(profileId);
 }
 
 /**
@@ -2166,7 +2194,12 @@ export async function closeCommission(
   // transient profile read must never be the reason a mandate cannot be closed —
   // that would put the close behind the cosmetic half of this function, which is
   // the inversion the write order below exists to prevent.
-  const currency = worth ? await getProfile(profileId).then((p) => p?.finance?.currency ?? '').catch(() => '') : '';
+  // A worker's worth is sales money, so the goal's currency first (metrics.ts salesCurrency).
+  const currency = worth
+    ? await Promise.all([getProfile(profileId), copilotDb().from('copilot_goals').select('metric, unit, priority').eq('profile_id', profileId).eq('status', 'active')])
+      .then(([p, g]) => (p?.finance?.currency || (g.data ?? []).length ? salesCurrency(p?.finance, (g.data ?? []) as Array<{ metric: string; unit: string | null; priority: number }>) : ''))
+      .catch(() => '')
+    : '';
   // Written whether or not the ledger accepts the row, so the sentence survives
   // an unapplied migration. See worthSentence.
   const sentence = worth ? worthSentence(worth.kind, worth.amount, worth.note, currency) : null;

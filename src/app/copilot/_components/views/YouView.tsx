@@ -7,6 +7,7 @@ import { creditedGoalId, goalCard } from '@/lib/copilot/goalcard';
 import { dayLabel } from '@/lib/copilot/money/ledger';
 import type { Actions } from '../shared';
 import { useShell } from '../shell';
+import { salesCurrency } from '@/lib/copilot/metrics';
 
 // Lives in the sheet behind the header avatar: goals, offer, targeting, runway,
 // plan, agent, account. Settings with the context the ranking runs on.
@@ -17,7 +18,7 @@ export default function YouView({ home, actions, briefing }: { home: HomeData; a
   const p = home.profile;
   const calendar = home.sources.find((s) => s.source_key === 'calendar');
   const b = home.billing;
-  const currency = p.finance?.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '$';
+  const currency = salesCurrency(p.finance, home.goals);
   // Two shells render this same app. The switch lives here so either one can be
   // opened from the other without typing a URL, and neither is the "real" one.
   const shell = useShell();

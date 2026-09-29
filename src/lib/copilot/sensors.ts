@@ -73,6 +73,13 @@ export interface SensorInput {
     review: number;
     failed: number;
     unreadable: string | null;
+    /**
+     * Questions only the person can answer: payers to name, and statements whose
+     * file named no currency. The money card under the tiles used to carry
+     * "2 to name"; with it gone, this row is where the ask lives.
+     */
+    toName?: number;
+    unlabelled?: number;
   } | null;
   owed: { open: number };
   focus: { minutesWeek: number };
@@ -91,6 +98,8 @@ export function sensorViews(input: SensorInput): SensorView[] {
         if (b.unreadable) return { ...def, state: 'attention', line: `Could not read your statements: ${b.unreadable}` };
         if (b.review) return { ...def, state: 'attention', line: `${plural(b.review, 'statement')} waiting on you to check` };
         if (b.reading) return { ...def, state: 'on', line: `Reading ${plural(b.reading, 'statement')}…` };
+        if (b.unlabelled) return { ...def, state: 'attention', line: `Say which currency ${b.unlabelled === 1 ? 'a statement is' : `${b.unlabelled} statements are`} in` };
+        if (b.toName) return { ...def, state: 'attention', line: `${plural(b.toName, 'payer')} to name, one tap each` };
         if (!b.rows) return { ...def, state: b.failed ? 'attention' : 'off', line: b.failed ? `The last upload could not be read` : 'Upload a statement: CSV, OFX, PDF or a screenshot' };
         return { ...def, state: 'on', line: `${plural(b.rows, 'transaction')}${b.to ? ` · to ${dayLabel(b.to)}` : ''}` };
       }

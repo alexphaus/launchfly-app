@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { computeRunwayMonths } from '@/lib/copilot/metrics';
+import { computeRunwayMonths, salesCurrency } from '@/lib/copilot/metrics';
 import { goalDue } from '@/lib/copilot/due';
 import { OFFER_TASK_TITLE, addOpeningToOffer, offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
@@ -22,7 +22,8 @@ import { whenLabel } from '@/lib/copilot/review';
 import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
 import BankSheet from './BankSheet';
-import { currencyClash, dayLabel } from '@/lib/copilot/money/ledger';
+import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
+import { dayLabel } from '@/lib/copilot/money/ledger';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
@@ -35,7 +36,9 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'opp': return <OppSheet home={home} id={sheet.id} actions={actions} />;
     case 'goal': return <GoalSheet goal={home.goals.find((g) => g.id === sheet.id)} actions={actions} />;
     case 'reset': return <ResetSheet actions={actions} />;
-    case 'finance': return <FinanceSheet home={home} actions={actions} />;
+    case 'finance': return <RunwaySheet home={home} actions={actions} />;
+    case 'moneyin': return <MoneyInSheet home={home} actions={actions} />;
+    case 'currency': return <CurrencySheet home={home} actions={actions} />;
     case 'targeting': return <TargetingSheet home={home} actions={actions} />;
     case 'account': return <AccountSheet home={home} actions={actions} />;
     case 'won': return <WonSheet home={home} oppId={sheet.oppId} actions={actions} />;
@@ -707,44 +710,6 @@ function HandoverSheet({ home, actions }: { home: HomeData; actions: Actions }) 
 
 /* ─── You: finance, targeting, account ──────────────────────────────────── */
 
-function FinanceSheet({ home, actions }: { home: HomeData; actions: Actions }) {
-  const f = home.profile.finance ?? {};
-  const [burn, setBurn] = useState(f.monthly_burn?.toString() ?? '');
-  const [cash, setCash] = useState(f.cash?.toString() ?? '');
-  const [currency, setCurrency] = useState(f.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '$');
-  const [busy, setBusy] = useState(false);
-  const preview = computeRunwayMonths({ monthly_burn: Number(burn) || undefined, cash: cash === '' ? undefined : Number(cash) });
-  const save = async () => { setBusy(true); await actions.saveFinance({ monthly_burn: burn === '' ? undefined : Number(burn), cash: cash === '' ? undefined : Number(cash), currency }); setBusy(false); };
-  // Where each number came from, when a statement supplied it. Typing over one
-  // makes it yours until a statement dated after today says otherwise.
-  const fromBank = [
-    f.source?.cash === 'statement' && f.cash_on ? `cash is your balance on ${dayLabel(f.cash_on)}` : null,
-    f.source?.monthly_burn === 'statement' && f.burn_to ? `burn is your spending averaged over the rows to ${dayLabel(f.burn_to)}` : null,
-  ].filter(Boolean);
-  const clash = currencyClash(f, home.money?.read ?? null);
-  return (
-    <>
-      <h3>Runway</h3>
-      <p className="desc">Cash and monthly burn. Runway shapes the read: under four months, the copilot favours fast-close work over big builds.</p>
-      {clash ? <div className="cp-note">{clash}</div> : fromBank.length > 0
-        ? <div className="cp-note">From your bank statements: {fromBank.join('; ')}. Type a number to use yours instead — a newer statement replaces it again.</div>
-        : home.money?.ready && <div className="cp-note">Or skip the typing: <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>upload a bank statement</button> and both are read off it.</div>}
-      <div className="cp-field"><label className="cp-label">Monthly burn / Cash on hand / Currency</label>
-        <div className="cp-input-row">
-          <input className="cp-input" inputMode="decimal" autoFocus value={burn} onChange={(e) => setBurn(e.target.value)} placeholder="1200" />
-          <input className="cp-input" inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="5000" />
-          <input className="cp-input" style={{ maxWidth: 70 }} value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={8} />
-        </div>
-        <div className="cp-help">{preview != null ? `That is ${preview} months of runway.` : 'Enter both to see runway.'}</div>
-      </div>
-      <div className="cp-btn-row">
-        <button className="cp-btn primary" disabled={busy} onClick={save}>Save</button>
-        <button className="cp-btn" onClick={actions.closeSheet}>Back</button>
-      </div>
-    </>
-  );
-}
-
 function TargetingSheet({ home, actions }: { home: HomeData; actions: Actions }) {
   const [segments, setSegments] = useState(home.profile.target_segments.join(', '));
   const [area, setArea] = useState(home.profile.target_area ?? home.profile.location ?? '');
@@ -1373,7 +1338,7 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   // Shown beside the amount field so nobody has to guess which currency a bare
   // number is in. Empty when there is no burn and no currency goal on file, and
   // then the field simply does not name one rather than assuming dollars.
-  const currency = home.profile.finance?.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '';
+  const currency = home.goals.some((g) => g.metric === 'currency' && g.unit) || home.profile.finance?.currency ? salesCurrency(home.profile.finance, home.goals) : '';
   // What it is actually waiting for. `blocked` covers two opposite states: a
   // question only this person can answer, and a worker that fell over. They
   // want opposite things — a reply and a retry — and rendering both under "Your

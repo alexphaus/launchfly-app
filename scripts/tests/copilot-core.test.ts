@@ -7336,7 +7336,7 @@ async function moneyFromTheBank() {
   const sig = { goals: [], working: [], contextCount: 2, capacity: 'deep' as const, offer: null };
   assert.equal(mSignature({ ...sig, money: null }), mSignature(sig), 'no statements, no change to any plan that exists today');
   assert.notEqual(mSignature({ ...sig, money: mForPlan(read).signature }), mSignature(sig));
-  assert.match(mPrompt({ ...mPromptBase, money: mForPlan(read).lines }), /THEIR MONEY, counted by the app from their bank statements:\n- Since 1 Jun/);
+  assert.match(mPrompt({ ...mPromptBase, money: mForPlan(read).lines }), /THEIR MONEY, counted by the app from their bank statements, every figure already in their main currency — statements in other currencies were converted at ECB daily rates, so never convert again:\n- Since 1 Jun/);
   assert.doesNotMatch(mPrompt(mPromptBase), /THEIR MONEY/);
 
   /* 16. Records: every sensor opens a sheet the app actually renders (invariant 7). */
@@ -7416,9 +7416,13 @@ import {
   statementFromPdfText as bPdf,
 } from '../../src/lib/copilot/money/statement';
 import {
-  currencyClash as bClash, currencyCodeOf as bCode, financeFromRead as bFinance, importLine as bLine, importView as bImport,
-  moneyRead as bRead, type LedgerTx as BTx,
+  currencyCodeOf as bCode, financeFromRead as bFinance, importLine as bLine, importView as bImport, dayLabel as bDay,
+  moneyRead as bRead, typedInLines as bTypedLines, financeFromTyped as bTyped, currencyForZone as bZone, financeMark as bMark, type LedgerTx as BTx,
 } from '../../src/lib/copilot/money/ledger';
+import {
+  covers as bCovers, fxTable as bTable, latestRate as bLatest, mainCurrency as bMain, parseRates as bParse, rateLine as bRateLine,
+  rateOn as bRateOn, ratesNeeded as bNeeded,
+} from '../../src/lib/copilot/money/fx';
 
 async function moneyFromMessyFiles() {
   /* 1. A budgeting app's export: scheduled bills a year ahead, a blank note, a move between its own accounts. */
@@ -7479,44 +7483,138 @@ async function moneyFromMessyFiles() {
   assert.equal(bText(wiseLike.filter((l) => !l.startsWith('30 August')).join('\n')), null, 'a row with no date is refused, not dated by its neighbours');
   assert.equal(bText('Hello\nTotal 5.00 5.00\n'), null, 'one figure pair is not a statement');
 
-  /* 4. One currency per figure: a file with none is not summed into one that names one. */
+  /* 4. One main currency: every row in another converted at its own day's rate, and said. */
   const t = (id: string, on: string, amount: number, currency: string | null): BTx => ({ id, on, amount, key: `K${id}`, currency, accountId: 'a', outcomeId: null });
   const pesos = ['2026-07-01', '2026-07-20', '2026-08-10', '2026-08-30', '2026-09-20'].map((d, i) => t(`p${i}`, d, -1000, null));
   const euros = [t('e1', '2026-06-01', 40, 'EUR'), t('e2', '2026-06-10', -5, 'EUR'), t('e3', '2026-06-30', -5, 'EUR')];
-  const both = bRead({ txs: [...pesos, ...euros], payees: [], accounts: [], today: '2026-09-29', currency: '₱' })!;
-  assert.equal(both.currency, 'EUR', 'beside a statement that names one, rows with none are a separate pile');
-  assert.equal(both.inTotal, 40);
-  assert.equal(both.outTotal, 10, 'not 5,010');
-  assert.equal(both.rows, 3, 'the count beside the figures is the rows behind them, not every row on file');
-  assert.deepEqual(both.otherCurrencies, [{ currency: '', rows: 5 }]);
-  assert.ok(both.lines.includes('5 rows with no currency are not in these numbers. Say which on Bank statements.'));
-  const alone = bRead({ txs: pesos, payees: [], accounts: [], today: '2026-09-29', currency: '₱' })!;
-  assert.equal(alone.currency, '₱', 'alone, they are the person’s own currency');
-  assert.deepEqual(alone.otherCurrencies, []);
-  const saidRows = [...pesos.map((p) => ({ ...p, currency: 'PHP' })), ...euros];
-  const said = bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '₱' })!;
-  assert.equal(said.currency, 'PHP', 'once said, they are the figures');
-  assert.deepEqual(said.otherCurrencies, [{ currency: 'EUR', rows: 3 }]);
-  assert.equal(bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '€' })!.currency, 'EUR', 'the person’s own currency beats a row count: their runway is in it');
-  assert.equal(bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '$' })!.currency, 'PHP', '$ names no one currency, so the most rows decide');
+  // A business-day series, the way the ECB publishes: no weekends.
+  const series = (base: string, quote: string, from: string, to: string, rate: number) => {
+    const out: Array<{ base: string; quote: string; day: string; rate: number }> = [];
+    for (let d = from; d <= to; d = new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)) {
+      const wd = new Date(`${d}T00:00:00Z`).getUTCDay();
+      if (wd !== 0 && wd !== 6) out.push({ base, quote, day: d, rate });
+    }
+    return out;
+  };
+  const eurUsd = series('EUR', 'USD', '2026-05-25', '2026-07-03', 1.1);
+  const phpUsd = series('PHP', 'USD', '2026-06-24', '2026-09-29', 0.0172);
+  const fxAll = bTable([...eurUsd, ...phpUsd]);
 
-  /* 5. Runway is one currency: a typed number is never divided by a read in another. */
-  const typedPesos = { cash: 71804, currency: '₱', typed_at: '2026-09-29T00:00:00Z', source: { cash: 'typed' as const } };
-  assert.equal(bFinance(typedPesos, both, 'now'), typedPesos, 'euro spending under typed pesos was 179 months of runway');
-  const leftBehind = bFinance({ ...typedPesos, monthly_burn: 37708, burn_to: '2026-09-29', source: { cash: 'typed', monthly_burn: 'statement' } }, both, 'now');
-  assert.equal(leftBehind.cash, 71804, 'what was typed stays');
-  assert.equal(leftBehind.monthly_burn, undefined, 'a peso burn whose rows are gone does not outlive them');
-  assert.match(bClash(typedPesos, both) ?? '', /in EUR and the runway you typed is in ₱/);
-  assert.equal(bClash(typedPesos, said), null, 'same currency, no clash');
-  const fromEuros = { cash: 5, cash_on: '2026-06-30', monthly_burn: 300, burn_to: '2026-06-30', currency: '€', source: { cash: 'statement' as const, monthly_burn: 'statement' as const } };
-  const switched = bFinance(fromEuros, said, 'now');
-  assert.equal(switched.currency, '₱');
-  assert.equal(switched.monthly_burn, Math.round(said.perMonth!.out));
-  assert.equal(switched.cash, undefined, 'a euro balance does not stay on as pesos');
-  assert.deepEqual(switched.source, { monthly_burn: 'statement' });
+  const both = bRead({ txs: [...pesos, ...euros], payees: [], accounts: [], today: '2026-09-29', currency: 'USD', main: 'USD', fx: fxAll })!;
+  assert.equal(both.currency, 'USD');
+  assert.equal(both.inMain, true);
+  assert.deepEqual(both.converted, [{ currency: 'EUR', rows: 3 }]);
+  assert.equal(Math.round(both.inTotal * 100) / 100, 44, '€40 at 1.10');
+  assert.equal(Math.round(both.outTotal * 100) / 100, 11, 'not 5,011: the pesos have no currency said yet');
+  assert.deepEqual(both.otherCurrencies, [{ currency: '', rows: 5 }]);
+  assert.ok(both.lines.includes('Converted to USD from EUR (3 rows) at ECB daily rates.'), 'a converted figure says so');
+  assert.ok(both.lines.includes('5 rows with no currency are not in these numbers. Say which on Bank statements.'));
+
+  const alone = bRead({ txs: pesos, payees: [], accounts: [], today: '2026-09-29', currency: 'USD', main: 'USD', fx: fxAll })!;
+  assert.equal(alone.currencyKnown, false, 'a file that never said its currency is never converted from a guess');
+  assert.ok(alone.lines.some((l) => /^You spend [\d,]+ a month\.$/.test(l)), 'printed bare: a $ on peso rows was a guess');
+
+  const saidRows = [...pesos.map((p) => ({ ...p, currency: 'PHP' })), ...euros];
+  const said = bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: 'USD', main: 'USD', fx: fxAll })!;
+  assert.equal(said.currency, 'USD', 'one currency for everything, whatever each statement was in');
+  assert.deepEqual(said.converted, [{ currency: 'PHP', rows: 5 }, { currency: 'EUR', rows: 3 }]);
+  assert.equal(Math.round(said.outTotal * 100) / 100, 97, '₱5,000 at 0.0172 is $86, and €10 is $11');
+  assert.deepEqual(said.otherCurrencies, [], 'nothing left out once everything converts');
+
+  const noPeso = bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: 'USD', main: 'USD', fx: bTable(eurUsd), fxMissing: { PHP: 'the exchange-rate service did not answer in time' } })!;
+  assert.deepEqual(noPeso.otherCurrencies, [{ currency: 'PHP', rows: 5, why: 'the exchange-rate service did not answer in time' }]);
+  assert.ok(noPeso.lines.includes('5 rows in PHP are not in these numbers: the exchange-rate service did not answer in time.'), 'a missing rate is said, never guessed');
+  const onlyPeso = bRead({ txs: saidRows.slice(0, 5), payees: [], accounts: [], today: '2026-09-29', currency: 'USD', main: 'USD' })!;
+  assert.equal(onlyPeso.currency, 'PHP', 'nothing converts: shown in its own currency rather than not at all');
+  assert.equal(onlyPeso.inMain, false);
+  assert.ok(onlyPeso.lines.some((l) => l.startsWith('Shown in PHP, not USD:')));
+  const withBalance = bRead({ txs: saidRows, payees: [], accounts: [{ id: 'w', label: 'Wise', currency: 'EUR', balance: 100, on: '2026-06-30' }], today: '2026-09-29', currency: 'USD', main: 'USD', fx: fxAll })!;
+  assert.equal(Math.round(withBalance.cash!.amount * 100) / 100, 110, 'a euro balance converted at its own day’s rate');
+  // Two accounts, one stopped in June: the euro one no longer speaks for this month, and a budget export prints no balance.
+  const twoAccounts = bRead({
+    txs: [...pesos.map((p) => ({ ...p, currency: 'PHP', accountId: 'budget' })), ...euros.map((e) => ({ ...e, accountId: 'wise' }))],
+    payees: [], today: '2026-09-29', currency: 'USD', main: 'USD', fx: fxAll,
+    accounts: [{ id: 'wise', label: 'Wise', currency: 'EUR', balance: 5, on: '2026-06-30' }, { id: 'budget', label: 'Budget', currency: 'PHP', balance: null, on: null }],
+  })!;
+  assert.equal(twoAccounts.perMonth?.over, 82, 'averaged over the account still being written, from its first row: not 90 days across a gap nobody recorded');
+  assert.equal(twoAccounts.runwayMonths, null, 'one account’s balance is not all the money there is');
+  assert.ok(twoAccounts.lines.some((l) => l.startsWith('Balance: $5.50 on 30 Jun in 1 of 2 accounts')));
+  assert.equal(bFinance({ currency: '$' }, twoAccounts, 'now', { main: 'USD' }).cash, undefined, 'so runway does not take it');
+
+  /* Rates: the day's, the business day before it, and nothing older than a week. */
+  assert.equal(bRateOn(fxAll, 'PHP', 'USD', '2026-09-26')?.day, '2026-09-25', 'a Saturday takes Friday’s rate');
+  assert.equal(bRateOn(fxAll, 'USD', 'PHP', '2026-09-25')?.rate, 1 / 0.0172, 'either way round');
+  assert.equal(bRateOn(fxAll, 'PHP', 'USD', '2026-10-15'), null, 'a rate two weeks old is not that day’s');
+  assert.equal(bRateOn(fxAll, 'EUR', 'USD', '2026-05-24')?.day, '2026-05-25', 'a day just before the series takes its first rate');
+  assert.equal(bRateOn(fxAll, 'GBP', 'USD', '2026-06-01'), null);
+  assert.equal(bRateOn(fxAll, 'USD', 'USD', '2026-06-01')?.rate, 1);
+  assert.equal(bLatest(fxAll, 'PHP', 'USD')?.day, '2026-09-29');
+  assert.equal(bRateLine('PHP', 'USD', { rate: 0.0172, day: '2026-09-26' }, bDay), '₱58.14 = $1 on 26 Sep', 'quoted the way a person reads it');
+  assert.deepEqual(bParse({ base: 'PHP', rates: { '2026-09-25': { USD: 0.0172 }, '2026-09-28': { USD: 0.0173 } } }, 'PHP', 'USD').map((r) => r.day), ['2026-09-25', '2026-09-28']);
+  assert.deepEqual(bParse({ base: 'PHP', date: '2026-09-29', rates: { USD: 0.0174 } }, 'PHP', 'USD'), [{ base: 'PHP', quote: 'USD', day: '2026-09-29', rate: 0.0174 }]);
+  assert.deepEqual(bParse({ base: 'EUR', rates: { '2026-09-25': { USD: 1.1 } } }, 'PHP', 'USD'), [], 'another base is not this pair');
+  assert.deepEqual(bParse({ message: 'not found' }, 'VND', 'USD'), []);
+  assert.deepEqual(bNeeded({ main: 'USD', txs: saidRows, accounts: [{ currency: 'EUR', on: '2026-07-02' }], typed: ['GBP'], today: '2026-09-29' }), [
+    { from: 'EUR', to: 'USD', start: '2026-06-01', end: '2026-07-02' },
+    { from: 'GBP', to: 'USD', start: '2026-09-29', end: '2026-09-29' },
+    { from: 'PHP', to: 'USD', start: '2026-07-01', end: '2026-09-20' },
+  ]);
+  assert.equal(bCovers({ first: '2026-06-26', last: '2026-09-25' }, { start: '2026-07-01', end: '2026-09-29' }, '2026-09-29'), true, 'a Friday rate covers the Monday after');
+  assert.equal(bCovers({ first: '2026-07-10', last: '2026-09-25' }, { start: '2026-07-01', end: '2026-09-20' }, '2026-09-29'), false, 'the first week has no rate');
+  assert.equal(bMain({}, []), 'USD');
+  assert.equal(bMain({ currency: '$' }, []), 'USD', '"$" is a US dollar unless said otherwise');
+  assert.equal(bMain({ currency: '₱' }, [{ metric: 'currency', unit: '$' }]), 'PHP', 'runway’s currency before the goal’s: nobody’s runway changes currency the day this ships');
+  assert.equal(bMain({}, [{ metric: 'currency', unit: '€' }]), 'EUR');
+  assert.equal(bMain({ currency: '$', main_currency: 'php' }, []), 'PHP', 'a choice in Settings wins');
+  assert.equal(bMark('CAD'), 'CAD', 'written so it reads back as itself: "$" would read back as USD');
+  assert.equal(bMark('USD'), '$');
+
+  /* 5. Runway in the main currency: statements converted, typed numbers kept as typed and converted. */
+  const latest = (from: string, to: string) => bLatest(fxAll, from, to);
+  // The live account: "$1,000 cash, $350 a month" typed, then a peso budget export.
+  const typedDollars = { cash: 1000, monthly_burn: 350, currency: '$', typed_at: '2026-09-20T00:00:00Z', source: { cash: 'typed' as const, monthly_burn: 'typed' as const } };
+  const settled = bFinance(typedDollars, said, '2026-09-29T10:00:00Z', { main: 'USD', latest });
+  assert.equal(settled.currency, '$');
+  assert.equal(settled.cash, 1000, 'typed in the main currency, kept as typed');
+  assert.equal(settled.monthly_burn, Math.round(said.perMonth!.out), 'the burn off the rows, converted: not blanked, not left in pesos');
+  assert.equal(settled.source?.monthly_burn, 'statement');
+  assert.equal(bFinance(settled, said, 'later', { main: 'USD', latest }), settled, 'settled once, the next load writes nothing');
+
+  // Then their book balance, typed in pesos.
+  const typedPeso = bTyped(settled, { cash: 71804, currencies: { cash: 'PHP' } }, '2026-09-29T11:00:00Z', 'USD');
+  assert.equal(typedPeso.cash, undefined, 'not a dollar figure until it is converted');
+  assert.deepEqual(typedPeso.typed_in, { cash: { amount: 71804, currency: 'PHP' } });
+  const inDollars = bFinance(typedPeso, said, '2026-09-29T11:00:01Z', { main: 'USD', latest });
+  assert.equal(inDollars.cash, 1235.03, '₱71,804 at 0.0172');
+  assert.deepEqual(inDollars.typed_in, { cash: { amount: 71804, currency: 'PHP', rate: 0.0172, day: '2026-09-29' } }, 'kept as typed, so it follows the peso');
+  assert.equal(inDollars.monthly_burn, Math.round(said.perMonth!.out), 'the burn came back off the rows');
+  assert.ok(bTypedLines(inDollars)[0].startsWith('Cash: you typed ₱71,804, which is $1,235 (₱58.14 = $1 on 29 Sep'));
+  const moved = bFinance(inDollars, said, 'next week', { main: 'USD', latest: () => ({ rate: 0.018, day: '2026-10-05' }) });
+  assert.equal(moved.cash, 1292.47, 'the peso moved, and the dollar figure with it');
+  const noRate = bFinance(typedPeso, said, 'now', { main: 'USD', latest: () => null });
+  assert.equal(noRate.cash, undefined, 'no rate, no figure: never a guess');
+  assert.match(bTypedLines(noRate)[0], /no PHP to USD rate yet/);
+
+  // Settings moves the main currency: what was typed in dollars is converted, and kept as typed.
+  const inPesos = bFinance(settled, bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: 'PHP', main: 'PHP', fx: fxAll })!, 'now', { main: 'PHP', latest });
+  assert.equal(inPesos.currency, '₱');
+  assert.equal(inPesos.cash, 58139.53, '$1,000 at 1/0.0172');
+  assert.deepEqual(inPesos.typed_in?.cash, { amount: 1000, currency: 'USD', rate: 1 / 0.0172, day: '2026-09-29' });
+
+  assert.equal(bFinance(typedDollars, alone, 'now', { main: 'USD', latest }), typedDollars, 'unlabelled rows never reach runway: they were $37,708 a month of pesos');
+  const orphan = bFinance(settled, onlyPeso, 'now', { main: 'USD', latest });
+  assert.equal(orphan.monthly_burn, undefined, 'a read not in the main currency writes nothing, and its old burn goes');
+  assert.equal(orphan.cash, 1000, 'what was typed stays');
+
+  const unchanged = bTyped(settled, { cash: 1000, monthly_burn: settled.monthly_burn }, 'now', 'USD');
+  assert.deepEqual(unchanged.source, { cash: 'typed', monthly_burn: 'statement' }, 'saving the sheet unchanged keeps the bank’s burn the bank’s');
+  assert.equal(bFinance({ cash: 5, main_currency: 'EUR' }, null, 'now', { main: 'EUR' }).main_currency, 'EUR');
   assert.equal(bCode('₱'), 'PHP');
   assert.equal(bCode('$'), null, 'a dozen currencies write $');
   assert.equal(bCode('eur'), 'EUR');
+  assert.equal(bZone('Asia/Manila'), 'PHP', 'offered first to a person in Manila, who had to type it');
+  assert.equal(bZone('Europe/Zurich'), null, 'not every European zone spends euros');
+  assert.equal(bZone(null), null);
 
   /* 6. The skipped line travels with the statement to the screen. */
   const i = bImport({ id: 'i1', status: 'ready', file_name: 'budget.csv', rows_found: 4, rows_new: 4, skipped: 'Left out 2 scheduled rows (pending or dated after today).', started_at: new Date().toISOString() }, new Date());

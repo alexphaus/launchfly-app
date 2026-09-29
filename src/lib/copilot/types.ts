@@ -21,6 +21,7 @@ import type { RecentLedger } from './review';
 import type { Hunt } from './hunts';
 import type { RoadmapMark, RoadmapRun } from './roadmap';
 import type { ExperimentMark } from './experiment';
+import type { MoneyHome } from './money/ledger';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
 export type OpportunityType = 'client' | 'people' | 'service' | 'community' | 'signal';
@@ -76,8 +77,29 @@ export interface Offer {
 /** How to reach the other side of an opportunity. All optional; sourced rows fill what they can. */
 export interface Contact { name?: string; whatsapp?: string; email?: string; website?: string }
 
-/** Manual runway inputs. Runway = cash / monthly_burn. */
-export interface Finance { monthly_burn?: number; cash?: number; currency?: string; updated_at?: string }
+/**
+ * Runway inputs. Runway = cash / monthly_burn.
+ *
+ * Typed on the finance sheet, or read off bank statements (money/ledger.ts
+ * financeFromRead) — whichever is newer. Every reader of these two numbers
+ * (metrics, the forecast, the runway guard, scoreMove's money factor, the plan)
+ * reads this row and nothing else, so a statement reaches all of them without
+ * any of them changing.
+ */
+export interface Finance {
+  monthly_burn?: number;
+  cash?: number;
+  currency?: string;
+  updated_at?: string;
+  /** Where each number came from. Absent on rows written before statements existed: typed. */
+  source?: { cash?: 'typed' | 'statement'; monthly_burn?: 'typed' | 'statement' };
+  /** The day the statement balance behind `cash` is from. */
+  cash_on?: string;
+  /** The last day of statement rows `monthly_burn` was averaged over. */
+  burn_to?: string;
+  /** When the person last typed a number here, so an older statement never overwrites a newer one. */
+  typed_at?: string;
+}
 
 export const OPPORTUNITY_TYPES: OpportunityType[] = ['client', 'people', 'service', 'community', 'signal'];
 export const SOURCE_KEYS: SourceKey[] = ['calendar', 'crm', 'finance'];
@@ -510,6 +532,12 @@ export interface HomeData {
    * run never looks like one that found nothing.
    */
   hunting: { hunts: Hunt[]; webReady: boolean; unreadable: string | null; lastError: string | null };
+  /**
+   * What the bank says: statements read, the read of the rows, and the payers
+   * nobody has named yet (money/ledger.ts). Optional because a payload cached
+   * before this existed has to render; `ready: false` when 20260929 is unapplied.
+   */
+  money?: MoneyHome;
   /**
    * When this read was made. Anything on screen that depends on "now" — what
    * arrived in the last day, how long ago an agent ran — is computed from this

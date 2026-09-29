@@ -177,6 +177,8 @@ export interface RoadmapInput {
   funnel: { windowDays: number; sent: number; replied: number; won: number; wonAmount: number };
   /** What came back in the last fortnight, one line each, already said from rows. */
   happened: string[];
+  /** What their bank statements say, one sentence each, counted by the app (money/ledger.ts). Empty without statements. */
+  money?: string[];
   /** The earlier plan's items and what the person did with each. Titles and marks only — see rule 3. */
   previous: Array<{ id: string; phase: PhaseKey; title: string; state: MarkState; steps: Array<{ id: string; title: string; state: MarkState }> }>;
   /** Whether research can be handed to a worker at all. */
@@ -281,6 +283,14 @@ export function roadmapPrompt(input: RoadmapInput): string {
   lines.push(`Time each day: ${cap.minutes} minutes (${cap.label})`);
   if (input.runwayMonths != null) lines.push(`Runway: ${input.runwayMonths} months of cash at their burn`);
   lines.push('');
+
+  // Their money as their bank shows it — every figure counted from rows, so the
+  // plan may cite them: who pays, what repeats, how long the cash lasts.
+  if (input.money?.length) {
+    lines.push('THEIR MONEY, counted by the app from their bank statements:');
+    for (const m of input.money) lines.push(`- ${m}`);
+    lines.push('');
+  }
 
   lines.push('GOALS, in their priority order:');
   if (!input.goals.length) lines.push('- none written yet');
@@ -822,6 +832,13 @@ export interface SignatureInput {
   contextCount: number;
   capacity: Capacity;
   offer: { sells?: string; price_band?: string } | null;
+  /**
+   * What their statements say (money/ledger.ts moneyForPlan): uploading one and
+   * naming a payer are things the person did, so they redraw like a note does.
+   * Absent without statements, and then the fingerprint is exactly what it was
+   * before money existed — no plan redraws for nothing.
+   */
+  money?: string | null;
 }
 
 /**
@@ -835,7 +852,7 @@ export function roadmapSignature(s: SignatureInput): string {
   const goals = [...s.goals].sort((a, b) => a.id.localeCompare(b.id))
     .map((g) => [g.id, g.title, g.target_value ?? '', g.current_value ?? '', g.horizon_days ?? '', g.priority, g.note ?? ''].join('~'));
   const working = [...s.working].sort((a, b) => a.id.localeCompare(b.id)).map((w) => `${w.id}~${w.body}`);
-  const raw = [goals.join('|'), working.join('|'), s.contextCount, s.capacity, s.offer?.sells ?? '', s.offer?.price_band ?? ''].join('#');
+  const raw = [goals.join('|'), working.join('|'), s.contextCount, s.capacity, s.offer?.sells ?? '', s.offer?.price_band ?? ''].join('#') + (s.money ? `#money:${s.money}` : '');
   // djb2: a short stable digest, so the row carries a fingerprint and not a copy of somebody's notes.
   let h = 5381;
   for (let i = 0; i < raw.length; i++) h = ((h << 5) + h + raw.charCodeAt(i)) | 0;

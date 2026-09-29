@@ -50,6 +50,9 @@ import { NIGHTLY_COLUMNS, nightlyFromRow, type NightlyOutput, type NightlyRun, t
 import { resolveLlmConfig, resolvePlanConfig } from './agent/llm';
 import { ROADMAP_COLUMNS, ROADMAP_MARK_EVENT, ROADMAP_RUN_KIND, markFromEvent, roadmapRunFromRow, type RoadmapMark, type RoadmapRun } from './roadmap';
 import { EXPERIMENT_EVENT, experimentMarkFromEvent, type ExperimentMark } from './experiment';
+import { loadMoneyRows } from './money/store';
+import { moneyHome } from './money/ledger';
+import { resolveStatementConfig } from './money/extract';
 
 export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
@@ -748,7 +751,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -790,6 +793,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadLastNightly(profileId),
     loadRoadmapRuns(profileId),
     loadRoadmapMarks(profileId),
+    // What the bank says. Never throws: a missing table is `ready: false`, any other failure is `unreadable`.
+    loadMoneyRows(profileId),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -927,6 +932,22 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   const shownTriage = triageHeld ? triage.filter((c) => c.source === 'move') : triage;
 
   const diagnosis = diagnose({ ...diagRows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now: new Date() });
+
+  // The money read, computed here from this load's rows so every figure on the
+  // screen and the payer questions agree with one another. Payers are matched
+  // against the businesses already in the pipeline, as suggestions only.
+  const money = moneyHome({
+    ready: moneyRows.ready,
+    canRead: !!resolveStatementConfig(),
+    imports: moneyRows.imports,
+    txs: moneyRows.txs,
+    payees: moneyRows.payees,
+    accounts: moneyRows.accounts,
+    today,
+    currency: profile.finance?.currency || goals.find((g) => g.metric === 'currency')?.unit || '$',
+    opportunities: pipelineRows.map((o) => ({ id: o.id, title: o.title })),
+    unreadable: moneyRows.unreadable,
+  });
   // The record is what makes "you keep doing this and it does not work"
   // possible; nothing else in the app can see it.
   const edge = growthEdge(diagnosis, { deadTopic: decisionReview(decisionLog).deadTopic });
@@ -1044,6 +1065,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     metrics,
     recent,
     hunting,
+    money,
     generatedAt: nowTs.toISOString(),
     supplyLastRun: supplyRun,
     account: { email: profile.email, verified: !!profile.email_verified_at },
@@ -1110,9 +1132,29 @@ export async function requestSource(profileId: string, key: SourceKey) {
   await logEvent(profileId, 'source_requested', { source_key: key });
 }
 
+/**
+ * The two numbers, typed. A number changed here is marked typed, with when, so
+ * a statement from before today cannot overwrite it (money/ledger.ts
+ * financeFromRead); a number left as it was keeps where it came from, so saving
+ * the currency does not turn a balance read off the bank into a typed guess.
+ */
 export async function setFinance(profileId: string, finance: Finance) {
-  const clean: Finance = { ...finance, updated_at: new Date().toISOString() };
-  await copilotDb().from('copilot_profiles').update({ finance: clean }).eq('id', profileId);
+  const prev: Finance = (await getProfile(profileId))?.finance ?? {};
+  const now = new Date().toISOString();
+  const source: NonNullable<Finance['source']> = {};
+  const clean: Finance = { cash: finance.cash, monthly_burn: finance.monthly_burn, currency: finance.currency ?? prev.currency, updated_at: now, source };
+  let typed = false;
+  if (finance.cash != null) {
+    if (finance.cash === prev.cash && prev.source?.cash === 'statement') { source.cash = 'statement'; clean.cash_on = prev.cash_on; }
+    else { source.cash = 'typed'; typed = true; }
+  }
+  if (finance.monthly_burn != null) {
+    if (finance.monthly_burn === prev.monthly_burn && prev.source?.monthly_burn === 'statement') { source.monthly_burn = 'statement'; clean.burn_to = prev.burn_to; }
+    else { source.monthly_burn = 'typed'; typed = true; }
+  }
+  clean.typed_at = typed ? now : prev.typed_at;
+  const { error } = await copilotDb().from('copilot_profiles').update({ finance: clean }).eq('id', profileId);
+  if (error) throw new Error(describeDbError(error, 'Could not save runway.'));
   await logEvent(profileId, 'finance_updated', { monthly_burn: clean.monthly_burn ?? null, cash: clean.cash ?? null });
 }
 

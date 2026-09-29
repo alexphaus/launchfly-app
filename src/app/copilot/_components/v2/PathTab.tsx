@@ -76,6 +76,9 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
   // the row opens that project and says where it stands.
   const handed: Handed = new Map(home.commissions.filter((t) => t.commission.status !== 'stopped').map((t) => [t.commission.objective, { id: t.commission.id, status: t.commission.status }]));
   const experiment = plan.state === 'ready' ? plan.experiment : null;
+  // The call is the plan's next step (planCall). While it waits on an answer it is
+  // the card above, so its step below is a pointer to it rather than a second copy.
+  const callTitle = d.path.now.kind === 'call' && home.decision?.response === 'pending' ? home.decision.headline : null;
   const experimentGoal = experiment?.exp.goalId ? home.goals.find((g) => g.id === experiment.exp.goalId)?.title ?? null : null;
   useAutoDraw(home, d, actions);
 
@@ -151,7 +154,7 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
             {plan.state === 'none' && <PlanPending view={plan} onDraw={() => void actions.drawRoadmap('manual')} />}
             {plan.state === 'ready'
               ? plan.phases.map((ph) => (
-                  <PhaseBlock key={ph.key} phase={ph} actions={actions} workerConnected={home.workerConnected} handed={handed} showGoal={!planServesOneGoal(plan)}>
+                  <PhaseBlock key={ph.key} phase={ph} actions={actions} workerConnected={home.workerConnected} handed={handed} showGoal={!planServesOneGoal(plan)} callTitle={callTitle}>
                     {ph.key === plan.phases[0].key && (
                       <>
                         <AlsoThisWeek steps={next.steps} render={(s) => <NextRow key={s.key} step={s} actions={actions} isNew={added.has(s.key)} capMinutes={cap.minutes} />} />

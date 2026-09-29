@@ -18,13 +18,26 @@
 // The intro exists because /copilot is the link people get sent. Landing a
 // stranger straight on "What should I call you?" asks them to fill in a form for
 // something nobody has explained yet.
+//
+// Then one more screen, after the account exists: a bank statement, optional.
+// Everything above is typed, and everything typed is what they already knew;
+// a statement is a year of what actually happened, read in a minute, and the
+// first screen of the app starts from it — runway, who pays them, what repeats
+// — instead of from zeros (lib/copilot/money). It comes after the account
+// because the rows need somewhere to live, and it can always be skipped.
+//
+// Capacity is no longer asked here. It defaults to Moderate, the header pill
+// changes it in one tap, and it was the one question on screen three that the
+// app could not use until the person had lived with a day of it.
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PLANS } from '@/lib/copilot/plans';
 import { useShell } from './shell';
-import { CAPACITY_META, type Capacity, type GoalMetric } from '@/lib/copilot/types';
+import type { Capacity, GoalMetric } from '@/lib/copilot/types';
 import { WATCH_INTENTS, SELLING_INTENTS, inferIntent, startersFor, type WatchIntent } from '@/lib/copilot/watch/catalogue';
-import { post } from './api';
+import { get, post, upload } from './api';
+import { importLine, type MoneyImport } from '@/lib/copilot/money/ledger';
+import { STATEMENT_ACCEPT } from '@/lib/copilot/money/statement';
 
 const METRICS: Array<{ v: GoalMetric; l: string }> = [{ v: 'currency', l: 'Money' }, { v: 'number', l: 'Count' }, { v: 'percent', l: 'Percent' }, { v: 'none', l: 'Just a goal' }];
 const HORIZONS = [30, 90, 180];
@@ -51,7 +64,8 @@ export default function Onboarding() {
   const [proof, setProof] = useState('');
   const [segments, setSegments] = useState('');
   const [area, setArea] = useState('');
-  const [capacity, setCapacity] = useState<Capacity>('moderate');
+  // Not asked: the header pill sets it in one tap, once a day of it has been lived with.
+  const capacity: Capacity = 'moderate';
   // Null until they reach step 2 or tap a chip, so the inferred value can keep
   // tracking the goal while they are still editing it.
   const [pickedIntent, setPickedIntent] = useState<WatchIntent | null>(null);
@@ -99,7 +113,10 @@ export default function Onboarding() {
         offer: selling ? { sells, for_who: forWho, problem, proof_url: proof.trim() || undefined } : {},
         watch: chosen.map((x) => ({ url: x.url, label: x.label, intent: x.intent })),
       });
-      router.refresh();
+      // The account exists now, so a statement has somewhere to go. One more,
+      // optional, screen before the app.
+      setBusy(false);
+      setStep(3);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
       setBusy(false);
@@ -111,7 +128,7 @@ export default function Onboarding() {
       <div className="cp-ob">
         <div className="cp-ob-head">
           <div className="cp-wordmark">COPILOT</div>
-          {!intro && <div className="cp-steps">{[0, 1, 2].map((i) => <span key={i} className={i < step ? 'done' : i === step ? 'on' : ''} />)}</div>}
+          {!intro && <div className="cp-steps">{[0, 1, 2, 3].map((i) => <span key={i} className={i < step ? 'done' : i === step ? 'on' : ''} />)}</div>}
         </div>
 
         <div className="cp-ob-body">
@@ -129,6 +146,7 @@ export default function Onboarding() {
                 <li><b>It brings finished work.</b> The drafted message, the listing, the arithmetic — never &ldquo;you should consider&rdquo;.</li>
                 <li><b>You decide.</b> Did it, not doing it, or wrong call. Turn something down enough times and it stops being the call.</li>
                 <li><b>It marks its own homework.</b> Every call names one number, and it reads that number back three days later.</li>
+                <li><b>It reads instead of asking.</b> Upload a bank statement and runway, who pays you and your repeat bills come off it — nothing to type.</li>
               </ol>
               <p className="cp-intro-plan">
                 Free is {PLANS.free.limits.matchesPerMonth} real matches a month and the whole engine —
@@ -141,7 +159,7 @@ export default function Onboarding() {
           {!intro && step === 0 && (
             <>
               <h2>Let&apos;s set you up.</h2>
-              <p className="sub">Three quick screens. You can change everything later.</p>
+              <p className="sub">Three quick screens, then a bank statement if you have one to hand. You can change everything later.</p>
               <div className="cp-field"><label className="cp-label">What should I call you?</label><input className="cp-input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex" maxLength={80} /></div>
               <div className="cp-field"><label className="cp-label">What do you do? One line.</label><input className="cp-input" value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Build WhatsApp booking automations for small agencies" maxLength={160} /><div className="cp-help">This line is used in the messages the copilot drafts for you. Be concrete.</div></div>
               <div className="cp-field"><label className="cp-label">Where are you based? (optional)</label><input className="cp-input" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Puerto Princesa, Palawan" maxLength={80} /></div>
@@ -218,14 +236,6 @@ export default function Onboarding() {
                 })}
               </div>
 
-              <div className="cp-field"><label className="cp-label">Capacity today</label>
-                {(Object.keys(CAPACITY_META) as Capacity[]).map((c) => (
-                  <button key={c} className={`cp-option ${capacity === c ? 'active' : ''}`} onClick={() => setCapacity(c)}>
-                    <div><div className="ct">{CAPACITY_META[c].label}</div><div className="cs">{CAPACITY_META[c].sub}</div></div>
-                  </button>
-                ))}
-              </div>
-
               <div className="cp-help" style={{ marginBottom: 14 }}>
                 You start on Free: {PLANS.free.limits.matchesPerMonth} real matches a month, no card.
                 Nothing is sent without you tapping send. <a href={`${shell}/pricing`}>Plans →</a>
@@ -233,18 +243,112 @@ export default function Onboarding() {
               </div>
             </>
           )}
+          {!intro && step === 3 && <StatementStep onDone={() => router.refresh()} />}
         </div>
 
         <div className="cp-ob-foot">
           {intro && <a className="cp-btn" href={`${shell}/login`} style={{ textDecoration: 'none' }}>Sign in</a>}
           {intro && <button className="cp-btn primary" onClick={() => setIntro(false)}>Start free</button>}
-          {!intro && step > 0 && <button className="cp-btn" disabled={busy} onClick={() => setStep((s) => s - 1)}>Back</button>}
+          {!intro && step > 0 && step < 3 && <button className="cp-btn" disabled={busy} onClick={() => setStep((s) => s - 1)}>Back</button>}
           {!intro && step === 0 && <a className="cp-btn" href={`${shell}/login`} style={{ textDecoration: 'none' }}>Sign in</a>}
-          {!intro && (step < 2
+          {!intro && step < 3 && (step < 2
             ? <button className="cp-btn primary" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>Continue</button>
             : <button className="cp-btn primary" disabled={!canNext || busy} onClick={finish}>{busy ? 'Finding matches & building your brief…' : 'Start my copilot'}</button>)}
         </div>
       </div>
     </div>
+  );
+}
+
+/** How long the screen waits on a PDF or a screenshot before handing it to the app to finish. */
+const WAIT_MS = 150_000;
+const POLL_MS = 3_000;
+
+/**
+ * The fourth screen: a statement, optional, read while they watch. A CSV comes
+ * back read; a PDF or a screenshot is followed until it lands, and past
+ * WAIT_MS the app takes over — the read is on You when it finishes, and the
+ * screen says so rather than spinning.
+ */
+function StatementStep({ onDone }: { onDone: () => void }) {
+  const [phase, setPhase] = useState<'idle' | 'working' | 'read' | 'review' | 'later' | 'failed'>('idle');
+  const [lines, setLines] = useState<string[]>([]);
+  const [said, setSaid] = useState<string | null>(null);
+
+  const land = async (i: MoneyImport) => {
+    if (i.status === 'ready') {
+      try {
+        const home = await get<{ money?: { read: { lines: string[] } | null } }>('/home');
+        setLines(home.money?.read?.lines ?? []);
+      } catch { setLines([]); }
+      setSaid(importLine(i));
+      setPhase('read');
+    } else if (i.status === 'review') {
+      setSaid('It is read, and it printed no balances to check the rows against — so it counts once you look at its totals. They are waiting under You → Records → Bank statements.');
+      setPhase('review');
+    } else {
+      setSaid(importLine(i));
+      setPhase('failed');
+    }
+  };
+
+  const follow = async (id: string) => {
+    const until = Date.now() + WAIT_MS;
+    while (Date.now() < until) {
+      await new Promise((r) => setTimeout(r, POLL_MS));
+      try {
+        const { imports } = await get<{ imports: MoneyImport[] }>('/money');
+        const i = imports.find((x) => x.id === id);
+        if (i && i.status !== 'reading') return land(i);
+      } catch { /* one missed check is a blip; the deadline below says the rest */ }
+    }
+    setSaid('Still reading. It keeps going without you — the result lands on You when it is done.');
+    setPhase('later');
+  };
+
+  const choose = async (file: File | undefined) => {
+    if (!file) return;
+    setPhase('working');
+    setSaid(null);
+    try {
+      const { status, body } = await upload<{ ok?: boolean; import?: MoneyImport }>('/money/import', file);
+      if (status >= 400 || body.ok === false || !body.import) {
+        setSaid(body.error || `Could not upload that (${status}).`);
+        setPhase('failed');
+        return;
+      }
+      if (body.import.status === 'reading') {
+        setSaid('Reading it. A PDF or a screenshot takes a minute.');
+        await follow(body.import.id);
+      } else await land(body.import);
+    } catch (e) {
+      setSaid(e instanceof Error ? e.message : 'Could not upload that.');
+      setPhase('failed');
+    }
+  };
+
+  return (
+    <>
+      <h2>Start from your real numbers.</h2>
+      <p className="sub">
+        Upload a bank statement and your runway, who pays you and your repeat bills are read off it — no forms.
+        The CSV or OFX from your bank’s website reads best; a PDF or a screenshot of your banking app works too.
+        The file is not kept, only the rows.
+      </p>
+      {(phase === 'idle' || phase === 'failed') && (
+        <label className="cp-btn primary block cp2-bank-upload">
+          {phase === 'failed' ? 'Try another file' : 'Upload a statement'}
+          <input type="file" accept={STATEMENT_ACCEPT} onChange={(e) => void choose(e.currentTarget.files?.[0])} />
+        </label>
+      )}
+      {phase === 'working' && <div className="cp-banner cp2-bank-reading"><span className="dot" />{said ?? 'Reading your statement…'}</div>}
+      {said && phase !== 'working' && <p className={phase === 'failed' ? 'cp-error' : 'cp-help'}>{said}</p>}
+      {phase === 'read' && lines.length > 0 && <div className="cp-src cp2-bank-read">{lines.map((l) => <p key={l}>{l}</p>)}</div>}
+      <div className="cp-btn-row">
+        <button className={`cp-btn ${phase === 'idle' || phase === 'failed' ? '' : 'primary'}`} disabled={phase === 'working'} onClick={onDone}>
+          {phase === 'idle' || phase === 'failed' ? 'Skip for now' : 'Open my copilot'}
+        </button>
+      </div>
+    </>
   );
 }

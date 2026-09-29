@@ -256,6 +256,26 @@ the verdict needs the ledger and the dates, the signals need the sends and the
 call record, the experiment ledger needs verdicts over weeks — rows, not
 recollection. See COPILOT.md → **Whether it can work, said first**.
 
+**Then** — money read from the bank, not typed. Its owner asked for the thing a
+person with an agent or a prompt cannot get without setting one up — and the
+answer was under this document's own root cause: everything the app knew about
+money was typed, so the engine had one lever. A bank statement changes that
+without the cost this document charged every new sensor. "Widening the sensor is
+months of collection before anything ranks differently" is true of a calendar
+and false of a statement, which arrives with a year of history on day one. So:
+upload a statement (CSV, OFX, a PDF or a screenshot), and runway, who pays, what
+repeats and how long the cash lasts are counted off it; a client's deposit
+becomes a win joined to the ledger; the plan is shown the lines and may cite
+them. It passes the survival test on the joins, not the reading: a chat can read
+one pasted statement once, and a harness could be set up to parse one, but
+neither keeps a deduplicated, balance-checked ledger across months, attributed
+by the person to clients, their job and their own accounts, and joined to the
+messages that earned it. What a model reads is held to the statement's own
+arithmetic before it counts; a role is the person's tap, never inferred. And
+the sensors are one list now — **Records** on You — so a calendar, a CV or a
+bank link is an entry and a sheet, not a new screen. See COPILOT.md → **Money,
+read from the bank, not typed**.
+
 ---
 
 ## Where it actually stands
@@ -264,8 +284,8 @@ Honest scoring against the "control loop" this is aiming at:
 
 | Layer | State |
 | --- | --- |
-| Reality ingestion | **~20%** — Maps supply, manual notes, manual cash/burn. Calendar is a button that does nothing. |
-| State model | **~55%** — goals, capacity, runway, commitments, decisions, outcomes. Missing: projects, people, *named* cash obligations. |
+| Reality ingestion | **~30%** — Maps supply, manual notes, and bank statements read into rows (CSV, OFX, PDF, screenshot), which replace typed cash and burn. No bank link yet. Calendar is a button that does nothing. |
+| State model | **~60%** — goals, capacity, runway from the bank, named cash obligations, who pays (named by the person), decisions, outcomes. Missing: projects, people. |
 | Leverage engine | **~45%** — `scoreOpportunity` is a real, transparent formula, and there is now one decision a day. But it can only rank opportunities, because they are the only domain observed. |
 | Execution | **~70%** — draft → approve → deep link → day-3 follow-up. Missing: calendar blocks, documents, workflows. |
 | Verification | **~65%** — six outcome kinds, reply reconciliation, a funnel that flags work done outside it, decisions graded on a named metric. Nothing proactively asks. |
@@ -276,7 +296,9 @@ Everything observed is outbound supply, so the engine has one lever. The
 cheapest fix that changes this is **named cash obligations** — expected inflows
 and outflows with dates, entered by hand, no integration — which turns runway
 from a number into a forecast and makes "collect the deposit" rankable against
-"send ten messages". Calendar second. Delivery/projects third.
+"send ten messages". Calendar second. Delivery/projects third. *Since
+20260929:* money is read off bank statements, so cash and burn are the bank's
+and not a guess — the first sensor that arrives with its own history.
 
 That ordering still passes the revised survival test — each one is rows nobody
 else collected — but it now competes with the harness question above, and loses
@@ -314,7 +336,11 @@ direction better than "copilot" does.
   does, the core loop is unshippable. Existential and cheap to research.
 - **Unknown: supply unit economics.** Pro promises 400 matches/month, Operator
   2,000. Apify cost per *inserted* match is not measured against those prices.
-- **No account deletion.** "Forget device" clears a cookie; the profile stays.
+- **Unknown: whether people will give an app their bank statement.** The whole
+  money read rests on it. Uploads are the low-trust path (read in memory, the
+  file never kept, a typed DELETE removes every row); a bank link would be the
+  high-trust one and does not exist yet. Five uploads from people who are not
+  the owner would answer it.
 - **Unknown: whether the surface is worth keeping at all.** If the harness
   argument above is right, Today's brief, insight, lesson and nudges are dead
   weight, and the send queue is the only screen worth defending. Nobody has

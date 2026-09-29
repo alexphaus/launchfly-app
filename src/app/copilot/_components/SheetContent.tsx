@@ -21,6 +21,8 @@ import { FOCUS_NOTE_MAX, FOCUS_PRESETS, dayLetter, focusWeek, hoursLabel } from 
 import { whenLabel } from '@/lib/copilot/review';
 import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
+import BankSheet from './BankSheet';
+import { dayLabel } from '@/lib/copilot/money/ledger';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
@@ -47,6 +49,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'move': return <MoveSheet home={home} id={sheet.id} actions={actions} />;
     case 'capture': return <CaptureSheet home={home} actions={actions} />;
     case 'focus': return <FocusSheet home={home} actions={actions} />;
+    case 'bank': return <BankSheet home={home} actions={actions} />;
   }
 }
 
@@ -712,10 +715,19 @@ function FinanceSheet({ home, actions }: { home: HomeData; actions: Actions }) {
   const [busy, setBusy] = useState(false);
   const preview = computeRunwayMonths({ monthly_burn: Number(burn) || undefined, cash: cash === '' ? undefined : Number(cash) });
   const save = async () => { setBusy(true); await actions.saveFinance({ monthly_burn: burn === '' ? undefined : Number(burn), cash: cash === '' ? undefined : Number(cash), currency }); setBusy(false); };
+  // Where each number came from, when a statement supplied it. Typing over one
+  // makes it yours until a statement dated after today says otherwise.
+  const fromBank = [
+    f.source?.cash === 'statement' && f.cash_on ? `cash is your balance on ${dayLabel(f.cash_on)}` : null,
+    f.source?.monthly_burn === 'statement' && f.burn_to ? `burn is your spending averaged over the rows to ${dayLabel(f.burn_to)}` : null,
+  ].filter(Boolean);
   return (
     <>
       <h3>Runway</h3>
-      <p className="desc">Two numbers, no bank connection. Runway shapes the read: under four months, the copilot favours fast-close work over big builds.</p>
+      <p className="desc">Cash and monthly burn. Runway shapes the read: under four months, the copilot favours fast-close work over big builds.</p>
+      {fromBank.length > 0
+        ? <div className="cp-note">From your bank statements: {fromBank.join('; ')}. Type a number to use yours instead — a newer statement replaces it again.</div>
+        : home.money?.ready && <div className="cp-note">Or skip the typing: <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>upload a bank statement</button> and both are read off it.</div>}
       <div className="cp-field"><label className="cp-label">Monthly burn / Cash on hand / Currency</label>
         <div className="cp-input-row">
           <input className="cp-input" inputMode="decimal" autoFocus value={burn} onChange={(e) => setBurn(e.target.value)} placeholder="1200" />

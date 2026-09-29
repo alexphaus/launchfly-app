@@ -23,6 +23,7 @@ import { weekReview } from '@/lib/copilot/review';
 import { doneForYou, needsYou, worthDoing } from '@/lib/copilot/today';
 import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
 import type { HomeData } from '@/lib/copilot/types';
+import { moneyForPlan } from '@/lib/copilot/money/ledger';
 import type { Tab2 } from '../shared';
 
 export function derive(home: HomeData) {
@@ -145,6 +146,8 @@ export function derive(home: HomeData) {
           contextCount: home.contextCount,
           capacity: home.profile.capacity,
           offer: home.profile.offer ?? null,
+          // The same fingerprint the server stores on the draw, off the same rows (moneyForPlan).
+          money: moneyForPlan(home.money?.read ?? null).signature,
         }),
       })
     : null;
@@ -306,7 +309,7 @@ export function derive(home: HomeData) {
   const week = focusWeek(home.recent.focus, home.recent.today);
 
   const status: Record<Tab2, string | null> = {
-    path: planStatus(path.here, asks.length, path.week.streak),
+    path: planStatus(asks.length, path.week.streak),
     matches: matchesStatus(counts),
     work: workStatus(team, running),
     you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : null,

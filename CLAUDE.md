@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 57 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 59 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -105,6 +105,13 @@ stale, not the schema — `notify pgrst, 'reload schema';`.
 The app's own web searches (`copilot_hunts`, 20260925) need `EXA_API_KEY` and
 that migration. Without either, Maps and feeds run as before and the Scout on
 Work says what is missing — there is no screen of searches to check instead.
+
+Bank statements (`copilot_money_*`, `copilot_transactions`,
+`copilot_counterparties`, 20260929) need that migration and nothing else for CSV
+and OFX. PDFs and screenshots are read by a model: the brief's, or
+`COPILOT_STATEMENT_MODEL` when the brief's model does not take images. Without
+the migration the Bank statements sheet says it is not set up and
+`/api/copilot/health` names the file.
 
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —

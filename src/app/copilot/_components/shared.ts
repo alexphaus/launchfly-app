@@ -6,6 +6,7 @@ import type { WorthKind } from '@/lib/copilot/worth';
 import type { AskAnswer } from '@/lib/copilot/ask';
 import type { MarkState } from '@/lib/copilot/roadmap';
 import type { ExperimentState } from '@/lib/copilot/experiment';
+import type { PayeeRole } from '@/lib/copilot/money/ledger';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -72,7 +73,16 @@ export type SheetState =
   /** The confirm card — opened drafts, or replies with no ending — as a sheet. */
   | { kind: 'capture' }
   /** Log deep work. The one number on You that nothing else can supply. */
-  | { kind: 'focus' };
+  | { kind: 'focus' }
+  /** Bank statements: upload, what they say, who paid, and the answers only the person can give. */
+  | { kind: 'bank' };
+
+/** What the person can say about their statements. See /api/copilot/money. */
+export type MoneyAnswer =
+  | { action: 'confirm' | 'discard'; id: string }
+  | { action: 'currency'; id: string; currency: string }
+  | { action: 'name'; key: string; role: PayeeRole | null; opportunity_id?: string | null }
+  | { action: 'forget'; confirm: string };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -234,4 +244,12 @@ export interface Actions {
   /** Record a block of deep work. Resolves false when it did not save. */
   logFocus(input: { minutes: number; on?: string; note?: string }): Promise<boolean>;
   removeFocus(id: string): Promise<void>;
+  /**
+   * Upload one statement. A CSV or OFX is read before this resolves; a PDF or a
+   * screenshot resolves as soon as the reading has started, and the hook
+   * watches it land.
+   */
+  uploadStatement(file: File): Promise<{ ok: boolean; error?: string; status?: string }>;
+  /** Confirm or discard a statement, say who a payer is, or delete every row read off the bank. */
+  answerMoney(answer: MoneyAnswer): Promise<{ ok: boolean; error?: string }>;
 }

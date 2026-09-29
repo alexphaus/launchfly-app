@@ -2,7 +2,9 @@
 import { useEffect, useState } from 'react';
 import { PLANS } from '@/lib/copilot/plans';
 import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
-import { goalProgress, money, relTime } from '../format';
+import { money, relTime } from '../format';
+import { creditedGoalId, goalCard } from '@/lib/copilot/goalcard';
+import { dayLabel } from '@/lib/copilot/money/ledger';
 import type { Actions } from '../shared';
 import { useShell } from '../shell';
 
@@ -20,17 +22,19 @@ export default function YouView({ home, actions, briefing }: { home: HomeData; a
   // opened from the other without typing a URL, and neither is the "real" one.
   const shell = useShell();
   const soft = shell === '/lifeos';
+  // The one goal a logged win moves; only its card says what wins added.
+  const credited = creditedGoalId(home.goals);
 
   return (
     <>
       <div className="cp-section"><span className="lead">Goals</span><button className="link" onClick={() => actions.openSheet({ kind: 'goal' })}>+ Add</button></div>
       {home.goals.length ? home.goals.map((g) => {
-        const pr = goalProgress(g);
+        const card = goalCard(g, { today: home.recent.today, creditedId: credited, wonAmount: m.won_amount, windowDays: m.window_days });
         return (
           <button key={g.id} className="cp-card cp-goal" onClick={() => actions.openSheet({ kind: 'goal', id: g.id })}>
-            <div className="top"><span className="name">{g.title}</span><span className="pct">{pr.pct !== null ? `${pr.pct}%` : g.horizon_days ? `${g.horizon_days}D` : '—'}</span></div>
-            <div className="track"><div className="cp-fill" style={{ width: `${pr.pct ?? 0}%` }} /></div>
-            <div className="sub">{pr.label}{g.metric === 'currency' && m.won_amount ? ` · ${money(m.won_amount, g.unit || '$')} from logged wins` : ''}</div>
+            <div className="top"><span className="name">{g.title}</span><span className="pct">{card.badge}</span></div>
+            <div className="track"><div className="cp-fill" style={{ width: `${card.pct ?? 0}%` }} /></div>
+            <div className="sub">{card.sub}</div>
           </button>
         );
       }) : (
@@ -77,6 +81,17 @@ export default function YouView({ home, actions, briefing }: { home: HomeData; a
 
       <div className="cp-section"><span className="lead">Context</span></div>
       <div className="cp-list">
+        {home.money?.ready && (
+          <div className="cp-ctx">
+            <div>
+              <div className="l">Bank statements</div>
+              <div className="s">{home.money.rows
+                ? `${home.money.rows} rows read${home.money.read ? ` · to ${dayLabel(home.money.read.to)}` : ''}${home.money.read?.toName.length ? ` · ${home.money.read.toName.length} payer${home.money.read.toName.length === 1 ? '' : 's'} to name` : ''}`
+                : 'Runway, income and repeat bills, read off your bank instead of typed.'}</div>
+            </div>
+            <button className={`cp-connect ${home.money.rows ? 'ghost' : ''}`} onClick={() => actions.openSheet({ kind: 'bank' })}>{home.money.rows ? 'Open' : 'Upload'}</button>
+          </div>
+        )}
         <div className="cp-ctx"><div><div className="l">Runway</div><div className="s">{m.runway_months != null ? `${m.runway_months} months · ${money(p.finance?.cash ?? 0, currency)} cash, ${money(p.finance?.monthly_burn ?? 0, currency)}/mo burn` : 'Two numbers. Shapes what counts as a good match.'}</div></div>
           <button className={`cp-connect ${m.runway_months != null ? 'ghost' : ''}`} onClick={() => actions.openSheet({ kind: 'finance' })}>{m.runway_months != null ? 'Edit' : 'Set'}</button></div>
         <div className="cp-ctx">

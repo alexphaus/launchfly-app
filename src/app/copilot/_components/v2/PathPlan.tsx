@@ -283,7 +283,7 @@ export function PlanPending({ view, onDraw }: { view: Extract<RoadmapView, { sta
  * steps (Moves, projects under way) sit under this week, where they compete for
  * the same hours.
  */
-export function PhaseBlock({ phase, actions, workerConnected, handed, showGoal, children }: { phase: PhaseView; actions: Actions; workerConnected: boolean; handed: Handed; showGoal: boolean; children?: React.ReactNode }) {
+export function PhaseBlock({ phase, actions, workerConnected, handed, showGoal, callTitle = null, children }: { phase: PhaseView; actions: Actions; workerConnected: boolean; handed: Handed; showGoal: boolean; callTitle?: string | null; children?: React.ReactNode }) {
   // One milestone open, the first still open this week: the rest of the week
   // folds to its count of steps. Every milestone this week open at once put
   // two reasons, two "done when"s and two checklists between the move and the
@@ -293,7 +293,7 @@ export function PhaseBlock({ phase, actions, workerConnected, handed, showGoal, 
     <>
       <div className="cp2-plan-phase"><span>{phase.label}</span></div>
       {phase.milestones.filter((m) => m.state !== 'dropped').map((m) => (
-        <MilestoneRow key={m.id} m={m} startOpen={m.id === first} actions={actions} workerConnected={workerConnected} handed={handed} showGoal={showGoal} />
+        <MilestoneRow key={m.id} m={m} startOpen={m.id === first} actions={actions} workerConnected={workerConnected} handed={handed} showGoal={showGoal} callTitle={callTitle} />
       ))}
       {phase.milestones.filter((m) => m.state === 'dropped').map((m) => (
         <SetAsideRow key={m.id} m={m} actions={actions} />
@@ -303,7 +303,7 @@ export function PhaseBlock({ phase, actions, workerConnected, handed, showGoal, 
   );
 }
 
-function MilestoneRow({ m, startOpen, actions, workerConnected, handed, showGoal }: { m: MilestoneView; startOpen: boolean; actions: Actions; workerConnected: boolean; handed: Handed; showGoal: boolean }) {
+function MilestoneRow({ m, startOpen, actions, workerConnected, handed, showGoal, callTitle }: { m: MilestoneView; startOpen: boolean; actions: Actions; workerConnected: boolean; handed: Handed; showGoal: boolean; callTitle: string | null }) {
   const [open, setOpen] = useState(startOpen && m.state === 'open');
   const reached = m.state === 'done';
   const visible = m.steps.filter((s) => s.state !== 'dropped');
@@ -326,7 +326,9 @@ function MilestoneRow({ m, startOpen, actions, workerConnected, handed, showGoal
         <>
           {m.doneWhen && <span className="cp2-plan-when"><b>Done when</b> {m.doneWhen}</span>}
           <ul className="cp2-plan-steps">
-            {visible.map((s) => <StepItem key={s.id} s={s} actions={actions} workerConnected={workerConnected} project={handed.get(s.title) ?? null} />)}
+            {visible.map((s) => (s.state !== 'done' && callTitle && s.title === callTitle
+              ? <CallStep key={s.id} title={s.title} />
+              : <StepItem key={s.id} s={s} actions={actions} workerConnected={workerConnected} project={handed.get(s.title) ?? null} />))}
           </ul>
           <span className="cp2-way-links">
             <button className={`cp2-link ${allDone ? 'strong' : ''}`} onClick={() => void actions.markRoadmap(m.id, 'done')}>{allDone ? 'Mark it reached' : 'Reached it already'}</button>
@@ -410,6 +412,24 @@ function StepItem({ s, actions, workerConnected, project }: { s: StepView; actio
           </span>
         )}
         {error && <span className="cp2-way-s cp2-err">{error}</span>}
+      </span>
+    </li>
+  );
+}
+
+/**
+ * The step that is today's call, in its place in the milestone but not a
+ * second copy of the card above: the same words with their own tick and chips,
+ * a screen below the call, read as two things to do. It is answered on the
+ * call, whose "I did it" ticks this step (stepForCall), so it has no tick here.
+ */
+function CallStep({ title }: { title: string }) {
+  return (
+    <li className="cp2-plan-step iscall">
+      <span className="cp2-plan-callmark" aria-hidden>↑</span>
+      <span className="cp2-plan-stepbody">
+        <span className="cp2-plan-steptext">{title}</span>
+        <span className="cp2-plan-meta"><span className="cp2-plan-tag call">Today’s call — answer it above</span></span>
       </span>
     </li>
   );

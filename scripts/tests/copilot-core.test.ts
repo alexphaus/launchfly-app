@@ -5984,9 +5984,10 @@ async function pathPlan() {
 
   // 7. The header line says where you are, and what needs you.
   const here = pathHere(ladderOf(f), f);
-  assert.equal(planStatus(here, 3, 1), '2 paying clients · 3 need you');
-  assert.equal(planStatus(here, 0, 4), '2 paying clients · 4 days in a row');
-  assert.equal(planStatus(here, 0, 1), '2 paying clients');
+  // Never "where you are": the first line under the header already says it, in bigger type.
+  assert.equal(planStatus(3, 1), '3 need you');
+  assert.equal(planStatus(0, 4), '4 days in a row');
+  assert.equal(planStatus(0, 1), null, 'nothing true to add, so nothing');
 
   // 8. A call's number in its own unit: "It was 2" over "$1,000 of $15,000" read as a contradiction.
   assert.equal(metricWords('won_amount'), 'money won');
@@ -7090,3 +7091,439 @@ async function pathReadsLight() {
 }
 
 pathReadsLight().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Money, read from the bank ───────────────────────────────────────────── */
+import {
+  checkBalances as mCheck, counterpartyKey as mKey, displayName as mName, inferDateOrder as mOrder, parseAmount as mAmount,
+  parseCsvStatement as mCsv, parseDateCell as mDate, parseOfxStatement as mOfx, rowFingerprints as mPrints, sniffFormat as mSniff,
+  statementFromReading as mReading, accountKey as mAccount, dateHintFor as mHint, type Statement as MStatement,
+} from '../../src/lib/copilot/money/statement';
+import {
+  IMPORT_STALE_MS as M_STALE, financeFromRead as mFinance, financeWithoutStatements as mNoStatements, importView as mImport,
+  matchWin as mMatch, moneyForPlan as mForPlan, moneyRead as mRead, moneyText as mText, recurringOut as mRecurring,
+  suggestOpportunity as mSuggest, winsToRecord as mWins, type LedgerTx as MTx, type Payee as MPayee,
+} from '../../src/lib/copilot/money/ledger';
+import { chunkPages as mChunks, mergeReadings as mMerge } from '../../src/lib/copilot/money/extract';
+import { SENSORS as M_SENSORS, sensorViews as mSensors } from '../../src/lib/copilot/sensors';
+import { roadmapPrompt as mPrompt, roadmapSignature as mSignature, type RoadmapInput as MRoadmapInput } from '../../src/lib/copilot/roadmap';
+
+const mPromptBase: MRoadmapInput = {
+  today: '2026-09-29', name: 'Alex', headline: null, location: null, capacity: 'deep', currency: '$', runwayMonths: null,
+  offer: null, price: null, goals: [], working: '', notes: [], funnel: { windowDays: 30, sent: 0, replied: 0, won: 0, wonAmount: 0 },
+  happened: [], previous: [], aiAvailable: false, found: [], drafts: null,
+};
+import { readFileSync as readMoneyFile } from 'node:fs';
+
+async function moneyFromTheBank() {
+  /* 1. Amounts as banks write them — and a currency code is never a debit marker. */
+  assert.equal(mAmount('1,234.56'), 1234.56);
+  assert.equal(mAmount('1.234,56', ','), 1234.56);
+  assert.equal(mAmount('(45.00)'), -45);
+  assert.equal(mAmount('45.00-'), -45);
+  assert.equal(mAmount('-€45'), -45);
+  assert.equal(mAmount('45.00 DR'), -45);
+  assert.equal(mAmount('45.00CR'), 45);
+  assert.equal(mAmount('PHP 1,200.00'), 1200);
+  assert.equal(mAmount('45.00 USD'), 45, 'the D of USD is not a debit');
+  assert.equal(mAmount('USD -1,200.00'), -1200);
+  assert.equal(mAmount('n/a'), null);
+  assert.equal(mAmount(''), null);
+
+  /* 2. Dates: a part over 12 settles the order; otherwise the order that keeps the column sorted; then the hint. */
+  assert.equal(mDate('2026-09-12'), '2026-09-12');
+  assert.equal(mDate('12/09/2026', 'dmy'), '2026-09-12');
+  assert.equal(mDate('12/09/2026', 'mdy'), '2026-12-09');
+  assert.equal(mDate('12-Sep-26'), '2026-09-12');
+  assert.equal(mDate('Sep 12, 2026'), '2026-09-12');
+  assert.equal(mDate('30 septiembre 2026'), '2026-09-30');
+  assert.equal(mDate('20260912'), '2026-09-12');
+  assert.equal(mDate('31/02/2026'), null, 'not a day');
+  assert.equal(mDate('12 Sep'), null, 'a row placed in the wrong year is worse than one left out');
+  assert.equal(mOrder(['09/12/2026', '09/13/2026']), 'mdy');
+  assert.equal(mOrder(['13/09/2026', '14/09/2026']), 'dmy');
+  assert.equal(mOrder(['10/09/2026', '11/09/2026', '01/10/2026'], 'mdy'), 'dmy', 'month-first would read 9 Oct, 9 Nov, 10 Jan — out of order; a statement is sorted');
+  assert.equal(mOrder(['01/09/2026', '01/10/2026'], 'mdy'), 'mdy', 'both orders keep these sorted, so the hint decides');
+  assert.equal(mHint('America/Chicago'), 'mdy');
+  assert.equal(mHint('Asia/Manila'), 'dmy');
+
+  /* 3. CSV exports: a preamble, a dated opening line, debit and credit columns, day-first semicolons. */
+  const boa = 'Description,,Summary Amt.\nBeginning balance as of 09/01/2026,,"1,000.00"\n\nDate,Description,Amount,Running Bal.\n09/01/2026,Beginning balance as of 09/01/2026,,"1,000.00"\n09/03/2026,"STARBUCKS #1203, MANILA","-5.50","994.50"\n09/05/2026,"ACME LTD PAYROLL","1,200.00","2,194.50"\n09/13/2026,"RENT SEPT","-800.00","1,394.50"\n';
+  const b = mCsv(boa, { dateHint: 'mdy' });
+  assert.equal(b.statement.rows.length, 3);
+  assert.equal(b.statement.rows[0].description, 'STARBUCKS #1203, MANILA', 'a comma inside quotes is text');
+  assert.equal(b.statement.opening, 1000, 'the dated "Beginning balance" line is the opening, not a dropped row');
+  const bc = mCheck(b.statement);
+  assert.equal(bc.check, 'balanced');
+  assert.equal(bc.closing, 1394.5);
+
+  const dc = mCsv('Date,Description,Debit,Credit,Running Balance\n01/09/2026,SALARY ACME,,"2,000.00","2,500.00"\n02/09/2026,LANDLORD,"800.00",,"1,700.00"\n');
+  assert.deepEqual(dc.statement.rows.map((r) => r.amount), [2000, -800]);
+  assert.equal(mCheck(dc.statement).check, 'balanced');
+
+  const es = mCsv('Fecha operación;Fecha valor;Concepto;Importe;Saldo\n30/09/2026;30/09/2026;TRANSFERENCIA DE JUAN PEREZ;1.250,00;3.410,25\n28/09/2026;28/09/2026;COMPRA MERCADONA;-45,30;2.160,25\n27/09/2026;27/09/2026;RECIBO LUZ;-60,00;2.205,55\n');
+  const ec = mCheck(es.statement);
+  assert.equal(ec.check, 'balanced', 'newest first is turned round and still chains');
+  assert.deepEqual(ec.rows.map((r) => r.on), ['2026-09-27', '2026-09-28', '2026-09-30']);
+  assert.equal(ec.opening, 2265.55);
+
+  const monzo = mCsv('Transaction ID,Date,Time,Type,Name,Amount,Currency,Notes and #tags,Description\ntx_0001,12/09/2026,10:00,Card payment,Pret,-4.50,GBP,,PRET A MANGER\n');
+  assert.equal(monzo.statement.rows[0].description, 'PRET A MANGER', 'an id column is not part of what it was');
+  assert.equal(monzo.statement.rows[0].counterparty, 'Pret', 'a Name column is who it was, kept apart from the description');
+  assert.equal(monzo.statement.currency, 'GBP');
+
+  const headerless = mCsv('"09/03/2026","-5.50","*","","STARBUCKS"\n"09/05/2026","1200.00","*","","ACME PAYROLL"\n"09/13/2026","-800.00","*","","RENT"\n', { dateHint: 'mdy' });
+  assert.deepEqual(headerless.statement.rows.map((r) => [r.on, r.amount]), [['2026-09-03', -5.5], ['2026-09-05', 1200], ['2026-09-13', -800]]);
+  assert.throws(() => mCsv('Name,Email\nA,a@b.c\nB,b@c.d\n'), /date column and an amount column/);
+
+  /* 4. OFX: signed amounts, the account's last digits, the ledger balance as the closing. */
+  const ofx = mOfx('OFXHEADER:100\n<OFX><CURDEF>USD<BANKACCTFROM><ACCTID>000123456789</BANKACCTFROM><BANKTRANLIST>\n<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260903120000[-5:EST]<TRNAMT>-5.50<NAME>STARBUCKS</STMTTRN>\n<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260905<TRNAMT>1200.00<NAME>ACME LTD<MEMO>PAYROLL</STMTTRN>\n</BANKTRANLIST><LEDGERBAL><BALAMT>1394.50</LEDGERBAL></OFX>');
+  assert.deepEqual(ofx.statement.rows.map((r) => r.amount), [-5.5, 1200]);
+  assert.equal(ofx.statement.rows[1].description, 'ACME LTD · PAYROLL');
+  assert.equal(ofx.statement.account.mask, '6789');
+  assert.equal(ofx.statement.currency, 'USD');
+  assert.equal(ofx.statement.closing, 1394.5);
+
+  /* 5. The check: the balances decide — even against the export's own signs. */
+  const st = (rows: Array<[string, number, number | null]>, opening: number | null = null, closing: number | null = null): MStatement =>
+    ({ rows: rows.map(([on, amount, balance]) => ({ on, amount, balance, description: 'x' })), currency: null, account: { institution: null, mask: null }, opening, closing });
+  const flipped = mCheck(st([['2026-09-01', 100, 900], ['2026-09-02', 50, 850]]));
+  assert.equal(flipped.check, 'balanced', 'an export that writes debits positive is corrected by its own balances');
+  assert.deepEqual(flipped.rows.map((r) => r.amount), [-100, -50]);
+  assert.equal(mCheck(st([['2026-09-01', -100, null], ['2026-09-02', 250, null]], 1000, 1150)).check, 'balanced');
+  const off = mCheck(st([['2026-09-01', -100, null]], 1000, 950));
+  assert.equal(off.check, 'unbalanced');
+  assert.match(off.detail ?? '', /off by 50/);
+  const broken = mCheck(st([['2026-09-01', -100, 900], ['2026-09-02', -50, 700], ['2026-09-03', -10, 690]]));
+  assert.equal(broken.check, 'unbalanced', 'a missing row breaks the chain');
+  assert.match(broken.detail ?? '', /1 of 2 rows/);
+  assert.equal(mCheck(st([['2026-09-01', -100, null]])).check, 'no_balances');
+
+  /* 6. A model's reading is held to the shape, and what fails is dropped and counted, never repaired. */
+  const reading = mReading({ currency: 'php', account_mask: 'Acct ****4417', opening_balance: '1,000.00', closing_balance: 1150, rows: [
+    { date: '2026-09-02', description: 'GCASH IN J DELA CRUZ', amount: '250', balance: null, counterparty: 'J Dela Cruz' },
+    { date: '2026-09-40', description: 'bad day', amount: 5 },
+    { date: '2026-09-03', description: '', amount: -5 },
+    { date: '2026-09-03', description: 'COFFEE', amount: -100 },
+  ] });
+  assert.equal(reading.dropped, 2);
+  assert.equal(reading.statement.currency, 'PHP');
+  assert.equal(reading.statement.account.mask, '4417');
+  assert.equal(mCheck(reading.statement).check, 'balanced', 'opening + rows = closing: the reading vouches for itself');
+  assert.throws(() => mReading({ nope: [] }), /without any rows/);
+  assert.deepEqual(mChunks(['a'.repeat(8000), 'b'.repeat(8000), '', 'c'.repeat(100)], 12000).map((c) => c.length > 0), [true, true]);
+  const merged = mMerge([
+    { rows: [{ on: '2026-09-01', amount: 1, description: 'a', balance: null }], currency: 'EUR', account: { institution: 'N26', mask: null }, opening: 10, closing: null },
+    { rows: [{ on: '2026-09-02', amount: 2, description: 'b', balance: null }], currency: null, account: { institution: null, mask: '1234' }, opening: null, closing: 13 },
+  ]);
+  assert.deepEqual([merged.rows.length, merged.currency, merged.account.institution, merged.account.mask, merged.opening, merged.closing], [2, 'EUR', 'N26', '1234', 10, 13]);
+
+  /* 7. Who: the bank's own words off; one row, one id, every time. */
+  assert.equal(mKey('POS 4411 STARBUCKS #1203 MANILA'), 'STARBUCKS MANILA');
+  assert.equal(mKey('PAYPAL *NETFLIX.COM 866-579'), 'NETFLIX COM');
+  assert.equal(mKey('GCASH TRF J DELA CRUZ 09171234567'), 'J DELA CRUZ');
+  assert.equal(mKey('SEPA CREDIT TRANSFER FROM ACME LTD REF INV-004'), 'ACME LTD');
+  assert.equal(mKey('GCASH'), 'GCASH', 'a line of nothing but rails is still somebody');
+  assert.equal(mKey('12345 678'), 'UNKNOWN');
+  assert.equal(mName('ACME LTD'), 'Acme LTD');
+  const acct = mAccount('upload', { institution: 'BPI', mask: '1234' });
+  const aug = [{ on: '2026-09-01', amount: -5, description: 'Coffee', balance: null }, { on: '2026-09-01', amount: -5, description: 'COFFEE', balance: null }, { on: '2026-09-02', amount: 100, description: 'Acme', balance: null }];
+  const printsA = mPrints(acct, aug);
+  assert.equal(new Set(printsA).size, 3, 'two identical coffees on one day stay two');
+  const printsB = mPrints(acct, [...aug, { on: '2026-09-03', amount: -9, description: 'Grab', balance: null }]);
+  assert.deepEqual(printsB.slice(0, 3), printsA, 'an overlapping statement lands on the same ids for the rows it shares');
+  assert.notDeepEqual(mPrints(mAccount('upload', { institution: 'BDO', mask: '9' }), aug), printsA, 'another account is another row');
+
+  /* 8. What a file is, by its bytes first. */
+  const bytes = (s: string) => new TextEncoder().encode(s);
+  assert.equal(mSniff(bytes('%PDF-1.7'), 'statement.csv'), 'pdf');
+  assert.equal(mSniff(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), 'x'), 'image');
+  assert.equal(mSniff(new Uint8Array([0x50, 0x4b, 0x03, 0x04]), 'x.xlsx'), 'spreadsheet');
+  assert.equal(mSniff(bytes('OFXHEADER:100'), 'x.txt'), 'ofx');
+  assert.equal(mSniff(bytes('Date,Amount\n1,2\n3,4'), 'download'), 'csv');
+  assert.equal(mSniff(bytes('hello'), 'notes'), null);
+
+  /* 9. Repeat bills: a rhythm, still going. */
+  const tx = (id: string, on: string, amount: number, key: string, extra: Partial<MTx> = {}): MTx => ({ id, on, amount, key, currency: 'USD', accountId: 'a', outcomeId: null, ...extra });
+  const rent = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'].map((d, i) => tx(`r${i}`, d, -400, 'LANDLORD'));
+  const gym = ['2026-03-05', '2026-04-05', '2026-05-05'].map((d, i) => tx(`g${i}`, d, -30, 'GYM'));
+  const coffee = ['2026-08-02', '2026-08-19', '2026-09-20'].map((d, i) => tx(`c${i}`, d, -4, 'COFFEE'));
+  const bills = mRecurring([...rent, ...gym, ...coffee], (k) => k, '2026-09-28');
+  assert.deepEqual(bills.map((x) => x.key), ['LANDLORD'], 'a gym cancelled in May is not due in October; three coffees are not a bill');
+  assert.equal(bills[0].next, '2026-10-01');
+  assert.equal(bills[0].every, 'month');
+
+  /* 10. The read: every number off the rows, the person's own accounts left out. */
+  const payees: MPayee[] = [
+    { key: 'ACME LTD', name: 'Acme LTD', role: 'employer', opportunityId: null },
+    { key: 'CORON REEF', name: 'Coron Reef', role: null, opportunityId: null },
+    { key: 'MY SAVINGS', name: 'My Savings', role: 'self', opportunityId: null },
+  ];
+  const ledger: MTx[] = [
+    ...rent,
+    tx('s1', '2026-07-15', 1500, 'ACME LTD'), tx('s2', '2026-08-15', 1500, 'ACME LTD'), tx('s3', '2026-09-05', 1500, 'ACME LTD'),
+    tx('p1', '2026-08-20', 150, 'CORON REEF'), tx('p2', '2026-09-10', 150, 'CORON REEF'),
+    tx('m1', '2026-09-11', 900, 'MY SAVINGS'), tx('m2', '2026-09-12', -900, 'MY SAVINGS'),
+    tx('e1', '2026-09-12', 20, 'SHOP', { currency: 'EUR' }), tx('e2', '2026-09-13', 30, 'SHOP', { currency: 'USD' }),
+    tx('u1', '2026-09-14', 10, 'SHOP', { currency: 'USD' }),
+  ];
+  const read = mRead({ txs: ledger, payees, accounts: [{ id: 'a', label: 'BPI', currency: 'USD', balance: 1800, on: '2026-09-15' }], today: '2026-09-29', currency: '$' })!;
+  assert.equal(read.currency, 'USD', 'the currency most rows carry');
+  assert.deepEqual(read.otherCurrencies, [{ currency: 'EUR', rows: 1 }]);
+  assert.equal(read.inTotal, 1500 * 3 + 150 * 2 + 30 + 10, 'the savings transfer is not income');
+  assert.equal(read.payers.find((p) => p.key === 'MY SAVINGS'), undefined);
+  assert.deepEqual(read.toName.map((p) => p.key), ['CORON REEF', 'SHOP'], 'only payers nobody named, biggest first');
+  assert.equal(read.byRole.employer, 4500);
+  assert.equal(read.lastIn?.name, 'Shop');
+  assert.ok(read.perMonth && read.perMonth.over === 90);
+  assert.equal(read.runwayMonths, Math.round((1800 / read.perMonth!.out) * 10) / 10);
+  assert.equal(read.lines[0], 'Since 1 Jun: $4,840 in from 3 payers.');
+  assert.ok(read.lines.includes('Acme LTD was 93% of it.'));
+  assert.ok(read.lines.includes('Of that: your job $4,500 · not named yet $340.'));
+  assert.ok(read.lines.some((l) => /^You spend \$\d[\d,]* a month, \$400 of it on repeat bills\.$/.test(l)));
+  assert.ok(read.lines.includes('Next: Landlord $400 around 1 Oct.'));
+  assert.ok(read.lines.includes('Your statement ends 14 Sep. Add a newer one to keep this current.'));
+  assert.ok(read.lines.includes('1 row in EUR are not in these numbers.') || read.lines.some((l) => /in EUR are not in these numbers/.test(l)));
+  assert.equal(mRead({ txs: [], payees: [], accounts: [], today: '2026-09-29', currency: '$' }), null, 'no rows, no read');
+  assert.equal(mText(1234.5, 'USD'), '$1,235');
+  assert.equal(mText(5.5, '€'), '€5.50');
+  assert.equal(mText(1200, 'CHF'), 'CHF 1,200');
+
+  /* 11. Into the finance row: the statement where it is newer, what was typed where that is. */
+  const prev = { cash: 5000, monthly_burn: 700, currency: '$', typed_at: '2026-09-20T10:00:00Z', source: { cash: 'typed' as const, monthly_burn: 'typed' as const } };
+  const kept = mFinance(prev, read, '2026-09-29T00:00:00Z');
+  assert.equal(kept.cash, 5000, 'typed on the 20th beats a balance from the 15th');
+  assert.equal(kept.monthly_burn, 700, 'and the burn over rows that end on the 14th');
+  const fresh = mFinance({ cash: 5000, monthly_burn: 700, typed_at: '2026-09-01T00:00:00Z', source: { cash: 'typed', monthly_burn: 'typed' } }, read, '2026-09-29T00:00:00Z');
+  assert.equal(fresh.cash, 1800);
+  assert.equal(fresh.cash_on, '2026-09-15');
+  assert.deepEqual(fresh.source, { cash: 'statement', monthly_burn: 'statement' });
+  assert.equal(mFinance({}, read, 'now').currency, '$');
+  const gone = mNoStatements(fresh, 'later');
+  assert.equal(gone.cash, undefined);
+  assert.equal(gone.monthly_burn, undefined);
+  assert.equal(mNoStatements({ cash: 10, source: { cash: 'typed' } }, 'later').cash, 10, 'what was typed stays');
+  const typedOnly = { cash: 10, monthly_burn: 5 };
+  assert.equal(mNoStatements(typedOnly, 'later'), typedOnly, 'nothing read off a statement: the row is left exactly as it was, not rewritten');
+
+  /* 12. Deposits into wins: named clients only, recent only, and a win logged by hand is the same money. */
+  const withClient: MPayee[] = [{ key: 'CORON REEF', name: 'Coron Reef', role: 'client', opportunityId: 'o1' }];
+  const due = mWins({ txs: [tx('p0', '2026-07-01', 150, 'CORON REEF'), tx('p1', '2026-09-10', 150, 'CORON REEF'), tx('p2', '2026-09-12', 150, 'CORON REEF', { outcomeId: 'w9' }), tx('x', '2026-09-12', 99, 'SHOP')], payees: withClient, today: '2026-09-29' });
+  assert.deepEqual(due.map((t) => t.id), ['p1'], 'not July, not one already a win, not a payer nobody named a client');
+  const wins = [{ id: 'w1', amount: 150, occurred_at: '2026-09-08T09:00:00Z' }, { id: 'w2', amount: 150, occurred_at: '2026-08-01T09:00:00Z' }, { id: 'w3', amount: 90, occurred_at: '2026-09-10T09:00:00Z' }];
+  assert.equal(mMatch({ on: '2026-09-10', amount: 150 }, wins, new Set()), 'w1');
+  assert.equal(mMatch({ on: '2026-09-10', amount: 150 }, wins, new Set(['w1'])), null, 'one win is one deposit');
+  assert.equal(mMatch({ on: '2026-09-10', amount: 151.2 }, wins, new Set()), 'w1', 'within one percent');
+
+  /* 13. Which business a payer is: shared distinctive words, or nothing. */
+  const opps = [{ id: 'o1', title: 'Coron Reef Divers' }, { id: 'o2', title: 'Lagen Island Resort' }, { id: 'o3', title: 'Coco Palms Resort' }];
+  assert.deepEqual(mSuggest('Coron Reef', opps), { id: 'o1', title: 'Coron Reef Divers' });
+  assert.equal(mSuggest('Sunset Resort', opps), null, '"resort" links every resort to every resort');
+  assert.equal(mSuggest('Coron', [{ id: 'a', title: 'Coron Reef' }, { id: 'b', title: 'Coron Tours' }]), null, 'two equally good answers are no answer');
+
+  /* 14. A reading that died mid-call says so. */
+  const started = new Date(Date.parse('2026-09-29T10:00:00Z') - M_STALE - 1000).toISOString();
+  assert.equal(mImport({ id: 'i', status: 'reading', started_at: started, format: 'pdf', method: 'read' }, new Date('2026-09-29T10:00:00Z')).status, 'failed');
+  assert.equal(mImport({ id: 'i', status: 'reading', started_at: '2026-09-29T09:59:00Z' }, new Date('2026-09-29T10:00:00Z')).status, 'reading');
+
+  /* 15. The plan redraws when the money says something new — a payer named is something new. */
+  const before = mForPlan(read).signature;
+  const after = mForPlan(mRead({ txs: ledger, payees: [...payees.slice(0, 1), { ...payees[1], role: 'client' }, payees[2]], accounts: [], today: '2026-09-29', currency: '$' })).signature;
+  assert.notEqual(before, after);
+  assert.ok(!mForPlan(read).lines.some((l) => /^Your statement ends/.test(l)), 'the stale-statement line is for the person, not the planner');
+  assert.deepEqual(mForPlan(null), { lines: [], signature: null });
+  // Cut for the screen, the read still fingerprints the same: the phone holds the cut one, the server all of it.
+  assert.equal(mForPlan({ ...read, payers: read.payers.slice(0, 1), recurring: [] }).signature, mForPlan(read).signature);
+  const sig = { goals: [], working: [], contextCount: 2, capacity: 'deep' as const, offer: null };
+  assert.equal(mSignature({ ...sig, money: null }), mSignature(sig), 'no statements, no change to any plan that exists today');
+  assert.notEqual(mSignature({ ...sig, money: mForPlan(read).signature }), mSignature(sig));
+  assert.match(mPrompt({ ...mPromptBase, money: mForPlan(read).lines }), /THEIR MONEY, counted by the app from their bank statements:\n- Since 1 Jun/);
+  assert.doesNotMatch(mPrompt(mPromptBase), /THEIR MONEY/);
+
+  /* 16. Records: every sensor opens a sheet the app actually renders (invariant 7). */
+  const sheets = readMoneyFile(new URL('../../src/app/copilot/_components/SheetContent.tsx', import.meta.url), 'utf8');
+  for (const s of M_SENSORS) assert.ok(sheets.includes(`case '${s.sheet}':`), `sensor ${s.key} opens '${s.sheet}', which SheetContent must render`);
+  const views = mSensors({ bank: { ready: true, rows: 412, to: '2026-09-30', reading: 0, review: 0, failed: 0, unreadable: null }, owed: { open: 0 }, focus: { minutesWeek: 210 }, feeds: { total: 5, failing: 2 } });
+  assert.deepEqual(views.map((v) => [v.key, v.state, v.line]), [
+    ['bank', 'on', '412 transactions · to 30 Sep'],
+    ['owed', 'off', 'Nothing logged'],
+    ['focus', 'on', '3.5h this week'],
+    ['feeds', 'attention', '2 of 5 failing'],
+  ]);
+  assert.equal(mSensors({ bank: { ready: false, rows: 0, to: null, reading: 0, review: 0, failed: 0, unreadable: null }, owed: { open: 0 }, focus: { minutesWeek: 0 }, feeds: { total: 0, failing: 0 } })[0].line, 'Not set up on this server yet', 'an unapplied migration is not "nothing uploaded"');
+  assert.equal(mSensors({ bank: { ready: true, rows: 10, to: null, reading: 0, review: 1, failed: 0, unreadable: null }, owed: { open: 0 }, focus: { minutesWeek: 0 }, feeds: { total: 0, failing: 0 } })[0].state, 'attention');
+
+  /* 17. The schema: plain unique constraints the upserts can infer, and a checker that can see them. */
+  const sql = readMoneyFile(new URL('../../supabase/migrations/20260929_copilot_money.sql', import.meta.url), 'utf8');
+  assert.match(sql, /constraint copilot_transactions_fingerprint unique \(profile_id, fingerprint\)/);
+  assert.match(sql, /constraint copilot_counterparties_key unique \(profile_id, key\)/);
+  assert.match(sql, /constraint copilot_money_accounts_key unique \(profile_id, provider, external_key\)/);
+  assert.doesNotMatch(sql, /create unique index[^;]*where/i, 'a partial unique index cannot be inferred by on_conflict (20260918)');
+  const moneyStore = readMoneyFile(new URL('../../src/lib/copilot/money/store.ts', import.meta.url), 'utf8');
+  for (const conflict of ["'profile_id,fingerprint'", "'profile_id,key'", "'profile_id,provider,external_key'"]) {
+    assert.ok(moneyStore.includes(`onConflict: ${conflict}`), `the store upserts on ${conflict}`);
+  }
+  const checker = readMoneyFile(new URL('../../scripts/sql/copilot-schema-check.sql', import.meta.url), 'utf8');
+  for (const t of ['copilot_money_accounts', 'copilot_money_imports', 'copilot_transactions', 'copilot_counterparties']) {
+    assert.ok(checker.includes(`'${t}'`), `the schema checker must name ${t}`);
+  }
+
+  console.log('copilot-core: money from the bank checks passed');
+}
+
+moneyFromTheBank().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Goal cards on You: the date the Path says, and wins only where they went ─ */
+import { creditedGoalId as gcCredited, goalCard as gcCard } from '../../src/lib/copilot/goalcard';
+
+async function goalCardsSayWhatIsTrue() {
+  const today = '2026-09-29';
+  const goals = [
+    { id: 'g1', metric: 'currency' as const, unit: '$', target_value: 1500, current_value: 300, horizon_days: 90, note: null, priority: 1, created_at: '2026-09-01T00:00:00Z' },
+    { id: 'g2', metric: 'none' as const, unit: null, target_value: null, current_value: null, horizon_days: 60, note: null, priority: 2, created_at: '2026-09-01T00:00:00Z' },
+    { id: 'g3', metric: 'currency' as const, unit: '$', target_value: 6000, current_value: 1200, horizon_days: 180, note: null, priority: 3, created_at: '2026-09-01T00:00:00Z' },
+    { id: 'g4', metric: 'none' as const, unit: null, target_value: null, current_value: null, horizon_days: null, note: null, priority: 4, created_at: '2026-09-01T00:00:00Z' },
+  ];
+  const credited = gcCredited(goals);
+  assert.equal(credited, 'g1', 'the first money goal by priority is the one recordOutcome credits');
+  assert.equal(gcCredited([{ id: 'a', metric: 'currency', priority: 3 }, { id: 'b', metric: 'currency', priority: 1 }]), 'b');
+  assert.equal(gcCredited([{ id: 'a', metric: 'none', priority: 1 }]), null);
+  const card = (i: number) => gcCard(goals[i], { today, creditedId: credited, wonAmount: 300, windowDays: 30 });
+
+  // 1. The date, not the horizon it was written with.
+  assert.equal(card(1).badge, '32d', 'written 1 Sep with 60 days: due 31 Oct, 32 days left — never "60d"');
+  assert.equal(card(1).sub, 'By 31 Oct · 32 days left');
+  assert.doesNotMatch(card(1).sub, /horizon/);
+  assert.equal(card(3).badge, '—');
+  assert.equal(card(3).sub, 'No target and no date yet');
+  assert.equal(gcCard({ ...goals[1], note: 'Ops roles only' }, { today, creditedId: credited, wonAmount: 0, windowDays: 30 }).sub, 'Ops roles only', 'their own note first');
+  assert.equal(gcCard({ ...goals[1], created_at: '2026-07-01T00:00:00Z' }, { today, creditedId: credited, wonAmount: 0, windowDays: 30 }).badge, 'Past');
+
+  // 2. Wins, only on the goal they went into.
+  assert.equal(card(0).badge, '20%');
+  assert.equal(card(0).sub, '$300 of $1,500 · By 30 Nov · 62 days left · $300 won in the last 30 days');
+  assert.doesNotMatch(card(2).sub, /won/, 'the exit fund never received a win, so it does not claim one');
+  assert.equal(card(2).sub, '$1,200 of $6,000 · By 28 Feb 2027 · 152 days left');
+  assert.doesNotMatch(gcCard(goals[0], { today, creditedId: credited, wonAmount: 0, windowDays: 30 }).sub, /won/, 'nothing won, nothing said');
+
+  console.log('copilot-core: goal cards checks passed');
+}
+
+goalCardsSayWhatIsTrue().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Money: a budgeting app's export, a PDF by rules, and one currency per figure ─── */
+import {
+  counterpartyKey as bKey, parseCsvStatement as bCsv, parseStatementText as bText, rowKey as bRowKey, skippedLine as bSkipped,
+  statementFromPdfText as bPdf,
+} from '../../src/lib/copilot/money/statement';
+import {
+  currencyClash as bClash, currencyCodeOf as bCode, financeFromRead as bFinance, importLine as bLine, importView as bImport,
+  moneyRead as bRead, type LedgerTx as BTx,
+} from '../../src/lib/copilot/money/ledger';
+
+async function moneyFromMessyFiles() {
+  /* 1. A budgeting app's export: scheduled bills a year ahead, a blank note, a move between its own accounts. */
+  const app = [
+    'Type,From Account,From Acc Type,To Account,To Acc Type,Pending,Note,Amount,Category,Date,Time',
+    'EXPENSE,Basic account,BASIC,,,Yes,Hosting,-515.00,Utilities,2027-09-01,06:00:00',
+    'EXPENSE,Basic account,BASIC,,,No,5G DATA,-510.00,Utilities,2026-09-20,21:14:00',
+    'EXPENSE,Basic account,BASIC,,,No,,-150.00,Dining Out,2026-09-21,12:00:00',
+    'EXPENSE,Basic account,BASIC,,,No,,-95.00,Dining Out,2026-09-22,12:00:00',
+    'INCOME,,,Basic account,BASIC,No,Client payment,5000.00,Salary,2026-09-15,09:00:00',
+    'TRANSFER,Basic account,BASIC,Card,BASIC,No,,-1000.00,,2026-09-16,10:00:00',
+    'EXPENSE,Basic account,BASIC,,,No,Coffee,-120.00,Coffee,2026-10-02,08:00:00',
+  ].join('\n');
+  const a = bCsv(app, { today: '2026-09-29' });
+  assert.deepEqual(a.statement.rows.map((r) => r.amount), [-510, -150, -95, 5000], 'marked pending, dated after today, or moved between its own accounts: none of it is money spent');
+  assert.deepEqual(a.skipped, { scheduled: 2, internal: 1, void: 0, foreign: 0 });
+  assert.equal(bSkipped(a.skipped), 'Left out 2 scheduled rows (pending or dated after today) and 1 transfer between your own accounts.');
+  assert.deepEqual(a.statement.rows.map((r) => bRowKey(r)), ['5G DATA', 'DINING OUT', 'DINING OUT', 'CLIENT'], 'a blank note is its category, not one payee called "(no description)"');
+  assert.equal(a.statement.currency, null, 'the file names none, and none is guessed');
+  assert.equal(bKey('5G DATA'), '5G DATA', 'a short token with a digit is a word, not a reference number');
+  assert.throws(() => bCsv('Date,Note,Amount,Pending\n2026-09-01,Rent,-500,Yes\n'), /No row in that file is money that has moved\. Left out 1 scheduled row/);
+
+  const statuses = bCsv('Date,Description,Amount,Status\n2026-09-01,Shop,-5,Completed\n2026-09-02,Shop,-7,Declined\n2026-09-03,Shop refund,5,Refunded\n');
+  assert.deepEqual(statuses.statement.rows.map((r) => r.amount), [-5, 5], 'declined never happened; a refund is a row of its own and stays');
+  const mixed = bCsv('Date,Description,Amount,Currency\n2026-09-01,A,-5,EUR\n2026-09-02,B,-6,EUR\n2026-09-03,C,-7,USD\n');
+  assert.equal(mixed.statement.currency, 'EUR');
+  assert.equal(mixed.statement.rows.length, 2, 'a dollar row is not stored as euros');
+  assert.equal(mixed.skipped?.foreign, 1);
+
+  /* 2. Who, out of how an e-money account words a line. */
+  assert.equal(bKey('Sent money to Jane Roe'), 'JANE ROE');
+  assert.equal(bKey('Received money from ACME LTD with reference Invoice 12'), 'ACME LTD', 'the reference is not who paid');
+  assert.equal(bKey('Card transaction of 348.00 PHP issued by Jollibee Jb3464 DASMARINAS'), 'JOLLIBEE DASMARINAS', 'a store number is not a name');
+
+  /* 3. A PDF's text, by rules: each row's date on the line after it, a page break, a description over two lines. */
+  const wiseLike = [
+    'ref:abc 1 / 2', 'Wise Europe SA', 'EUR statement', '1 August 2026 [GMT+08:00] - 31 August 2026 [GMT+08:00]', 'IBAN', 'BE00 1234 5678 9012',
+    'Description Incoming Outgoing Amount',
+    'Sent money to Jane Roe -30.00 5.00', '31 August 2026 | Transaction: TRANSFER-1',
+    'Card transaction of 348.00 PHP issued by Jollibee Jb3464 DASMARINAS -5.00 35.00', '30 August 2026 | Transaction: CARD-2',
+    'ref:abc 2 / 2', 'Description Incoming Outgoing Amount',
+    'Received money from ACME LTD with reference', 'Invoice 12 40.00 40.00', '29 August 2026 | Transaction: TRANSFER-3 | Reference: Invoice 12',
+  ];
+  const w = bText(wiseLike.join('\n'))!;
+  assert.ok(w, 'the layout is read');
+  assert.deepEqual(w.statement.rows.map((r) => [r.on, r.amount, r.balance]), [['2026-08-31', -30, 5], ['2026-08-30', -5, 35], ['2026-08-29', 40, 40]]);
+  assert.equal(w.statement.rows[2].description, 'Received money from ACME LTD with reference Invoice 12', 'a page header does not leak into the next description');
+  assert.equal(w.statement.currency, 'EUR');
+  assert.deepEqual(w.statement.account, { institution: 'Wise', mask: '9012' });
+  assert.ok(bPdf([wiseLike.slice(0, 11).join('\n'), wiseLike.slice(11).join('\n')]), 'pages joined, and the running balance holds on every row');
+
+  const dated = 'Statement of account\nDate Description Amount Balance\n03/09/2026 STARBUCKS MANILA -5.50 994.50\n05/09/2026 ACME PAYROLL 1,200.00 2,194.50\n13/09/2026 RENT SEPT -800.00 1,394.50\n';
+  assert.deepEqual(bText(dated)!.statement.rows.map((r) => [r.on, r.description]), [['2026-09-03', 'STARBUCKS MANILA'], ['2026-09-05', 'ACME PAYROLL'], ['2026-09-13', 'RENT SEPT']]);
+  assert.ok(bPdf([dated]));
+  const misread = dated.replace('2,194.50', '2,190.50');
+  assert.ok(bText(misread), 'it reads');
+  assert.equal(bPdf([misread]), null, 'and a chain that breaks once hands the whole file to the model — rules never guess');
+  assert.equal(bText(wiseLike.filter((l) => !l.startsWith('30 August')).join('\n')), null, 'a row with no date is refused, not dated by its neighbours');
+  assert.equal(bText('Hello\nTotal 5.00 5.00\n'), null, 'one figure pair is not a statement');
+
+  /* 4. One currency per figure: a file with none is not summed into one that names one. */
+  const t = (id: string, on: string, amount: number, currency: string | null): BTx => ({ id, on, amount, key: `K${id}`, currency, accountId: 'a', outcomeId: null });
+  const pesos = ['2026-07-01', '2026-07-20', '2026-08-10', '2026-08-30', '2026-09-20'].map((d, i) => t(`p${i}`, d, -1000, null));
+  const euros = [t('e1', '2026-06-01', 40, 'EUR'), t('e2', '2026-06-10', -5, 'EUR'), t('e3', '2026-06-30', -5, 'EUR')];
+  const both = bRead({ txs: [...pesos, ...euros], payees: [], accounts: [], today: '2026-09-29', currency: '₱' })!;
+  assert.equal(both.currency, 'EUR', 'beside a statement that names one, rows with none are a separate pile');
+  assert.equal(both.inTotal, 40);
+  assert.equal(both.outTotal, 10, 'not 5,010');
+  assert.equal(both.rows, 3, 'the count beside the figures is the rows behind them, not every row on file');
+  assert.deepEqual(both.otherCurrencies, [{ currency: '', rows: 5 }]);
+  assert.ok(both.lines.includes('5 rows with no currency are not in these numbers. Say which on Bank statements.'));
+  const alone = bRead({ txs: pesos, payees: [], accounts: [], today: '2026-09-29', currency: '₱' })!;
+  assert.equal(alone.currency, '₱', 'alone, they are the person’s own currency');
+  assert.deepEqual(alone.otherCurrencies, []);
+  const saidRows = [...pesos.map((p) => ({ ...p, currency: 'PHP' })), ...euros];
+  const said = bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '₱' })!;
+  assert.equal(said.currency, 'PHP', 'once said, they are the figures');
+  assert.deepEqual(said.otherCurrencies, [{ currency: 'EUR', rows: 3 }]);
+  assert.equal(bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '€' })!.currency, 'EUR', 'the person’s own currency beats a row count: their runway is in it');
+  assert.equal(bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '$' })!.currency, 'PHP', '$ names no one currency, so the most rows decide');
+
+  /* 5. Runway is one currency: a typed number is never divided by a read in another. */
+  const typedPesos = { cash: 71804, currency: '₱', typed_at: '2026-09-29T00:00:00Z', source: { cash: 'typed' as const } };
+  assert.equal(bFinance(typedPesos, both, 'now'), typedPesos, 'euro spending under typed pesos was 179 months of runway');
+  const leftBehind = bFinance({ ...typedPesos, monthly_burn: 37708, burn_to: '2026-09-29', source: { cash: 'typed', monthly_burn: 'statement' } }, both, 'now');
+  assert.equal(leftBehind.cash, 71804, 'what was typed stays');
+  assert.equal(leftBehind.monthly_burn, undefined, 'a peso burn whose rows are gone does not outlive them');
+  assert.match(bClash(typedPesos, both) ?? '', /in EUR and the runway you typed is in ₱/);
+  assert.equal(bClash(typedPesos, said), null, 'same currency, no clash');
+  const fromEuros = { cash: 5, cash_on: '2026-06-30', monthly_burn: 300, burn_to: '2026-06-30', currency: '€', source: { cash: 'statement' as const, monthly_burn: 'statement' as const } };
+  const switched = bFinance(fromEuros, said, 'now');
+  assert.equal(switched.currency, '₱');
+  assert.equal(switched.monthly_burn, Math.round(said.perMonth!.out));
+  assert.equal(switched.cash, undefined, 'a euro balance does not stay on as pesos');
+  assert.deepEqual(switched.source, { monthly_burn: 'statement' });
+  assert.equal(bCode('₱'), 'PHP');
+  assert.equal(bCode('$'), null, 'a dozen currencies write $');
+  assert.equal(bCode('eur'), 'EUR');
+
+  /* 6. The skipped line travels with the statement to the screen. */
+  const i = bImport({ id: 'i1', status: 'ready', file_name: 'budget.csv', rows_found: 4, rows_new: 4, skipped: 'Left out 2 scheduled rows (pending or dated after today).', started_at: new Date().toISOString() }, new Date());
+  assert.equal(i.skipped, 'Left out 2 scheduled rows (pending or dated after today).');
+  assert.equal(bLine(i), 'Read budget.csv: 4 new rows. Left out 2 scheduled rows (pending or dated after today).');
+
+  console.log('copilot-core: money from messy files checks passed');
+}
+
+moneyFromMessyFiles().catch((e) => { console.error(e); process.exit(1); });

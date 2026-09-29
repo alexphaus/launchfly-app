@@ -315,7 +315,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Matches | who is worth contacting, and where each one is | pills (New · To send · Waiting · Replied) · only what the ranker recommends, each card a tile, what it is and where, why, and one action · a draft sent from its own card | `matches.ts` |
 | Work | what am I building | the offer and what it knows about how you work · the path to money · the agents · projects handed over, in full (the ones that need you, the ones running, what it offers to take on, what finished) · the brief for Claude | `machine.ts` |
-| You | how is it going | money, runway, deep work, replies · the week read back · goals · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts` |
+| You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
 `derive.ts` computes all of it once per `HomeData`, from `generatedAt` rather
 than the clock, so the header's status line and the tab under it cannot disagree
@@ -866,6 +866,160 @@ search (invariant 13).
 Setup: `EXA_API_KEY`, and the 20260925 migration. Without either, Maps and feeds
 run as before and the Scout says what is missing.
 
+## Money, read from the bank, not typed (`lib/copilot/money/`)
+
+Everything the app knew about somebody's money was typed: cash and burn on the
+Runway sheet, each win one at a time, each invoice one at a time. So runway was
+whatever was typed last month, and scoreMove's money factor was 1.0 on nearly
+every Move — the comment in `obligations.ts` says it outright: the day collapses
+to outreach "because nothing else brings a number to the argument". A bank
+statement is the person's own record, written by their bank, and unlike every
+other sensor it arrives with its history: a year of rows on day one, not a year
+of collecting. DIRECTION.md's objection to widening the sensor ("months of
+collection before anything ranks differently") does not hold for this one.
+
+**How a statement gets in.** One upload control, reached from the money card on
+You, Records → Bank statements, the Runway sheet and onboarding's fourth screen
+(`BankSheet.tsx`, `POST /api/copilot/money/import`, 10 MB, 30 a day). The file
+is read in memory and dropped; only the rows are kept. What it is is decided by
+its bytes (`sniffFormat`), and the two ways in are not trusted the same:
+
+- **parsed** — CSV, TSV and OFX exports (`statement.ts`). Deterministic: the bank
+  wrote those rows and this only splits them. Headers are found under a
+  preamble, dates are read day- or month-first by whichever keeps the column in
+  order (the person's timezone breaks a tie), decimals by a vote across the
+  column, debit/credit columns and DR/CR marks turned into signs. Read now, in
+  the request.
+
+  Budgeting-app exports (the kind people keep for cash) come through the same
+  parser, and three of their habits are handled rather than summed: rows marked
+  pending or dated after the person's today are left out (apps export a year of
+  scheduled bills); a transfer whose row names both of the app's own accounts
+  is left out (it is neither income nor spending); a blank note falls back to
+  the payee column, then the category, so fifty unlabelled meals are "Dining
+  Out", not one payee called "(no description)". Cancelled and declined rows are
+  left out; refunded ones stay, because the refund is a row of its own. Rows in
+  a second currency are left out, never relabelled. Each import carries one
+  line saying what was left out (`skipped`), on the sheet and in the toast.
+- **parsed, from a PDF** — a PDF's text layer (`pdf-parse`) is tried by rules
+  first (`parseStatementText`): a line ending in an amount and a running
+  balance, dated at its start or on the very next line (Wise's layout). It is
+  used only when the running balance holds on every row
+  (`statementFromPdfText`), so no misread column survives it; anything else
+  goes to the model. Wise's 101-row quarterly statement is read this way in
+  about a second, and nothing is sent anywhere. So a PDF that prints a balance
+  needs no model, and the upload takes PDFs on a server with none.
+- **read** — any other PDF, and screenshots (resized with `sharp`), copied into
+  rows by a model in `after()` (`extract.ts`). A model can
+  drop a line, misread a digit or flip a sign, so its prompt forbids arithmetic,
+  `statementFromReading` drops whatever does not parse — counted, never
+  repaired — and the reading is a proposal until it proves itself.
+
+**Nothing read is trusted until it adds up** (`checkBalances`). Two proofs: the
+running balance holds line to line, or the opening balance plus every row is the
+closing balance. Either proves no row was dropped and no sign flipped; a file
+that lists newest first is turned round, and one whose amounts come out
+backwards against its own balances is corrected — the balances are the bank's
+arithmetic. A parsed file is used unless its own balances contradict it; a
+reading is used only when it balances. Anything else waits in `review`, its rows
+in `copilot_money_imports.pending`, until the person holds the totals against
+their statement and taps **They match** (or **Discard**). A worker cannot mark
+its own homework (invariant 10), and neither can a reader.
+
+**Overlapping statements are safe.** Each row's id is its account, day, amount
+in cents, counterparty and how many identical rows preceded it in the file
+(`rowFingerprints`), and `(profile_id, fingerprint)` is a plain unique
+constraint the upsert skips on — August–October then September–November counts
+September once, and two identical coffees on one day stay two.
+
+**What the rows become** (`ledger.ts`, pure, and every number is a sum, a count or
+a date off the rows — invariant 2):
+
+- **The read** (`moneyRead`): "Since 1 Jul: $4,200 in from 2 payers. Acme was
+  86% of it. Last paid on 25 Sep: Coron Reef Divers, $150. You spend $844 a
+  month, $804 of it on repeat bills. That is 4.5 months of runway on $3,789 (25
+  Sep). Next: Rent $400 around 1 Oct." Monthly figures average the last 90 days
+  of rows and are withheld under 20 days of history; repeat bills are the same
+  payee, about the same amount, weekly to monthly, at least three times and
+  still going (`recurringOut`); cash is the last balance each account printed.
+  One currency per figure: the person's own (their runway's) when any row
+  carries it, else the one most rows carry. Rows in another are kept out and
+  said to be. A file that names no currency is the person's own
+  currency only while nothing else names one; beside a statement that does, it
+  is its own pile until they say which (`setImportCurrency`, one chip on the
+  sheet, applied to the whole account, and inherited by the next upload to it,
+  so next month's export of the same app needs no question). 264 unlabelled peso rows had been summed into a euro
+  account's figures and printed with its €.
+- **The finance row** (`financeFromRead`): cash and burn written into
+  `profile.finance` with where each came from (`source`, `cash_on`, `burn_to`),
+  so metrics, the forecast, the runway guard, scoreMove's money factor and the
+  plan all move without any of them changing. A number the person typed after
+  the statement's own date stands (`typed_at`); the Runway sheet says which is
+  which. Runway is cash over burn, so both are one currency: a read in another
+  currency than a typed number stays out of the row (`currencyClash` says so on
+  the Runway sheet) — euro spending under typed pesos was 179 months of runway —
+  and a figure an earlier read left there goes, since no row in the person's
+  currency is left behind it. An account's cash is the latest statement's
+  closing on a date tie with its rows: a batch shares `created_at`, so the last
+  row of a day with two is a coin toss (Wise's quarter read €5 for €0.00).
+- **Who paid, named by the person.** Each payer nobody has named is one question
+  with four answers — a client, my job, my own account, something else — and,
+  where a payer shares distinctive words with exactly one business in the
+  pipeline, that business as a fifth (`suggestOpportunity`). Nothing infers a
+  role. "My own account" drops the counterparty out of income and spending both
+  ways; payees that read like savings ("MY SAVINGS", "POT", "ISA") are asked
+  about the same way (`ownCheck`), because until then a monthly transfer to
+  savings is the biggest "bill" on the list.
+- **Deposits into wins.** A client's deposits from the last 30 days become `won`
+  outcomes — source `manual` when the person's naming caused it, `system` when
+  a later statement brings money from somebody already named — or are attached
+  to the win already logged by hand for the same money, within ten days and one
+  percent (`matchWin`), so nothing counts twice. This is the join the product
+  was missing: from a message sent to money that actually landed.
+
+**The plan sees it.** `drawRoadmap` puts the lines in the prompt as THEIR MONEY,
+so the number guard lets the plan cite them, and the signature carries a money
+fingerprint (`moneyForPlan`) so a new statement or a payer named redraws the
+plan like a note does. Built only from totals computed before any list is cut
+for the screen, so the phone and the server always agree — a fingerprint that
+differed would redraw on every open — and absent without statements, so no
+existing plan redraws for nothing.
+
+**Deleting it.** Remove one statement and its rows go with it
+(`on delete cascade`), then its account if nothing else is on it. **Delete
+everything read off your bank** (typed DELETE) removes every row, statement,
+payer and account and the cash and burn read off them; what was typed stays.
+Wins already recorded stay in both cases — they are the person's record of
+work — and the sheet says so before the tap.
+
+**Bank links, later.** Nothing on screen offers one, because no provider exists
+(invariant 7). The seam does: `copilot_money_accounts` keys an account by
+`provider` and `external_key` and carries `status`, `last_error` and
+`last_synced_at`; `startImport` takes source, format and method `link`; and
+`finishImport(…, { method: 'link', provider })` runs a provider's rows through
+the same dedupe, check, read, finance row and wins as an upload. A provider is
+one module that turns its API's transactions into `StatementRow`s — GoCardless
+Bank Account Data (free for EU/UK), Plaid (US), Belvo (Latin America) — plus
+its consent screen and a scheduled sync.
+
+### Records — what it reads instead of asking (`sensors.ts`)
+
+The sensors lived in four places: the Runway sheet, the Money owed sheet, a tile
+on You and a line under Settings. **Records** on You is the one list, so "what
+does it actually know about me, and how" has one answer: bank statements (you
+upload), money owed (you log), deep work (you log), sources you watch (read on
+its own), each with a line computed from rows ("22 transactions · to 25 Sep", "2
+of 5 failing") and a state (recording, not yet, look at this). Adding a sensor —
+a calendar, a CV, a bank link — is a `SensorDef` in `SENSORS`, its line in
+`sensorViews`, and its sheet. A test reads `SheetContent.tsx` for every sheet a
+sensor names, so a row that opens nothing cannot ship (invariant 7).
+
+Setup: `supabase/migrations/20260929_copilot_money.sql`. CSV and OFX need
+nothing else. PDFs and screenshots need a model — the brief's, or
+`COPILOT_STATEMENT_MODEL` on the same endpoint when the brief's model does not
+take images. Without the migration the Bank statements sheet says it is not set
+up, `/api/copilot/health` names the file, and every other screen is unchanged.
+
 ## The loop
 
 ```
@@ -947,6 +1101,9 @@ COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL
 COPILOT_PLAN_MODEL / COPILOT_PLAN_API_KEY / COPILOT_PLAN_BASE_URL
 COPILOT_PLAN_TIMEOUT_MS=110000      # up to 240000; spent inside the nightly pass too
 COPILOT_PLAN_EXTRA_BODY / COPILOT_PLAN_MAX_OUTPUT_TOKENS   # e.g. a higher reasoning effort for the plan only
+# The model that reads PDF statements and screenshots (optional; unset = the brief's).
+# Screenshots need one that takes images. CSV and OFX need no model at all.
+COPILOT_STATEMENT_MODEL
 
 # Real supply
 APIFY_API_TOKEN=...                 # Google Maps adapter (same token Launchfly uses)
@@ -984,7 +1141,8 @@ STRIPE_PRICE_COPILOT_OPERATOR_YEARLY=price_...
 NEXT_PUBLIC_COPILOT_CURRENCY=$             # display only; Stripe decides what is charged
 ```
 
-3. Open `/copilot`. New device → 3 screens → first supply pull (prospect pipeline) → first brief.
+3. Open `/copilot`. New device → 3 screens → first supply pull (prospect pipeline) → first brief →
+   a fourth, optional screen: a bank statement, read while they watch (see **Money, read from the bank**).
    Add to home screen installs it as its own app.
 
 ### Scheduling the daily loop
@@ -1974,6 +2132,8 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/moves/:id` | `{ status: done \| dismissed \| handover }` — `handover` turns a proposed Move into a live mandate |
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
+| POST | `/api/copilot/money/import` | multipart `file`: a bank statement. CSV/TSV/OFX, and a PDF whose running balance holds by rules, are read in the request and answer with the import and the screen; any other PDF or a screenshot answers 202 and is read by a model in `after()` (30 a day, 10 MB) |
+| GET/POST | `/api/copilot/money` | `GET` the statements, polled while one is read · `POST { action: 'confirm' \| 'discard', id }` · `{ action: 'currency', id, currency }` (three letters, for a file that named none) · `{ action: 'name', key, role: client \| employer \| self \| other \| null, opportunity_id? }` · `{ action: 'forget', confirm: 'DELETE' }` |
 | POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |
 | GET/POST | `/api/copilot/roadmap` | the Path's drawn plan: `POST { action: 'draw', reason? }` writes a `copilot_agent_runs` row of kind `roadmap`, draws in `after()` and returns 202 (or the draw in flight; 12 a day) · `POST { action: 'mark', item, state: done \| dropped \| open }` ticks a step or milestone of the current plan (`copilot_events`, `roadmap_marked`) · `GET` is the latest draw, polled while it runs |
 
@@ -2151,6 +2311,22 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
 
 ## Known gaps
 
+- **No bank link yet.** Statements are uploaded; the link seam (`provider`, `startImport` with `link`,
+  `finishImport` with a provider) has no provider behind it, so nothing offers one.
+- A credit-card export with no balance column can come in with purchases positive: there is no balance
+  to prove the sign wrong. Bank-account exports and anything with balances are corrected by them.
+- Money moved between two uploaded accounts counts as income on one and spending on the other until the
+  person names the counterparty their own account. Nothing pairs the two rows automatically.
+- Two sources for the same money are not reconciled. A card purchase in a bank statement and the same
+  purchase logged in a budgeting app are two accounts, so both count. Dedupe is within one account
+  (overlapping exports of the same file); across sources the advice is one source per kind of money.
+- Uploads that name neither a bank nor an account number (most budgeting-app exports) share one
+  account, so two different such apps would dedupe against each other on identical day/amount/payee rows.
+- A PDF that prints debits and credits as unsigned figures in two columns loses the column in its text
+  layer; its chain fails and it goes to the model. Nothing infers a sign from the balance delta, because
+  the first row has no delta to prove it.
+- Removing a statement leaves the wins its deposits became. Deliberate, and said on the sheet, but a
+  statement removed because it was wrong leaves wins that were wrong with it.
 - Email replies are not reconciled automatically yet (WhatsApp is); log them by hand on the match.
 - Cross-user learning ("people like you get 12% replies with this angle") needs more than one
   user; `copilot_outcomes` is shaped for it.

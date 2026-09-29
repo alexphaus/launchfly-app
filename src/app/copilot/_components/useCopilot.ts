@@ -18,6 +18,7 @@ import type { AskAnswer } from '@/lib/copilot/ask';
 import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/lib/copilot/nightly';
 import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
 import type { ExperimentState } from '@/lib/copilot/experiment';
+import { importLine, type MoneyImport } from '@/lib/copilot/money/ledger';
 
 /** What answering the experiment did, said back: the next plan is what changes. */
 const EXPERIMENT_SAID: Record<ExperimentState, string> = {
@@ -28,7 +29,7 @@ const EXPERIMENT_SAID: Record<ExperimentState, string> = {
   unclear: 'Noted. The next plan knows it was not clear either way.',
   ignored: 'Noted.',
 };
-import { api, del, get, post } from './api';
+import { api, del, get, post, upload } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
 import type { Actions, OutcomeInput, SheetState, Tab, Tab2 } from './shared';
@@ -69,6 +70,8 @@ const NIGHTLY_POLL_MS = 4_000;
 const NIGHTLY_MISSES = 3;
 /** A draw is one model call, usually under a minute. */
 const ROADMAP_POLL_MS = 3_000;
+/** A PDF or a screenshot is one model call a few pages long. */
+const IMPORT_POLL_MS = 3_000;
 
 export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: CopilotConfig<T>) {
   const shell = useShell();
@@ -255,6 +258,40 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     const timer = setInterval(() => { void tick(); }, ROADMAP_POLL_MS);
     return () => { over = true; clearInterval(timer); };
   }, [liveRoadmap, refresh, say]);
+
+  // A PDF or a screenshot is read in after(), so the upload returns while it is
+  // still being read. Follow it — keyed on the ids being read, so a second
+  // upload joins the watch rather than racing it — and reload when it lands,
+  // saying what it came to, failure included.
+  const readingIds = (home.money?.imports ?? []).filter((i) => i.status === 'reading').map((i) => i.id).join(',');
+  useEffect(() => {
+    if (!readingIds) return;
+    const watched = readingIds.split(',');
+    let over = false;
+    let misses = 0;
+    const tick = async () => {
+      let imports: MoneyImport[];
+      try {
+        imports = (await get<{ imports: MoneyImport[] }>('/money')).imports;
+        misses = 0;
+      } catch (e) {
+        misses += 1;
+        if (misses === NIGHTLY_MISSES) say(`Cannot check on your statement: ${e instanceof Error ? e.message : 'no connection'}. Still trying.`);
+        return;
+      }
+      if (over || imports.some((i) => watched.includes(i.id) && i.status === 'reading')) return;
+      over = true;
+      clearInterval(timer);
+      try { await refresh(); } catch {
+        say('Your statement was read, but this screen could not reload. Reopen the app to see it.');
+        return;
+      }
+      const lines = imports.filter((i) => watched.includes(i.id)).map(importLine).filter((x): x is string => !!x);
+      if (lines.length) say(lines.join(' '));
+    };
+    const timer = setInterval(() => { void tick(); }, IMPORT_POLL_MS);
+    return () => { over = true; clearInterval(timer); };
+  }, [readingIds, refresh, say]);
 
   // First open. A brand new account has nothing to look at, so the first thing
   // the app does is go and find some — the supply route runs the brief too, so
@@ -803,6 +840,48 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         const r = await del<{ home: HomeData }>(`/focus?id=${encodeURIComponent(id)}`);
         setHome(r.home);
       } catch (e) { fail(e, 'Could not remove that'); void refresh(); }
+    },
+    async uploadStatement(file) {
+      try {
+        const { status, body } = await upload<{ ok?: boolean; import?: MoneyImport; home?: HomeData }>('/money/import', file);
+        // A file that was not a statement still comes back with the screen, its failure on the row.
+        if (body.home) setHome(body.home);
+        if (status >= 400 || body.ok === false || !body.import) {
+          const error = body.error || `Could not upload that (${status})`;
+          say(error);
+          return { ok: false, error };
+        }
+        const i = body.import;
+        say(i.status === 'reading'
+          ? `Reading ${i.fileName ?? 'it'}. A PDF or a screenshot takes a minute; you can leave this screen.`
+          : importLine(i) ?? 'Read.');
+        return { ok: true, status: i.status };
+      } catch (e) {
+        const error = e instanceof Error ? e.message : 'Could not upload that';
+        say(error);
+        return { ok: false, error };
+      }
+    },
+    async answerMoney(answer) {
+      try {
+        const r = await post<{ home: HomeData; recorded?: number; attached?: number }>('/money', answer);
+        setHome(r.home);
+        if (answer.action === 'name') {
+          const won = (r.recorded ?? 0) + (r.attached ?? 0);
+          say(answer.role === 'client' && won
+            ? `Named. ${won === 1 ? 'Their latest payment counts' : `${won} of their payments count`} as ${won === 1 ? 'a win' : 'wins'} now.`
+            : answer.role === 'self' ? 'Noted. Money moving between your own accounts is not income or spending any more.'
+            : 'Noted.');
+        } else if (answer.action === 'confirm') say('Confirmed. Those rows count now.');
+        else if (answer.action === 'discard') say('Removed, with the rows it brought in.');
+        else if (answer.action === 'currency') say(`Counted in ${answer.currency.toUpperCase()}.`);
+        else say('Deleted. Nothing read off your bank is kept.');
+        return { ok: true };
+      } catch (e) {
+        const error = e instanceof Error ? e.message : 'Could not save that';
+        say(error);
+        return { ok: false, error };
+      }
     },
   };
 

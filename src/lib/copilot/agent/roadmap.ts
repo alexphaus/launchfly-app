@@ -12,6 +12,8 @@
 // when the record moved since the last plan, or when the plan is a week old.
 
 import { generateText } from 'ai';
+import { moneyForPlan, moneyRead, type MoneyRead } from '../money/ledger';
+import { loadMoneyRows, moneyCurrency } from '../money/store';
 import { copilotDb, todayIso } from '../db';
 import { VERDICT_LABEL, decisionReview, verdictOf } from '../decision';
 import { DEFAULT_HORIZON_DAYS, goalDue } from '../due';
@@ -75,14 +77,26 @@ async function contextCount(profileId: string): Promise<number> {
 
 /** What the person has said, fingerprinted exactly as loadHome's read of the same rows is. */
 async function signatureOf(profile: Profile, goals: Goal[]): Promise<string> {
-  const [working, notes] = await Promise.all([loadWorking(profile.id), contextCount(profile.id)]);
+  const [working, notes, money] = await Promise.all([loadWorking(profile.id), contextCount(profile.id), moneyReadFor(profile)]);
   return roadmapSignature({
     goals,
     working: working.filter((w) => w.status === 'live').map((w) => ({ id: w.id, body: w.body })),
     contextCount: notes,
     capacity: profile.capacity,
     offer: profile.offer ?? null,
+    money: moneyForPlan(money).signature,
   });
+}
+
+/**
+ * The money read, the way loadHome computes it for the screen, so the plan and
+ * the Path fingerprint the same rows. Null without statements, or when they
+ * cannot be read — the plan is drawn without money rather than not at all.
+ */
+async function moneyReadFor(profile: Profile): Promise<MoneyRead | null> {
+  const rows = await loadMoneyRows(profile.id);
+  if (!rows.ready || rows.unreadable) return null;
+  return moneyRead({ txs: rows.txs, payees: rows.payees, accounts: rows.accounts, today: todayIso(profile.timezone), currency: await moneyCurrency(profile.id, profile) });
 }
 
 /**
@@ -118,7 +132,7 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
     const profile = await getProfile(profileId);
     if (!profile) throw new Error('profile not found');
 
-    const [goals, working, notes, metrics, recent, commissions, runs, marks, jobs, queue, open, talk, decisions] = await Promise.all([
+    const [goals, working, notes, metrics, recent, commissions, runs, marks, jobs, queue, open, talk, decisions, money] = await Promise.all([
       activeGoals(profileId),
       loadWorking(profileId),
       loadOwnNotes(profileId),
@@ -135,6 +149,7 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
       // messages sent, which were answered, and what people wrote back.
       loadConversations(profileId),
       loadDecisions(profileId, 12),
+      moneyReadFor(profile),
     ]);
     // A plan drawn without knowing what the person already did with the last
     // one would bring back what they set aside. Better to fail and say so.
@@ -231,6 +246,7 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
           .map((c) => ({ objective: c.objective, closedAt: c.closed_at!, outcome: c.outcome })),
         currency,
       }),
+      money: moneyForPlan(money).lines,
       previous: previousForPrompt(last, marks.marks),
       aiAvailable: jobs.includes('commission'),
       // Drafts from a blank offer are not put in front of anyone (invariant 1), so the plan is not told about them either.

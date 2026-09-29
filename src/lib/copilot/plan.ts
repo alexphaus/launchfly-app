@@ -456,10 +456,11 @@ function goalStop(input: AheadInput, perClient: number | null, early: boolean, m
   };
 }
 
-/** The line under the greeting on the Path: where you are, and what needs you. */
-export function planStatus(here: Here, asks: number, streak: number): string {
-  const parts = [here.title];
-  if (asks) parts.push(`${asks} need${asks === 1 ? 's' : ''} you`);
-  else if (streak >= 2) parts.push(`${streak} days in a row`);
-  return parts.join(' · ');
+/** The line under the greeting on the Path: what needs you, or the streak — nothing when neither. */
+export function planStatus(asks: number, streak: number): string | null {
+  // Not "where you are": that is the first line under the header, in bigger
+  // type, and the header said it again directly above it.
+  if (asks) return `${asks} need${asks === 1 ? 's' : ''} you`;
+  if (streak >= 2) return `${streak} days in a row`;
+  return null;
 }

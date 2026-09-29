@@ -942,19 +942,44 @@ a date off the rows — invariant 2):
   of rows and are withheld under 20 days of history; repeat bills are the same
   payee, about the same amount, weekly to monthly, at least three times and
   still going (`recurringOut`); cash is the last balance each account printed.
-  One currency per figure: the one the person picked for runway on purpose
-  (`chosenCurrency`) when any row carries it, else the one most rows carry —
-  never the finance row's currency as such, which follows the read, so one euro
-  statement cannot lock runway in euros. Rows in another currency are kept out
-  and said to be. A file that names no currency is its own pile until the
-  person says which (`setImportCurrency`: one chip on the Bank statements sheet,
-  the time zone's currency offered first, applied to the whole account and
-  inherited by the next upload to it, so next month's export of the same app
-  needs no question). Until then its figures print as bare numbers
-  (`currencyKnown: false`) and never reach runway: counted as "the person's
-  currency" they were written into a dollar runway as $37,708 a month of peso
-  spending, and before that, 264 unlabelled peso rows were summed into a euro
-  account's figures and printed with its €.
+  The average covers only accounts still being written — one whose rows stop
+  more than `LIVE_ACCOUNT_DAYS` before the newest does not speak for this
+  month: a Wise quarter ending 30 Jun beside a budget export starting 15 Jul
+  averaged a fortnight nobody recorded, and $648 a month read as $554. Runway
+  comes off the rows only when every account printed a balance; a budget export
+  prints none, and "0 months of runway on $5.50" was one euro account standing
+  in for all the money there is, so the read says whose balance it has and asks
+  for cash.
+  One currency for everything: the main one (below), with every row in
+  another converted into it at the rate for its own day. A row whose currency
+  has no rate is left out and said, with why — never converted at a guess — and
+  when nothing converts at all (the rate service down on a first load) the
+  figures are shown in the pile with the most rows and say so (`inMain:
+  false`), and runway does not take them. A file that names no currency is its
+  own pile until the person says which (`setImportCurrency`: one chip on the
+  Bank statements sheet, the time zone's currency offered first, applied to the
+  whole account and inherited by the next upload to it, so next month's export
+  of the same app needs no question). Until then its figures print as bare
+  numbers (`currencyKnown: false`) and never reach runway: counted as "the
+  person's currency" they were written into a dollar runway as $37,708 a month
+  of peso spending, and before that, 264 unlabelled peso rows were summed into
+  a euro account's figures and printed with its €.
+- **The main currency and its rates** (`fx.ts`, `fxstore.ts`,
+  `copilot_fx_rates`, 20260930). A person who sells in dollars, keeps a peso
+  budget app and a euro Wise account asked for one currency the whole app
+  counts in. It is the one chosen in Settings (`finance.main_currency`), else
+  the one runway is already in, else the money goal's, else USD — "$" is a US
+  dollar unless Settings says otherwise (`toCode`). Rates are the European
+  Central Bank's reference rates via frankfurter.dev (`COPILOT_FX_URL` to point
+  elsewhere): a weekend or holiday takes the last business day before it, and
+  nothing older than `RATE_STALE_DAYS` counts as a day's rate. They are cached
+  in `copilot_fx_rates`, shared by every account, so a load is one query and a
+  fetch happens only for days the cache does not reach (`covers`); a pair that
+  failed is not asked again for fifteen minutes, so a dead service cannot add
+  six seconds to every open; and without the table they are held in the
+  process's memory. A converted figure is a claim about a rate as well as the
+  rows, so the read says which currencies were converted, and the Runway sheet
+  shows the rate and its day. Goals keep the unit they were written in.
 - **The last thirty days** (`recent`, `months`, `spend`): money in and out over
   the thirty days ending on the last row — not on today, since a statement
   that ends in June has no "last 30 days" in September (`recentLabel` says
@@ -966,29 +991,30 @@ a date off the rows — invariant 2):
   so metrics, the forecast, the runway guard, scoreMove's money factor and the
   plan all move without any of them changing. A number the person typed after
   the statement's own date stands (`typed_at`); the Runway sheet says which is
-  which. Runway is cash over burn, so both are one currency — and the
-  statements set it. A live account had typed "$1,000 cash, $350 a month" into
-  a field prefilled with $, then uploaded a peso budget export; keeping the
-  typed row blanked runway beside a card that knew the burn to the peso, and the
-  plan was drawn with no runway. Now the typed numbers are set aside
-  (`set_aside`, kept and said on the Runway sheet by `setAsideLine`), the burn
-  comes off the rows, and the one thing asked is cash in the rows' currency; a
-  later switch back restores what was set aside in that currency. Two cases
-  keep the typed row: a currency the person changed on the Runway sheet
-  (`source.currency = 'typed'`, set by `financeFromTyped`; `currencyClash` then
-  says why runway ignores the rows), and a read with nothing to write. Either
-  way a figure an earlier read left there goes, since no row in the person's
-  currency is left behind it. `loadHome` settles the row from the rows on every
-  load and writes only when it moved (`financeFromRead` returns the row itself
-  otherwise; a failed write is `money.settleError`, said on the Runway sheet),
-  and the nightly pass settles it first, before the plan and the brief read it.
-- **Sales money is not runway money** (`salesCurrency`, metrics.ts). An offer,
-  a win, a goal and the plan's prices are in the first money goal's unit, else
-  the finance row's; runway, cash and what is owed stay in the finance row's.
-  Before statements the two were one field, and a person who sells in dollars
-  and lives in pesos would have seen their $70 offer printed as ₱70. An account's cash is the latest statement's
-  closing on a date tie with its rows: a batch shares `created_at`, so the last
-  row of a day with two is a coin toss (Wise's quarter read €5 for €0.00).
+  which. Runway is in the main currency: statement figures arrive converted,
+  and a number typed in another — ₱71,804 of cash in a dollar app — is kept as
+  typed (`typed_in`) and converted at the newest rate every time runway
+  settles, so the dollar figure follows the peso (`typedInLines` says what it
+  became and at what rate). With no rate the number is left out, not guessed.
+  A live account had typed "$1,000 cash, $350 a month", then uploaded a peso
+  budget export: runway went blank beside a card that knew the burn to the
+  peso, because the old rule refused to divide dollars by pesos and had nothing
+  to convert with. `loadHome` settles the row on every load and writes only
+  when it moved (`financeFromRead` returns the row itself otherwise; a failed
+  write is `money.settleError`, said on the Runway sheet); the nightly pass
+  settles it first, before the plan and the brief read it; and saving runway or
+  the main currency settles it at once (`setFinance` → `refreshFinance`).
+  An account's cash is the latest statement's closing on a date tie with its
+  rows: a batch shares `created_at`, so the last row of a day with two is a
+  coin toss (Wise's quarter read €5 for €0.00).
+- **Wins in the main currency.** A client's deposit is recorded as a win
+  converted at its day's rate, the original in the note: a ₱5,000 deposit
+  recorded as 5,000 would have moved a dollar goal by $5,000. A deposit with
+  no rate, or in a file whose currency nobody has said, is not recorded, and
+  the statement's note says why.
+- **Sales money** (`salesCurrency`, metrics.ts): an offer, a win, a goal and
+  the plan's prices print in the first money goal's unit, else the finance
+  row's, so a goal written in dollars stays in dollars whatever Settings says.
 - **Who paid, named by the person.** Each payer nobody has named is one question
   with four answers — a client, my job, my own account, something else — and,
   where a payer shares distinctive words with exactly one business in the
@@ -1015,13 +1041,13 @@ it carried — payers to name, a currency to say — are the Bank statements row
 in Records.
 
 **The plan and the brief see it.** `drawRoadmap` puts the lines in the prompt as
-THEIR MONEY, noting they are in the bank's currency, which may not be the one
-they sell in, so the number guard lets the plan cite them, and the signature
+THEIR MONEY, noting every figure is already in the main currency so the model
+never converts again, so the number guard lets the plan cite them, and the signature
 carries a money fingerprint (`moneyForPlan`) so a new statement or a payer
 named redraws the plan like a note does. The brief's context pack carries the
 same lines as `money` (one loader, `loadMoneyRead`, so the three cannot
 disagree), under a MONEY rule that lets it cite them and forbids converting
-between currencies or treating a payer as a won sale; a read that failed is
+them again or treating a payer as a won sale; a read that failed is
 `moneyError`, never an empty section. The handoff export has them as "My
 money". Built only from totals computed before any list is cut
 for the screen, so the phone and the server always agree — a fingerprint that

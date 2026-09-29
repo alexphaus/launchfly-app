@@ -77,7 +77,9 @@ export type SheetState =
   /** Bank statements: upload, what they say, who paid, and the answers only the person can give. */
   | { kind: 'bank' }
   /** Money in, opened: who paid, month by month, then the wins logged. */
-  | { kind: 'moneyin' };
+  | { kind: 'moneyin' }
+  /** The currency the whole app counts in (Settings). */
+  | { kind: 'currency' };
 
 /** What the person can say about their statements. See /api/copilot/money. */
 export type MoneyAnswer =
@@ -136,7 +138,8 @@ export interface Actions {
   recordOutcome(input: OutcomeInput): Promise<boolean>;
   draftFor(oppId: string, channel?: Channel): Promise<boolean>;
   findMatches(): Promise<void>;
-  saveFinance(f: { monthly_burn?: number; cash?: number; currency?: string }): Promise<boolean>;
+  /** `cash_currency` / `burn_currency`: what each number was typed in, when not the main currency. `main_currency`: the whole app's, from Settings. */
+  saveFinance(f: { monthly_burn?: number; cash?: number; cash_currency?: string; burn_currency?: string; main_currency?: string }): Promise<boolean>;
   saveTargeting(t: { target_segments: string[]; target_area: string }): Promise<boolean>;
   /** Signals → "Stop matching <segment>": drops one segment and everything drafted for it. */
   dropSegment(segment: string): Promise<boolean>;

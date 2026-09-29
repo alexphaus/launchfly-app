@@ -91,19 +91,24 @@ export interface Finance {
   cash?: number;
   currency?: string;
   updated_at?: string;
+  /** Where each number came from. Absent on rows written before statements existed: typed. */
+  source?: { cash?: 'typed' | 'statement'; monthly_burn?: 'typed' | 'statement' };
   /**
-   * Where each number came from. Absent on rows written before statements
-   * existed: typed. `currency` is 'typed' only when the person changed it on
-   * the Runway sheet — a "$" the field was prefilled with is not a choice, and
-   * statements in pesos replace it (money/ledger.ts financeFromRead).
+   * The currency the whole app counts in, chosen in Settings (money/fx.ts
+   * mainCurrency). Absent: the money goal's, else this row's, else USD.
+   * `currency` above is then always that one, written as its mark.
    */
-  source?: { cash?: 'typed' | 'statement'; monthly_burn?: 'typed' | 'statement'; currency?: 'typed' | 'statement' };
+  main_currency?: string;
   /**
-   * Numbers the person typed in another currency before their statements set
-   * this one. Kept and said on the Runway sheet — never divided by a burn in the
-   * new currency, and never silently gone. Cleared when they next save runway.
+   * Numbers typed in another currency than the main one, as typed — ₱71,804 of
+   * cash in a dollar app. cash and monthly_burn hold them converted at the
+   * newest rate (`rate`, `day`), redone each time runway settles, so the dollar
+   * figure follows the peso. No rate yet: the converted figure is absent.
    */
-  set_aside?: { cash?: number; monthly_burn?: number; currency: string; on: string };
+  typed_in?: {
+    cash?: { amount: number; currency: string; rate?: number; day?: string };
+    monthly_burn?: { amount: number; currency: string; rate?: number; day?: string };
+  };
   /** The day the statement balance behind `cash` is from. */
   cash_on?: string;
   /** The last day of statement rows `monthly_burn` was averaged over. */

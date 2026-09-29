@@ -12,7 +12,8 @@
 // Every figure is off the read (lib/copilot/money/ledger.ts moneyRead) or the
 // finance row the read settles (financeFromRead). Nothing here computes one.
 import { useState } from 'react';
-import { ROLE_LABEL, currencyClash, currencyMark, dayLabel, moneyText, readMoney, recentLabel, setAsideLine, type MoneyRead } from '@/lib/copilot/money/ledger';
+import { ROLE_LABEL, currencyForZone, dayLabel, moneyText, readMoney, recentLabel, typedInLines, type MoneyRead } from '@/lib/copilot/money/ledger';
+import { FX_SOURCE, mainCurrency } from '@/lib/copilot/money/fx';
 import { computeRunwayMonths, salesCurrency } from '@/lib/copilot/metrics';
 import type { HomeData } from '@/lib/copilot/types';
 import { money as short } from './format';
@@ -98,29 +99,43 @@ function Months({ read }: { read: MoneyRead }) {
 export function RunwaySheet({ home, actions }: { home: HomeData; actions: Actions }) {
   const f = home.profile.finance ?? {};
   const read = home.money?.read ?? null;
+  const main = mainCurrency(f, home.goals);
   const fromStatementBurn = f.source?.monthly_burn === 'statement';
-  const [burn, setBurn] = useState(f.monthly_burn?.toString() ?? '');
-  const [cash, setCash] = useState(f.cash?.toString() ?? '');
-  const [currency, setCurrency] = useState(f.currency || salesCurrency(f, home.goals));
+  // A number typed in another currency is shown as typed, in its own currency:
+  // the person wrote ₱71,804, not the $1,238 it is worth today.
+  const [cash, setCash] = useState(f.typed_in?.cash ? String(f.typed_in.cash.amount) : f.cash?.toString() ?? '');
+  const [cashCurrency, setCashCurrency] = useState(f.typed_in?.cash?.currency ?? main);
+  const [burn, setBurn] = useState(f.typed_in?.monthly_burn ? String(f.typed_in.monthly_burn.amount) : f.monthly_burn?.toString() ?? '');
+  const [burnCurrency, setBurnCurrency] = useState(f.typed_in?.monthly_burn?.currency ?? main);
   const [busy, setBusy] = useState(false);
-  const preview = computeRunwayMonths({ monthly_burn: Number(burn) || undefined, cash: cash === '' ? undefined : Number(cash) });
-  const save = async () => { setBusy(true); await actions.saveFinance({ monthly_burn: burn === '' ? undefined : Number(burn), cash: cash === '' ? undefined : Number(cash), currency }); setBusy(false); };
+  const save = async () => {
+    setBusy(true);
+    await actions.saveFinance({
+      cash: cash === '' ? undefined : Number(cash),
+      monthly_burn: burn === '' ? undefined : Number(burn),
+      cash_currency: cashCurrency,
+      burn_currency: burnCurrency,
+    });
+    setBusy(false);
+  };
+  // Previewed only when both are in the main currency: anything else is converted on save, at the rate the server has.
+  const preview = cashCurrency === main && burnCurrency === main
+    ? computeRunwayMonths({ monthly_burn: Number(burn) || undefined, cash: cash === '' ? undefined : Number(cash) })
+    : null;
 
   const runway = computeRunwayMonths(f);
-  const cur = f.currency || currency;
-  // Where each number came from, when a statement supplied it. Typing over one
-  // makes it yours until a statement dated after today says otherwise.
+  // Not which currencies: a statement that stopped months ago is converted in the read but not in this average.
+  const converted = read?.inMain && read.converted.length ? `, converted to ${main} at ${FX_SOURCE}` : '';
   const fromBank = [
     f.source?.cash === 'statement' && f.cash_on ? `cash is your balance on ${dayLabel(f.cash_on)}` : null,
-    fromStatementBurn && f.burn_to ? `burn is your spending averaged over the rows to ${dayLabel(f.burn_to)}` : null,
+    fromStatementBurn && f.burn_to ? `burn is your spending averaged over the rows to ${dayLabel(f.burn_to)}${converted}` : null,
   ].filter(Boolean);
-  const clash = currencyClash(f, read);
-  const aside = setAsideLine(f);
-  // The one number the rows cannot give — a budget export prints no balance —
-  // asked first, with the burn they did give already filled in.
-  const askCash = fromStatementBurn && f.cash == null;
-  const sameCurrency = read && read.currencyKnown && currencyMark(f.currency || read.currency) === currencyMark(read.currency);
+  const typedLines = typedInLines(f);
+  // The one number a budget export cannot give — it prints no balance — asked first, with the burn it did give filled in.
+  const askCash = fromStatementBurn && f.cash == null && !f.typed_in?.cash;
   const unlabelled = read && !read.currencyKnown;
+  const notMain = read && read.currencyKnown && !read.inMain;
+  const options = currencyChoices(home, main);
 
   return (
     <div className="cp-sheet-embed">
@@ -128,52 +143,62 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
       {runway != null ? (
         <div className="cp2-mny-hero">
           <b>{runway} month{runway === 1 ? '' : 's'}</b>
-          <span>{moneyText(f.cash ?? 0, cur)} cash ÷ {moneyText(f.monthly_burn ?? 0, cur)} a month</span>
+          <span>{moneyText(f.cash ?? 0, main)} cash ÷ {moneyText(f.monthly_burn ?? 0, main)} a month</span>
         </div>
       ) : askCash ? (
         <div className="cp2-mny-hero">
-          <b>{moneyText(f.monthly_burn ?? 0, cur)} a month</b>
+          <b>{moneyText(f.monthly_burn ?? 0, main)} a month</b>
           <span>what your statements spend · type your cash to count runway</span>
         </div>
       ) : (
-        <p className="desc">Cash divided by what you spend a month. Under four months, the copilot favours work that pays fast over big builds.</p>
+        <p className="desc">Cash divided by what you spend a month, in {main}. Under four months, the copilot favours work that pays fast over big builds.</p>
       )}
 
       {/* A failed write is said here, not shown as a runway that never came (invariant 13). */}
       {home.money?.settleError && <div className="cp-error">{home.money.settleError}</div>}
-      {aside && <div className="cp-note">{aside}</div>}
+      {typedLines.map((l) => <div key={l} className="cp-note">{l}</div>)}
       {unlabelled
-        ? <div className="cp-note">Your statement does not say its currency, so runway does not use it yet. <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>Say which</button> and the burn is counted from it.</div>
-        : clash
-        ? <div className="cp-note">{clash}</div>
+        ? <div className="cp-note">Your statement does not say its currency, so runway does not use it yet. <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>Say which</button> and it is converted to {main}.</div>
+        : notMain
+        ? <div className="cp-note">Your statements are in {read.currency} and there is no rate to put them in {main} yet, so runway does not use them. It tries again shortly.</div>
         : fromBank.length > 0
         ? <div className="cp-note">From your bank statements: {fromBank.join('; ')}. Type a number to use yours instead — a newer statement replaces it again.</div>
         : !read && home.money?.ready && <div className="cp-note">Or skip the typing: <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>upload a bank statement</button> and both are read off it.</div>}
 
       <div className="cp-field">
-        <label className="cp-label">Cash on hand / Monthly burn / Currency</label>
+        <label className="cp-label" htmlFor="cp2-rw-cash">Cash on hand</label>
         <div className="cp-input-row">
-          <input className="cp-input" inputMode="decimal" autoFocus={askCash || !fromStatementBurn} value={cash} onChange={(e) => setCash(e.target.value)} placeholder="Cash" aria-label="Cash on hand" />
-          <input className="cp-input" inputMode="decimal" value={burn} onChange={(e) => setBurn(e.target.value)} placeholder="A month" aria-label="Monthly burn" />
-          <input className="cp-input" style={{ maxWidth: 70 }} value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={8} aria-label="Currency" />
+          <input id="cp2-rw-cash" className="cp-input" inputMode="decimal" autoFocus={askCash || !fromStatementBurn} value={cash} onChange={(e) => setCash(e.target.value)} placeholder="Cash" />
+          <CurrencyPick value={cashCurrency} options={options} onChange={setCashCurrency} label="Currency of the cash" />
         </div>
-        <div className="cp-help">{preview != null ? `That is ${preview} months of runway.` : 'Enter both to see runway.'}</div>
+      </div>
+      <div className="cp-field">
+        <label className="cp-label" htmlFor="cp2-rw-burn">Spent a month</label>
+        <div className="cp-input-row">
+          <input id="cp2-rw-burn" className="cp-input" inputMode="decimal" value={burn} onChange={(e) => setBurn(e.target.value)} placeholder="A month" />
+          <CurrencyPick value={burnCurrency} options={options} onChange={setBurnCurrency} label="Currency of the monthly spend" />
+        </div>
+        <div className="cp-help">
+          {preview != null ? `That is ${preview} months of runway.`
+            : cashCurrency !== main || burnCurrency !== main ? `Counted in ${main}: converted at the newest ${FX_SOURCE} when you save.`
+            : 'Enter both to see runway.'}
+        </div>
       </div>
       <div className="cp-btn-row">
         <button className="cp-btn primary" disabled={busy} onClick={save}>Save</button>
         <button className="cp-btn" onClick={actions.closeSheet}>Back</button>
       </div>
 
-      {/* Only when the rows are in runway's own currency: euro bills under a peso runway explain nothing. */}
-      {sameCurrency && read.spend.length > 0 && (
+      {/* Converted into the main currency like runway itself, so the lines add up to the burn above. */}
+      {read?.inMain && read.spend.length > 0 && (
         <>
           <div className="cp-section"><span className="lead">Where it goes</span><span className="count">a month, last {read.perMonth?.over ?? 0} days</span></div>
-          {read.spend.map((s) => (
-            <div key={s.key} className="cp-kv"><span>{s.name}</span><b>{readMoney(read)(s.perMonth)}</b></div>
+          {read.spend.map((x) => (
+            <div key={x.key} className="cp-kv"><span>{x.name}</span><b>{readMoney(read)(x.perMonth)}</b></div>
           ))}
         </>
       )}
-      {sameCurrency && read.recurring.length > 0 && (
+      {read?.inMain && read.recurring.length > 0 && (
         <>
           <div className="cp-section"><span className="lead">Repeat bills</span><span className="count">{readMoney(read)(read.recurringPerMonth)} a month</span></div>
           {read.recurring.map((r) => (
@@ -181,7 +206,63 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
           ))}
         </>
       )}
-      {sameCurrency && <Months read={read} />}
+      {read?.inMain && <Months read={read} />}
+    </div>
+  );
+}
+
+/** A currency, picked from the ones this person has anything in. */
+function CurrencyPick({ value, options, onChange, label }: { value: string; options: string[]; onChange: (c: string) => void; label: string }) {
+  return (
+    <select className="cp-input cp2-mny-cur" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+      {[...new Set([value, ...options])].map((c) => <option key={c} value={c}>{c}</option>)}
+    </select>
+  );
+}
+
+/** The currencies worth offering: the main one, the time zone's, every one on a statement, then the common few. */
+function currencyChoices(home: HomeData, main: string): string[] {
+  const m = home.money;
+  return [...new Set([
+    main,
+    currencyForZone(home.profile.timezone),
+    ...(m?.imports.map((i) => i.currency) ?? []),
+    ...(m?.read?.converted.map((c) => c.currency) ?? []),
+    ...(m?.read?.otherCurrencies.map((c) => c.currency) ?? []),
+    'USD', 'EUR', 'GBP', 'PHP',
+  ].filter((c): c is string => !!c && /^[A-Z]{3}$/.test(c)))];
+}
+
+/* ─── The main currency ───────────────────────────────────────────────────── */
+
+/**
+ * The one currency the whole app counts in. Statements, balances and numbers
+ * typed in any other are converted into it at the ECB rate for their own day
+ * (lib/copilot/money/fx.ts); goals keep the unit they were written in.
+ */
+export function CurrencySheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  const main = mainCurrency(home.profile.finance, home.goals);
+  const [other, setOther] = useState('');
+  const [busy, setBusy] = useState(false);
+  const pick = async (c: string) => { setBusy(true); await actions.saveFinance({ main_currency: c }); setBusy(false); };
+  const read = home.money?.read ?? null;
+  return (
+    <div className="cp-sheet-embed">
+      <h3>Your currency</h3>
+      <p className="desc">
+        Everything is counted in {main}: money in, runway, what you spend. Statements and cash in any other currency are
+        converted into it at the {FX_SOURCE} for each row&rsquo;s own day, and the screen says which were.
+      </p>
+      {read?.converted.length ? <div className="cp-note">Converted now: {read.converted.map((c) => `${c.rows} rows in ${c.currency}`).join(', ')}.</div> : null}
+      <div className="cp-chips cp2-bank-chips">
+        {currencyChoices(home, main).map((c) => (
+          <button key={c} className={`cp-fchip${c === main ? ' active' : ''}`} disabled={busy || c === main} onClick={() => void pick(c)} aria-pressed={c === main}>{c}</button>
+        ))}
+      </div>
+      <div className="cp-input-row cp2-bank-cur">
+        <input className="cp-input sm" value={other} maxLength={3} onChange={(e) => setOther(e.target.value.toUpperCase())} placeholder="CAD" aria-label="Another currency, three letters" />
+        <button className="cp-connect" disabled={busy || !/^[A-Z]{3}$/.test(other)} onClick={() => void pick(other)}>Use it</button>
+      </div>
     </div>
   );
 }

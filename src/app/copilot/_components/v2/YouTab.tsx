@@ -22,6 +22,7 @@ import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { money } from '../format';
 import { creditedGoalId, goalCard } from '@/lib/copilot/goalcard';
 import { currencyMark, dayLabel, recentLabel } from '@/lib/copilot/money/ledger';
+import { mainCurrency } from '@/lib/copilot/money/fx';
 import { HOW_LABEL, sensorViews } from '@/lib/copilot/sensors';
 import type { Actions } from '../shared';
 import { useShell } from '../shell';
@@ -361,6 +362,8 @@ function Settings({ home, d, actions }: { home: HomeData; d: Derived; actions: A
     { key: 'offer', l: 'Your offer', s: p.offer?.sells || 'Not set — nothing is drafted without it', onClick: () => actions.openSheet({ kind: 'offer' }) },
     { key: 'targeting', l: 'Who it looks for', s: p.target_segments.length ? `${p.target_segments.join(', ')}${p.target_area || p.location ? ` · ${p.target_area || p.location}` : ''}` : 'Not set', onClick: () => actions.openSheet({ kind: 'targeting' }) },
     { key: 'working', l: 'How you work', s: `${home.workingProgress?.filled ?? 0} of ${home.workingProgress?.total ?? 6} written${home.workingProgress?.proposals ? ` · ${home.workingProgress.proposals} to check` : ''}`, onClick: () => actions.openSheet({ kind: 'working' }) },
+    // The currency every figure is counted in; statements in others are converted into it.
+    { key: 'currency', l: 'Currency', s: 'Everything is counted in it · other currencies converted', onClick: () => actions.openSheet({ kind: 'currency' }), right: mainCurrency(p.finance, home.goals) },
     { key: 'capacity', l: 'Capacity', s: CAPACITY_META[p.capacity].sub, onClick: () => actions.openSheet({ kind: 'capacity' }), right: CAPACITY_META[p.capacity].label },
     { key: 'account', l: 'Account & notifications', s: home.account.email ? `${home.account.email}${home.account.verified ? ' · verified' : ' · not verified'}${home.push.enabled ? ' · push on' : ''}` : 'This device only — add an email to sign in elsewhere', onClick: () => actions.openSheet({ kind: 'account' }) },
     b.effective === 'free'

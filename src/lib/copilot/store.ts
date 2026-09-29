@@ -51,8 +51,9 @@ import { NIGHTLY_COLUMNS, nightlyFromRow, type NightlyOutput, type NightlyRun, t
 import { resolveLlmConfig, resolvePlanConfig } from './agent/llm';
 import { ROADMAP_COLUMNS, ROADMAP_MARK_EVENT, ROADMAP_RUN_KIND, markFromEvent, roadmapRunFromRow, type RoadmapMark, type RoadmapRun } from './roadmap';
 import { EXPERIMENT_EVENT, experimentMarkFromEvent, type ExperimentMark } from './experiment';
-import { loadMoneyRows } from './money/store';
-import { chosenCurrency, financeFromRead, financeFromTyped, financeWithoutStatements, moneyHome } from './money/ledger';
+import { loadMoneyRows, moneyGoals, ratesFor, refreshFinance } from './money/store';
+import { financeFromRead, financeFromTyped, moneyHome } from './money/ledger';
+import { latestRate, mainCurrency } from './money/fx';
 import { resolveStatementConfig } from './money/extract';
 
 export { getProfile, logEvent, setActionStatus, touchProfile };
@@ -897,6 +898,11 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   const unresolved = repliesAwaitingOutcome(replyRows2, nowTs);
   const capture = captureAsk({ opened, replies: unresolved, sentInWindow: metrics.sent, windowDays: metrics.window_days });
 
+  // One currency for every figure (money/fx.ts), and the rates to put the
+  // others into it: from the cache, fetched only for days it does not reach.
+  const main = mainCurrency(profile.finance, goals);
+  const fx = moneyRows.unreadable ? null : await ratesFor({ main, rows: moneyRows, finance: profile.finance ?? {}, today });
+
   // The money read, computed here from this load's rows so every figure on the
   // screen and the payer questions agree with one another. Payers are matched
   // against the businesses already in the pipeline, as suggestions only.
@@ -908,8 +914,10 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     payees: moneyRows.payees,
     accounts: moneyRows.accounts,
     today,
-    currency: profile.finance?.currency || goals.find((g) => g.metric === 'currency')?.unit || '$',
-    own: chosenCurrency(profile.finance),
+    currency: main,
+    main,
+    fx: fx?.table,
+    fxMissing: fx?.missing,
     opportunities: pipelineRows.map((o) => ({ id: o.id, title: o.title })),
     unreadable: moneyRows.unreadable,
   });
@@ -920,10 +928,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   // moved (financeFromRead returns the row itself otherwise), and a failed write
   // is said on the Runway sheet rather than shown as a runway that never came.
   let settleError: string | null = null;
-  if (moneyRows.ready && !moneyRows.unreadable) {
+  if (fx) {
     const was: Finance = profile.finance ?? {};
-    const stamp = new Date().toISOString();
-    const settled = money.read ? financeFromRead(was, money.read, stamp) : financeWithoutStatements(was, stamp);
+    const settled = financeFromRead(was, moneyRows.ready ? money.read : null, new Date().toISOString(), { main, latest: (from, to) => latestRate(fx.table, from, to) });
     if (settled !== was) {
       const { error } = await db.from('copilot_profiles').update({ finance: settled }).eq('id', profileId);
       if (error) settleError = describeDbError(error, 'Runway could not be updated from your statements.');
@@ -1161,12 +1168,22 @@ export async function requestSource(profileId: string, key: SourceKey) {
  * financeFromRead); a number left as it was keeps where it came from, so saving
  * the currency does not turn a balance read off the bank into a typed guess.
  */
-export async function setFinance(profileId: string, finance: Finance) {
+export async function setFinance(profileId: string, finance: Finance & { cash_currency?: string; burn_currency?: string }) {
   const prev: Finance = (await getProfile(profileId))?.finance ?? {};
-  const clean = financeFromTyped(prev, finance, new Date().toISOString());
+  const goals = await moneyGoals(profileId);
+  // A main currency chosen here is the whole app's; the numbers typed with it
+  // are in whichever currency the person typed them in.
+  const withMain: Finance = finance.main_currency ? { ...prev, main_currency: finance.main_currency } : prev;
+  const main = mainCurrency(withMain, goals);
+  const clean = finance.cash === undefined && finance.monthly_burn === undefined && finance.main_currency
+    ? { ...withMain, updated_at: new Date().toISOString() }
+    : financeFromTyped(withMain, { cash: finance.cash, monthly_burn: finance.monthly_burn, currencies: { cash: finance.cash_currency, monthly_burn: finance.burn_currency } }, new Date().toISOString(), main);
   const { error } = await copilotDb().from('copilot_profiles').update({ finance: clean }).eq('id', profileId);
   if (error) throw new Error(describeDbError(error, 'Could not save runway.'));
-  await logEvent(profileId, 'finance_updated', { monthly_burn: clean.monthly_burn ?? null, cash: clean.cash ?? null, currency: clean.currency ?? null });
+  await logEvent(profileId, 'finance_updated', { monthly_burn: clean.monthly_burn ?? null, cash: clean.cash ?? null, currency: clean.currency ?? null, main });
+  // Converted now, not on the next load: a number typed in pesos in a dollar
+  // app, or a main currency just changed, needs the newest rate to mean anything.
+  await refreshFinance(profileId);
 }
 
 /**

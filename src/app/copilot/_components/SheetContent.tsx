@@ -22,7 +22,7 @@ import { whenLabel } from '@/lib/copilot/review';
 import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
 import BankSheet from './BankSheet';
-import { MoneyInSheet, RunwaySheet } from './MoneySheets';
+import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
 import { dayLabel } from '@/lib/copilot/money/ledger';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
@@ -38,6 +38,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'reset': return <ResetSheet actions={actions} />;
     case 'finance': return <RunwaySheet home={home} actions={actions} />;
     case 'moneyin': return <MoneyInSheet home={home} actions={actions} />;
+    case 'currency': return <CurrencySheet home={home} actions={actions} />;
     case 'targeting': return <TargetingSheet home={home} actions={actions} />;
     case 'account': return <AccountSheet home={home} actions={actions} />;
     case 'won': return <WonSheet home={home} oppId={sheet.oppId} actions={actions} />;

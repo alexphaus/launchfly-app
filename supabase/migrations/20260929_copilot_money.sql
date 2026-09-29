@@ -77,6 +77,10 @@ create table if not exists copilot_money_imports (
   rows_found int,
   rows_new int,
   rows_dropped int,
+  -- Rows the file had that are not money yet or not money at all — scheduled,
+  -- cancelled, a transfer between the person's own accounts — said in one line
+  -- so a count lower than the file's is explained, not a mystery.
+  skipped text,
   total_in numeric,
   total_out numeric,
   -- The checked rows of a reading that is waiting on the person's yes. Emptied
@@ -91,6 +95,9 @@ create table if not exists copilot_money_imports (
   finished_at timestamptz,
   confirmed_at timestamptz
 );
+
+-- For a database that ran this file before `skipped` was in it.
+alter table copilot_money_imports add column if not exists skipped text;
 
 create index if not exists copilot_money_imports_profile_idx on copilot_money_imports(profile_id, started_at desc);
 

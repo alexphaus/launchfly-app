@@ -874,6 +874,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
             : 'Noted.');
         } else if (answer.action === 'confirm') say('Confirmed. Those rows count now.');
         else if (answer.action === 'discard') say('Removed, with the rows it brought in.');
+        else if (answer.action === 'currency') say(`Counted in ${answer.currency.toUpperCase()}.`);
         else say('Deleted. Nothing read off your bank is kept.');
         return { ok: true };
       } catch (e) {

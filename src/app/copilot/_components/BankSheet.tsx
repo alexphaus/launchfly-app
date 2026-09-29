@@ -7,13 +7,13 @@
 // waiting on their eye, the read itself, the questions, then the record of
 // what is on file and the way to delete all of it.
 import { useState } from 'react';
-import { PAYEE_ROLES, ROLE_LABEL, dayLabel, moneyText, type MoneyImport, type PayeeRole } from '@/lib/copilot/money/ledger';
+import { PAYEE_ROLES, ROLE_LABEL, currencyCodeOf, dayLabel, moneyText, type MoneyImport, type PayeeRole } from '@/lib/copilot/money/ledger';
 import { STATEMENT_ACCEPT } from '@/lib/copilot/money/statement';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Actions } from './shared';
 
-/** What the upload takes when no model is set up: the two formats that need none. */
-const PARSED_ONLY = '.csv,.tsv,.txt,.ofx,.qfx';
+/** What the upload takes when no model is set up: exports, and PDFs — most print a balance the rows can be read against. */
+const NO_MODEL = '.csv,.tsv,.txt,.ofx,.qfx,.pdf';
 const EVERY: Record<'week' | 'fortnight' | 'month', string> = { week: 'a week', fortnight: 'every two weeks', month: 'a month' };
 
 export default function BankSheet({ home, actions }: { home: HomeData; actions: Actions }) {
@@ -46,6 +46,15 @@ export default function BankSheet({ home, actions }: { home: HomeData; actions: 
   const failed = m.imports.filter((i) => i.status === 'failed');
   const onFile = m.imports.filter((i) => i.status === 'ready');
   const read = m.read;
+  // One file whose currency is unknown, asked about at a time: the answer covers
+  // its whole account, so the next export of the same app needs no question.
+  const unlabelled = [...review, ...onFile].find((i) => !i.currency) ?? null;
+  const currencyOptions = [...new Set([
+    currencyCodeOf(home.profile.finance?.currency),
+    ...m.imports.map((i) => i.currency),
+    ...(read?.otherCurrencies.map((o) => o.currency) ?? []),
+    'USD', 'EUR',
+  ].filter((c): c is string => !!c && /^[A-Z]{3}$/.test(c)))].slice(0, 5);
 
   return (
     // Embedded, so section headers sit on the cards' edge rather than the tab's.
@@ -53,7 +62,7 @@ export default function BankSheet({ home, actions }: { home: HomeData; actions: 
       <h3>Bank statements</h3>
       <p className="desc">
         Your bank’s own record, read into rows. Runway, income, who pays you and your repeat bills are counted off
-        it instead of typed. The file is not kept, only the rows{m.canRead ? ' — and a PDF or a screenshot is read by the AI model this app uses' : ''}.
+        it instead of typed. The file is not kept, only the rows{m.canRead ? ' — and a screenshot, or a PDF without a running balance, is read by the AI model this app uses' : ''}.
       </p>
       {m.unreadable && <div className="cp-error">Could not read your statements just now: {m.unreadable}</div>}
 
@@ -61,15 +70,15 @@ export default function BankSheet({ home, actions }: { home: HomeData; actions: 
         {uploading ? 'Uploading…' : m.rows ? 'Upload another statement' : 'Upload a statement'}
         <input
           type="file"
-          accept={m.canRead ? STATEMENT_ACCEPT : PARSED_ONLY}
+          accept={m.canRead ? STATEMENT_ACCEPT : NO_MODEL}
           multiple
           disabled={uploading}
           onChange={(e) => { const files = e.currentTarget.files; void upload(files).then(() => { e.target.value = ''; }); }}
         />
       </label>
       <p className="cp-help">
-        The CSV or OFX download from your bank’s website reads best.
-        {m.canRead ? ' A PDF statement or a screenshot of your banking app works too.' : ' PDFs and screenshots need an AI model on this server, and none is set up.'}
+        The CSV or OFX download from your bank’s website reads best, then a PDF statement.
+        {m.canRead ? ' A screenshot of your banking app works too.' : ' Screenshots, and PDFs that print no running balance, need an AI model on this server, and none is set up.'}
         {' '}Overlapping statements are fine: a row already on file is not counted twice.
       </p>
 
@@ -77,6 +86,7 @@ export default function BankSheet({ home, actions }: { home: HomeData; actions: 
         <div key={i.id} className="cp-banner cp2-bank-reading"><span className="dot" />Reading {i.fileName ?? 'your statement'}…</div>
       ))}
       {review.map((i) => <ReviewCard key={i.id} i={i} money={money} actions={actions} />)}
+      {unlabelled && <CurrencyQuestion key={unlabelled.id} i={unlabelled} options={currencyOptions} actions={actions} />}
       {failed.map((i) => (
         <div key={i.id} className="cp-src cp2-bank-card">
           <div className="ct">Could not read {i.fileName ?? 'that file'}</div>
@@ -87,7 +97,7 @@ export default function BankSheet({ home, actions }: { home: HomeData; actions: 
 
       {read && (
         <>
-          <div className="cp-section"><span className="lead">What it says</span><span className="count">{m.rows} rows · {dayLabel(read.from)} to {dayLabel(read.to)}</span></div>
+          <div className="cp-section"><span className="lead">What it says</span><span className="count">{read.rows} rows · {dayLabel(read.from)} to {dayLabel(read.to)}</span></div>
           <div className="cp-src cp2-bank-read">{read.lines.map((l) => <p key={l}>{l}</p>)}</div>
         </>
       )}
@@ -187,6 +197,30 @@ function ReviewCard({ i, money, actions }: { i: MoneyImport; money: (n: number |
   );
 }
 
+/**
+ * A file that never said what money it is in — a budgeting app's export, most
+ * often. Until it is said, its rows are not added to a statement that names a
+ * currency: pesos summed into a euro account read as a fortune.
+ */
+function CurrencyQuestion({ i, options, actions }: { i: MoneyImport; options: string[]; actions: Actions }) {
+  const [busy, setBusy] = useState(false);
+  const [other, setOther] = useState('');
+  const answer = async (currency: string) => { setBusy(true); await actions.answerMoney({ action: 'currency', id: i.id, currency }); setBusy(false); };
+  return (
+    <div className="cp-src cp2-bank-card">
+      <div className="ct">Which currency is {i.fileName ?? 'this file'} in?</div>
+      <div className="cs">The file does not say. Until you do, its {i.rowsFound ?? ''} rows are not added to a statement that names one.</div>
+      <div className="cp-chips cp2-bank-chips">
+        {options.map((c) => <button key={c} className="cp-fchip" disabled={busy} onClick={() => void answer(c)}>{c}</button>)}
+      </div>
+      <div className="cp-input-row cp2-bank-cur">
+        <input className="cp-input sm" value={other} maxLength={3} onChange={(e) => setOther(e.target.value.toUpperCase())} placeholder="PHP" aria-label="Another currency, three letters" />
+        <button className="cp-connect" disabled={busy || !/^[A-Z]{3}$/.test(other)} onClick={() => void answer(other)}>Use it</button>
+      </div>
+    </div>
+  );
+}
+
 /** One question, a chip per answer. The answer is the whole interaction. */
 function Question({ title, line, options, onAnswer }: {
   title: string;
@@ -211,14 +245,15 @@ function Question({ title, line, options, onAnswer }: {
 function OnFileRow({ i, actions }: { i: MoneyImport; actions: Actions }) {
   // Two taps: a statement is months of rows, and the first tap says what the second does.
   const [armed, setArmed] = useState(false);
-  const checkWord = i.check === 'balanced' ? 'balances add up' : i.check === 'no_balances' ? (i.method === 'parsed' ? 'your bank’s export' : 'you checked the totals') : 'you checked the totals';
+  const checkWord = i.check === 'balanced' ? 'balances add up' : i.check === 'no_balances' ? (i.method === 'parsed' ? 'no balances printed to check' : 'you checked the totals') : 'you checked the totals';
   return (
     <div className="cp-src cp2-bank-card">
       <div className="ct">{i.fileName ?? 'Statement'}</div>
       <div className="cs">
         {i.periodStart && i.periodEnd ? `${dayLabel(i.periodStart)} to ${dayLabel(i.periodEnd)} · ` : ''}
-        {i.rowsFound} rows{i.rowsNew != null && i.rowsNew !== i.rowsFound ? ` (${i.rowsNew} new)` : ''} · {checkWord}
+        {i.rowsFound} rows{i.rowsNew != null && i.rowsNew !== i.rowsFound ? ` (${i.rowsNew} new)` : ''}{i.currency ? ` · ${i.currency}` : ''} · {checkWord}
       </div>
+      {i.skipped && <div className="cs">{i.skipped}</div>}
       {/* Something that did not follow the rows in — a win that could not be recorded — is said here, beside them. */}
       {i.note && <div className="cs bad">{i.note}</div>}
       <div className="acts">

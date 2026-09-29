@@ -80,6 +80,7 @@ export type SheetState =
 /** What the person can say about their statements. See /api/copilot/money. */
 export type MoneyAnswer =
   | { action: 'confirm' | 'discard'; id: string }
+  | { action: 'currency'; id: string; currency: string }
   | { action: 'name'; key: string; role: PayeeRole | null; opportunity_id?: string | null }
   | { action: 'forget'; confirm: string };
 

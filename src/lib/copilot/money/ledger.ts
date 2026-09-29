@@ -97,8 +97,10 @@ export interface PartyLine {
 }
 
 export interface MoneyRead {
-  /** The currency every figure is in: the one most rows carry. */
+  /** The currency every figure is in: the person's own when rows carry it, else the one most rows carry. */
   currency: string;
+  /** Rows behind the figures: in that currency, and not between the person's own accounts. */
+  rows: number;
   from: string;
   to: string;
   days: number;
@@ -117,7 +119,7 @@ export interface MoneyRead {
   recurringPerMonth: number;
   cash: { amount: number; on: string; accounts: number; missing: number } | null;
   runwayMonths: number | null;
-  /** Rows in another currency than `currency`, kept out of every figure and said. */
+  /** Rows in another currency than `currency`, kept out of every figure and said. '' is rows whose file named none. */
   otherCurrencies: Array<{ currency: string; rows: number }>;
   /** The read, one sentence each, every number off the rows above. */
   lines: string[];
@@ -165,6 +167,14 @@ export function currencyMark(c: string | null | undefined): string {
   if (!raw) return '$';
   const code = raw.toUpperCase();
   return SYMBOL[code] ?? raw;
+}
+
+/** The code for a mark only one currency uses: ₱ is PHP, $ is a dozen of them and says nothing. */
+export function currencyCodeOf(c: string | null | undefined): string | null {
+  const raw = (c ?? '').trim();
+  if (/^[A-Za-z]{3}$/.test(raw)) return raw.toUpperCase();
+  const codes = Object.entries(SYMBOL).filter(([, mark]) => mark === raw).map(([code]) => code);
+  return codes.length === 1 ? codes[0] : null;
 }
 
 /** "$1,200", "$5.50", "USD 1,200" — whole units at 100 and over, cents under it. */
@@ -266,16 +276,22 @@ export interface MoneyReadInput {
 export function moneyRead(input: MoneyReadInput): MoneyRead | null {
   if (!input.txs.length) return null;
 
-  // One currency per figure. Rows with none are the person's own currency.
+  // One currency per figure: the person's own when rows carry it — their
+  // runway is typed in it — else the one most rows carry. A file that names
+  // none (a budgeting app's export, most often) is the person's own currency
+  // only while nothing else names one. Beside a statement that does, it is a
+  // separate pile until they say which: 264 unlabelled peso rows used to be
+  // summed into a euro account's figures and printed with its €.
   const tally = new Map<string, number>();
   for (const t of input.txs) {
     const c = (t.currency || '').toUpperCase();
     tally.set(c, (tally.get(c) ?? 0) + 1);
   }
   const named = [...tally.entries()].filter(([c]) => c).sort((a, b) => b[1] - a[1]);
-  const main = named[0]?.[0] ?? '';
-  const inMain = (c: string | null) => { const u = (c || '').toUpperCase(); return !u || u === main; };
-  const otherCurrencies = named.filter(([c]) => c !== main).map(([currency, rows]) => ({ currency, rows }));
+  const own = currencyCodeOf(input.currency);
+  const main = own && tally.has(own) ? own : named[0]?.[0] ?? '';
+  const inMain = (c: string | null) => (c || '').toUpperCase() === main;
+  const otherCurrencies = [...tally.entries()].filter(([c]) => c !== main).sort((a, b) => b[1] - a[1]).map(([currency, rows]) => ({ currency, rows }));
   const currency = main || input.currency;
 
   const payee = new Map(input.payees.map((p) => [p.key, p]));
@@ -375,10 +391,13 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
     .sort((a, b) => a.next.localeCompare(b.next))[0];
   if (next) lines.push(`Next: ${next.name} ${money(next.amount)} around ${dayLabel(next.next)}.`);
   if (daysBetween(to, input.today) > STALE_DAYS) lines.push(`Your statement ends ${dayLabel(to)}. Add a newer one to keep this current.`);
-  for (const o of otherCurrencies) lines.push(`${o.rows} row${o.rows === 1 ? '' : 's'} in ${o.currency} are not in these numbers.`);
+  for (const o of otherCurrencies) {
+    const n = `${o.rows} row${o.rows === 1 ? '' : 's'}`;
+    lines.push(o.currency ? `${n} in ${o.currency} are not in these numbers.` : `${n} with no currency are not in these numbers. Say which on Bank statements.`);
+  }
 
   return {
-    currency, from, to, days, inTotal, outTotal, payers, payees: payees.slice(0, 12), perMonth, byRole,
+    currency, rows: txs.length, from, to, days, inTotal, outTotal, payers, payees: payees.slice(0, 12), perMonth, byRole,
     lastIn, recurring, recurringPerMonth, cash, runwayMonths, otherCurrencies, lines,
     toName: payers.filter((p) => p.role == null).slice(0, MAX_QUESTIONS),
     ownCheck: payees.filter((p) => p.role == null && OWN_ACCOUNT.test(p.key)).slice(0, MAX_QUESTIONS),
@@ -392,10 +411,23 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
  * is the newer evidence. A number the person typed after the statement's own
  * date stands: they know something the file does not. `source` says where each
  * number came from, so the sheet can say it.
+ *
+ * Runway is cash over burn, so both have to be one currency. A read in another
+ * currency than a number the person typed stays on the money card and out of
+ * the row — euro spending under typed pesos made 179 months of runway — and
+ * what an earlier read left in the row goes: moneyRead reads the person's own
+ * currency whenever any row carries it, so a read in another means no row in
+ * theirs is left to stand behind those figures. With nothing typed, the row
+ * follows the read.
  */
 export function financeFromRead(prev: Finance, read: MoneyRead | null, nowIso: string): Finance {
   if (!read) return prev;
-  const next: Finance = { ...prev, source: { ...(prev.source ?? {}) } };
+  const mark = currencyMark(read.currency);
+  const switching = !!prev.currency && currencyMark(prev.currency) !== mark;
+  const typed = (f: 'cash' | 'monthly_burn') => prev[f] != null && prev.source?.[f] !== 'statement';
+  if (switching && (typed('cash') || typed('monthly_burn'))) return financeWithoutStatements(prev, nowIso);
+  const base = switching ? financeWithoutStatements(prev, nowIso) : prev;
+  const next: Finance = { ...base, source: { ...(base.source ?? {}) } };
   const typedOn = prev.typed_at?.slice(0, 10) ?? null;
   const newer = (field: 'cash' | 'monthly_burn', on: string) => prev.source?.[field] !== 'typed' || !typedOn || on >= typedOn;
   let changed = false;
@@ -411,10 +443,18 @@ export function financeFromRead(prev: Finance, read: MoneyRead | null, nowIso: s
     next.source!.monthly_burn = 'statement';
     changed = true;
   }
-  if (!changed) return prev;
-  if (!next.currency) next.currency = currencyMark(read.currency);
+  if (!changed) return base;
+  if (!next.currency || switching) next.currency = mark;
   next.updated_at = nowIso;
   return next;
+}
+
+/** Why runway is not using the statements, when that is the reason: a typed number in another currency. Null otherwise. */
+export function currencyClash(finance: Finance, read: Pick<MoneyRead, 'currency'> | null): string | null {
+  if (!read || !finance.currency || currencyMark(finance.currency) === currencyMark(read.currency)) return null;
+  const typed = (['cash', 'monthly_burn'] as const).some((f) => finance[f] != null && finance.source?.[f] !== 'statement');
+  if (!typed) return null;
+  return `Your statements are in ${read.currency} and the runway you typed is in ${finance.currency}, so runway does not use them.`;
 }
 
 /** Statements gone: the numbers read off them go too. What was typed stays — and a row with nothing read off a statement is returned as it is. */
@@ -519,6 +559,8 @@ export interface MoneyImport {
   rowsFound: number | null;
   rowsNew: number | null;
   rowsDropped: number | null;
+  /** "Left out 24 scheduled rows (…)." — rows the file had that are not money yet, or not money at all. */
+  skipped: string | null;
   totalIn: number | null;
   totalOut: number | null;
   currency: string | null;
@@ -563,6 +605,7 @@ export function importView(row: Record<string, unknown>, now: Date): MoneyImport
     rowsFound: numOrNull(row.rows_found),
     rowsNew: numOrNull(row.rows_new),
     rowsDropped: numOrNull(row.rows_dropped),
+    skipped: strOrNull(row.skipped),
     totalIn: numOrNull(row.total_in),
     totalOut: numOrNull(row.total_out),
     currency: strOrNull(row.currency),
@@ -659,7 +702,7 @@ export function importLine(i: MoneyImport): string | null {
   if (i.status === 'ready') {
     const fresh = i.rowsNew ?? 0;
     const rows = fresh === 1 ? '1 new row' : `${fresh} new rows`;
-    return `Read ${name}: ${fresh || i.rowsFound == null ? rows : 'nothing new — you had every row already'}${i.check === 'balanced' ? ', and the balances add up' : ''}.`;
+    return `Read ${name}: ${fresh || i.rowsFound == null ? rows : 'nothing new — you had every row already'}${i.check === 'balanced' ? ', and the balances add up' : ''}.${i.skipped ? ` ${i.skipped}` : ''}`;
   }
   return null;
 }

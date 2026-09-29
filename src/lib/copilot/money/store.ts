@@ -36,7 +36,7 @@ import {
  */
 export class MoneyRefusal extends Error {}
 
-const IMPORT_COLS = 'id, file_name, format, method, status, balance_check, check_detail, currency, period_start, period_end, rows_found, rows_new, rows_dropped, total_in, total_out, error, note, started_at, finished_at';
+const IMPORT_COLS = 'id, file_name, format, method, status, balance_check, check_detail, currency, period_start, period_end, rows_found, rows_new, rows_dropped, skipped, total_in, total_out, error, note, started_at, finished_at';
 /** A year and a month of rows: the read says "last 12 months", and the extra month keeps a bill's rhythm visible across the edge. */
 const TX_READ_DAYS = 400;
 /** Rows read at most. Past this the oldest fall out of the read, never the newest. */
@@ -198,7 +198,7 @@ interface Pending {
 export async function finishImport(
   profileId: string,
   importId: string,
-  input: { statement: Statement; dropped: number; truncated?: number; method: 'parsed' | 'read' | 'link'; provider?: string },
+  input: { statement: Statement; dropped: number; truncated?: number; skipped?: string | null; method: 'parsed' | 'read' | 'link'; provider?: string },
 ): Promise<MoneyImport> {
   const db = copilotDb();
   const st = input.statement;
@@ -225,27 +225,28 @@ export async function finishImport(
     account_id: account.id,
     balance_check: checked.check as BalanceCheck,
     check_detail: checked.detail,
-    currency: st.currency,
+    currency: account.currency,
     period_start: periodStart,
     period_end: periodEnd,
     opening_balance: checked.opening,
     closing_balance: checked.closing,
     rows_found: rows.length,
     rows_dropped: dropped,
+    skipped: input.skipped ?? null,
     total_in: totalIn,
     total_out: totalOut,
     finished_at: new Date().toISOString(),
   };
 
   if (!ready) {
-    const pending: Pending = { accountId: account.id, currency: st.currency, closing: checked.closing, rows, fingerprints };
+    const pending: Pending = { accountId: account.id, currency: account.currency, closing: checked.closing, rows, fingerprints };
     const { error } = await db.from('copilot_money_imports').update({ ...base, status: 'review', pending }).eq('id', importId);
     if (error) throw new Error(describeDbError(error, 'Could not save what was read.'));
     await logEvent(profileId, 'statement_review', { import_id: importId, rows: rows.length, check: checked.check });
     return reloadImport(profileId, importId);
   }
 
-  const rowsNew = await commitRows(profileId, importId, { accountId: account.id, currency: st.currency, closing: checked.closing, rows, fingerprints });
+  const rowsNew = await commitRows(profileId, importId, { accountId: account.id, currency: account.currency, closing: checked.closing, rows, fingerprints });
   const { error } = await db.from('copilot_money_imports').update({ ...base, status: 'ready', rows_new: rowsNew, pending: null }).eq('id', importId);
   if (error) throw new Error(describeDbError(error, 'The rows are in, but the statement could not be marked read.'));
   await afterRowsLanded(profileId, importId, 'system');
@@ -258,17 +259,29 @@ async function reloadImport(profileId: string, importId: string): Promise<MoneyI
   return importView((data ?? { id: importId, status: 'failed', error: 'The statement row could not be read back.' }) as Record<string, unknown>, new Date());
 }
 
-async function upsertAccount(profileId: string, provider: string, st: Statement): Promise<{ id: string }> {
-  const { data, error } = await copilotDb().from('copilot_money_accounts').upsert({
+/**
+ * The account a statement is from, and the currency its rows are in. A file
+ * that names none takes the one its account already has: the person said it
+ * once (setImportCurrency), and next month's export of the same app is the
+ * same money. Writing the file's null over it made them answer every month.
+ */
+async function upsertAccount(profileId: string, provider: string, st: Statement): Promise<{ id: string; currency: string | null }> {
+  const db = copilotDb();
+  const externalKey = accountKey(provider, st.account);
+  const { data: known, error: readError } = await db.from('copilot_money_accounts').select('currency')
+    .eq('profile_id', profileId).eq('provider', provider).eq('external_key', externalKey).maybeSingle();
+  if (readError) throw new Error(describeDbError(readError, 'Could not read the account this statement is from.'));
+  const currency = st.currency ?? ((known?.currency as string | null) || null);
+  const { data, error } = await db.from('copilot_money_accounts').upsert({
     profile_id: profileId,
     provider,
-    external_key: accountKey(provider, st.account),
+    external_key: externalKey,
     institution: st.account.institution,
     mask: st.account.mask,
-    currency: st.currency,
+    currency,
   }, { onConflict: 'profile_id,provider,external_key' }).select('id').single();
   if (error) throw new Error(describeDbError(error, 'Could not save the account this statement is from.'));
-  return { id: String(data.id) };
+  return { id: String(data.id), currency };
 }
 
 /**
@@ -327,7 +340,11 @@ async function recomputeBalances(profileId: string): Promise<void> {
     ]);
     const fromRow = tx.data ? { on: String(tx.data.posted_on).slice(0, 10), balance: Number(tx.data.balance_after) } : null;
     const fromImport = imp.data ? { on: String(imp.data.period_end).slice(0, 10), balance: Number(imp.data.closing_balance) } : null;
-    const best = fromRow && fromImport ? (fromImport.on > fromRow.on ? fromImport : fromRow) : fromRow ?? fromImport;
+    // On the same day the statement's closing wins: rows written in one batch
+    // share created_at, so "the last row" of a day with two is a coin toss —
+    // Wise's quarter ends on two rows dated 30 Jun, and the toss read €5 for a
+    // closing balance of €0.00. The closing is the end of the checked chain.
+    const best = fromRow && fromImport ? (fromImport.on >= fromRow.on ? fromImport : fromRow) : fromRow ?? fromImport;
     await db.from('copilot_money_accounts').update({ balance: best?.balance ?? null, balance_on: best?.on ?? null }).eq('id', a.id);
   }
 }
@@ -484,6 +501,40 @@ export async function confirmImport(profileId: string, importId: string): Promis
   if (e2) throw new Error(describeDbError(e2, 'The rows are in, but the statement could not be marked read.'));
   await logEvent(profileId, 'statement_confirmed', { import_id: importId, new: rowsNew });
   await afterRowsLanded(profileId, importId, 'system');
+}
+
+/**
+ * The currency of a file that did not say — a budgeting app's export, most
+ * often. Set on its whole account, not just this upload: last month's export
+ * of the same app shares the account and is in the same money. Until this is
+ * said, its rows sit outside any statement that names a currency (moneyRead).
+ */
+export async function setImportCurrency(profileId: string, importId: string, raw: string): Promise<void> {
+  const currency = raw.trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new MoneyRefusal('A currency is three letters: PHP, EUR, USD.');
+  const db = copilotDb();
+  const { data, error } = await db.from('copilot_money_imports').select('account_id, currency, pending').eq('profile_id', profileId).eq('id', importId).maybeSingle();
+  if (error) throw new Error(describeDbError(error, 'Could not read that statement.'));
+  if (!data) throw new MoneyRefusal('That statement is not on file any more.');
+  if (data.currency) throw new MoneyRefusal(`That statement says it is in ${data.currency}.`);
+  const pending = data.pending as Pending | null;
+  const accountId = (data.account_id as string | null) ?? null;
+  const writes = [
+    db.from('copilot_money_imports').update({ currency, ...(pending ? { pending: { ...pending, currency } } : {}) }).eq('profile_id', profileId).eq('id', importId),
+  ];
+  if (accountId) {
+    writes.push(
+      db.from('copilot_money_imports').update({ currency }).eq('profile_id', profileId).eq('account_id', accountId).is('currency', null),
+      db.from('copilot_money_accounts').update({ currency }).eq('profile_id', profileId).eq('id', accountId),
+      db.from('copilot_transactions').update({ currency }).eq('profile_id', profileId).eq('account_id', accountId).is('currency', null),
+    );
+  }
+  for (const w of writes) {
+    const { error: e } = await w;
+    if (e) throw new Error(describeDbError(e, 'Could not save the currency.'));
+  }
+  await logEvent(profileId, 'statement_currency', { import_id: importId, currency });
+  await refreshFinance(profileId);
 }
 
 /**

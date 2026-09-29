@@ -54,6 +54,7 @@ const PROBES: Array<{ table: string; column: string; migration: string }> = [
   // Money read from the bank. Without these the Bank statements sheet says it is not set up, which is honest but easy to mistake for an account with nothing uploaded.
   { table: 'copilot_transactions', column: 'outcome_id', migration: '20260929_copilot_money.sql' },
   { table: 'copilot_money_imports', column: 'pending', migration: '20260929_copilot_money.sql' },
+  { table: 'copilot_money_imports', column: 'skipped', migration: '20260929_copilot_money.sql' },
   { table: 'copilot_counterparties', column: 'role', migration: '20260929_copilot_money.sql' },
   { table: 'copilot_money_accounts', column: 'balance_on', migration: '20260929_copilot_money.sql' },
 ];

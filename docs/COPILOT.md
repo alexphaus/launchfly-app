@@ -890,8 +890,27 @@ its bytes (`sniffFormat`), and the two ways in are not trusted the same:
   order (the person's timezone breaks a tie), decimals by a vote across the
   column, debit/credit columns and DR/CR marks turned into signs. Read now, in
   the request.
-- **read** — PDFs (their text layer, `pdf-parse`) and screenshots (resized with
-  `sharp`), copied into rows by a model in `after()` (`extract.ts`). A model can
+
+  Budgeting-app exports (the kind people keep for cash) come through the same
+  parser, and three of their habits are handled rather than summed: rows marked
+  pending or dated after the person's today are left out (apps export a year of
+  scheduled bills); a transfer whose row names both of the app's own accounts
+  is left out (it is neither income nor spending); a blank note falls back to
+  the payee column, then the category, so fifty unlabelled meals are "Dining
+  Out", not one payee called "(no description)". Cancelled and declined rows are
+  left out; refunded ones stay, because the refund is a row of its own. Rows in
+  a second currency are left out, never relabelled. Each import carries one
+  line saying what was left out (`skipped`), on the sheet and in the toast.
+- **parsed, from a PDF** — a PDF's text layer (`pdf-parse`) is tried by rules
+  first (`parseStatementText`): a line ending in an amount and a running
+  balance, dated at its start or on the very next line (Wise's layout). It is
+  used only when the running balance holds on every row
+  (`statementFromPdfText`), so no misread column survives it; anything else
+  goes to the model. Wise's 101-row quarterly statement is read this way in
+  about a second, and nothing is sent anywhere. So a PDF that prints a balance
+  needs no model, and the upload takes PDFs on a server with none.
+- **read** — any other PDF, and screenshots (resized with `sharp`), copied into
+  rows by a model in `after()` (`extract.ts`). A model can
   drop a line, misread a digit or flip a sign, so its prompt forbids arithmetic,
   `statementFromReading` drops whatever does not parse — counted, never
   repaired — and the reading is a proposal until it proves itself.
@@ -923,13 +942,26 @@ a date off the rows — invariant 2):
   of rows and are withheld under 20 days of history; repeat bills are the same
   payee, about the same amount, weekly to monthly, at least three times and
   still going (`recurringOut`); cash is the last balance each account printed.
-  Rows in another currency are kept out of every figure and said to be.
+  One currency per figure: the person's own (their runway's) when any row
+  carries it, else the one most rows carry. Rows in another are kept out and
+  said to be. A file that names no currency is the person's own
+  currency only while nothing else names one; beside a statement that does, it
+  is its own pile until they say which (`setImportCurrency`, one chip on the
+  sheet, applied to the whole account, and inherited by the next upload to it,
+  so next month's export of the same app needs no question). 264 unlabelled peso rows had been summed into a euro
+  account's figures and printed with its €.
 - **The finance row** (`financeFromRead`): cash and burn written into
   `profile.finance` with where each came from (`source`, `cash_on`, `burn_to`),
   so metrics, the forecast, the runway guard, scoreMove's money factor and the
   plan all move without any of them changing. A number the person typed after
   the statement's own date stands (`typed_at`); the Runway sheet says which is
-  which.
+  which. Runway is cash over burn, so both are one currency: a read in another
+  currency than a typed number stays out of the row (`currencyClash` says so on
+  the Runway sheet) — euro spending under typed pesos was 179 months of runway —
+  and a figure an earlier read left there goes, since no row in the person's
+  currency is left behind it. An account's cash is the latest statement's
+  closing on a date tie with its rows: a batch shares `created_at`, so the last
+  row of a day with two is a coin toss (Wise's quarter read €5 for €0.00).
 - **Who paid, named by the person.** Each payer nobody has named is one question
   with four answers — a client, my job, my own account, something else — and,
   where a payer shares distinctive words with exactly one business in the
@@ -2100,8 +2132,8 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/moves/:id` | `{ status: done \| dismissed \| handover }` — `handover` turns a proposed Move into a live mandate |
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
-| POST | `/api/copilot/money/import` | multipart `file`: a bank statement. CSV/TSV/OFX are read in the request and answer with the import and the screen; a PDF or a screenshot answers 202 and is read by a model in `after()` (30 a day, 10 MB) |
-| GET/POST | `/api/copilot/money` | `GET` the statements, polled while one is read · `POST { action: 'confirm' \| 'discard', id }` · `{ action: 'name', key, role: client \| employer \| self \| other \| null, opportunity_id? }` · `{ action: 'forget', confirm: 'DELETE' }` |
+| POST | `/api/copilot/money/import` | multipart `file`: a bank statement. CSV/TSV/OFX, and a PDF whose running balance holds by rules, are read in the request and answer with the import and the screen; any other PDF or a screenshot answers 202 and is read by a model in `after()` (30 a day, 10 MB) |
+| GET/POST | `/api/copilot/money` | `GET` the statements, polled while one is read · `POST { action: 'confirm' \| 'discard', id }` · `{ action: 'currency', id, currency }` (three letters, for a file that named none) · `{ action: 'name', key, role: client \| employer \| self \| other \| null, opportunity_id? }` · `{ action: 'forget', confirm: 'DELETE' }` |
 | POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |
 | GET/POST | `/api/copilot/roadmap` | the Path's drawn plan: `POST { action: 'draw', reason? }` writes a `copilot_agent_runs` row of kind `roadmap`, draws in `after()` and returns 202 (or the draw in flight; 12 a day) · `POST { action: 'mark', item, state: done \| dropped \| open }` ticks a step or milestone of the current plan (`copilot_events`, `roadmap_marked`) · `GET` is the latest draw, polled while it runs |
 
@@ -2285,6 +2317,14 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
   to prove the sign wrong. Bank-account exports and anything with balances are corrected by them.
 - Money moved between two uploaded accounts counts as income on one and spending on the other until the
   person names the counterparty their own account. Nothing pairs the two rows automatically.
+- Two sources for the same money are not reconciled. A card purchase in a bank statement and the same
+  purchase logged in a budgeting app are two accounts, so both count. Dedupe is within one account
+  (overlapping exports of the same file); across sources the advice is one source per kind of money.
+- Uploads that name neither a bank nor an account number (most budgeting-app exports) share one
+  account, so two different such apps would dedupe against each other on identical day/amount/payee rows.
+- A PDF that prints debits and credits as unsigned figures in two columns loses the column in its text
+  layer; its chain fails and it goes to the model. Nothing infers a sign from the balance delta, because
+  the first row has no delta to prove it.
 - Removing a statement leaves the wins its deposits became. Deliberate, and said on the sheet, but a
   statement removed because it was wrong leaves wins that were wrong with it.
 - Email replies are not reconciled automatically yet (WhatsApp is); log them by hand on the match.

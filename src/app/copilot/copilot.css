@@ -703,6 +703,8 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-root .cp2-bank-read p { margin: 0 0 6px; font-size: 13.5px; line-height: 1.45; font-weight: 500; }
 .cp-root .cp2-bank-read p:last-child { margin-bottom: 0; }
 .cp-root .cp2-bank-chips { margin-top: 10px; }
+.cp-root .cp2-bank-cur { align-items: center; margin-top: 10px; }
+.cp-root .cp2-bank-cur .cp-input { margin-top: 0; max-width: 96px; text-transform: uppercase; }
 .cp-root .cp2-bank-why { margin: 0 0 4px; }
 .cp-root .cp2-bank-forget { display: block; margin: 22px 0 6px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .cp-root .cp2-bank-inline { display: inline; padding: 0; margin: 0; border: 0; background: none; font: inherit; color: var(--blue); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

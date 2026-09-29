@@ -4,16 +4,18 @@
 //
 // CSV and OFX are parsed here and now — the bank wrote those rows, and a few
 // thousand of them split in milliseconds — so the response carries the read.
-// PDFs and screenshots go to a model, which can take a minute a page, and the
-// proxy gives up in under one: the row is written, the reading is handed to
-// after(), and the client watches GET /api/copilot/money until it lands —
-// the same shape as a plan redraw.
+// So is a PDF whose text reads by rules with a running balance that holds on
+// every row (Wise's, and most that print one): no model, nothing sent anywhere.
+// Any other PDF, and every screenshot, goes to a model, which can take a minute
+// a page, and the proxy gives up in under one: the row is written, the reading
+// is handed to after(), and the client watches GET /api/copilot/money until it
+// lands — the same shape as a plan redraw.
 import { after } from 'next/server';
 import { todayIso } from '@/lib/copilot/db';
 import { fail, json, profileIdOr401 } from '@/lib/copilot/http';
 import { rateLimit } from '@/lib/copilot/limits';
-import { readImageStatement, readPdfStatement, resolveStatementConfig } from '@/lib/copilot/money/extract';
-import { MAX_STATEMENT_BYTES, dateHintFor, parseCsvStatement, parseOfxStatement, sniffFormat } from '@/lib/copilot/money/statement';
+import { pdfPages, readImageStatement, readPdfStatement, resolveStatementConfig } from '@/lib/copilot/money/extract';
+import { MAX_STATEMENT_BYTES, dateHintFor, parseCsvStatement, parseOfxStatement, skippedLine, sniffFormat, statementFromPdfText, type ParsedCsv } from '@/lib/copilot/money/statement';
 import { failImport, finishImport, startImport } from '@/lib/copilot/money/store';
 import { getProfile, loadHome } from '@/lib/copilot/store';
 
@@ -52,13 +54,30 @@ export async function POST(req: Request) {
   const format = sniffFormat(bytes.subarray(0, 2048), file.name, file.type);
   if (format === 'spreadsheet') return fail('That is a spreadsheet file. Open it and save it as CSV, or download the CSV from your bank, and upload that.');
   if (!format) return fail('That is not a statement this can read. Upload the CSV or OFX from your bank’s website, a PDF statement, or a screenshot.');
-  const method = format === 'pdf' || format === 'image' ? 'read' : 'parsed';
-  if (method === 'read' && !resolveStatementConfig()) {
-    return fail(`Reading a ${format === 'pdf' ? 'PDF' : 'screenshot'} needs a model, and none is set up on this server. Upload the CSV or OFX from your bank instead — those need nothing.`);
-  }
 
   const rl = await rateLimit(`copilot:statement:${auth.pid}`, UPLOADS_PER_DAY, 86400);
   if (!rl.ok) return fail(`That is today’s ${UPLOADS_PER_DAY} statements. Upload the rest tomorrow.`, 429);
+
+  const today = todayIso(profile.timezone);
+  const dateHint = dateHintFor(profile.timezone);
+  // A PDF's own text first. A password or a broken file is said now: no model
+  // opens it either.
+  let pages: string[] | undefined;
+  let byRules: ParsedCsv | null = null;
+  if (format === 'pdf') {
+    try {
+      pages = await pdfPages(bytes);
+      byRules = statementFromPdfText(pages, { dateHint });
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : 'Could not open that PDF.');
+    }
+  }
+  const method = format === 'image' || (format === 'pdf' && !byRules) ? 'read' : 'parsed';
+  if (method === 'read' && !resolveStatementConfig()) {
+    return fail(format === 'pdf'
+      ? 'This PDF’s rows could not be read by rules alone — they do not add up line by line against a printed balance — and reading it with a model is not set up on this server. Upload the CSV or OFX from your bank instead.'
+      : 'Reading a screenshot needs a model, and none is set up on this server. Upload the CSV or OFX from your bank, or the PDF statement, instead.');
+  }
 
   let started;
   try {
@@ -71,9 +90,8 @@ export async function POST(req: Request) {
     // Parsed now. A file that is not a statement is a failed import with its
     // reason on the row, not a bare error: the sheet shows what was tried.
     try {
-      const text = decode(bytes);
-      const parsed = format === 'ofx' ? parseOfxStatement(text) : parseCsvStatement(text, { dateHint: dateHintFor(profile.timezone) });
-      const done = await finishImport(auth.pid, started.id, { ...parsed, method: 'parsed' });
+      const parsed = byRules ?? (format === 'ofx' ? parseOfxStatement(decode(bytes)) : parseCsvStatement(decode(bytes), { dateHint, today }));
+      const done = await finishImport(auth.pid, started.id, { ...parsed, skipped: skippedLine(parsed.skipped), method: 'parsed' });
       return json({ ok: true, import: done, home: await loadHome(auth.pid) });
     } catch (e) {
       const reason = e instanceof Error ? e.message : 'Could not read that file.';
@@ -82,12 +100,11 @@ export async function POST(req: Request) {
     }
   }
 
-  const today = todayIso(profile.timezone);
   const mediaType = file.type || 'image/png';
   after(async () => {
     // Never throws: whatever goes wrong is written on the import's row, where the sheet reads it.
     try {
-      const reading = format === 'pdf' ? await readPdfStatement(bytes, today) : await readImageStatement(bytes, mediaType, today);
+      const reading = format === 'pdf' ? await readPdfStatement(bytes, today, pages) : await readImageStatement(bytes, mediaType, today);
       await finishImport(auth.pid, started.id, { statement: reading.statement, dropped: reading.dropped, method: 'read' });
     } catch (e) {
       await failImport(started.id, e instanceof Error ? e.message : String(e));

@@ -22,7 +22,7 @@ import { whenLabel } from '@/lib/copilot/review';
 import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
 import BankSheet from './BankSheet';
-import { dayLabel } from '@/lib/copilot/money/ledger';
+import { currencyClash, dayLabel } from '@/lib/copilot/money/ledger';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
@@ -721,11 +721,12 @@ function FinanceSheet({ home, actions }: { home: HomeData; actions: Actions }) {
     f.source?.cash === 'statement' && f.cash_on ? `cash is your balance on ${dayLabel(f.cash_on)}` : null,
     f.source?.monthly_burn === 'statement' && f.burn_to ? `burn is your spending averaged over the rows to ${dayLabel(f.burn_to)}` : null,
   ].filter(Boolean);
+  const clash = currencyClash(f, home.money?.read ?? null);
   return (
     <>
       <h3>Runway</h3>
       <p className="desc">Cash and monthly burn. Runway shapes the read: under four months, the copilot favours fast-close work over big builds.</p>
-      {fromBank.length > 0
+      {clash ? <div className="cp-note">{clash}</div> : fromBank.length > 0
         ? <div className="cp-note">From your bank statements: {fromBank.join('; ')}. Type a number to use yours instead — a newer statement replaces it again.</div>
         : home.money?.ready && <div className="cp-note">Or skip the typing: <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>upload a bank statement</button> and both are read off it.</div>}
       <div className="cp-field"><label className="cp-label">Monthly burn / Cash on hand / Currency</label>

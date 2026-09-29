@@ -281,7 +281,8 @@ function StatementStep({ onDone }: { onDone: () => void }) {
         const home = await get<{ money?: { read: { lines: string[] } | null } }>('/home');
         setLines(home.money?.read?.lines ?? []);
       } catch { setLines([]); }
-      setSaid(importLine(i));
+      // A budgeting app's export names no currency; its figures print in the goal's until the person says.
+      setSaid(`${importLine(i) ?? ''}${i.currency ? '' : ' It does not say its currency — say which under You → Records → Bank statements.'}`);
       setPhase('read');
     } else if (i.status === 'review') {
       setSaid('It is read, and it printed no balances to check the rows against — so it counts once you look at its totals. They are waiting under You → Records → Bank statements.');

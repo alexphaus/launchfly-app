@@ -71,6 +71,7 @@ with expected(kind, table_name, column_name, migration) as (values
   ('table',  'copilot_money_imports',  null,                        '20260929_copilot_money.sql'),
   ('column', 'copilot_money_imports',  'pending',                   '20260929_copilot_money.sql'),
   ('column', 'copilot_money_imports',  'note',                      '20260929_copilot_money.sql'),
+  ('column', 'copilot_money_imports',  'skipped',                   '20260929_copilot_money.sql'),
   ('table',  'copilot_transactions',   null,                        '20260929_copilot_money.sql'),
   ('column', 'copilot_transactions',   'outcome_id',                '20260929_copilot_money.sql'),
   ('table',  'copilot_counterparties', null,                        '20260929_copilot_money.sql'),

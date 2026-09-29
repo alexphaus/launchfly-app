@@ -323,7 +323,7 @@ export function splitCsv(text: string, d: string): string[][] {
   return rows;
 }
 
-type Role = 'date' | 'description' | 'amount' | 'debit' | 'credit' | 'balance' | 'currency' | 'type';
+type Role = 'date' | 'description' | 'party' | 'category' | 'amount' | 'debit' | 'credit' | 'balance' | 'currency' | 'type' | 'status' | 'from' | 'to';
 
 /**
  * What a header names. Order matters: "Debit amount" is a debit column, not an
@@ -336,27 +336,54 @@ function roleOf(header: string): Role | null {
   // "Transaction ID", "Card number": identifiers, which would otherwise be
   // joined into the description and split one payee into a hundred.
   if (/\b(id|number|no|nr|num)\b/.test(h)) return null;
+  // The person's own name on every card row ("Card Holder Full Name") is not
+  // who the money went to.
+  if (/\b(holder|cardholder|titular)\b/.test(h)) return null;
   if (/\b(balance|saldo|solde|kontostand|running bal)/.test(h)) return 'balance';
   // Before debit and credit: "Debit/Credit" is a column saying which, not an amount.
   if (/^(dr ?\/ ?cr|cr ?\/ ?dr|debit ?\/ ?credit|credit ?\/ ?debit|type|tipo|transaction type|trans type)$/.test(h)) return 'type';
+  // Whether it happened yet: a budgeting app's "Pending", a bank's "State".
+  if (/^(pending|status|state|estado|estatus|transaction status|txn status)$/.test(h)) return 'status';
+  // A budgeting app's two accounts on a transfer between them.
+  if (/^(from account|from acc|source account)$/.test(h)) return 'from';
+  if (/^(to account|to acc|destination account)$/.test(h)) return 'to';
   if (/\b(debit|debits|withdrawal|withdrawals|paid out|money out|cargo|cargos|retiro|retiros|egreso|egresos|debe|ausgang|sortie)\b/.test(h)) return 'debit';
   if (/\b(credit|credits|deposit|deposits|paid in|money in|abono|abonos|ingreso|ingresos|haber|eingang|entree)\b/.test(h)) return 'credit';
   if (/\b(currency|moneda|divisa|devise|wahrung)\b/.test(h) || h === 'ccy' || h === 'curr') return 'currency';
   if (/\b(date|fecha|datum|data|posted|booking|buchungstag|valuta)\b/.test(h)) return 'date';
   if (/\b(amount|importe|monto|montant|betrag|valor|value|sum|total)\b/.test(h)) return 'amount';
-  if (/\b(description|descripcion|details|detail|narrative|narration|memo|payee|merchant|concepto|particulars|name|reference|beschreibung|verwendungszweck|libelle|transaction|remarks|counterparty|beneficiary|notes?)\b/.test(h)) return 'description';
+  if (/\b(category|categoria|categorie|kategorie)\b/.test(h)) return 'category';
+  // Who the money was with, when the file says so in a column of its own.
+  if (/\b(payee|payer|merchant|counterparty|counter party|beneficiary|recipient|sender|name|nombre|empfanger|beguenstigter)\b/.test(h)) return 'party';
+  if (/\b(description|descripcion|details|detail|narrative|narration|memo|concepto|particulars|reference|beschreibung|verwendungszweck|libelle|transaction|remarks|notes?)\b/.test(h)) return 'description';
   return null;
 }
 
-interface Columns { date: number; description: number[]; amount: number | null; debit: number | null; credit: number | null; balance: number | null; currency: number | null; type: number | null }
+interface Columns {
+  date: number;
+  description: number[];
+  party: number[];
+  category: number | null;
+  amount: number | null;
+  debit: number | null;
+  credit: number | null;
+  balance: number | null;
+  currency: number | null;
+  type: number | null;
+  status: number | null;
+  from: number | null;
+  to: number | null;
+}
+
+const noColumns = (): Omit<Columns, 'date'> => ({ description: [], party: [], category: null, amount: null, debit: null, credit: null, balance: null, currency: null, type: null, status: null, from: null, to: null });
 
 function columnsOf(header: string[]): Columns | null {
-  const cols: Columns = { date: -1, description: [], amount: null, debit: null, credit: null, balance: null, currency: null, type: null };
+  const cols: Columns = { date: -1, ...noColumns() };
   const dates: number[] = [];
   header.forEach((h, i) => {
     const r = roleOf(h);
     if (r === 'date') dates.push(i);
-    else if (r === 'description') cols.description.push(i);
+    else if (r === 'description' || r === 'party') cols[r].push(i);
     else if (r && cols[r] == null) cols[r] = i;
   });
   // A posting date over a value date, when a file carries both.
@@ -390,22 +417,66 @@ function columnsFromContent(rows: string[][]): Columns | null {
   if (date < 0 || !numeric.length || description < 0) return null;
   // One amount and maybe a running balance after it; with three numbers the
   // shape is debit, credit, balance.
-  if (numeric.length === 1) return { date, description: [description], amount: numeric[0], debit: null, credit: null, balance: null, currency: null, type: null };
-  if (numeric.length === 2) return { date, description: [description], amount: numeric[0], debit: null, credit: null, balance: numeric[1], currency: null, type: null };
-  if (numeric.length === 3) return { date, description: [description], amount: null, debit: numeric[0], credit: numeric[1], balance: numeric[2], currency: null, type: null };
+  const base = { ...noColumns(), date, description: [description] };
+  if (numeric.length === 1) return { ...base, amount: numeric[0] };
+  if (numeric.length === 2) return { ...base, amount: numeric[0], balance: numeric[1] };
+  if (numeric.length === 3) return { ...base, debit: numeric[0], credit: numeric[1], balance: numeric[2] };
   return null;
 }
 
 const OPENING = /\b(opening|beginning|starting|previous|brought forward|b\/f|saldo (inicial|anterior)|solde (initial|precedent)|anfangssaldo)\b/i;
 const CLOSING = /\b(closing|ending|final|carried forward|c\/f|saldo (final|actual)|solde final|endsaldo|available balance)\b/i;
 
-export interface ParsedCsv { statement: Statement; dropped: number; truncated: number }
+export interface ParsedCsv {
+  statement: Statement;
+  /** Lines that could not be read as a transaction at all. */
+  dropped: number;
+  truncated: number;
+  /**
+   * Lines read and deliberately left out, by why — said on the statement, so
+   * a total that differs from the file is explained rather than suspicious.
+   */
+  skipped?: Skipped;
+}
+
+export interface Skipped {
+  /** Not happened yet: marked pending or scheduled, or dated after today. */
+  scheduled: number;
+  /** Money moved between two accounts inside the same export, which is neither income nor spending. */
+  internal: number;
+  /** Marked cancelled, declined, failed or reverted. */
+  void: number;
+  /** In another currency than most of the file: one statement is one currency, and these would be summed as if they were. */
+  foreign?: number;
+}
+
+/** "Left out 24 scheduled rows and 2 transfers between your own accounts." Null when nothing was. */
+export function skippedLine(s: Skipped | null | undefined): string | null {
+  if (!s) return null;
+  const n = (k: number, one: string, many: string) => (k ? `${k} ${k === 1 ? one : many}` : null);
+  const parts = [
+    n(s.scheduled, 'scheduled row (pending or dated after today)', 'scheduled rows (pending or dated after today)'),
+    n(s.internal, 'transfer between your own accounts', 'transfers between your own accounts'),
+    n(s.void, 'cancelled or declined row', 'cancelled or declined rows'),
+    n(s.foreign ?? 0, 'row in another currency (upload that currency’s statement on its own)', 'rows in other currencies (upload each currency’s statement on its own)'),
+  ].filter(Boolean);
+  if (!parts.length) return null;
+  return `Left out ${parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0]}.`;
+}
+
+/** A pending flag or a status that says it has not happened, or will not. */
+const NOT_YET = /^(yes|y|true|1|si|pending|pendiente|en proceso|processing|scheduled|planned|upcoming|future|authorised|authorized|hold|on hold)$/;
+// Not refunded or returned: a refund arrives as a row of its own, and dropping the original would leave the refund as income.
+const VOID = /^(cancelled|canceled|cancelado|declined|rechazado|failed|reverted|void|voided|rejected)$/;
 
 /**
  * A CSV or TSV export into a statement. Throws with a sentence a person can act
  * on when the file is not one — the route shows it as the import's reason.
+ *
+ * `today` is the person's own: a budgeting app exports its scheduled bills a
+ * year ahead, and a row dated next June is not money anybody has spent.
  */
-export function parseCsvStatement(text: string, opts: { dateHint?: DateOrder } = {}): ParsedCsv {
+export function parseCsvStatement(text: string, opts: { dateHint?: DateOrder; today?: string } = {}): ParsedCsv {
   const d = sniffDelimiter(text);
   const all = splitCsv(text, d);
   if (all.length < 2) throw new Error('That file has fewer than two lines, so there are no transactions in it.');
@@ -434,12 +505,19 @@ export function parseCsvStatement(text: string, opts: { dateHint?: DateOrder } =
 
   const rows: StatementRow[] = [];
   let dropped = 0;
+  const skipped: Skipped = { scheduled: 0, internal: 0, void: 0, foreign: 0 };
+  const rowCurrency: string[] = [];
   let opening: number | null = null;
   let closing: number | null = null;
   const currencies = new Map<string, number>();
+  const joined = (idx: number[], r: string[]) => idx.map((i) => pick(r, i)).filter(Boolean).join(' · ').replace(/\s+/g, ' ').slice(0, 300);
   for (const r of body) {
     const on = parseDateCell(pick(r, c.date), order);
-    const description = c.description.map((i) => pick(r, i)).filter(Boolean).join(' · ').replace(/\s+/g, ' ').slice(0, 300);
+    const party = c.party.map((i) => pick(r, i)).find((x) => x.trim()) ?? '';
+    // What it was: the file's description, else who it was with, else a
+    // budgeting app's category — "Dining Out" beats every blank note landing
+    // on one payee called "(no description)".
+    const description = joined(c.description, r) || party.slice(0, 300) || pick(r, c.category).slice(0, 120);
     const balance = c.balance != null ? parseAmount(pick(r, c.balance), dec) : null;
     if (!on) {
       // "Opening balance" and "Closing balance" lines have no date and are
@@ -470,17 +548,32 @@ export function parseCsvStatement(text: string, opts: { dateHint?: DateOrder } =
       continue;
     }
     if (amount == null || cents(amount) === 0) { dropped++; continue; }
+    const status = fold(pick(r, c.status)).trim();
+    if (VOID.test(status)) { skipped.void++; continue; }
+    if (NOT_YET.test(status) || (opts.today && on > opts.today)) { skipped.scheduled++; continue; }
+    // A transfer between two accounts inside the same export: both sides are
+    // the person's, so it is neither income nor spending. Only when the file
+    // names both — a bank's "TRANSFER" is money sent to somebody else.
+    if (/transfer|transferencia|virement/.test(fold(pick(r, c.type))) && pick(r, c.from).trim() && pick(r, c.to).trim()) { skipped.internal++; continue; }
     const cur = pick(r, c.currency).toUpperCase();
     if (/^[A-Z]{3}$/.test(cur)) currencies.set(cur, (currencies.get(cur) ?? 0) + 1);
-    rows.push({ on, amount, description: description || '(no description)', balance });
+    rowCurrency.push(/^[A-Z]{3}$/.test(cur) ? cur : '');
+    rows.push({ on, amount, description: description || '(no description)', balance, counterparty: party.trim() ? party.trim().slice(0, 80) : null });
   }
-  if (!rows.length) throw new Error('No transactions came out of that file: no row had both a date and an amount.');
-  const truncated = Math.max(0, rows.length - MAX_STATEMENT_ROWS);
+  if (!rows.length) {
+    if (skipped.scheduled || skipped.internal || skipped.void) throw new Error(`No row in that file is money that has moved. ${skippedLine(skipped)}`);
+    throw new Error('No transactions came out of that file: no row had both a date and an amount.');
+  }
   const currency = currencies.size ? [...currencies.entries()].sort((a, b) => b[1] - a[1])[0][0] : currencyIn(preamble);
+  // Every row is stored in the file's one currency, so a row that names another is left out, not relabelled.
+  const kept = currency ? rows.filter((_, i) => !rowCurrency[i] || rowCurrency[i] === currency) : rows;
+  skipped.foreign = rows.length - kept.length;
+  const truncated = Math.max(0, kept.length - MAX_STATEMENT_ROWS);
   return {
-    statement: { rows: rows.slice(0, MAX_STATEMENT_ROWS), currency, account: accountIn(preamble), opening, closing },
+    statement: { rows: kept.slice(0, MAX_STATEMENT_ROWS), currency, account: accountIn(preamble), opening, closing },
     dropped,
     truncated,
+    skipped,
   };
 }
 
@@ -496,6 +589,120 @@ function accountIn(text: string): StatementAccount {
   const m = text.match(/(?:account|acct|cuenta|iban|konto|compte)[^\d]{0,24}([\dX*•\- ]{4,34}\d)/i);
   const digits = m ? m[1].replace(/\D/g, '') : '';
   return { institution: null, mask: digits.length >= 4 ? digits.slice(-4) : null };
+}
+
+/* ─── A PDF's text, read without a model ──────────────────────────────────── */
+
+/** A money figure as the last two tokens of a statement line print it: "-3.65", "1,234.56", "(12.00)", "45.00CR". */
+const FIGURE = /^[-−–+]?\(?[\d.,']*\d[.,]\d{2}\)?(?:CR|DR)?$/i;
+
+/** Lines that start a page or a table, after which a description starts fresh. */
+const PAGE_HEADER = /^(ref:|page \d+|pagina \d+|p[aá]gina \d+|\d+\s*\/\s*\d+$)|\s\d+\s*\/\s*\d+$/i;
+const COLUMN_WORDS = /\b(description|date|amount|balance|incoming|outgoing|debit|credit|details|fecha|importe|saldo|concepto|withdrawals|deposits|particulars)\b/gi;
+
+/** The date a line starts with, and the line without it. Only the unambiguous shapes: a year is required. */
+function leadingDate(line: string, order: DateOrder): { on: string; rest: string } | null {
+  const on = parseDateCell(line, order);
+  if (!on) return null;
+  const m = line.match(/^(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{1,2}(?:st|nd|rd|th)?[\s\-/.]*[A-Za-zÀ-ÿ]{3,10}\.?[\s\-/.,]*\d{2,4}|[A-Za-zÀ-ÿ]{3,10}\.?[\s\-/.]*\d{1,2}(?:st|nd|rd|th)?[\s,\-/.]+\d{2,4})/);
+  return { on, rest: m ? line.slice(m[0].length).trim() : line };
+}
+
+/** The currency a statement declares itself in: "EUR statement", "Currency: PHP", else the one code it names. */
+export function statementCurrency(text: string): string | null {
+  const head = text.slice(0, 3000);
+  const m = head.match(/\b([A-Z]{3})\s+statement\b/) ?? head.match(/\bstatement\s+(?:in\s+)?([A-Z]{3})\b/i) ?? head.match(/\bcurrency\s*[:\-]?\s*([A-Z]{3})\b/i);
+  return m ? m[1].toUpperCase() : currencyIn(head);
+}
+
+const INSTITUTIONS = /\b(Wise|Revolut|N26|Monzo|Starling|bunq|Payoneer|PayPal|GCash|Maya|BPI|BDO|Metrobank|UnionBank|Security Bank|RCBC|Chase|Wells Fargo|Bank of America|Barclays|HSBC|Lloyds|NatWest|Santander|BBVA|CaixaBank|ING|Deutsche Bank|Nubank|Mercado Pago)\b/i;
+
+/** The account a statement's text names: the bank, and the last digits of an IBAN or account number. */
+function accountInText(text: string): StatementAccount {
+  const head = text.slice(0, 3000);
+  const iban = head.match(/\bIBAN\b[\s:]*([A-Z]{2}\d{2}[A-Z0-9 ]{8,40})/);
+  const digits = iban ? iban[1].replace(/\D/g, '') : '';
+  const acct = digits.length >= 4 ? { mask: digits.slice(-4) } : accountIn(head);
+  const inst = head.match(INSTITUTIONS);
+  return { institution: inst ? inst[1] : null, mask: acct.mask };
+}
+
+/**
+ * A PDF statement's text layer, read by rules instead of a model — the cheap,
+ * exact path, tried first. It claims only the two layouts it cannot misread:
+ *
+ *   a line that starts with its date and ends with the amount and the
+ *   running balance ("12/09/2026 STARBUCKS MANILA -5.50 994.50")
+ *
+ *   a line that ends with the amount and the balance, its date on the very
+ *   next line — how Wise prints every row ("Sent money to X -5.00 0.00", then
+ *   "30 June 2026 | Transaction: TRANSFER-…"). A description may run over the
+ *   two lines before it.
+ *
+ * A row either rule cannot date, and the whole reading is refused (null): a
+ * row dated by guesswork is worse than asking the model. And the caller uses
+ * it only when checkBalances says the chain holds line for line, which no
+ * misread column survives — so a reading from here is the bank's arithmetic,
+ * not a heuristic's.
+ */
+export function parseStatementText(text: string, opts: { dateHint?: DateOrder } = {}): ParsedCsv | null {
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const tails = lines.map((l) => {
+    const t = l.split(' ');
+    return t.length >= 2 && FIGURE.test(t[t.length - 1]) && FIGURE.test(t[t.length - 2]) ? { head: t.slice(0, -2).join(' '), a: t[t.length - 2], b: t[t.length - 1] } : null;
+  });
+  if (tails.filter(Boolean).length < 3) return null;
+  const dec = inferDecimal(tails.flatMap((t) => (t ? [t.a, t.b] : [])));
+  const order = inferDateOrder(lines.map((l) => l.split(' ').slice(0, 3).join(' ')), opts.dateHint ?? 'dmy');
+
+  const rows: StatementRow[] = [];
+  let buffer: string[] = [];
+  let waiting: { description: string; amount: number; balance: number } | null = null;
+  let orphans = 0;
+  let dropped = 0;
+  lines.forEach((line, i) => {
+    const tail = tails[i];
+    const dated = leadingDate(line, order);
+    if (!tail && (PAGE_HEADER.test(line) || (line.match(COLUMN_WORDS) ?? []).length >= 2)) { buffer = []; return; }
+    if (tail) {
+      if (waiting) orphans++;
+      waiting = null;
+      const head = dated ? leadingDate(tail.head, order)?.rest ?? tail.head : tail.head;
+      const description = [...buffer.slice(-2), head].join(' ').replace(/\s+/g, ' ').trim().slice(0, 300) || '(no description)';
+      buffer = [];
+      const amount = parseAmount(tail.a, dec);
+      const balance = parseAmount(tail.b, dec);
+      if (amount == null || balance == null || cents(amount) === 0) { dropped++; return; }
+      if (dated) rows.push({ on: dated.on, amount, balance, description });
+      else waiting = { description, amount, balance };
+      return;
+    }
+    if (dated && waiting) {
+      rows.push({ on: dated.on, ...waiting });
+      waiting = null;
+      buffer = [];
+      return;
+    }
+    buffer.push(line);
+  });
+  if (waiting) orphans++;
+  if (orphans || rows.length < 3) return null;
+  const truncated = Math.max(0, rows.length - MAX_STATEMENT_ROWS);
+  return {
+    statement: { rows: rows.slice(0, MAX_STATEMENT_ROWS), currency: statementCurrency(text), account: accountInText(text), opening: null, closing: null },
+    dropped,
+    truncated,
+  };
+}
+
+/**
+ * A PDF's pages, read by rules — kept only when the running balance holds on
+ * every row. Null hands the file to the model. Wise's 101-row statement lands
+ * here: exact, instant, and nothing sent anywhere.
+ */
+export function statementFromPdfText(pages: string[], opts: { dateHint?: DateOrder } = {}): ParsedCsv | null {
+  const parsed = parseStatementText(pages.join('\n'), opts);
+  return parsed && checkBalances(parsed.statement).check === 'balanced' ? parsed : null;
 }
 
 /* ─── OFX ─────────────────────────────────────────────────────────────────── */
@@ -700,10 +907,22 @@ export function counterpartyKey(description: string): string {
   let s = description.normalize('NFKD').replace(/[̀-ͯ]/g, '').toUpperCase();
   const star = s.match(/\b(?:PAYPAL|PP|SQ|SQUARE|SP|STRIPE|TST|GOOGLE|APPLE\.COM\/BILL|AMZN MKTP|AMAZON|VENMO|CASHAPP|CASH APP)\s*\*\s*(.+)$/);
   if (star) s = star[1];
+  // What a bank writes around a name: "Sent money to X", "Received money from
+  // X with reference ...", "Card transaction of 256.00 PHP issued by X". The
+  // name is what follows; the rest is the same for every row and would make
+  // every transfer one counterparty called "Sent Money".
+  const lead = s.match(/\bISSUED BY\s+(.+)$/)
+    ?? s.match(/\b(?:SENT MONEY TO|MONEY SENT TO|SENT TO|PAID TO|PAYMENT TO|TRANSFER TO|TRANSFERENCIA A|ENVIADO A|PAGO A)\s+(.+)$/)
+    ?? s.match(/\b(?:RECEIVED MONEY FROM|MONEY RECEIVED FROM|RECEIVED FROM|PAYMENT FROM|TRANSFER FROM|TRANSFERENCIA DE|RECIBIDO DE)\s+(.+)$/);
+  if (lead) s = lead[1];
+  s = s.replace(/\s+WITH REFERENCE\b.*$/, '');
   const words = s.replace(/[^A-Z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean);
+  // A reference, a card number, a phone number: mostly digits and longer than a
+  // brand. "5G", "7UP" and "3M" are names and stay.
   const wordy = (w: string) => {
     const digits = w.replace(/\D/g, '').length;
-    return digits === 0 || digits * 2 < w.length;
+    if (digits === w.length) return false;
+    return digits * 2 < w.length || w.length <= 3;
   };
   const kept: string[] = [];
   for (const w of words) {

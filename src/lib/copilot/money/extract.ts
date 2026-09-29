@@ -146,11 +146,11 @@ export function mergeReadings(parts: Statement[]): Statement {
 
 export interface Reading { statement: Statement; dropped: number; model: string }
 
-/** A PDF's text, read. Throws with a sentence for the import row when it cannot be. */
-export async function readPdfStatement(data: Uint8Array, today: string): Promise<Reading> {
+/** A PDF's text, read. Throws with a sentence for the import row when it cannot be. `pages` when the caller already opened it. */
+export async function readPdfStatement(data: Uint8Array, today: string, opened?: string[]): Promise<Reading> {
   const cfg = resolveStatementConfig();
-  if (!cfg) throw new Error('Reading a PDF needs a model, and none is set up on this server. Upload the CSV or OFX from your bank instead — those need nothing.');
-  const pages = await pdfPages(data);
+  if (!cfg) throw new Error('Reading this PDF needs a model, and none is set up on this server. Upload the CSV or OFX from your bank instead — those need nothing.');
+  const pages = opened ?? await pdfPages(data);
   const chunks = chunkPages(pages);
   if (!chunks.length) throw new Error('That PDF has no text in it — it is a scan. Upload a screenshot of it instead, or the CSV from your bank.');
   if (chunks.length > MAX_CHUNKS) throw new Error(`That PDF is ${pages.length} pages. Upload one or two months at a time, or the CSV.`);

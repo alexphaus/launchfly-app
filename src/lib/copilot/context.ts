@@ -13,6 +13,8 @@ import { changesSince, movedBy, snapshotOf } from './decision';
 import { openingTrend } from './diagnose';
 import { loadMetrics } from './outcomes';
 import { planFocus } from './roadmap';
+import { moneyForPlan } from './money/ledger';
+import { loadMoneyRead } from './money/store';
 import { getProfile, loadConversations, loadDecisions, loadOpeningRows, loadRoadmapMarks, loadRoadmapRuns, loadWorking, previousSnapshot, typeAffinityFor } from './store';
 import { workingBrief } from './working';
 import type { Action, Candidate, ContextItem, ContextPack, ContextSource, Goal, Opportunity, PackOpening } from './types';
@@ -29,7 +31,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
   if (!profile) throw new Error('profile not found');
 
   const today = todayIso(profile.timezone);
-  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent, conversations, openingRows, workingRows, roadmapRuns, roadmapMarks] = await Promise.all([
+  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent, conversations, openingRows, workingRows, roadmapRuns, roadmapMarks, money] = await Promise.all([
     db.from('copilot_goals').select('title, metric, unit, target_value, current_value, horizon_days, priority, note, created_at').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_context_items').select('source, kind, content, created_at, weight').eq('profile_id', profileId).order('created_at', { ascending: false }).limit(MAX_CONTEXT_ITEMS).then((r) => (r.data ?? []) as ContextItem[]),
     db.from('copilot_context_sources').select('source_key, status, last_synced_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as ContextSource[]),
@@ -49,6 +51,9 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
     loadWorking(profileId),
     loadRoadmapRuns(profileId),
     loadRoadmapMarks(profileId),
+    loadMoneyRead(profile)
+      .then((read) => ({ lines: moneyForPlan(read).lines, error: null as string | null }))
+      .catch((e: unknown) => ({ lines: [] as string[], error: e instanceof Error ? e.message : String(e) })),
   ]);
 
   // The plan's open milestones, for ranking against where the person is going.
@@ -112,5 +117,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
     sent: conversations.sent,
     openings,
     metrics,
+    money: money.lines,
+    ...(money.error ? { moneyError: `Their bank statements could not be read just now: ${money.error}` } : {}),
   };
 }

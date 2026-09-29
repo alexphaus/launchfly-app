@@ -12,8 +12,8 @@
 // when the record moved since the last plan, or when the plan is a week old.
 
 import { generateText } from 'ai';
-import { moneyForPlan, moneyRead, type MoneyRead } from '../money/ledger';
-import { loadMoneyRows, moneyCurrency } from '../money/store';
+import { moneyForPlan, type MoneyRead } from '../money/ledger';
+import { loadMoneyRead } from '../money/store';
 import { copilotDb, todayIso } from '../db';
 import { VERDICT_LABEL, decisionReview, verdictOf } from '../decision';
 import { DEFAULT_HORIZON_DAYS, goalDue } from '../due';
@@ -37,6 +37,7 @@ import type { Goal, Profile } from '../types';
 import { workingBrief } from '../working';
 import { planExtraBody, planMaxOutputTokens, planTimeoutMs, providerFor, resolvePlanConfig } from './llm';
 import { UnreadableJson, extractJson } from './schema';
+import { salesCurrency } from '../metrics';
 
 /**
  * A plan is a page of JSON, not a paragraph, and it now carries an experiment
@@ -94,9 +95,7 @@ async function signatureOf(profile: Profile, goals: Goal[]): Promise<string> {
  * cannot be read — the plan is drawn without money rather than not at all.
  */
 async function moneyReadFor(profile: Profile): Promise<MoneyRead | null> {
-  const rows = await loadMoneyRows(profile.id);
-  if (!rows.ready || rows.unreadable) return null;
-  return moneyRead({ txs: rows.txs, payees: rows.payees, accounts: rows.accounts, today: todayIso(profile.timezone), currency: await moneyCurrency(profile.id, profile) });
+  return loadMoneyRead(profile).catch(() => null);
 }
 
 /**
@@ -156,7 +155,7 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
     if (runs.unreadable) throw new Error(`could not read the last plan: ${runs.unreadable}`);
     if (marks.unreadable) throw new Error(`could not read what you ticked off: ${marks.unreadable}`);
 
-    const currency = profile.finance?.currency || goals.find((g) => g.metric === 'currency')?.unit || '$';
+    const currency = salesCurrency(profile.finance, goals);
     const since = Date.now() - 14 * 86_400_000;
     const last = runs.current?.roadmap ?? null;
     const today = todayIso(profile.timezone);

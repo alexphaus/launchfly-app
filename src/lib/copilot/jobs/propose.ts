@@ -15,7 +15,7 @@ import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { extractJson } from '../agent/schema';
 import { cronTimeoutMs, extraBody, maxOutputTokens, resolveLlmConfig } from '../agent/llm';
-import { describeMetrics } from '../metrics';
+import { describeMetrics, salesCurrency } from '../metrics';
 import { countOpenMoves, loadCommissions, loadMoveAnswers, loadStandingRefusals, loadWorking } from '../store';
 import { dismissedStreak } from '../moves';
 import { loadWorthLedger } from '../outcomes';
@@ -110,7 +110,7 @@ export const proposeJob: Job = {
       // proposal from inside the app can beat the same question typed into a
       // chat window.
       working: workingBrief(working),
-      metricsLine: describeMetrics(metrics, ctx.profile.finance?.currency || '$'),
+      metricsLine: describeMetrics(metrics, salesCurrency(ctx.profile.finance, goals)),
       recentObjectives: commissions.slice(0, RECENT_OBJECTIVES).map((c) => c.objective),
       refusedPhrases: [...standing].map(phraseFor),
     });

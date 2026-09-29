@@ -21,7 +21,7 @@ import { copilotDb, describeDbError, todayIso } from '../db';
 import { recordOutcome } from '../outcomes';
 import type { Finance, Profile } from '../types';
 import {
-  WIN_MATCH_DAYS, WIN_RECORD_DAYS, financeFromRead, financeWithoutStatements, importView, matchWin, moneyRead,
+  WIN_MATCH_DAYS, WIN_RECORD_DAYS, chosenCurrency, financeFromRead, financeWithoutStatements, importView, matchWin, moneyRead,
   winsToRecord, type AccountBalance, type LedgerTx, type MoneyImport, type MoneyRead, type Payee, type PayeeRole,
 } from './ledger';
 import {
@@ -370,6 +370,19 @@ async function afterRowsLanded(profileId: string, importId: string | null, sourc
 /* ─── The finance row ─────────────────────────────────────────────────────── */
 
 /**
+ * The money read the way loadHome computes it for the screen, for everything
+ * that reads money without drawing it: the plan, the brief. One loader, so the
+ * three can never disagree about a figure. Null without statements; throws
+ * only on a read that failed, which the caller says rather than drawing blind.
+ */
+export async function loadMoneyRead(profile: Profile): Promise<MoneyRead | null> {
+  const rows = await loadMoneyRows(profile.id);
+  if (!rows.ready) return null;
+  if (rows.unreadable) throw new Error(rows.unreadable);
+  return moneyRead({ txs: rows.txs, payees: rows.payees, accounts: rows.accounts, today: todayIso(profile.timezone), currency: await moneyCurrency(profile.id, profile), own: chosenCurrency(profile.finance) });
+}
+
+/**
  * Cash and burn from the rows, into the finance row — where metrics, the
  * forecast, the runway guard, scoreMove and the plan already read them. A
  * number the person typed after the statement's own date is left alone.
@@ -380,7 +393,7 @@ export async function refreshFinance(profileId: string): Promise<MoneyRead | nul
   const rows = await loadMoneyRows(profileId);
   if (!rows.ready) return null;
   if (rows.unreadable) throw new Error(rows.unreadable);
-  const read = moneyRead({ txs: rows.txs, payees: rows.payees, accounts: rows.accounts, today: todayIso(profile.timezone), currency: await moneyCurrency(profileId, profile) });
+  const read = moneyRead({ txs: rows.txs, payees: rows.payees, accounts: rows.accounts, today: todayIso(profile.timezone), currency: await moneyCurrency(profileId, profile), own: chosenCurrency(profile.finance) });
   const prev: Finance = profile.finance ?? {};
   const now = new Date().toISOString();
   const next = read ? financeFromRead(prev, read, now) : financeWithoutStatements(prev, now);

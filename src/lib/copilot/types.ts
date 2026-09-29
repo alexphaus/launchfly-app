@@ -91,8 +91,19 @@ export interface Finance {
   cash?: number;
   currency?: string;
   updated_at?: string;
-  /** Where each number came from. Absent on rows written before statements existed: typed. */
-  source?: { cash?: 'typed' | 'statement'; monthly_burn?: 'typed' | 'statement' };
+  /**
+   * Where each number came from. Absent on rows written before statements
+   * existed: typed. `currency` is 'typed' only when the person changed it on
+   * the Runway sheet — a "$" the field was prefilled with is not a choice, and
+   * statements in pesos replace it (money/ledger.ts financeFromRead).
+   */
+  source?: { cash?: 'typed' | 'statement'; monthly_burn?: 'typed' | 'statement'; currency?: 'typed' | 'statement' };
+  /**
+   * Numbers the person typed in another currency before their statements set
+   * this one. Kept and said on the Runway sheet — never divided by a burn in the
+   * new currency, and never silently gone. Cleared when they next save runway.
+   */
+  set_aside?: { cash?: number; monthly_burn?: number; currency: string; on: string };
   /** The day the statement balance behind `cash` is from. */
   cash_on?: string;
   /** The last day of statement rows `monthly_burn` was averaged over. */
@@ -626,6 +637,18 @@ export interface ContextPack {
   openings: PackOpening[];
   /** Real numbers. The insight must cite at least one. */
   metrics: Metrics;
+  /**
+   * Their money as their bank statements show it (money/ledger.ts
+   * moneyForPlan): who pays them, what they spend a month, what repeats. Every
+   * figure counted from rows. Empty with no statements, or when they could not
+   * be read — the brief is written without money rather than not at all, as it
+   * always was. The plan has had these since statements existed; the brief,
+   * which writes the call, did not, so a call could name a $70 test while the
+   * rows said ₱37,708 a month goes out and 95% of what comes in is family help.
+   */
+  money?: string[];
+  /** Why `money` is empty when statements exist and could not be read. The brief says it rather than implying there is no money. */
+  moneyError?: string;
 }
 
 /**

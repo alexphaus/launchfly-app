@@ -21,6 +21,8 @@ import { RANKING_WINDOW, phraseFor } from '@/lib/copilot/call';
 import { decisionReview } from '@/lib/copilot/decision';
 import { loadAskRows, loadWorthLedger } from '@/lib/copilot/outcomes';
 import { getProfile } from '@/lib/copilot/base';
+import { copilotDb } from '@/lib/copilot/db';
+import { salesCurrency } from '@/lib/copilot/metrics';
 import { loadDecisions, loadStandingRefusals } from '@/lib/copilot/store';
 import { fail, json, profileIdOr401 } from '@/lib/copilot/http';
 
@@ -39,12 +41,15 @@ export async function GET() {
   if ('res' in auth) return auth.res;
 
   try {
-    const [profile, decisions, rows, standing, worth] = await Promise.all([
+    const [profile, decisions, rows, standing, worth, goals] = await Promise.all([
       getProfile(auth.pid),
       loadDecisions(auth.pid, RANKING_WINDOW),
       loadAskRows(auth.pid),
       loadStandingRefusals(auth.pid),
       loadWorthLedger(auth.pid),
+      // Only for the currency: wins are sales money, counted in the goal's (metrics.ts salesCurrency).
+      copilotDb().from('copilot_goals').select('metric, unit, priority').eq('profile_id', auth.pid).eq('status', 'active')
+        .then((r) => (r.data ?? []) as Array<{ metric: string; unit: string | null; priority: number }>),
     ]);
     const { deadTopic } = decisionReview(decisions);
 
@@ -58,7 +63,7 @@ export async function GET() {
         dead: deadTopic ? [deadTopic] : [],
         worth,
         phraseFor,
-        currency: profile?.finance?.currency || '',
+        currency: profile?.finance?.currency || goals.some((g) => g.metric === 'currency' && g.unit) ? salesCurrency(profile?.finance, goals) : '',
         // The deployment's pricing currency, which is usually not the user's. See
         // AskInput.planCurrency for why the two are never silently added up.
         planCurrency: CURRENCY,

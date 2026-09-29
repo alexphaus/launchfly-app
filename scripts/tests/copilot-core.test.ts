@@ -7336,7 +7336,7 @@ async function moneyFromTheBank() {
   const sig = { goals: [], working: [], contextCount: 2, capacity: 'deep' as const, offer: null };
   assert.equal(mSignature({ ...sig, money: null }), mSignature(sig), 'no statements, no change to any plan that exists today');
   assert.notEqual(mSignature({ ...sig, money: mForPlan(read).signature }), mSignature(sig));
-  assert.match(mPrompt({ ...mPromptBase, money: mForPlan(read).lines }), /THEIR MONEY, counted by the app from their bank statements:\n- Since 1 Jun/);
+  assert.match(mPrompt({ ...mPromptBase, money: mForPlan(read).lines }), /THEIR MONEY, counted by the app from their bank statements \(in their bank's currency, which may not be the \$ they sell in — never add or convert between the two\):\n- Since 1 Jun/);
   assert.doesNotMatch(mPrompt(mPromptBase), /THEIR MONEY/);
 
   /* 16. Records: every sensor opens a sheet the app actually renders (invariant 7). */
@@ -7417,7 +7417,7 @@ import {
 } from '../../src/lib/copilot/money/statement';
 import {
   currencyClash as bClash, currencyCodeOf as bCode, financeFromRead as bFinance, importLine as bLine, importView as bImport,
-  moneyRead as bRead, type LedgerTx as BTx,
+  moneyRead as bRead, setAsideLine as bAside, financeFromTyped as bTyped, currencyForZone as bZone, type LedgerTx as BTx,
 } from '../../src/lib/copilot/money/ledger';
 
 async function moneyFromMessyFiles() {
@@ -7491,32 +7491,77 @@ async function moneyFromMessyFiles() {
   assert.deepEqual(both.otherCurrencies, [{ currency: '', rows: 5 }]);
   assert.ok(both.lines.includes('5 rows with no currency are not in these numbers. Say which on Bank statements.'));
   const alone = bRead({ txs: pesos, payees: [], accounts: [], today: '2026-09-29', currency: '₱' })!;
-  assert.equal(alone.currency, '₱', 'alone, they are the person’s own currency');
+  assert.equal(alone.currencyKnown, false, 'alone, they are still a file that never said its currency');
   assert.deepEqual(alone.otherCurrencies, []);
+  assert.ok(alone.lines.some((l) => /^You spend [\d,]+ a month\.$/.test(l)), 'printed bare: a $ on peso rows was a guess');
   const saidRows = [...pesos.map((p) => ({ ...p, currency: 'PHP' })), ...euros];
   const said = bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '₱' })!;
   assert.equal(said.currency, 'PHP', 'once said, they are the figures');
   assert.deepEqual(said.otherCurrencies, [{ currency: 'EUR', rows: 3 }]);
-  assert.equal(bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '€' })!.currency, 'EUR', 'the person’s own currency beats a row count: their runway is in it');
-  assert.equal(bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '$' })!.currency, 'PHP', '$ names no one currency, so the most rows decide');
+  assert.equal(bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '€', own: '€' })!.currency, 'EUR', 'a currency the person chose beats a row count');
+  assert.equal(bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '€' })!.currency, 'PHP', 'one the finance row merely carries does not: a euro read would lock runway in euros');
+  assert.equal(bRead({ txs: saidRows, payees: [], accounts: [], today: '2026-09-29', currency: '$', own: '$' })!.currency, 'PHP', '$ names no one currency, so the most rows decide');
 
-  /* 5. Runway is one currency: a typed number is never divided by a read in another. */
+  /* 5. Runway is one currency, and the statements set it. */
+  // The live account: "$1,000 cash, $350 a month" typed into a field prefilled
+  // with $, then a peso budget export. The old rule kept the typed row and runway
+  // read "Set it" beside a card that knew the burn to the peso.
+  const typedDollars = { cash: 1000, monthly_burn: 350, currency: '$', typed_at: '2026-09-20T00:00:00Z', source: { cash: 'typed' as const, monthly_burn: 'typed' as const } };
+  const moved = bFinance(typedDollars, said, '2026-09-29T10:00:00Z');
+  assert.equal(moved.currency, '₱', 'the rows set runway’s currency');
+  assert.equal(moved.monthly_burn, Math.round(said.perMonth!.out), 'burn is what the rows spend');
+  assert.equal(moved.cash, undefined, 'a dollar balance is never divided by peso spending');
+  assert.deepEqual(moved.set_aside, { cash: 1000, monthly_burn: 350, currency: '$', on: '2026-09-29' }, 'what was typed is kept, not lost');
+  assert.match(bAside(moved) ?? '', /^You typed \$1,000 cash and \$350 a month before your statements\. They are in ₱/);
+  assert.equal(bClash(moved, said), null);
+  assert.equal(bFinance(moved, said, 'later'), moved, 'settled once, the next load writes nothing');
+
+  // The same person saying, on the Runway sheet, what they have in pesos.
+  const answered = bTyped(moved, { cash: 71804, monthly_burn: moved.monthly_burn, currency: '₱' }, '2026-09-29T11:00:00Z');
+  assert.equal(answered.set_aside, undefined, 'answered');
+  assert.deepEqual(answered.source, { currency: 'statement', cash: 'typed', monthly_burn: 'statement' }, 'saving the sheet unchanged keeps the bank’s burn the bank’s');
+  assert.equal(answered.burn_to, moved.burn_to);
+  assert.equal(bFinance(answered, said, 'later'), answered);
+
+  // A currency picked on purpose stands, and says why runway is not counted from the rows.
+  const chosen = bTyped(moved, { cash: 1000, monthly_burn: 350, currency: '$' }, 'now');
+  assert.equal(chosen.source?.currency, 'typed', 'changing it is a choice');
+  assert.deepEqual(chosen.source, { currency: 'typed', cash: 'typed', monthly_burn: 'typed' }, 'and a peso figure saved under $ is theirs, not the bank’s');
+  assert.equal(bFinance(chosen, said, 'later'), chosen);
+  assert.match(bClash(chosen, said) ?? '', /in PHP and you chose \$ for runway/);
+  const leftBehind = bFinance({ ...chosen, monthly_burn: 37708, burn_to: '2026-09-29', source: { currency: 'typed', cash: 'typed', monthly_burn: 'statement' } }, said, 'now');
+  assert.equal(leftBehind.cash, 1000, 'what was typed stays');
+  assert.equal(leftBehind.monthly_burn, undefined, 'a burn whose rows are not in this currency does not outlive them');
+
+  assert.equal(bFinance(typedDollars, alone, 'now'), typedDollars, 'unlabelled rows never reach runway: they were $37,708 a month of pesos');
+  const short = bRead({ txs: [t('s1', '2026-09-20', -5, 'EUR'), t('s2', '2026-09-22', -5, 'EUR')], payees: [], accounts: [], today: '2026-09-29', currency: '€' })!;
+  assert.equal(bFinance(typedDollars, short, 'now'), typedDollars, 'a read with nothing to write never blanks runway to switch it');
+
+  // Euros first (the pesos not yet labelled), then the pesos labelled: the peso cash comes back.
   const typedPesos = { cash: 71804, currency: '₱', typed_at: '2026-09-29T00:00:00Z', source: { cash: 'typed' as const } };
-  assert.equal(bFinance(typedPesos, both, 'now'), typedPesos, 'euro spending under typed pesos was 179 months of runway');
-  const leftBehind = bFinance({ ...typedPesos, monthly_burn: 37708, burn_to: '2026-09-29', source: { cash: 'typed', monthly_burn: 'statement' } }, both, 'now');
-  assert.equal(leftBehind.cash, 71804, 'what was typed stays');
-  assert.equal(leftBehind.monthly_burn, undefined, 'a peso burn whose rows are gone does not outlive them');
-  assert.match(bClash(typedPesos, both) ?? '', /in EUR and the runway you typed is in ₱/);
-  assert.equal(bClash(typedPesos, said), null, 'same currency, no clash');
+  const inEuros = bFinance(typedPesos, both, '2026-09-29T12:00:00Z');
+  assert.equal(inEuros.currency, '€');
+  assert.deepEqual(inEuros.set_aside, { cash: 71804, currency: '₱', on: '2026-09-29' });
+  const backInPesos = bFinance(inEuros, said, '2026-09-29T13:00:00Z');
+  assert.equal(backInPesos.currency, '₱');
+  assert.equal(backInPesos.cash, 71804, 'set aside in pesos, restored in pesos');
+  assert.equal(backInPesos.source?.cash, 'typed');
+  assert.equal(backInPesos.set_aside, undefined);
+  assert.equal(backInPesos.monthly_burn, Math.round(said.perMonth!.out));
+
   const fromEuros = { cash: 5, cash_on: '2026-06-30', monthly_burn: 300, burn_to: '2026-06-30', currency: '€', source: { cash: 'statement' as const, monthly_burn: 'statement' as const } };
   const switched = bFinance(fromEuros, said, 'now');
   assert.equal(switched.currency, '₱');
   assert.equal(switched.monthly_burn, Math.round(said.perMonth!.out));
   assert.equal(switched.cash, undefined, 'a euro balance does not stay on as pesos');
-  assert.deepEqual(switched.source, { monthly_burn: 'statement' });
+  assert.deepEqual(switched.source, { currency: 'statement', monthly_burn: 'statement' });
+  assert.equal(switched.set_aside, undefined, 'nothing typed, nothing set aside');
   assert.equal(bCode('₱'), 'PHP');
   assert.equal(bCode('$'), null, 'a dozen currencies write $');
   assert.equal(bCode('eur'), 'EUR');
+  assert.equal(bZone('Asia/Manila'), 'PHP', 'offered first to a person in Manila, who had to type it');
+  assert.equal(bZone('Europe/Zurich'), null, 'not every European zone spends euros');
+  assert.equal(bZone(null), null);
 
   /* 6. The skipped line travels with the statement to the screen. */
   const i = bImport({ id: 'i1', status: 'ready', file_name: 'budget.csv', rows_found: 4, rows_new: 4, skipped: 'Left out 2 scheduled rows (pending or dated after today).', started_at: new Date().toISOString() }, new Date());

@@ -75,7 +75,9 @@ export type SheetState =
   /** Log deep work. The one number on You that nothing else can supply. */
   | { kind: 'focus' }
   /** Bank statements: upload, what they say, who paid, and the answers only the person can give. */
-  | { kind: 'bank' };
+  | { kind: 'bank' }
+  /** Money in, opened: who paid, month by month, then the wins logged. */
+  | { kind: 'moneyin' };
 
 /** What the person can say about their statements. See /api/copilot/money. */
 export type MoneyAnswer =

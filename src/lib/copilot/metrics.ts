@@ -13,6 +13,19 @@ export interface MetricsInput {
   now?: Date;
 }
 
+/**
+ * The currency a sale, a win and a goal are counted in: the first money goal's
+ * unit, else the finance row's, else "$". Not the finance row's first — that
+ * row follows the person's bank statements now (money/ledger.ts
+ * financeFromRead), and somebody who sells in dollars and lives in pesos would
+ * see their $70 offer printed as ₱70 the day they uploaded a budget export.
+ * Runway, cash and what is owed stay in the finance row's own currency.
+ */
+export function salesCurrency(finance: Finance | null | undefined, goals: ReadonlyArray<{ metric: string; unit: string | null; priority?: number }>): string {
+  const goal = [...goals].filter((g) => g.metric === 'currency' && g.unit?.trim()).sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))[0];
+  return goal?.unit?.trim() || finance?.currency || '$';
+}
+
 export function computeRunwayMonths(f: Finance): number | null {
   if (!f || !f.monthly_burn || f.monthly_burn <= 0 || f.cash == null) return null;
   return Math.round((f.cash / f.monthly_burn) * 10) / 10;

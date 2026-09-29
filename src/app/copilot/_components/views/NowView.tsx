@@ -46,6 +46,7 @@ import { money, relTime } from '../format';
 import TriageStack from '../TriageStack';
 import JobList from '../CommissionThread';
 import type { Actions } from '../shared';
+import { salesCurrency } from '@/lib/copilot/metrics';
 
 /** Anything past this is folded. A plan you can finish beats a list you cannot. */
 
@@ -456,9 +457,9 @@ export function QueueClear({ home, actions }: { home: HomeData; actions: Actions
  * The three buttons are the only place the app finds out whether it was right —
  * so "Wrong call" is offered as plainly as "I did it".
  */
-/** The currency a money metric is said in: the finances, else the money goal, else "$". */
+/** The currency a money metric is said in: the money goal's, else the finances', else "$" (metrics.ts salesCurrency). */
 function currencyOf(home: HomeData): string {
-  return home.profile.finance?.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '$';
+  return salesCurrency(home.profile.finance, home.goals);
 }
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 

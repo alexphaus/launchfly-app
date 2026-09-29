@@ -704,6 +704,11 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-root .cp2-bank-read p:last-child { margin-bottom: 0; }
 .cp-root .cp2-bank-chips { margin-top: 10px; }
 .cp-root .cp2-bank-cur { align-items: center; margin-top: 10px; }
+.cp-root .cp2-mny-hero { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 14px; }
+.cp-root .cp2-mny-hero b { font-size: 28px; font-weight: 800; line-height: 1.1; }
+.cp-root .cp2-mny-hero span { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.cp-root .cp2-mny-role { font-style: normal; margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.cp-root .cp2-mny-link { display: block; margin: 10px 0 4px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--blue); text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .cp-root .cp2-bank-cur .cp-input { margin-top: 0; max-width: 96px; text-transform: uppercase; }
 .cp-root .cp2-bank-why { margin: 0 0 4px; }
 .cp-root .cp2-bank-forget { display: block; margin: 22px 0 6px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
@@ -1602,15 +1607,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-recs-state { border: 0; background: var(--line); color: var(--muted); font-weight: 600; }
 .cp-root[data-theme="soft"] .cp2-recs-state.on { background: var(--ai-tint); color: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-recs-state.attention { background: var(--tint); color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-money { padding: 18px 20px; }
-.cp-root[data-theme="soft"] button.cp2-money { display: block; width: calc(100% - 40px); text-align: left; font: inherit; color: inherit; }
-.cp-root[data-theme="soft"] .cp2-money-head,
-.cp-root[data-theme="soft"] .cp2-money-lines,
-.cp-root[data-theme="soft"] .cp2-money-foot { width: 100%; }
-.cp-root[data-theme="soft"] .cp2-money-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 10px; }
-.cp-root[data-theme="soft"] .cp2-money-head .t { font-size: 15px; font-weight: 600; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-money-head .s { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-money-lines { display: flex; flex-direction: column; gap: 6px; }
-.cp-root[data-theme="soft"] .cp2-money-line { display: block; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-money-foot { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
-.cp-root[data-theme="soft"] .cp2-money-empty p { margin: 6px 0 14px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+/* Money in and Runway, opened (MoneySheets.tsx): the figure first, the rows under it. */
+.cp-root[data-theme="soft"] .cp2-mny-hero b { font-family: var(--display); font-size: 30px; font-weight: 700; letter-spacing: -0.5px; }
+.cp-root[data-theme="soft"] .cp2-mny-hero span { font-size: 12.5px; }

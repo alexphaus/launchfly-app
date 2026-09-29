@@ -287,7 +287,9 @@ export function roadmapPrompt(input: RoadmapInput): string {
   // Their money as their bank shows it — every figure counted from rows, so the
   // plan may cite them: who pays, what repeats, how long the cash lasts.
   if (input.money?.length) {
-    lines.push('THEIR MONEY, counted by the app from their bank statements:');
+    // Said, because a person can sell in one currency and live in another: the
+    // plan must never add their bank's pesos to their offer's dollars.
+    lines.push(`THEIR MONEY, counted by the app from their bank statements (in their bank's currency, which may not be the ${input.currency} they sell in — never add or convert between the two):`);
     for (const m of input.money) lines.push(`- ${m}`);
     lines.push('');
   }

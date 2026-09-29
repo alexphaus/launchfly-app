@@ -942,24 +942,51 @@ a date off the rows — invariant 2):
   of rows and are withheld under 20 days of history; repeat bills are the same
   payee, about the same amount, weekly to monthly, at least three times and
   still going (`recurringOut`); cash is the last balance each account printed.
-  One currency per figure: the person's own (their runway's) when any row
-  carries it, else the one most rows carry. Rows in another are kept out and
-  said to be. A file that names no currency is the person's own
-  currency only while nothing else names one; beside a statement that does, it
-  is its own pile until they say which (`setImportCurrency`, one chip on the
-  sheet, applied to the whole account, and inherited by the next upload to it,
-  so next month's export of the same app needs no question). 264 unlabelled peso rows had been summed into a euro
+  One currency per figure: the one the person picked for runway on purpose
+  (`chosenCurrency`) when any row carries it, else the one most rows carry —
+  never the finance row's currency as such, which follows the read, so one euro
+  statement cannot lock runway in euros. Rows in another currency are kept out
+  and said to be. A file that names no currency is its own pile until the
+  person says which (`setImportCurrency`: one chip on the Bank statements sheet,
+  the time zone's currency offered first, applied to the whole account and
+  inherited by the next upload to it, so next month's export of the same app
+  needs no question). Until then its figures print as bare numbers
+  (`currencyKnown: false`) and never reach runway: counted as "the person's
+  currency" they were written into a dollar runway as $37,708 a month of peso
+  spending, and before that, 264 unlabelled peso rows were summed into a euro
   account's figures and printed with its €.
+- **The last thirty days** (`recent`, `months`, `spend`): money in and out over
+  the thirty days ending on the last row — not on today, since a statement
+  that ends in June has no "last 30 days" in September (`recentLabel` says
+  which) — who paid in them, calendar months in and out (`partial` when the
+  rows start or stop inside one), and where the money goes a month over the
+  same days `perMonth` averages.
 - **The finance row** (`financeFromRead`): cash and burn written into
   `profile.finance` with where each came from (`source`, `cash_on`, `burn_to`),
   so metrics, the forecast, the runway guard, scoreMove's money factor and the
   plan all move without any of them changing. A number the person typed after
   the statement's own date stands (`typed_at`); the Runway sheet says which is
-  which. Runway is cash over burn, so both are one currency: a read in another
-  currency than a typed number stays out of the row (`currencyClash` says so on
-  the Runway sheet) — euro spending under typed pesos was 179 months of runway —
-  and a figure an earlier read left there goes, since no row in the person's
-  currency is left behind it. An account's cash is the latest statement's
+  which. Runway is cash over burn, so both are one currency — and the
+  statements set it. A live account had typed "$1,000 cash, $350 a month" into
+  a field prefilled with $, then uploaded a peso budget export; keeping the
+  typed row blanked runway beside a card that knew the burn to the peso, and the
+  plan was drawn with no runway. Now the typed numbers are set aside
+  (`set_aside`, kept and said on the Runway sheet by `setAsideLine`), the burn
+  comes off the rows, and the one thing asked is cash in the rows' currency; a
+  later switch back restores what was set aside in that currency. Two cases
+  keep the typed row: a currency the person changed on the Runway sheet
+  (`source.currency = 'typed'`, set by `financeFromTyped`; `currencyClash` then
+  says why runway ignores the rows), and a read with nothing to write. Either
+  way a figure an earlier read left there goes, since no row in the person's
+  currency is left behind it. `loadHome` settles the row from the rows on every
+  load and writes only when it moved (`financeFromRead` returns the row itself
+  otherwise; a failed write is `money.settleError`, said on the Runway sheet),
+  and the nightly pass settles it first, before the plan and the brief read it.
+- **Sales money is not runway money** (`salesCurrency`, metrics.ts). An offer,
+  a win, a goal and the plan's prices are in the first money goal's unit, else
+  the finance row's; runway, cash and what is owed stay in the finance row's.
+  Before statements the two were one field, and a person who sells in dollars
+  and lives in pesos would have seen their $70 offer printed as ₱70. An account's cash is the latest statement's
   closing on a date tie with its rows: a batch shares `created_at`, so the last
   row of a day with two is a coin toss (Wise's quarter read €5 for €0.00).
 - **Who paid, named by the person.** Each payer nobody has named is one question
@@ -977,10 +1004,26 @@ a date off the rows — invariant 2):
   percent (`matchWin`), so nothing counts twice. This is the join the product
   was missing: from a message sent to money that actually landed.
 
-**The plan sees it.** `drawRoadmap` puts the lines in the prompt as THEIR MONEY,
-so the number guard lets the plan cite them, and the signature carries a money
-fingerprint (`moneyForPlan`) so a new statement or a payer named redraws the
-plan like a note does. Built only from totals computed before any list is cut
+**The screen.** Money in and Runway, the first two tiles on You, read the rows:
+Money in is what came in over the last thirty days of rows and opens who paid,
+month by month, then the wins logged (`MoneyInSheet`); Runway opens the figure,
+where each number came from, the cash field first when the rows gave the burn
+and no balance, then where the money goes a month and the repeat bills
+(`RunwaySheet`). Before statements both open what they always did. The money
+card that sat under the tiles repeated them in prose and went; the questions
+it carried — payers to name, a currency to say — are the Bank statements row's
+in Records.
+
+**The plan and the brief see it.** `drawRoadmap` puts the lines in the prompt as
+THEIR MONEY, noting they are in the bank's currency, which may not be the one
+they sell in, so the number guard lets the plan cite them, and the signature
+carries a money fingerprint (`moneyForPlan`) so a new statement or a payer
+named redraws the plan like a note does. The brief's context pack carries the
+same lines as `money` (one loader, `loadMoneyRead`, so the three cannot
+disagree), under a MONEY rule that lets it cite them and forbids converting
+between currencies or treating a payer as a won sale; a read that failed is
+`moneyError`, never an empty section. The handoff export has them as "My
+money". Built only from totals computed before any list is cut
 for the screen, so the phone and the server always agree — a fingerprint that
 differed would redraw on every open — and absent without statements, so no
 existing plan redraws for nothing.

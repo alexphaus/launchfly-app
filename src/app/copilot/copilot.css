@@ -37,6 +37,10 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Not a scroll container, where supported. Hidden still is one: an input
+     autofocused in a sheet as it slid in scrolled the frame 163px, for good,
+     and the next closed sheet sat in view under the nav. */
+  overflow: clip;
 }
 @media (min-width: 520px) and (min-height: 700px) {
   .cp-root { padding: 28px 12px; align-items: flex-start; }
@@ -1611,3 +1615,124 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 /* Money in and Runway, opened (MoneySheets.tsx): the figure first, the rows under it. */
 .cp-root[data-theme="soft"] .cp2-mny-hero b { font-family: var(--display); font-size: 30px; font-weight: 700; letter-spacing: -0.5px; }
 .cp-root[data-theme="soft"] .cp2-mny-hero span { font-size: 12.5px; }
+
+/* ── The Money tab (v2/MoneyTab.tsx) ──────────────────────────────────────
+   One budget-app screen: the balance, the list under it with each day's spend
+   on its header, the calendar, and the add sheet. Names are cp2-bk-*, and none
+   is a bare word: .cp-steps once sized every span inside it, and a component
+   that reused a common name rendered as grey rectangles (CLAUDE.md). */
+/* Five tabs in the pill: a little less air each so "Matches" keeps one line at 360px. */
+.cp-root[data-theme="soft"] .cp2-nav button { padding: 6px 9px; }
+.cp-root[data-theme="soft"] .cp2-bk-wait { padding-top: 24px; }
+.cp-root[data-theme="soft"] .cp2-bk-msg { margin-top: 14px; }
+.cp-root[data-theme="soft"] .cp2-bk-msg p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.55; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-bk-msg p.cp-help { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bk-h { margin: 0 0 8px; font-family: var(--display); font-size: 18px; font-weight: 700; letter-spacing: -0.2px; }
+.cp-root[data-theme="soft"] .cp2-bk-gap { margin-top: 10px; }
+
+/* The balance */
+.cp-root[data-theme="soft"] .cp2-bk-top { margin-top: 14px; display: flex; flex-direction: column; gap: 4px; }
+.cp-root[data-theme="soft"] .cp2-bk-toprow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-bk-lbl { font-size: 12px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bk-bal {
+  align-self: flex-start; max-width: 100%; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  font-family: var(--display); font-size: 32px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.15; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cp-root[data-theme="soft"] .cp2-bk-sub { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+
+/* Segmented pills: the currency, list or calendar, spent or balance, in or out */
+.cp-root[data-theme="soft"] .cp2-bk-seg { flex: none; display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--track); }
+.cp-root[data-theme="soft"] .cp2-bk-seg > button,
+.cp-root[data-theme="soft"] .cp2-bk-seg > select {
+  appearance: none; -webkit-appearance: none; border: 0; border-radius: 999px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 11.5px; font-weight: 600; padding: 6px 11px; cursor: pointer; line-height: 1.2;
+}
+.cp-root[data-theme="soft"] .cp2-bk-seg > .on { background: var(--surface); color: var(--blue); font-weight: 700; box-shadow: var(--shadow-sm); }
+/* The picked other currency is a select: a caret says it opens. */
+.cp-root[data-theme="soft"] .cp2-bk-seg > select.on {
+  padding-right: 22px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--blue) 50%), linear-gradient(135deg, var(--blue) 50%, transparent 50%);
+  background-position: calc(100% - 12px) 52%, calc(100% - 8px) 52%; background-size: 4px 4px; background-repeat: no-repeat; background-color: var(--surface);
+}
+.cp-root[data-theme="soft"] .cp2-bk-seg.sm > button { padding: 5px 9px; font-size: 11px; }
+.cp-root[data-theme="soft"] .cp2-bk-seg.wide { display: flex; margin-bottom: 14px; }
+.cp-root[data-theme="soft"] .cp2-bk-seg.wide > button { flex: 1; padding: 10px; font-size: 13px; }
+
+/* The month */
+.cp-root[data-theme="soft"] .cp2-bk-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 22px 0; }
+.cp-root[data-theme="soft"] .cp2-bk-month { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-bk-month b { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-bk-month button {
+  width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--blue);
+  font-size: 20px; line-height: 1; cursor: pointer;
+}
+.cp-root[data-theme="soft"] .cp2-bk-month button:disabled { color: var(--dim); cursor: default; }
+.cp-root[data-theme="soft"] .cp2-bk-totals { margin: 4px 24px 0; font-size: 12px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bk-totals b { color: var(--ink); font-weight: 700; }
+
+/* The list: a day's header carries what the day cost */
+.cp-root[data-theme="soft"] .cp2-bk-dayhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 18px 26px 8px; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-bk-dayhead .n { display: inline-flex; gap: 10px; font-weight: 700; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bk-dayhead .n b { color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-bk-dayhead .n i { font-style: normal; color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-bk-lines { overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-bk-line {
+  display: flex; width: 100%; align-items: center; gap: 12px; padding: 13px 20px; border: 0; border-bottom: 1px solid var(--line);
+  background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.cp-root[data-theme="soft"] .cp2-bk-line:last-child { border-bottom: 0; }
+.cp-root[data-theme="soft"] .cp2-bk-line .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-root[data-theme="soft"] .cp2-bk-line .t { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-bk-line .s { font-size: 11.5px; line-height: 1.4; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-bk-line .amt { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.cp-root[data-theme="soft"] .cp2-bk-line .amt b { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-bk-line .amt b.in { color: var(--ai); }
+/* Read off a file: there, but not the person's to edit here. */
+.cp-root[data-theme="soft"] .cp2-bk-line.read .t { font-weight: 500; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bk-rep { width: 13px; height: 13px; flex: none; stroke: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-bk-end { height: 64px; }
+.cp-root[data-theme="soft"] .cp2-bk-empty { margin-top: 12px; border: 0; background: var(--surface); box-shadow: var(--shadow-sm); border-radius: 20px; }
+
+/* The calendar */
+.cp-root[data-theme="soft"] .cp2-bk-cal { margin-top: 12px; padding: 16px 14px 14px; }
+.cp-root[data-theme="soft"] .cp2-bk-calhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px 12px; font-size: 11.5px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bk-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cp-root[data-theme="soft"] .cp2-bk-grid .wd { text-align: center; font-size: 10.5px; font-weight: 700; color: var(--dim); padding-bottom: 4px; }
+.cp-root[data-theme="soft"] .cp2-bk-grid .cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 2px; min-width: 0; height: 50px;
+  padding: 6px 2px 5px; border: 0; border-radius: 12px; background: transparent; font: inherit; color: var(--ink); cursor: pointer;
+}
+.cp-root[data-theme="soft"] .cp2-bk-grid .cell .d { font-size: 12px; font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-bk-grid .cell .v { max-width: 100%; font-size: 10.5px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-bk-grid .cell .d { position: relative; }
+.cp-root[data-theme="soft"] .cp2-bk-grid .cell .d i { position: absolute; top: 1px; right: -7px; width: 5px; height: 5px; border-radius: 50%; background: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-bk-grid .cell.today { background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-bk-grid .cell.today .d { color: var(--blue); font-weight: 800; }
+.cp-root[data-theme="soft"] .cp2-bk-grid .cell.future .d { color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-bk-grid .cell.picked { box-shadow: inset 0 0 0 2px var(--blue); }
+
+/* The add button, above the nav, under the thumb */
+.cp-root[data-theme="soft"] .cp2-bk-fab {
+  position: absolute; right: 24px; bottom: calc(100px + env(safe-area-inset-bottom)); z-index: 21;
+  width: 54px; height: 54px; border: 0; border-radius: 50%; background: var(--blue); color: #fff;
+  font-size: 28px; font-weight: 400; line-height: 1; box-shadow: var(--lift); cursor: pointer;
+}
+
+/* The add sheet */
+.cp-root[data-theme="soft"] .cp2-bk-amtrow { display: flex; align-items: baseline; gap: 6px; padding: 4px 4px 12px; border-bottom: 2px solid var(--line); margin-bottom: 6px; }
+.cp-root[data-theme="soft"] .cp2-bk-amtrow:focus-within { border-bottom-color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-bk-amtrow .mark { font-family: var(--display); font-size: 26px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bk-amt.big {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 0;
+  font-family: var(--display); font-size: 36px; font-weight: 700; letter-spacing: -0.6px; color: var(--ink);
+}
+.cp-root[data-theme="soft"] .cp2-bk-flabel { margin: 14px 0 8px; }
+.cp-root[data-theme="soft"] .cp2-bk-chips .cp-fchip { padding: 8px 13px; font-size: 12.5px; }
+.cp-root[data-theme="soft"] .cp2-bk-date { font: inherit; font-size: 12.5px; font-weight: 600; min-width: 0; max-width: 150px; }
+.cp-root[data-theme="soft"] .cp2-bk-save { margin-top: 18px; }
+.cp-root[data-theme="soft"] .cp2-bk-save + .cp2-bk-save { margin-top: 10px; }
+.cp-root[data-theme="soft"] .cp2-bk-del { color: #A85F2E; }
+.cp-root[data-theme="soft"] .cp2-bk-balrow { align-items: center; margin-top: 4px; }
+.cp-root[data-theme="soft"] .cp2-bk-balrow .cp2-bk-amt { flex: 1; min-width: 0; font-size: 18px; font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-bk-cur { flex: none; font-weight: 700; color: var(--muted); padding: 0 6px; }

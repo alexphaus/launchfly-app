@@ -24,6 +24,7 @@ import {
   WIN_MATCH_DAYS, WIN_RECORD_DAYS, dayLabel, financeFromRead, financeMark, financeWithoutStatements, importView, matchWin, moneyRead, moneyText,
   winsToRecord, type AccountBalance, type LedgerTx, type MoneyImport, type MoneyRead, type Payee, type PayeeRole,
 } from './ledger';
+import { anchorOf, bookBalance, type BookAnchor } from './book';
 import { latestRate, mainCurrency, rateLine, rateOn, ratesNeeded, toCode } from './fx';
 import { loadRates, type LoadedRates } from './fxstore';
 import {
@@ -57,6 +58,11 @@ export interface MoneyRows {
 
 type DbError = { code?: string; message?: string } | null;
 
+/** 42703 from Postgres, PGRST204 from PostgREST's schema cache: a column a later migration adds is not there yet. */
+export function isMissingColumn(e: DbError): boolean {
+  return !!e && (e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find the .* column/i.test(e.message ?? ''));
+}
+
 /** 42P01 from Postgres, PGRST205 from a PostgREST that has not seen the table. Both mean 20260929 is not in. */
 function isMissingTable(e: DbError): boolean {
   return !!e && (e.code === '42P01' || e.code === 'PGRST205' || /does not exist|could not find the table/i.test(e.message ?? ''));
@@ -75,7 +81,7 @@ export async function loadMoneyRows(profileId: string, now = new Date()): Promis
     const rows: Array<Record<string, unknown>> = [];
     for (let from = 0; from < TX_READ_MAX; from += PAGE) {
       const { data, error } = await db.from('copilot_transactions')
-        .select('id, posted_on, amount, currency, counterparty_key, account_id, outcome_id, description')
+        .select('id, posted_on, amount, currency, counterparty_key, account_id, outcome_id, description, created_at, fingerprint')
         .eq('profile_id', profileId).gte('posted_on', since)
         .order('posted_on', { ascending: false }).order('id', { ascending: true })
         .range(from, from + PAGE - 1);
@@ -90,7 +96,7 @@ export async function loadMoneyRows(profileId: string, now = new Date()): Promis
     db.from('copilot_money_imports').select(IMPORT_COLS).eq('profile_id', profileId).order('started_at', { ascending: false }).limit(12),
     txRead,
     db.from('copilot_counterparties').select('key, name, role, opportunity_id').eq('profile_id', profileId).limit(PAGE),
-    db.from('copilot_money_accounts').select('id, label, institution, mask, currency, balance, balance_on').eq('profile_id', profileId),
+    db.from('copilot_money_accounts').select('id, provider, label, institution, mask, currency, balance, balance_on').eq('profile_id', profileId),
   ]);
   const errors = [imp.error, tx.error, cp.error, acc.error] as DbError[];
   if (errors.some(isMissingTable)) return { ...empty, ready: false };
@@ -109,6 +115,9 @@ export async function loadMoneyRows(profileId: string, now = new Date()): Promis
       accountId: (r.account_id as string | null) ?? null,
       outcomeId: (r.outcome_id as string | null) ?? null,
       description: (r.description as string | null) ?? undefined,
+      createdAt: r.created_at ? String(r.created_at) : undefined,
+      // Logged in the Money tab, not read off a file: only these move the book's balance.
+      book: /^(book|repeat):/.test(String(r.fingerprint ?? '')),
     })),
     payees: ((cp.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
       key: String(r.key),
@@ -116,7 +125,10 @@ export async function loadMoneyRows(profileId: string, now = new Date()): Promis
       role: (['client', 'employer', 'self', 'other'] as const).find((x) => x === r.role) ?? null,
       opportunityId: (r.opportunity_id as string | null) ?? null,
     })),
-    accounts: ((acc.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    // The money book prints no balance of its own: its balance is the finance
+    // row's (book.ts), and counted here as an account without one it made every
+    // read say "type your cash" beside a cash the person keeps to the peso.
+    accounts: ((acc.data ?? []) as Array<Record<string, unknown>>).filter((r) => r.provider !== 'book').map((r) => ({
       id: String(r.id),
       label: accountLabel(r as { label?: string; institution?: string; mask?: string }),
       currency: (r.currency as string | null) ?? null,
@@ -297,14 +309,45 @@ async function commitRows(profileId: string, importId: string, p: Pending): Prom
     description: r.description.slice(0, 300),
     counterparty_key: rowKey(r),
     balance_after: r.balance == null ? null : cents(r.balance) / 100,
+    ...(r.category ? { category: r.category } : {}),
   }));
   let inserted = 0;
+  // `category` is 20261001's. Where that is not applied yet the rows go in
+  // without it rather than not at all: a statement must never fail on a column
+  // only the Money tab reads.
+  let withCategory = payload.some((r) => 'category' in r);
   for (let i = 0; i < payload.length; i += 500) {
-    const { data, error } = await db.from('copilot_transactions')
-      .upsert(payload.slice(i, i + 500), { onConflict: 'profile_id,fingerprint', ignoreDuplicates: true })
+    const page = payload.slice(i, i + 500);
+    let res = await db.from('copilot_transactions')
+      .upsert(withCategory ? page : page.map(({ category: _c, ...r }) => r), { onConflict: 'profile_id,fingerprint', ignoreDuplicates: true })
       .select('id');
-    if (error) throw new Error(describeDbError(error, 'Could not save the transactions.'));
-    inserted += (data ?? []).length;
+    if (res.error && withCategory && isMissingColumn(res.error)) {
+      withCategory = false;
+      res = await db.from('copilot_transactions')
+        .upsert(page.map(({ category: _c, ...r }) => r), { onConflict: 'profile_id,fingerprint', ignoreDuplicates: true })
+        .select('id');
+    }
+    if (res.error) throw new Error(describeDbError(res.error, 'Could not save the transactions.'));
+    inserted += (res.data ?? []).length;
+  }
+  // Rows already on file from an earlier upload of the same export get the
+  // category they were missing — so re-sharing a budget export fills in the
+  // Money tab's history instead of skipping every row it has seen.
+  if (withCategory) {
+    const byCategory = new Map<string, string[]>();
+    payload.forEach((r) => { if (r.category) byCategory.set(r.category, [...(byCategory.get(r.category) ?? []), r.fingerprint]); });
+    let failed: string | null = null;
+    for (const [category, prints] of byCategory) {
+      for (let i = 0; i < prints.length && !failed; i += 200) {
+        const { error } = await db.from('copilot_transactions').update({ category }).eq('profile_id', profileId).in('fingerprint', prints.slice(i, i + 200)).is('category', null);
+        if (error) failed = describeDbError(error);
+      }
+    }
+    // The rows are in; only the Money tab's categories on older ones are not. Said on the statement's row.
+    if (failed) {
+      const { error } = await db.from('copilot_money_imports').update({ note: `Categories were not added to rows already on file: ${failed}`.slice(0, 600) }).eq('id', importId);
+      if (error) console.error('[copilot/money] could not note a failed category backfill:', failed, error.message);
+    }
   }
   // Everybody on the statement gets a row to be named on, once.
   const keys = [...new Set(payload.map((r) => r.counterparty_key))];
@@ -364,6 +407,41 @@ async function afterRowsLanded(profileId: string, importId: string | null, sourc
   if (problems.length && !importId) throw new Error(problems.join(' '));
 }
 
+/* ─── The money book's balance ────────────────────────────────────────────── */
+
+/**
+ * The rows that move the book's balance (book.ts bookBalance): logged — no
+ * import — and written after the balance was said or dated after its day. A
+ * query of its own rather than the read's rows, which stop TX_READ_DAYS back:
+ * a book kept longer than that would drift from the Money tab's figure, the
+ * one the person checks against their wallet.
+ */
+export async function bookRowsSince(profileId: string, anchor: BookAnchor): Promise<Array<Pick<LedgerTx, 'on' | 'amount' | 'currency' | 'createdAt' | 'book'>>> {
+  const db = copilotDb();
+  const out: Array<Pick<LedgerTx, 'on' | 'amount' | 'currency' | 'createdAt' | 'book'>> = [];
+  for (let from = 0; from < 20 * PAGE; from += PAGE) {
+    const { data, error } = await db.from('copilot_transactions').select('posted_on, amount, currency, created_at, fingerprint')
+      .eq('profile_id', profileId).is('import_id', null)
+      .or(`created_at.gt."${anchor.at}",posted_on.gt.${anchor.on}`)
+      .order('id', { ascending: true }).range(from, from + PAGE - 1);
+    if (error) throw new Error(describeDbError(error, 'Could not read your money book.'));
+    for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+      out.push({
+        on: String(r.posted_on).slice(0, 10), amount: Number(r.amount), currency: (r.currency as string | null) ?? null,
+        createdAt: String(r.created_at ?? ''), book: /^(book|repeat):/.test(String(r.fingerprint ?? '')),
+      });
+    }
+    if ((data ?? []).length < PAGE) break;
+  }
+  return out;
+}
+
+/** The book's balance now, or null when there is no book. Throws when its rows cannot be read: a guess here is a runway. */
+export async function bookBalanceNow(profileId: string, finance: Finance | null | undefined, today: string): Promise<number | null> {
+  const anchor = anchorOf(finance);
+  return anchor ? bookBalance(anchor, await bookRowsSince(profileId, anchor), today) : null;
+}
+
 /* ─── The finance row ─────────────────────────────────────────────────────── */
 
 /**
@@ -397,6 +475,8 @@ export async function ratesFor(input: { main: string; rows: Pick<MoneyRows, 'txs
   const typed = [
     ...Object.values(input.finance.typed_in ?? {}).map((t) => t?.currency ?? null),
     toCode(input.finance.currency),
+    // The book's balance is cash in its own currency from the first load after it is said.
+    toCode(input.finance.book?.currency),
   ].filter((c): c is string => !!c && c !== input.main);
   const needs = ratesNeeded({ main: input.main, txs: input.rows.txs, accounts: input.rows.accounts, typed, today: input.today });
   return loadRates(needs, input.today);
@@ -418,7 +498,10 @@ export async function refreshFinance(profileId: string): Promise<MoneyRead | nul
   // Rates even without statements: a number typed in pesos in a dollar app needs one.
   const fx = await ratesFor({ main, rows, finance: prev, today });
   const read = rows.ready ? moneyRead({ txs: rows.txs, payees: rows.payees, accounts: rows.accounts, today, currency: main, main, fx: fx.table, fxMissing: fx.missing }) : null;
-  const next = financeFromRead(prev, read, new Date().toISOString(), { main, latest: (from, to) => latestRate(fx.table, from, to) });
+  const next = financeFromRead(prev, read, new Date().toISOString(), {
+    main, latest: (from, to) => latestRate(fx.table, from, to),
+    book: await bookBalanceNow(profileId, prev, today),
+  });
   if (next === prev) return read;
   const { error } = await copilotDb().from('copilot_profiles').update({ finance: next }).eq('id', profileId);
   if (error) throw new Error(describeDbError(error, 'Could not update runway.'));
@@ -610,8 +693,17 @@ export async function discardImport(profileId: string, importId: string): Promis
  */
 export async function forgetMoney(profileId: string): Promise<void> {
   const db = copilotDb();
-  for (const table of ['copilot_transactions', 'copilot_money_imports', 'copilot_counterparties', 'copilot_money_accounts']) {
-    const { error } = await db.from(table).delete().eq('profile_id', profileId);
+  // What was read off a bank, not what the person logged on the Money tab:
+  // the button says "read off your bank", and a cash book is theirs, kept to the
+  // peso. Its rows carry no import, and its account is provider 'book'.
+  const steps = [
+    () => db.from('copilot_transactions').delete().eq('profile_id', profileId).not('import_id', 'is', null),
+    () => db.from('copilot_money_imports').delete().eq('profile_id', profileId),
+    () => db.from('copilot_counterparties').delete().eq('profile_id', profileId),
+    () => db.from('copilot_money_accounts').delete().eq('profile_id', profileId).neq('provider', 'book'),
+  ];
+  for (const step of steps) {
+    const { error } = await step();
     if (error && !isMissingTable(error)) throw new Error(describeDbError(error, 'Could not delete your statement data.'));
   }
   const profile = await getProfile(profileId);

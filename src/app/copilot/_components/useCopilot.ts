@@ -51,6 +51,14 @@ export interface CopilotConfig<T extends Tab | Tab2> {
   afterDraft?: T;
 }
 
+/**
+ * How the app was opened, when it was opened to do one thing: a file shared to
+ * it (manifest share_target — `shared` is how many the service worker kept, or
+ * 'done'/'error' from the server's fallback, with what to say in `why`), or the
+ * Log money shortcut (`add`).
+ */
+export interface Arrival { shared: string | null; why: string | null; add: boolean }
+
 /** The sheet body stays mounted while it slides out, so each target needs its own
  * identity or one goal's form state would be saved onto the next goal opened. */
 export function sheetKey(s: SheetState): string {
@@ -89,6 +97,8 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
   const [briefing, setBriefing] = useState(false);
   const [finding, setFinding] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [arrival, setArrival] = useState<Arrival | null>(null);
+  const clearArrival = useCallback(() => setArrival(null), []);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const briefStarted = useRef(false);
   // One scroll container serves all tabs, so without this a tab opens wherever
@@ -308,6 +318,18 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     }
   }, [initial.needsFirstSupply, initial.needsBrief, findMatches, runBrief]);
 
+  // The service worker, registered by the app itself. The root layout does it
+  // on window load, which has usually fired by the time its afterInteractive
+  // script runs, so on these pages it often never happened: turning nudges on
+  // waited on `ready` forever, and a file shared to the app from the phone
+  // skipped the worker that keeps it (public/sw.js). Registering the same
+  // script again is a no-op when it already is.
+  const swError = useRef<string | null>(null);
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').catch((e: unknown) => { swError.current = e instanceof Error ? e.message : String(e); });
+  }, []);
+
   // Back from Stripe. The webhook that flips the plan and the redirect race each
   // other, so confirm the payment immediately and re-read once the webhook has
   // had a moment — otherwise someone who just paid lands on a page still
@@ -319,6 +341,12 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     const wanted = params.get('tab');
     const resolved = wanted ? aliasRef.current[wanted] : undefined;
     if (resolved) setTabState(resolved);
+    // A file shared from another app, or the Log money shortcut: kept for the
+    // tab that handles it, since the URL is cleaned below before it mounts.
+    const shared = params.get('shared');
+    if (shared || params.get('add')) {
+      setArrival({ shared, why: params.get('why'), add: params.get('add') === '1' });
+    }
     if (!upgraded && !wanted) return;
     window.history.replaceState({}, '', window.location.pathname);
     if (!upgraded) return;
@@ -796,6 +824,8 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     async setPush(enabled) {
       try {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('This browser does not support push');
+        // `ready` never settles without a registration: say why rather than wait forever.
+        if (swError.current) throw new Error(`Notifications need the app's service worker, which did not start: ${swError.current}`);
         const reg = await navigator.serviceWorker.ready;
         if (enabled) {
           if (!home.push.publicKey) throw new Error('Push is not configured on the server');
@@ -888,6 +918,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
   return {
     home, setHome, tab, setTab, actions,
     sheet, sheetOpen, dismissSheets,
-    briefing, finding, toast, mainRef,
+    briefing, finding, toast, mainRef, say, refresh,
+    arrival, clearArrival,
   };
 }

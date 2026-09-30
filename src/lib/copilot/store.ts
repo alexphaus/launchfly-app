@@ -51,7 +51,7 @@ import { NIGHTLY_COLUMNS, nightlyFromRow, type NightlyOutput, type NightlyRun, t
 import { resolveLlmConfig, resolvePlanConfig } from './agent/llm';
 import { ROADMAP_COLUMNS, ROADMAP_MARK_EVENT, ROADMAP_RUN_KIND, markFromEvent, roadmapRunFromRow, type RoadmapMark, type RoadmapRun } from './roadmap';
 import { EXPERIMENT_EVENT, experimentMarkFromEvent, type ExperimentMark } from './experiment';
-import { loadMoneyRows, moneyGoals, ratesFor, refreshFinance } from './money/store';
+import { bookBalanceNow, loadMoneyRows, moneyGoals, ratesFor, refreshFinance } from './money/store';
 import { financeFromRead, financeFromTyped, moneyHome } from './money/ledger';
 import { latestRate, mainCurrency } from './money/fx';
 import { resolveStatementConfig } from './money/extract';
@@ -928,9 +928,16 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   // moved (financeFromRead returns the row itself otherwise), and a failed write
   // is said on the Runway sheet rather than shown as a runway that never came.
   let settleError: string | null = null;
-  if (fx) {
+  // The book's balance, read on its own: unreadable, runway is left as it was
+  // and says why — settled without it, the cash the book gave would be wiped.
+  let book: number | null = null;
+  try { book = fx ? await bookBalanceNow(profileId, profile.finance, today) : null; }
+  catch (e) { settleError = e instanceof Error ? e.message : String(e); }
+  if (fx && !settleError) {
     const was: Finance = profile.finance ?? {};
-    const settled = financeFromRead(was, moneyRows.ready ? money.read : null, new Date().toISOString(), { main, latest: (from, to) => latestRate(fx.table, from, to) });
+    const settled = financeFromRead(was, moneyRows.ready ? money.read : null, new Date().toISOString(), {
+      main, latest: (from, to) => latestRate(fx.table, from, to), book,
+    });
     if (settled !== was) {
       const { error } = await db.from('copilot_profiles').update({ finance: settled }).eq('id', profileId);
       if (error) settleError = describeDbError(error, 'Runway could not be updated from your statements.');

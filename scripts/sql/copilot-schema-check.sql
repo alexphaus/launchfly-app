@@ -77,7 +77,10 @@ with expected(kind, table_name, column_name, migration) as (values
   ('table',  'copilot_counterparties', null,                        '20260929_copilot_money.sql'),
   ('column', 'copilot_counterparties', 'opportunity_id',            '20260929_copilot_money.sql'),
   -- Without it rates live in the server's memory and are fetched again after every restart.
-  ('table',  'copilot_fx_rates',       null,                        '20260930_copilot_fx.sql')
+  ('table',  'copilot_fx_rates',       null,                        '20260930_copilot_fx.sql'),
+  -- Without them the Money tab says it is not set up; statements and runway are unaffected.
+  ('column', 'copilot_transactions',   'category',                  '20261001_copilot_book.sql'),
+  ('column', 'copilot_transactions',   'repeat',                    '20261001_copilot_book.sql')
 ),
 
 missing as (

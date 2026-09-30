@@ -7625,3 +7625,178 @@ async function moneyFromMessyFiles() {
 }
 
 moneyFromMessyFiles().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The money book: the Money tab's list, calendar, balance and repeats ─── */
+import {
+  anchorOf as kAnchor, bookBalance as kBalance, bookDayLabel as kDay, bookMoney as kMoney, bookRateLine as kRateLine, bookView as kView,
+  checkEntry as kCheck, nextRepeat as kNext, parseRepeat as kParse, repeatValue as kValue, repeatsDue as kDue, shiftMonth as kShift,
+  type BookRow as KRow,
+} from '../../src/lib/copilot/money/book';
+import {
+  financeFromRead as kFinance, financeFromTyped as kTyped, moneyRead as kRead, typedInLines as kTypedLines, type LedgerTx as KTx,
+} from '../../src/lib/copilot/money/ledger';
+import { fxTable as kTable } from '../../src/lib/copilot/money/fx';
+
+async function moneyBook() {
+  const today = '2026-09-30';
+
+  /* 1. Repeats: a monthly one keeps its day through a short month; a weekly one catches up, bounded. */
+  assert.equal(kValue('month', '2026-01-31'), 'monthly@31');
+  assert.equal(kValue('week', '2026-01-31'), 'weekly');
+  const m31 = kParse('monthly@31')!;
+  assert.deepEqual(m31, { every: 'month', day: 31 });
+  assert.equal(kNext(m31, '2026-01-31'), '2026-02-28', 'February has no 31st');
+  assert.equal(kNext(m31, '2026-02-28'), '2026-03-31', 'and March gets it back: the day is the rule’s, not the last row’s');
+  assert.equal(kNext(kParse('monthly@15')!, '2026-12-15'), '2027-01-15');
+  assert.equal(kNext({ every: 'week' }, '2026-09-09'), '2026-09-16');
+  assert.equal(kParse('monthly@0'), null);
+  assert.equal(kParse('daily'), null);
+  assert.equal(kParse(null), null);
+  assert.deepEqual(kDue({ every: 'week' }, '2026-09-09', today), ['2026-09-16', '2026-09-23', '2026-09-30', '2026-10-07'],
+    'every one that came, and the next one after today as pending');
+  assert.deepEqual(kDue(kParse('monthly@1')!, '2026-10-01', today), [], 'a series whose latest row is still pending owes nothing');
+  assert.equal(kDue({ every: 'week' }, '2020-01-01', today).length, 60, 'a series nobody opened for years writes a bounded catch-up, not forever');
+
+  /* 2. The balance: said once, moved only by what was logged after it. */
+  const anchor = { currency: 'PHP', balance: 71479.06, at: '2026-09-30T01:00:00Z', on: today };
+  const row = (r: Partial<KRow> & Pick<KRow, 'id' | 'on' | 'amount'>): KRow => ({
+    currency: 'PHP', description: r.category ?? 'Money', category: null, note: null, repeat: null, createdAt: '2026-09-29T20:00:00Z', book: false, source: null, ...r,
+  });
+  const rows: KRow[] = [
+    row({ id: 'imp1', on: '2026-09-29', amount: -200, category: 'Groceries', source: 'budget.csv' }),
+    row({ id: 'imp2', on: '2026-09-28', amount: -500, category: 'Dining Out', source: 'budget.csv' }),
+    row({ id: 'sm', on: today, amount: -350, category: 'Groceries', note: 'SM market', createdAt: '2026-09-30T02:00:00Z', book: true }),
+    row({ id: 'salon', on: '2026-09-29', amount: 20000, category: 'Client', note: 'Salon deposit', createdAt: '2026-09-30T03:00:00Z', book: true }),
+    row({ id: 'early', on: today, amount: -99, category: 'Coffee', createdAt: '2026-09-30T00:30:00Z', book: true }),
+    row({ id: 'rent', on: '2026-10-01', amount: -8000, category: 'Housing', note: 'Rent', repeat: 'monthly@1', createdAt: '2026-09-30T04:00:00Z', book: true }),
+    row({ id: 'usd', on: today, amount: -5, currency: 'USD', category: 'Coffee', createdAt: '2026-09-30T05:00:00Z', book: true }),
+    row({ id: 'nocur', on: '2026-09-27', amount: -40, currency: null, category: 'Coffee', source: 'old.csv' }),
+    row({ id: 'aug', on: '2026-08-15', amount: -1000, category: 'Groceries', source: 'budget.csv' }),
+  ];
+  assert.equal(kBalance(anchor, rows, today), 91129.06,
+    '₱71,479.06 − ₱350 logged after + ₱20,000 logged after (back-dated, still after): a coffee logged before the balance was said is in it already, a file never moves it, rent is pending, dollars are another book');
+  assert.equal(kBalance(anchor, rows, '2026-10-01'), 83129.06, 'the rent counts on its day');
+
+  /* 3. The screen, in the book's own currency. */
+  const noFx = kTable([]);
+  const v = kView({ rows, anchor, currency: 'PHP', view: 'PHP', today, month: '2026-09', fx: noFx });
+  assert.deepEqual(v.balance, { amount: 91129.06, shown: 91129.06, rateDay: null });
+  assert.deepEqual(v.days.map((d) => [d.on, d.label, d.spent, d.received]), [
+    [today, 'Today', 449, 0],
+    ['2026-09-29', 'Yesterday', 200, 20000],
+    ['2026-09-28', 'Mon 28 Sep', 500, 0],
+  ], 'newest day first, each header carrying what the day cost');
+  assert.deepEqual(v.days[0].lines.map((l) => [l.label, l.sub, l.book]), [['SM market', 'Groceries', true], ['Coffee', null, true]],
+    'newest logged first; the note reads first and the category under it');
+  assert.equal(v.days[1].lines[1].source, 'budget.csv', 'a file’s row says where it came from');
+  assert.deepEqual(v.totals, { spent: 1149, received: 20000 }, 'pending rent is in no total');
+  assert.deepEqual(v.pending.map((l) => [l.on, l.label, l.repeat]), [['2026-10-01', 'Rent', 'monthly@1']]);
+  assert.equal(v.calendar.length, 30);
+  const cell = (on: string) => v.calendar.find((c) => c.on === on)!;
+  assert.deepEqual([cell(today).spent, cell(today).balance], [449, 91129.06]);
+  assert.equal(cell('2026-09-29').balance, 91578.06, 'the end of yesterday: today’s ₱449 not yet spent');
+  assert.equal(cell('2026-09-28').balance, 71778.06, 'and before the salon paid');
+  assert.equal(cell('2026-09-28').received, 0);
+  assert.deepEqual(v.categories.out, ['Groceries', 'Coffee', 'Dining Out', 'Housing', 'Transportation', 'Utilities', 'Self-care', 'Purchases'],
+    'the person’s own most used first, then the usual ones they have not used');
+  assert.deepEqual(v.categories.in, ['Client', 'Salary', 'Help']);
+  assert.equal(v.unlabelled, 1, 'a row with no currency is not guessed into pesos');
+  assert.deepEqual([v.first, v.last], ['2026-08', '2026-10'], 'the arrows reach August back and the pending rent forward');
+  assert.equal(v.missing, null);
+  const oct = kView({ rows, anchor, currency: 'PHP', view: 'PHP', today, month: '2026-10', fx: noFx });
+  assert.ok(oct.calendar.every((c) => c.future && c.balance == null), 'no balance is drawn for a day that has not happened');
+  assert.equal(oct.days.length, 0, 'pending rows are not days yet');
+  const kept = kView({ rows, anchor, currency: 'PHP', view: 'PHP', today, month: '2026-09', fx: noFx, balanceNow: 91000 });
+  assert.equal(kept.balance?.amount, 91000, 'the balance read on its own wins over the rows the screen was sent');
+  assert.equal(kept.calendar.find((c) => c.on === '2026-09-29')!.balance, 91449, 'and the calendar works back from it');
+  const unsaid = kView({ rows, anchor: null, currency: 'PHP', view: 'PHP', today, month: '2026-09', fx: noFx });
+  assert.equal(unsaid.balance, null);
+  assert.ok(unsaid.calendar.every((c) => c.balance == null), 'with no balance said there is nothing to work back from');
+
+  /* 4. Shown in euros, logged in pesos: every row at its own day's rate, or none is. */
+  const series: Array<{ base: string; quote: string; day: string; rate: number }> = [];
+  for (let d = '2026-09-21'; d <= today; d = new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)) {
+    const wd = new Date(`${d}T00:00:00Z`).getUTCDay();
+    if (wd !== 0 && wd !== 6) series.push({ base: 'PHP', quote: 'EUR', day: d, rate: 0.016 });
+  }
+  const fx = kTable(series);
+  const eur = kView({ rows, anchor, currency: 'PHP', view: 'EUR', today, month: '2026-09', fx });
+  assert.equal(eur.view, 'EUR');
+  assert.deepEqual(eur.balance, { amount: 91129.06, shown: 1458.06, rateDay: today });
+  assert.deepEqual(eur.days[0].lines.map((l) => [l.amount, l.shown]), [[-350, -5.6], [-99, -1.58]], 'the peso amount kept beside the euro one');
+  assert.equal(eur.days[0].spent, 7.18);
+  assert.equal(eur.pending[0].shown, -128, 'pending, at today’s rate: its own has not been published');
+  assert.equal(kRateLine(eur), 'rate of 30 Sep, ECB daily rates');
+  assert.equal(kRateLine(v), null);
+  const august = kView({ rows, anchor, currency: 'PHP', view: 'EUR', today, month: '2026-08', fx, fxMissing: 'the exchange-rate service did not answer in time' });
+  assert.equal(august.view, 'PHP', 'a month with a day the rates do not reach is shown whole in pesos, not half in each');
+  assert.match(august.missing ?? '', /^No PHP to EUR rate for these days \(the exchange-rate service did not answer in time\), so this is in PHP\.$/);
+
+  /* 5. What the add sheet sends, checked. */
+  assert.deepEqual(kCheck({ kind: 'out', amount: '1,234.50', on: today, category: 'Groceries' }, today),
+    { amount: -1234.5, on: today, category: 'Groceries', note: null, repeat: null });
+  assert.deepEqual(kCheck({ kind: 'in', amount: 20000, on: '2026-09-29', note: '  Salon   deposit ', repeat: 'month' }, today),
+    { amount: 20000, on: '2026-09-29', category: null, note: 'Salon deposit', repeat: 'month' });
+  assert.equal(kCheck({ kind: 'out', amount: 5, on: today, category: 'Coffee', repeat: 'yearly' }, today).repeat, null);
+  const refused = (input: Record<string, unknown>) => { try { kCheck(input, today); return null; } catch (e) { return (e as Error).message; } };
+  assert.equal(refused({ kind: 'out', amount: 'abc', on: today, category: 'Coffee' }), 'Type an amount above zero.');
+  assert.equal(refused({ kind: 'out', amount: 0, on: today, category: 'Coffee' }), 'Type an amount above zero.');
+  assert.equal(refused({ kind: 'out', amount: 1e9, on: today, category: 'Coffee' }), 'That amount is too large to be one move.');
+  assert.equal(refused({ amount: 5, on: today, category: 'Coffee' }), 'Money in or out?');
+  assert.equal(refused({ kind: 'out', amount: 5, on: '2026-13-45', category: 'Coffee' }), 'Pick a day.');
+  assert.equal(refused({ kind: 'out', amount: 5, on: '2028-01-01', category: 'Coffee' }), 'Pick a day within a year from today.');
+  assert.equal(refused({ kind: 'out', amount: 5, on: '2025-09-01', category: 'Coffee' }), 'Pick a day within a year from today.', 'back past the year the read looks at');
+  assert.equal(refused({ kind: 'out', amount: 5, on: today, category: ' ', note: '' }), 'Pick a category or write what it was.');
+
+  /* 6. The words and numbers the screen prints. */
+  assert.equal(kMoney(71479.06, 'PHP'), '₱71,479.06');
+  assert.equal(kMoney(-510, 'PHP'), '-₱510');
+  assert.equal(kMoney(1458.1, 'EUR'), '€1,458.10', 'a book is kept to the cent');
+  assert.deepEqual([kDay(today, today), kDay('2026-09-29', today), kDay('2026-10-01', today), kDay('2026-09-27', today)], ['Today', 'Yesterday', 'Tomorrow', 'Sun 27 Sep']);
+  assert.deepEqual([kShift('2026-12', 1), kShift('2026-01', -1)], ['2027-01', '2025-12']);
+  assert.deepEqual(kAnchor({ book: { currency: 'php', balance: 5, at: 'x', on: today } }), { currency: 'PHP', balance: 5, at: 'x', on: today });
+  assert.equal(kAnchor({ book: { currency: 'PHP', balance: 'lots', at: 'x', on: today } as never }), null, 'a finance row written wrong is no book, not a crash');
+  assert.equal(kAnchor(null), null);
+
+  /* 7. Runway reads the book's balance as cash, ahead of any statement. */
+  const latest = () => ({ rate: 0.0172, day: '2026-09-29' });
+  const withBook = { currency: '$', book: anchor, source: {} };
+  const f1 = kFinance(withBook, null, 'now', { main: 'USD', latest, book: 91129.06 });
+  assert.equal(f1.source?.cash, 'book');
+  assert.equal(f1.cash, 1567.42, '₱91,129.06 at 0.0172');
+  assert.deepEqual(f1.typed_in?.cash, { amount: 91129.06, currency: 'PHP', rate: 0.0172, day: '2026-09-29' });
+  assert.equal(kFinance(f1, null, 'later', { main: 'USD', latest, book: 91129.06 }), f1, 'settled once, the next load writes nothing');
+  assert.equal(kFinance(f1, null, 'later', { main: 'USD', latest, book: 90000 }).cash, 1548, 'a coffee logged, and runway moves with it');
+  assert.match(kTypedLines(f1)[0], /^Cash: the Money tab's balance, ₱91,129, which is \$1,567 \(/);
+  // A statement that prints a balance does not take the cash back from the book.
+  const usd: KTx[] = [
+    { id: 't1', on: '2026-09-01', amount: -300, currency: 'USD', key: 'rent', accountId: 'a', outcomeId: null },
+    { id: 't2', on: '2026-09-25', amount: -200, currency: 'USD', key: 'food', accountId: 'a', outcomeId: null },
+  ];
+  const read = kRead({ txs: usd, payees: [], accounts: [{ id: 'a', label: 'Bank', currency: 'USD', balance: 500, on: '2026-09-25' }], today, currency: 'USD', main: 'USD', fx: noFx })!;
+  assert.equal(read.cash?.amount, 500);
+  const f2 = kFinance(f1, read, 'now', { main: 'USD', latest, book: 91129.06 });
+  assert.equal(f2.cash, 1567.42, 'the person counts every peso they spend; a file a month old does not overrule that');
+  assert.equal(f2.source?.cash, 'book');
+  const inMain = kFinance({ currency: '$', book: { ...anchor, currency: 'USD' } }, null, 'now', { main: 'USD', latest, book: 1200 });
+  assert.equal(inMain.cash, 1200);
+  assert.equal(inMain.typed_in, undefined, 'a book in the main currency is the figure itself');
+  const gone = kFinance({ ...f1, book: undefined }, null, 'now', { main: 'USD', latest, book: null });
+  assert.deepEqual([gone.cash, gone.source?.cash, gone.typed_in?.cash], [undefined, undefined, undefined], 'no book, no book cash left behind');
+  const typed = kTyped(f1, { cash: 5000, monthly_burn: 600 }, 'now', 'USD');
+  assert.deepEqual([typed.cash, typed.source?.cash, typed.monthly_burn, typed.source?.monthly_burn], [1567.42, 'book', 600, 'typed'],
+    'a cash typed on the Runway sheet would be overwritten on the next load, so it is not taken');
+  assert.deepEqual(typed.book, anchor, 'saving the Runway sheet keeps the book');
+
+  /* 8. A pending row is money that has not moved: in no figure of the read. */
+  const pendingRead = kRead({
+    txs: [...usd, { id: 't3', on: '2026-10-05', amount: -8000, currency: 'USD', key: 'rent', accountId: 'a', outcomeId: null }],
+    payees: [], accounts: [], today, currency: 'USD', main: 'USD', fx: noFx,
+  })!;
+  assert.equal(pendingRead.outTotal, 500);
+  assert.equal(pendingRead.to, '2026-09-25');
+
+  console.log('copilot-core: money book checks passed');
+}
+
+moneyBook().catch((e) => { console.error(e); process.exit(1); });

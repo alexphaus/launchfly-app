@@ -59,6 +59,8 @@ const PROBES: Array<{ table: string; column: string; migration: string }> = [
   { table: 'copilot_money_accounts', column: 'balance_on', migration: '20260929_copilot_money.sql' },
   // Conversion still works without it — rates are held in memory — but every restart fetches them again.
   { table: 'copilot_fx_rates', column: 'rate', migration: '20260930_copilot_fx.sql' },
+  // The Money tab's book. Without it the tab says so; nothing else changes.
+  { table: 'copilot_transactions', column: 'repeat', migration: '20261001_copilot_book.sql' },
 ];
 
 /**

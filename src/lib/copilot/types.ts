@@ -92,7 +92,7 @@ export interface Finance {
   currency?: string;
   updated_at?: string;
   /** Where each number came from. Absent on rows written before statements existed: typed. */
-  source?: { cash?: 'typed' | 'statement'; monthly_burn?: 'typed' | 'statement' };
+  source?: { cash?: 'typed' | 'statement' | 'book'; monthly_burn?: 'typed' | 'statement' };
   /**
    * The currency the whole app counts in, chosen in Settings (money/fx.ts
    * mainCurrency). Absent: the money goal's, else this row's, else USD.
@@ -115,6 +115,21 @@ export interface Finance {
   burn_to?: string;
   /** When the person last typed a number here, so an older statement never overwrites a newer one. */
   typed_at?: string;
+  /**
+   * The money book's starting point (money/book.ts): the balance the person
+   * said they had, in the book's currency, when they said it. Present, the
+   * book's running balance is the cash runway reads — ahead of any statement,
+   * since it moves the moment something is logged.
+   */
+  book?: BookAnchorRow;
+}
+
+/** What the book counts from: `balance` of `currency` as of `at` (the instant) on `on` (the day). */
+export interface BookAnchorRow {
+  currency: string;
+  balance: number;
+  at: string;
+  on: string;
 }
 
 export const OPPORTUNITY_TYPES: OpportunityType[] = ['client', 'people', 'service', 'community', 'signal'];

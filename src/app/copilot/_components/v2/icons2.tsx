@@ -21,6 +21,10 @@ export const IconGauge = () => (<svg {...base}><path d="M4 17a8 8 0 1 1 16 0" />
 export const IconFlask = () => (<svg {...base}><path d="M9 3h6" /><path d="M10 3v6.5L4.8 18.4A1.7 1.7 0 0 0 6.3 21h11.4a1.7 1.7 0 0 0 1.5-2.6L14 9.5V3" /><path d="M7.5 15h9" /></svg>);
 /** The goal at the end of the path. */
 export const IconFlag = () => (<svg {...base}><path d="M5 21V4" /><path d="M5 4h11l-2 4 2 4H5" /></svg>);
+/** Money: a wallet — the cash that is actually there. */
+export const IconMoney = () => (<svg {...base}><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" /><path d="M4 7.5v10A2.5 2.5 0 0 0 6.5 20H20V8H6.5A2.5 2.5 0 0 1 4 5.5" /><circle cx="16" cy="14" r="1.2" /></svg>);
+/** Repeats: a row that comes round again. */
+export const IconRepeat = () => (<svg {...base} className="cp2-bk-rep"><path d="M17 2l3 3-3 3" /><path d="M4 11V9a4 4 0 0 1 4-4h12" /><path d="M7 22l-3-3 3-3" /><path d="M20 13v2a4 4 0 0 1-4 4H4" /></svg>);
 /** You: the person the numbers are about. */
 export const IconYou = () => (<svg {...base}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>);
 

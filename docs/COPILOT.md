@@ -1204,6 +1204,26 @@ phone did before the keypad could be touched. So:
   is a ride), a plain in/out arrow when nothing matches — a wrong picture is
   worse than a plain one.
 
+**Safe to spend today** (`safeToSpend`, `safeAfter`). The line under the
+balance, and the label over the categories wherever a move is logged: what is
+in the book, less what is already promised in the next thirty days — pending
+moves out, and each repeat carried through the thirty (a weekly one is four
+rows, not the one written ahead) — spread evenly, less what today has spent.
+Today's spending is put back before the spread, so the share holds through the
+day and only what is left shrinks. Money that has not arrived counts for
+nothing: a pending "came in" is the cheapest thing to be wrong about, and a
+figure called safe errs low. No forecast of income or of habits; from rows the
+person made and nothing else (invariant 2). While an amount is typed the label
+says what would be left after it — "₱1,721 left today after this", warm when
+over — so "can I?" is answered before "Log it". Tapped, the line says where the
+figure comes from. The Log money page gets it with the balance
+(`balanceAndSafe`: the balance query and one read of today's and the pending
+rows), and every reply to a move carries the new one.
+
+**The calendar opens on today** in the current month, its moves already under
+the grid; another month opens with nothing picked. "Download everything as CSV"
+sits under the list only.
+
 **Logged in another currency.** Tap the ₱ on the keypad: a select laid over the
 mark. The choice is the default for the next move, kept on the account
 (`finance.book.entry`, `setEntryCurrency`) so the shortcut's first HTML already

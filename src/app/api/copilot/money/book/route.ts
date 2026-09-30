@@ -14,9 +14,10 @@
 // Every POST answers with the book as it now is, for the month and view the
 // screen was on, so the list never shows a row the server does not have — or,
 // with `reply: 'balance'` (the Log money page, which draws no list), with the
-// balance alone: the book is a dozen reads that page would throw away.
-import { MoneyRefusal, bookBalanceNow } from '@/lib/copilot/money/store';
-import { addEntry, deleteEntry, editEntry, loadBook, setBookBalance, setEntryCurrency } from '@/lib/copilot/money/bookstore';
+// balance and what is safe to spend today: the book is a dozen reads that page
+// would throw away.
+import { MoneyRefusal } from '@/lib/copilot/money/store';
+import { addEntry, balanceAndSafe, deleteEntry, editEntry, loadBook, setBookBalance, setEntryCurrency } from '@/lib/copilot/money/bookstore';
 import { getProfile } from '@/lib/copilot/base';
 import { todayIso } from '@/lib/copilot/db';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
@@ -45,7 +46,8 @@ export async function POST(req: Request) {
   const answer = async (extra: Record<string, unknown> = {}) => {
     if (b.reply === 'balance') {
       const profile = await getProfile(auth.pid);
-      return json({ ok: true, ...extra, balance: profile ? await bookBalanceNow(auth.pid, profile.finance, todayIso(profile.timezone)) : null });
+      const snap = profile ? await balanceAndSafe(auth.pid, profile.finance, todayIso(profile.timezone)) : { balance: null, safe: null };
+      return json({ ok: true, ...extra, ...snap });
     }
     return json({ ok: true, ...extra, book: await loadBook(auth.pid, at) });
   };

@@ -141,36 +141,39 @@ export default function EntryPad(p: EntryPadProps) {
       </div>
       {blocked && <p className="cp2-pad-conv">Logging in {typedIn} is not set up on this server yet. Pick {currency} to log it now.</p>}
 
+      {/* The layout the owner kept: every category in view (wrapped, never
+          scrolled off the right), then the note, the day and the repeat, each
+          under its own label. Tall enough that with the keyboard up the amount,
+          the categories and the note stay above it. */}
       <div className="cp-label cp2-pad-label">Category</div>
-      <div className="cp2-pad-cats" role="group" aria-label="Category">
+      <div className="cp-chips cp2-pad-chips" role="group" aria-label="Category">
         {shownCats.map((c) => (
-          <button key={c} className={`cp2-pad-cat${category === c ? ' on' : ''}${kind === 'in' ? ' in' : ''}`} aria-pressed={category === c} onClick={() => setCategory(category === c ? null : c)}>
+          <button key={c} className={`cp-fchip cp2-pad-chip${category === c ? ' active' : ''}${kind === 'in' ? ' in' : ''}`} aria-pressed={category === c} onClick={() => setCategory(category === c ? null : c)}>
             <BookGlyph icon={categoryIcon(c, '', kind === 'in' ? 1 : -1)} />{c}
           </button>
         ))}
-        {!typing && <button className="cp2-pad-cat" onClick={() => setTyping(true)}>New…</button>}
+        {!typing && <button className="cp-fchip cp2-pad-chip" onClick={() => setTyping(true)}>New…</button>}
       </div>
       {typing && <input className="cp-input cp2-pad-field" value={category ?? ''} maxLength={40} onChange={(e) => setCategory(e.target.value || null)} placeholder="Category" aria-label="New category" autoFocus />}
 
-      <div className="cp2-pad-when">
-        <button className={`cp-fchip${on === p.today ? ' active' : ''}`} aria-pressed={on === p.today} onClick={() => setOn(p.today)}>Today</button>
-        <button className={`cp-fchip${on === yesterday ? ' active' : ''}`} aria-pressed={on === yesterday} onClick={() => setOn(yesterday)}>Yesterday</button>
-        {/* Another day: a chip that says the day, with the phone's own date picker laid over it — the bare date field was wider than the row. */}
-        <label className={`cp-fchip cp2-pad-date${on !== p.today && on !== yesterday ? ' active' : ''}`}>
-          {on !== p.today && on !== yesterday ? bookDayLabel(on, p.today) : 'Other day'}
-          <input type="date" value={on} onChange={(e) => e.target.value && setOn(e.target.value)} aria-label="Another day" />
-        </label>
-        <select className={`cp-fchip cp2-pad-rep${repeat ? ' active' : ''}`} value={repeat ?? ''} onChange={(e) => setRepeat((e.target.value || null) as 'week' | 'month' | null)} aria-label="Repeats">
-          <option value="">Once</option>
-          <option value="week">Weekly</option>
-          <option value="month">Monthly</option>
-        </select>
+      <input className="cp-input cp2-pad-field" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" />
+
+      <div className="cp-label cp2-pad-label">Day</div>
+      <div className="cp-chips cp2-pad-chips">
+        <button className={`cp-fchip cp2-pad-chip${on === p.today ? ' active' : ''}`} aria-pressed={on === p.today} onClick={() => setOn(p.today)}>Today</button>
+        <button className={`cp-fchip cp2-pad-chip${on === yesterday ? ' active' : ''}`} aria-pressed={on === yesterday} onClick={() => setOn(yesterday)}>Yesterday</button>
+        <input type="date" className={`cp-fchip cp2-pad-date${on !== p.today && on !== yesterday ? ' active' : ''}`} value={on} onChange={(e) => e.target.value && setOn(e.target.value)} aria-label="Another day" />
       </div>
       {on > p.today && <p className="cp-help">Pending until {bookDayLabel(on, p.today)}: in the list, not in the balance, until then.</p>}
+
+      <div className="cp-label cp2-pad-label">Repeats</div>
+      <div className="cp-chips cp2-pad-chips">
+        <button className={`cp-fchip cp2-pad-chip${!repeat ? ' active' : ''}`} aria-pressed={!repeat} onClick={() => setRepeat(null)}>Once</button>
+        <button className={`cp-fchip cp2-pad-chip${repeat === 'week' ? ' active' : ''}`} aria-pressed={repeat === 'week'} onClick={() => setRepeat('week')}>Weekly</button>
+        <button className={`cp-fchip cp2-pad-chip${repeat === 'month' ? ' active' : ''}`} aria-pressed={repeat === 'month'} onClick={() => setRepeat('month')}>Monthly</button>
+      </div>
       {repeat && !line?.repeat && <p className="cp-help">The next one is written ahead, as pending, and counts on its day.</p>}
       {line?.repeat && !repeat && <p className="cp-help">Saving stops the repeat: the upcoming ones go, the past ones stay.</p>}
-
-      <input className="cp-input cp2-pad-field" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" />
 
       <button className="cp-btn primary block cp2-pad-go" disabled={!ready} onClick={() => void submit()}>
         {busy ? 'Saving…' : line ? 'Save' : 'Log it'}

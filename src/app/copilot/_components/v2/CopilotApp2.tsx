@@ -135,8 +135,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
       <Sheet open={sheetOpen} onClose={dismissSheets}>
         {sheet && <SheetContent key={sheetKey(sheet)} sheet={sheet} home={home} actions={actions} briefing={briefing} />}
       </Sheet>
-      {/* Taller than the other sheets, and over the nav: the keypad needs the room the nav's clearance took. */}
-      <Sheet open={!!book.entry} onClose={book.closeEntry} className="cp2-bk-sheet">
+      <Sheet open={!!book.entry} onClose={book.closeEntry}>
         <MoneyTabGuard><BookSheet book={book} /></MoneyTabGuard>
       </Sheet>
 

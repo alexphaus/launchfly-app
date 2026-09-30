@@ -7961,3 +7961,88 @@ async function safeToSpendSuite() {
 }
 
 safeToSpendSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── A move said out loud (money/spoken.ts) ──────────────────────────────── */
+
+import { parseSpoken as spoken } from '../../src/lib/copilot/money/spoken';
+import { DEFAULT_CATEGORIES as SPOKEN_DEFAULTS } from '../../src/lib/copilot/money/book';
+
+async function spokenMoveSuite() {
+  const today = '2026-09-30'; // a Wednesday
+  const categories = { out: [...SPOKEN_DEFAULTS.out, '5G Data'], in: SPOKEN_DEFAULTS.in };
+  const say = (t: string) => spoken(t, { categories, today });
+  const pick = (t: string) => { const s = say(t); return [s.kind, s.amount, s.category, s.note, s.on, s.currency]; };
+
+  /* 1. The usual ones: a category and an amount, said either way round. */
+  assert.deepEqual(pick('coffee 130'), ['out', '130', 'Coffee', '', today, null], 'the category named is the category, not the note too');
+  assert.deepEqual(pick('130 coffee'), ['out', '130', 'Coffee', '', today, null]);
+  assert.deepEqual(pick('I spent 130 on coffee'), ['out', '130', 'Coffee', '', today, null], 'the words around it are not the note');
+  assert.deepEqual(pick('groceries 1,500.50'), ['out', '1500.5', 'Groceries', '', today, null], 'a comma between digits is a thousands mark');
+  assert.deepEqual(pick('two coffees 260'), ['out', '260', 'Coffee', '', today, null], 'digits beat words, and a plural still names it');
+  assert.deepEqual(pick('5G data 299'), ['out', '299', '5G Data', '', today, null], 'their own categories, digits and all');
+  assert.equal(say('fifteen hundred groceries').amount, '1500', 'said in words');
+  assert.equal(say('a thousand and fifty rent').amount, '1050');
+  assert.equal(say('got paid 5k').amount, '5000');
+  assert.equal(say('coffee 1:50').amount, '150', 'recognition hears "one fifty" as a time');
+  assert.equal(say('coffee 5 billion').amount, null, 'past what one move can be, no amount rather than a wrong one');
+  assert.equal(say('coffee').amount, null, 'nothing said, nothing filled in');
+
+  /* 2. Money in: said, or a category that is only ever money in. */
+  assert.deepEqual(pick('salary came in 50,000'), ['in', '50000', 'Salary', '', today, null]);
+  assert.deepEqual(pick('client paid me 20,000'), ['in', '20000', 'Client', '', today, null], '"paid me" is money in, not "paid"');
+  assert.deepEqual(pick('got paid 5k by client'), ['in', '5000', 'Client', '', today, null]);
+  assert.deepEqual(pick('Salary 40000'), ['in', '40000', 'Salary', '', today, null], 'an in-only category is money in');
+  assert.equal(say('paid rent 8000').kind, 'out');
+
+  /* 3. No category named: the one of theirs the words picture, and only when there is just one. */
+  assert.deepEqual(pick('Grab 240'), ['out', '240', 'Transportation', 'Grab', today, null], 'the words stay as the note');
+  assert.deepEqual(pick('meralco 2,400'), ['out', '2400', 'Utilities', 'Meralco', today, null]);
+  assert.equal(say('sweater 500').category, null, '"sweater" is not "eat": a word is matched from its start');
+  const two = spoken('lunch 150', { categories: { out: ['Dining Out', 'Siomai', 'Coffee'], in: [] }, today });
+  assert.deepEqual([two.category, two.note], [null, 'Lunch'], 'two of theirs share the picture: none is picked, the words are kept');
+
+  /* 4. The day. */
+  assert.equal(say('coffee 130 yesterday').on, '2026-09-29');
+  assert.equal(say('kape 50 kahapon').on, '2026-09-29');
+  assert.equal(say('dinner 450 day before yesterday').on, '2026-09-28');
+  assert.equal(say('three days ago dinner 450').on, '2026-09-27');
+  assert.equal(say('gas 1000 tomorrow').on, '2026-10-01', 'a day ahead is kept: the sheet says it is pending');
+  assert.equal(say('groceries 900 last monday').on, '2026-09-28');
+  assert.equal(say('groceries 900 on wednesday').on, today, 'the weekday it is, is today');
+  assert.equal(say('groceries 900 last wednesday').on, '2026-09-23');
+  assert.equal(say('rent 8000 next friday').on, '2026-10-02');
+  assert.equal(say('dining out 700 on September 12').on, '2026-09-12');
+  assert.equal(say('rent sept 5 8000').amount, '8000', 'the day of the month is not the amount');
+  assert.equal(say('the 28th groceries 900').on, '2026-09-28');
+  assert.equal(say('the 30th groceries 900').on, today);
+  assert.equal(spoken('rent 8000 on the 28th', { categories, today: '2026-10-03' }).on, '2026-09-28', 'an ordinal not reached yet this month is last month’s');
+  assert.equal(spoken('gift 900 december 24', { categories, today: '2027-01-02' }).on, '2026-12-24', 'a month and day is the one within half a year');
+  const thirty = say('coffee 30 sept');
+  assert.deepEqual([thirty.amount, thirty.on, thirty.onSaid], ['30', today, false], 'a bare number before a month stays the amount');
+  assert.equal(say('coffee 130').onSaid, false);
+
+  /* 5. Currency, only beside the amount. */
+  assert.equal(say('40 euros lunch').currency, 'EUR');
+  assert.equal(say('130 in euros coffee').currency, 'EUR');
+  assert.equal(say('$12 netflix').currency, 'USD');
+  assert.equal(say('20 singapore dollars taxi').currency, 'SGD');
+  assert.equal(say('120 pesos coffee').currency, 'PHP');
+  assert.equal(say('I won 500').currency, null, '"won" before an amount is a verb');
+  assert.equal(say('a pound of beef 300').currency, null);
+  assert.equal(say('coffee 120 pesos at starbucks').note, 'Coffee at starbucks', 'the currency word is not left in the note');
+
+  /* 6. Two moves in one breath: the first is filled in, the other is said. */
+  for (const t of ['coffee 130 and bread 50', 'coffee 130 bread 50', '130 coffee 50 bread']) {
+    const s = say(t);
+    assert.deepEqual([s.amount, s.category, s.note, s.more], ['130', 'Coffee', '', [50]], t);
+  }
+
+  /* 7. Hostile and empty. */
+  assert.equal(say('constructor 50').amount, '50', 'a word that is a key of every object is just a word');
+  assert.deepEqual(pick(''), ['out', null, null, '', today, null]);
+  assert.equal(say('  coffee   130 ').heard, 'coffee 130', 'what was heard, as shown back');
+
+  console.log('copilot-core: spoken move checks passed');
+}
+
+spokenMoveSuite().catch((e) => { console.error(e); process.exit(1); });

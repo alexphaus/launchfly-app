@@ -3,13 +3,16 @@
 // and a way into the Money tab. It stays up after a move, cleared for the next.
 // Moves go through the same outbox as the tab (bookLocal.ts), so one logged
 // here with no signal is sent from here, or from the tab, whichever opens next.
+// The mic is here too (VoiceLog.tsx): what it hears fills the pad in place.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { bookMoney } from '@/lib/copilot/money/book';
+import { parseSpoken, type SpokenMove } from '@/lib/copilot/money/spoken';
 import type { EntryDefault, LogScreenData } from '@/lib/copilot/money/bookstore';
 import { post } from '../api';
 import { useOutbox } from './bookLocal';
 import EntryPad from './EntryPad';
 import { UnsentMoves } from './MoneyTab';
+import { useVoice, VoiceButton, VoiceLive } from './VoiceLog';
 
 export default function LogScreen({ pid, data, failed }: { pid: string; data: LogScreenData | null; failed: string | null }) {
   const [toast, setToast] = useState<string | null>(null);
@@ -46,6 +49,15 @@ export default function LogScreen({ pid, data, failed }: { pid: string; data: Lo
     say,
   });
 
+  // A move said: the pad is drawn again from it (its key), since a pad reads what it starts from once.
+  const [spoken, setSpoken] = useState<{ n: number; move: SpokenMove } | null>(null);
+  const voice = useVoice({
+    onHeard: (text) => { if (data) setSpoken({ n: Date.now(), move: parseSpoken(text, { categories: data.categories, today: today || data.today }) }); },
+    // The pad is already on the page: saying why is all there is to do.
+    onFailed: (why) => say(why),
+  });
+  const logging = !failed && !!data?.ready && !!data.started;
+
   const onEntry = useCallback(async (code: string): Promise<EntryDefault | undefined> => {
     try {
       const r = await post<{ entry: EntryDefault }>('/money/book', { action: 'entry', currency: code });
@@ -62,9 +74,13 @@ export default function LogScreen({ pid, data, failed }: { pid: string; data: Lo
       <header className="cp-header">
         <div>
           <h1>Log money</h1>
-          {data?.started && balance != null && <p>{offline ? 'Offline · ' : ''}{bookMoney(balance, data.currency)} in your book{offline ? ' when last online' : ''}</p>}
+          {voice.listening
+            ? <VoiceLive voice={voice} />
+            : data?.started && balance != null && <p>{offline ? 'Offline · ' : ''}{bookMoney(balance, data.currency)} in your book{offline ? ' when last online' : ''}</p>}
         </div>
         <div className="cp-header-right">
+          {/* Without recognition there is no + here: the pad is the page. */}
+          {logging && voice.supported && <VoiceButton voice={voice} onType={() => undefined} />}
           <a className="cp-capacity" href="/copilot2?tab=money">Money tab</a>
         </div>
       </header>
@@ -86,6 +102,8 @@ export default function LogScreen({ pid, data, failed }: { pid: string; data: Lo
           <>
             <UnsentMoves list={outbox.unsent} sending={outbox.sending} onRetry={() => void outbox.flush()} onRemove={outbox.remove} />
             <EntryPad
+              key={spoken?.n ?? 0}
+              spoken={spoken?.move}
               variant="page"
               currency={data.currency}
               entry={entry}

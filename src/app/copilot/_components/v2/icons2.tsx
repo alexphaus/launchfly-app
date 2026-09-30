@@ -24,6 +24,8 @@ export const IconFlask = () => (<svg {...base}><path d="M9 3h6" /><path d="M10 3
 export const IconFlag = () => (<svg {...base}><path d="M5 21V4" /><path d="M5 4h11l-2 4 2 4H5" /></svg>);
 /** Money: a wallet — the cash that is actually there. */
 export const IconMoney = () => (<svg {...base}><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" /><path d="M4 7.5v10A2.5 2.5 0 0 0 6.5 20H20V8H6.5A2.5 2.5 0 0 1 4 5.5" /><circle cx="16" cy="14" r="1.2" /></svg>);
+/** Say a move: the mic in the header (VoiceLog.tsx). */
+export const IconMic = () => (<svg {...base}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0" /><path d="M12 17.5V21" /></svg>);
 /** Repeats: a row that comes round again. */
 export const IconRepeat = () => (<svg {...base} className="cp2-bk-rep"><path d="M17 2l3 3-3 3" /><path d="M4 11V9a4 4 0 0 1 4-4h12" /><path d="M7 22l-3-3 3-3" /><path d="M20 13v2a4 4 0 0 1-4 4H4" /></svg>);
 /**

@@ -27,10 +27,14 @@
 // would throw away the only comparison worth having. So the data, the routes,
 // the sheets and every action are shared — useCopilot — and only the arrangement
 // is new. Both can be installed and lived with; the one that gets opened wins.
+//
+// The header's corner is the mic (VoiceLog.tsx): say a move from any tab and
+// the add sheet opens with it filled in. It held the capacity pill, a setting
+// shown on every screen and changed about never; that is in You → Settings.
 import { useCallback, useRef, useState } from 'react';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView } from '@/lib/copilot/nightly';
-import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
+import type { HomeData } from '@/lib/copilot/types';
 import { greeting } from '../format';
 import Sheet from '../Sheet';
 import SheetContent from '../SheetContent';
@@ -43,6 +47,7 @@ import MatchesTab from './MatchesTab';
 import WorkTab from './WorkTab';
 import MoneyTab, { BookFab, BookSheet, MoneyTabGuard, useBook } from './MoneyTab';
 import YouTab from './YouTab';
+import { useVoice, VoiceButton, VoiceLive } from './VoiceLog';
 
 const TABS: Tab2[] = ['path', 'matches', 'work', 'money', 'you'];
 const LABEL: Record<Tab2, string> = { path: 'Path', matches: 'Matches', work: 'Work', money: 'Money', you: 'You' };
@@ -74,6 +79,18 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     }, HOME_AFTER_BOOK_MS);
   }, [refresh, say]);
   const book = useBook(home.profile.id, say, onMoved);
+  // The mic opens the book's sheet from any tab, so the book loads as it starts
+  // listening: by the time the words are in, the categories they are read
+  // against usually are too. The sheet says "Opening your book…" when not.
+  const logMove = (heard?: string) => {
+    if (!book.book) void book.load();
+    book.openEntry(heard ? { kind: 'add', heard } : { kind: 'add' });
+  };
+  const voice = useVoice({
+    onStart: () => { if (!book.book) void book.load(); },
+    onHeard: (text) => logMove(text),
+    onFailed: (why, type) => { say(why); if (type) logMove(); },
+  });
   const d = useDerived(home);
   const status = d.status[tab];
   const nightly = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? nightlyView(home.nightly.run, new Date()) : null;
@@ -88,13 +105,11 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
       <header className="cp-header">
         <div>
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
-          {/* Tab-aware, and nothing when there is nothing true to say. */}
-          {status && <p>{status}</p>}
+          {/* Tab-aware, and nothing when there is nothing true to say. While the mic is open, what it hears. */}
+          {voice.listening ? <VoiceLive voice={voice} /> : status && <p>{status}</p>}
         </div>
         <div className="cp-header-right">
-          <button className="cp-capacity" onClick={() => actions.openSheet({ kind: 'capacity' })} aria-label="Set your capacity">
-            ⚡ <span>{CAPACITY_META[home.profile.capacity].label}</span>
-          </button>
+          <VoiceButton voice={voice} onType={() => logMove()} />
         </div>
       </header>
 

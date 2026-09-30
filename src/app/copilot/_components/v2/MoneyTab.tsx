@@ -24,6 +24,7 @@ import type { BookPayload, EntryDefault } from '@/lib/copilot/money/bookstore';
 import {
   bookDayLabel, bookMoney, bookRateLine, categoryIcon, parseRepeat, safeLine, safeWhy, shiftMonth, type BookDay, type BookLine, type CalendarCell,
 } from '@/lib/copilot/money/book';
+import { parseSpoken } from '@/lib/copilot/money/spoken';
 import { get, post } from '../api';
 import type { Actions } from '../shared';
 import type { Arrival } from '../useCopilot';
@@ -33,8 +34,9 @@ import { BookGlyph, IconRepeat } from './icons2';
 
 /* ─── State ───────────────────────────────────────────────────────────────── */
 
-export type BookEntry = ({ kind: 'add' } | { kind: 'edit'; line: BookLine } | { kind: 'balance' }) & { n: number };
-type EntryAsk = { kind: 'add' } | { kind: 'edit'; line: BookLine } | { kind: 'balance' };
+/** `heard`: the words said to the header's mic, read into the sheet when it has the book's categories (money/spoken.ts). */
+export type BookEntry = ({ kind: 'add'; heard?: string } | { kind: 'edit'; line: BookLine } | { kind: 'balance' }) & { n: number };
+type EntryAsk = { kind: 'add'; heard?: string } | { kind: 'edit'; line: BookLine } | { kind: 'balance' };
 
 const VIEW_KEY = 'cp2.book.view';
 const ALT_KEY = 'cp2.book.alt';
@@ -458,8 +460,10 @@ export function BookSheet({ book }: { book: Book }) {
   const b = book.book;
   if (!e) return null;
   // Opened before the book ever loaded on this phone — the shortcut, a first
-  // visit. Said, not a blank sheet.
+  // visit, the mic from another tab. Said, not a blank sheet.
   if (!b) return <div className="cp-sheet-embed"><p className="desc">{book.error ?? 'Opening your book…'}</p></div>;
+  // The mic is in the header on every tab, so the sheet can open on a server without the book's migration.
+  if (!b.ready) return <div className="cp-sheet-embed"><p className="desc">{b.notReady}</p></div>;
   // The Log money shortcut before the book has a balance: the balance first, since every move counts from it.
   if (!b.started) {
     return (
@@ -481,6 +485,7 @@ export function BookSheet({ book }: { book: Book }) {
   }
   const line = e.kind === 'edit' ? e.line : null;
   const upcomingRepeat = !!line?.repeat && line.on > b.today;
+  const spoken = e.kind === 'add' && e.heard ? parseSpoken(e.heard, { categories: b.categories, today: b.today }) : null;
   return (
     <div className="cp-sheet-embed" key={e.n}>
       <EntryPad
@@ -494,6 +499,7 @@ export function BookSheet({ book }: { book: Book }) {
         categories={b.categories}
         today={b.today}
         line={line}
+        spoken={spoken}
         busy={book.busy}
         onSubmit={async (body, said) => {
           // A new move goes through the outbox and the sheet closes at once;

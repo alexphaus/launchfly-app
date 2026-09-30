@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 63 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 64 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -135,6 +135,12 @@ worker's own requests, and `public/sw.js` passes the page's API calls through
 itself — so an "offline" test with it quietly sends everything. Stop the server
 instead, with `launchPersistentContext` so the worker, its caches and the
 outbox survive between the phases.
+
+**Testing the mic:** headless Chromium has no microphone, and its own
+`webkitSpeechRecognition` fails. Put a stand-in `SpeechRecognition` on the page
+with `addInitScript` that fires `onresult`/`onend` for a set phrase (or
+`onerror` with `not-allowed`, `no-speech`); delete both constructors to see the
++ the header shows where a browser has none.
 
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —

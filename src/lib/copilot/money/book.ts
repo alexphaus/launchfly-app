@@ -453,6 +453,15 @@ export function padKey(current: string, key: string): string {
   return whole.length >= 9 ? current : current + key;
 }
 
+/**
+ * What was typed in the amount field, kept to what padKey allows. A phone's
+ * number keyboard offers a comma too: here it is a thousands mark ("1,500" is
+ * fifteen hundred), never a decimal point, so it is dropped rather than read.
+ */
+export function cleanAmount(raw: string): string {
+  return [...raw.replace(/[,\s]/g, '')].reduce(padKey, '');
+}
+
 /* ─── Logged in another currency ──────────────────────────────────────────── */
 
 /**

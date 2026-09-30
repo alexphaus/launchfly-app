@@ -7803,7 +7803,7 @@ moneyBook().catch((e) => { console.error(e); process.exit(1); });
 
 /* ─── The money book, faster: the keypad, pictures, typed in another currency ─── */
 import {
-  anchorOf as fAnchor, bookView as fView, categoryIcon as fIcon, convertEntry as fConvert, padKey as fPad, repeatsDue as fDue,
+  anchorOf as fAnchor, bookView as fView, categoryIcon as fIcon, cleanAmount as fClean, convertEntry as fConvert, padKey as fPad, repeatsDue as fDue,
   seriesDay as fSeriesDay, type BookRow as FRow,
 } from '../../src/lib/copilot/money/book';
 import { fxTable as fTable } from '../../src/lib/copilot/money/fx';
@@ -7821,6 +7821,10 @@ async function moneyBookFaster() {
   assert.equal(fPad('130', 'clear'), '');
   assert.equal(fPad('130', 'x'), '130');
   assert.equal(fPad('', 'back'), '');
+  assert.equal(fClean('1,500'), '1500', 'a comma from the number keyboard is a thousands mark, not a point');
+  assert.equal(fClean('12.345'), '12.34');
+  assert.equal(fClean('007.5'), '7.5');
+  assert.equal(fClean('abc'), '');
 
   /* 2. A picture per row: by category, then by the words in it; plain when nothing matches. */
   const out = (c: string | null, text = '') => fIcon(c, text, -1);

@@ -1167,11 +1167,16 @@ phone did before the keypad could be touched. So:
 
 - **The shortcut has its own page**, `/copilot2/log` (`loadLogScreen`): the
   profile, then categories, the balance and the entry rate at once — three
-  reads, 0.23s — with the keypad in its first HTML. The old shortcut URL
+  reads, 0.23s — with the form in its first HTML. The old shortcut URL
   (`?tab=money&add=1`) redirects there before the home loads.
-- **A keypad of its own** (`EntryPad.tsx`, `padKey`): on screen from the first
-  frame, no keyboard to wake or dismiss, categories and "Log it" always in view.
-  Two decimals, nine digits. The note is the one field that uses the keyboard.
+- **The phone's own number keyboard, up at once** (`EntryPad.tsx`): the amount
+  field takes focus as the sheet opens, on the same tap as the +. A keypad drawn
+  on the page was tried and the owner preferred the keyboard their hands know.
+  A phone opens a keyboard only in answer to a tap, so on the Log money page,
+  opened by a shortcut, the first one needs a tap on the amount; after each move
+  the field takes focus again and the keyboard stays up. A comma is a thousands
+  mark ("1,500"), never a decimal point (`cleanAmount`). Enter logs when it is
+  ready, else puts the keyboard away so the categories show.
 - **The save is not waited for.** "Log it" writes the move to the phone's
   outbox (`bookLocal.ts`) under an id the phone makes, closes the sheet, and
   sends behind it; the server stores it as `book:<that id>` with `ignoreDuplicates`,

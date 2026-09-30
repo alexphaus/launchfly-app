@@ -1749,12 +1749,16 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pad .cp2-bk-seg.wide { margin-bottom: 0; }
 .cp-root[data-theme="soft"] .cp2-pad .cp-help { margin: -4px 2px 0; }
 .cp-root[data-theme="soft"] .cp2-pad-amount { display: flex; align-items: center; gap: 8px; padding: 2px 4px 8px; border-bottom: 2px solid var(--line); }
-.cp-root[data-theme="soft"] .cp2-pad-cur { position: relative; flex: none; display: inline-flex; align-items: center; gap: 3px; font-family: var(--display); font-size: 26px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-pad-cur { position: relative; flex: none; display: inline-flex; align-items: center; font-family: var(--display); font-size: 26px; font-weight: 600; color: var(--muted); cursor: pointer; }
 /* The select covers the mark, invisible: the mark is what shows, the phone's own list is what opens. */
 .cp-root[data-theme="soft"] .cp2-pad-cur select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
-.cp-root[data-theme="soft"] .cp2-pad-cur i { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--dim); margin-top: 4px; }
-.cp-root[data-theme="soft"] .cp2-pad-num { flex: 1; min-width: 0; font-family: var(--display); font-size: 38px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.15; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cp-root[data-theme="soft"] .cp2-pad-num.empty { color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-pad-num {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 0;
+  font-family: var(--display); font-size: 38px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.15; color: var(--ink);
+}
+.cp-root[data-theme="soft"] .cp2-pad-num::placeholder { color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-pad-amount:focus-within { border-bottom-color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pad-label { margin: 4px 2px -2px; }
 .cp-root[data-theme="soft"] .cp2-pad-conv { margin: -4px 4px 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
 /* Two rows that scroll sideways together: the most used categories in view, the rest a swipe away, and the keypad still on screen. */
 .cp-root[data-theme="soft"] .cp2-pad-cats {
@@ -1770,19 +1774,13 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pad-cat.in svg { stroke: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-pad-cat.on { background: var(--blue); color: #fff; box-shadow: var(--lift); }
 .cp-root[data-theme="soft"] .cp2-pad-cat.on svg { stroke: #fff; }
-.cp-root[data-theme="soft"] .cp2-pad-when { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+/* Wrapped, not scrolled: a scrolling row clips the chips' shadows into a grey box behind them. */
+.cp-root[data-theme="soft"] .cp2-pad-when { display: flex; gap: 8px; flex-wrap: wrap; }
 .cp-root[data-theme="soft"] .cp2-pad-when .cp-fchip { flex: none; padding: 8px 12px; font-size: 12.5px; }
 .cp-root[data-theme="soft"] .cp2-pad-date { position: relative; cursor: pointer; }
 .cp-root[data-theme="soft"] .cp2-pad-date input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .cp-root[data-theme="soft"] .cp2-pad-rep { font: inherit; font-size: 12.5px; font-weight: 600; appearance: none; -webkit-appearance: none; cursor: pointer; }
 .cp-root[data-theme="soft"] .cp2-pad-field { padding: 11px 14px; }
-.cp-root[data-theme="soft"] .cp2-pad-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.cp-root[data-theme="soft"] .cp2-pad-key {
-  height: 48px; border: 0; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink);
-  font-family: var(--display); font-size: 21px; font-weight: 600; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-}
-.cp-root[data-theme="soft"] .cp2-pad-key:active { background: var(--tint); }
-.cp-root[data-theme="soft"] .cp2-pad-key svg { width: 22px; height: 22px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
 .cp-root[data-theme="soft"] .cp2-pad-go { margin-top: 2px; }
 .cp-root[data-theme="soft"] .cp2-pad-del { color: #A85F2E; }
 
@@ -1790,5 +1788,4 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-log .cp-content { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 .cp-root[data-theme="soft"] .cp2-log-main .cp2-pad { margin: 6px 22px 0; }
 .cp-root[data-theme="soft"] .cp2-log-main .cp2-pad-cats { margin: 0 -22px; padding-left: 22px; padding-right: 22px; }
-.cp-root[data-theme="soft"] .cp2-log-main .cp2-pad-key { height: 54px; }
 .cp-root[data-theme="soft"] .cp2-log .cp-capacity { text-decoration: none; }

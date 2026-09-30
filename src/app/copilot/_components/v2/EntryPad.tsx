@@ -1,20 +1,20 @@
 'use client';
-// Log a move: amount on a keypad of its own, a category, done.
+// Log a move: the amount on the phone's own number keyboard, a category, done.
 //
-// Its own keypad, not the phone's keyboard. Timed on the owner's phone, a
-// coffee took a tap in the field to wake the keyboard, the typing, a swipe to
-// put the keyboard away because it covered the categories, the category, then
-// "Log it" — and the keyboard cannot be opened for you when the app starts from
-// the Log money shortcut, because a phone only opens one for a tap. The keypad
-// is on screen from the first frame. The note, the one field that wants
-// letters, still uses the keyboard.
+// The owner tried a keypad drawn on the page and preferred the phone's own:
+// it is the keyboard their hands know. So the amount field takes focus as the
+// sheet opens — on the same tap as the + — and the number keyboard is up at
+// once. A phone opens a keyboard only in answer to a tap, so the Log money
+// page, which a shortcut opens with no tap on the page yet, needs one on the
+// amount. Enter logs it when it is ready, else puts the keyboard away so the
+// categories show.
 //
 // Tap the ₱ to type a move in another currency; it is kept as the default for
 // the next one, and each is converted into the book's on its own day
 // (bookstore.ts movedColumns). Shared by the Money tab's sheet and the Log
 // money page.
 import { useEffect, useRef, useState } from 'react';
-import { bookDayLabel, bookMoney, categoryIcon, padKey, parseRepeat, type BookLine } from '@/lib/copilot/money/book';
+import { bookDayLabel, bookMoney, categoryIcon, cleanAmount, parseRepeat, type BookLine } from '@/lib/copilot/money/book';
 import type { EntryDefault } from '@/lib/copilot/money/bookstore';
 import { currencyMark } from '@/lib/copilot/money/fx';
 import { addDay } from '@/lib/copilot/money/ledger';
@@ -41,24 +41,11 @@ export interface EntryPadProps {
   onLogged?: () => void;
   /** 'page' stays on screen after a move, cleared for the next. */
   variant: 'sheet' | 'page';
-  /**
-   * On screen. A sheet's body stays mounted after it closes, to slide out —
-   * and a keyboard listener left on it would take Enter pressed anywhere as
-   * "Log it" again for the move it just logged.
-   */
+  /** On screen: the amount takes focus when it becomes so. A sheet's body stays mounted after it closes, to slide out. */
   active?: boolean;
 }
 
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back'] as const;
 const OFFERED = ['EUR', 'USD', 'GBP', 'PHP'];
-
-/** "1234.5" drawn as "1,234.5": the digits as typed, grouped. */
-function grouped(v: string): string {
-  if (!v) return '0';
-  const [whole, cents] = v.split('.');
-  const w = Number(whole || '0').toLocaleString('en-US');
-  return cents === undefined ? w : `${w}.${cents}`;
-}
 
 export default function EntryPad(p: EntryPadProps) {
   const { line, currency } = p;
@@ -66,7 +53,6 @@ export default function EntryPad(p: EntryPadProps) {
   const [kind, setKind] = useState<'out' | 'in'>(line && line.amount > 0 ? 'in' : 'out');
   const [amount, setAmount] = useState(line ? String(Math.abs(fromEntered?.amount ?? line.amount)) : '');
   const [typedIn, setTypedIn] = useState<string>(fromEntered?.currency ?? (line ? currency : p.entry?.currency ?? currency));
-  const [rate, setRate] = useState(p.entry?.currency === typedIn ? p.entry.rate : null);
   const [category, setCategory] = useState<string | null>(line?.category ?? null);
   const [typing, setTyping] = useState(false);
   const [note, setNote] = useState(line?.note ?? '');
@@ -80,7 +66,6 @@ export default function EntryPad(p: EntryPadProps) {
   useEffect(() => {
     if (line || touched.current) return;
     setTypedIn(p.entry?.currency ?? currency);
-    setRate(p.entry?.rate ?? null);
   }, [line, p.entry, currency]);
 
   // Today can move under the pad (the Log money page learning it from the
@@ -102,8 +87,7 @@ export default function EntryPad(p: EntryPadProps) {
   const ready = n > 0 && !!(category || note.trim()) && !blocked && !busy && !p.busy;
   const what = note.trim() || category || '';
 
-  const press = (key: string) => setAmount((a) => padKey(a, key));
-
+  const amountRef = useRef<HTMLInputElement>(null);
   const reset = () => {
     setAmount(''); setCategory(null); setNote(''); setTyping(false); setOn(p.today); setRepeat(null); setKind('out');
   };
@@ -114,35 +98,22 @@ export default function EntryPad(p: EntryPadProps) {
     const said = line ? 'Saved.' : `Logged ${kind === 'out' ? '−' : '+'}${bookMoney(n, typedIn)}${what ? ` · ${what}` : ''}${on > p.today ? `, pending until ${bookDayLabel(on, p.today)}` : ''}.`;
     const ok = await p.onSubmit({ kind, amount, currency: typedIn, on, category, note, repeat }, said);
     setBusy(false);
-    if (ok && p.variant === 'page') { reset(); p.onLogged?.(); }
+    // The page stays up for the next move: back to the amount, keyboard still up — the tap on "Log it" lets the phone keep it open.
+    if (ok && p.variant === 'page') { reset(); amountRef.current?.focus({ preventScroll: true }); p.onLogged?.(); }
   };
 
-  // A keyboard, where there is one: digits, a point, backspace, Enter.
-  const submitRef = useRef(submit);
-  submitRef.current = submit;
+  // The keyboard up as the pad appears — focus without scrolling, so the
+  // sheet sliding in is not dragged along by the field.
   const active = p.active !== false;
   useEffect(() => {
-    if (!active) return;
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
-      if (/^\d$/.test(e.key) || e.key === '.' || e.key === ',') { press(e.key === ',' ? '.' : e.key); e.preventDefault(); }
-      else if (e.key === 'Backspace') { press('back'); e.preventDefault(); }
-      else if (e.key === 'Enter') { void submitRef.current(); e.preventDefault(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [active]);
+    if (active && !line) amountRef.current?.focus({ preventScroll: true });
+  }, [active, line]);
 
   const pickCurrency = async (code: string) => {
     touched.current = true;
     setTypedIn(code);
-    setRate(p.entry?.currency === code ? p.entry.rate : null);
     // Kept as the default for the next move — not when correcting one already logged.
-    if (!line && p.onEntry) {
-      const next = await p.onEntry(code);
-      if (next !== undefined) setRate(next?.currency === code ? next.rate : null);
-    }
+    if (!line && p.onEntry) await p.onEntry(code);
   };
   const choices = [...new Set([currency, typedIn, p.entry?.currency, ...OFFERED].filter((c): c is string => !!c))];
 
@@ -157,21 +128,20 @@ export default function EntryPad(p: EntryPadProps) {
         {/* The mark is the picker: a select laid over it, so the phone's own list opens on a tap. */}
         <label className="cp2-pad-cur">
           <span aria-hidden>{currencyMark(typedIn)}</span>
-          <i aria-hidden />
           <select value={typedIn} onChange={(e) => void pickCurrency(e.target.value)} aria-label="Currency this is in">
             {choices.map((c) => <option key={c} value={c}>{c === currency ? `${c} · your book` : c}</option>)}
           </select>
         </label>
-        <output className={`cp2-pad-num${amount ? '' : ' empty'}`} aria-live="polite">{grouped(amount)}</output>
+        <input
+          ref={amountRef} className="cp2-pad-num" inputMode="decimal" enterKeyHint="done" autoComplete="off"
+          value={amount} placeholder="0" aria-label={`Amount in ${typedIn}`}
+          onChange={(e) => setAmount(cleanAmount(e.target.value))}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (ready) void submit(); else e.currentTarget.blur(); } }}
+        />
       </div>
-      {other && (
-        <p className="cp2-pad-conv">
-          {blocked ? `Logging in ${typedIn} is not set up on this server yet. Pick ${currency} to log it now.`
-            : rate && n > 0 ? `≈ ${bookMoney(Math.round(n * rate.rate * 100) / 100, currency)} in your book, at the rate of ${Number(rate.day.slice(8, 10))} ${new Date(`${rate.day}T00:00:00Z`).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })}`
-            : `Counted in ${currency} at the rate on its day.`}
-        </p>
-      )}
+      {blocked && <p className="cp2-pad-conv">Logging in {typedIn} is not set up on this server yet. Pick {currency} to log it now.</p>}
 
+      <div className="cp-label cp2-pad-label">Category</div>
       <div className="cp2-pad-cats" role="group" aria-label="Category">
         {shownCats.map((c) => (
           <button key={c} className={`cp2-pad-cat${category === c ? ' on' : ''}${kind === 'in' ? ' in' : ''}`} aria-pressed={category === c} onClick={() => setCategory(category === c ? null : c)}>
@@ -201,14 +171,6 @@ export default function EntryPad(p: EntryPadProps) {
       {line?.repeat && !repeat && <p className="cp-help">Saving stops the repeat: the upcoming ones go, the past ones stay.</p>}
 
       <input className="cp-input cp2-pad-field" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" />
-
-      <div className="cp2-pad-keys" role="group" aria-label="Amount keypad">
-        {KEYS.map((k) => (
-          <button key={k} className="cp2-pad-key" onClick={() => press(k)} aria-label={k === 'back' ? 'Delete a digit' : k === '.' ? 'Point' : k}>
-            {k === 'back' ? <svg viewBox="0 0 24 24" aria-hidden><path d="M9 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-6-6 6-6z" /><path d="M12.5 10l4 4M16.5 10l-4 4" /></svg> : k}
-          </button>
-        ))}
-      </div>
 
       <button className="cp-btn primary block cp2-pad-go" disabled={!ready} onClick={() => void submit()}>
         {busy ? 'Saving…' : line ? 'Save' : 'Log it'}

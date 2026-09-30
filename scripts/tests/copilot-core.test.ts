@@ -7800,3 +7800,79 @@ async function moneyBook() {
 }
 
 moneyBook().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The money book, faster: the keypad, pictures, typed in another currency ─── */
+import {
+  anchorOf as fAnchor, bookView as fView, categoryIcon as fIcon, convertEntry as fConvert, padKey as fPad, repeatsDue as fDue,
+  seriesDay as fSeriesDay, type BookRow as FRow,
+} from '../../src/lib/copilot/money/book';
+import { fxTable as fTable } from '../../src/lib/copilot/money/fx';
+
+async function moneyBookFaster() {
+  /* 1. The keypad: two decimals, nine digits, no leading zeros, one point. */
+  const typed = (keys: string[]) => keys.reduce((a, k) => fPad(a, k), '');
+  assert.equal(typed(['1', '3', '0']), '130');
+  assert.equal(typed(['0', '5']), '5', 'a leading zero gives way');
+  assert.equal(typed(['.', '5']), '0.5', 'a point first is "0."');
+  assert.equal(typed(['1', '.', '2', '3', '4']), '1.23', 'cents stop at two');
+  assert.equal(typed(['1', '.', '.', '2']), '1.2', 'one point');
+  assert.equal(typed(['1', '2', '.', '5', 'back', 'back']), '12');
+  assert.equal(typed([...'1234567890']), '123456789', 'nine digits: a coffee is not a billion');
+  assert.equal(fPad('130', 'clear'), '');
+  assert.equal(fPad('130', 'x'), '130');
+  assert.equal(fPad('', 'back'), '');
+
+  /* 2. A picture per row: by category, then by the words in it; plain when nothing matches. */
+  const out = (c: string | null, text = '') => fIcon(c, text, -1);
+  assert.deepEqual(
+    ['Groceries', 'Dining Out', 'Coffee', 'Transportation', 'Utilities', 'Sent', 'Purchases', 'Self-care', 'Housing'].map((c) => out(c)),
+    ['groceries', 'dining', 'coffee', 'transport', 'bills', 'sent', 'shopping', 'care', 'home'],
+    'every category the owner uses has one');
+  assert.deepEqual(['Salary', 'Client', 'Help'].map((c) => fIcon(c, '', 1)), ['salary', 'client', 'gift']);
+  assert.equal(out(null, '5G DATA'), 'phone', 'a row with no category is read by its words');
+  assert.equal(out('Food', 'Siomai'), 'dining');
+  assert.equal(out(null, 'GrabFood order'), 'dining', 'GrabFood is food');
+  assert.equal(out(null, 'Grab to Makati'), 'transport', 'Grab is a ride');
+  assert.equal(out('Misc', 'thing'), 'out', 'nothing matches: a plain one, not a wrong one');
+  assert.equal(fIcon('Misc', 'thing', 50), 'in');
+
+  /* 3. A repeat counts from the day it was written for, not a date it was moved to. */
+  assert.equal(fSeriesDay('2026-09-20', 'repeat:abc:2026-10-01'), '2026-10-01', 'moved earlier: the fingerprint’s day');
+  assert.equal(fSeriesDay('2026-10-05', 'repeat:abc:2026-10-01'), '2026-10-05', 'moved later: its date');
+  assert.equal(fSeriesDay('2026-09-20', 'book:abc'), '2026-09-20');
+  // Counted from the moved date the next row is 1 Oct again — a fingerprint that
+  // exists, so the write is ignored and the series stops without a word.
+  const monthly = { every: 'month' as const, day: 1 };
+  assert.deepEqual(fDue(monthly, fSeriesDay('2026-09-20', 'repeat:abc:2026-10-01'), '2026-10-02'), ['2026-11-01']);
+
+  /* 4. Typed in euros, kept in pesos at the rate on its day. */
+  const fx = fTable([
+    { base: 'EUR', quote: 'PHP', day: '2026-09-28', rate: 63.5 },
+    { base: 'EUR', quote: 'PHP', day: '2026-09-29', rate: 63.6 },
+  ]);
+  assert.deepEqual(fConvert(fx, 'EUR', 'PHP', -12, '2026-09-29', '2026-09-30'), { amount: -763.2, rate: 63.6, day: '2026-09-29' });
+  assert.deepEqual(fConvert(fx, 'EUR', 'PHP', -12, '2026-09-30', '2026-09-30')?.day, '2026-09-29', 'today before the ECB publishes: the last rate');
+  assert.equal(fConvert(fx, 'EUR', 'PHP', -12, '2026-10-20', '2026-09-30')?.amount, -763.2, 'pending: today’s rate, its own does not exist yet');
+  assert.equal(fConvert(fx, 'JPY', 'PHP', -500, '2026-09-29', '2026-09-30'), null, 'no rate, no row: never a guess');
+  assert.equal(fConvert(fx, 'EUR', 'PHP', -12, '2026-09-01', '2026-09-30'), null, 'nothing within five days of it either');
+
+  /* 5. Shown in the currency it was typed in, it is what was typed. */
+  const anchor = { currency: 'PHP', balance: 70000, at: '2026-09-30T00:00:00Z', on: '2026-09-30' };
+  const rows: FRow[] = [{
+    id: 'e', on: '2026-09-29', amount: -763.2, currency: 'PHP', description: 'Dining Out', category: 'Dining Out', note: null, repeat: null,
+    createdAt: '2026-09-30T02:00:00Z', book: true, source: null, entered: { amount: -12, currency: 'EUR' },
+  }];
+  const phpToEur = fTable([{ base: 'PHP', quote: 'EUR', day: '2026-09-29', rate: 1 / 63.6 }, { base: 'PHP', quote: 'EUR', day: '2026-09-30', rate: 1 / 63.7 }]);
+  const inPesos = fView({ rows, anchor, currency: 'PHP', view: 'PHP', today: '2026-09-30', month: '2026-09', fx: fTable([]) }).days[0].lines[0];
+  assert.deepEqual([inPesos.shown, inPesos.entered, inPesos.icon], [-763.2, { amount: -12, currency: 'EUR' }, 'dining']);
+  const inEuros = fView({ rows, anchor, currency: 'PHP', view: 'EUR', today: '2026-09-30', month: '2026-09', fx: phpToEur }).days[0].lines[0];
+  assert.equal(inEuros.shown, -12, 'not ₱763.20 turned back into euros at another rounding');
+
+  /* 6. The default currency to type in rides on the balance, and only when it is another. */
+  assert.equal(fAnchor({ book: { currency: 'PHP', balance: 1, at: 'x', on: '2026-09-30', entry: 'eur' } })?.entry, 'EUR');
+  assert.equal(fAnchor({ book: { currency: 'PHP', balance: 1, at: 'x', on: '2026-09-30', entry: 'PHP' } })?.entry, undefined);
+
+  console.log('copilot-core: money book faster checks passed');
+}
+
+moneyBookFaster().catch((e) => { console.error(e); process.exit(1); });

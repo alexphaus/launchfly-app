@@ -431,15 +431,32 @@ export async function bookRowsSince(profileId: string, anchor: BookAnchor): Prom
         createdAt: String(r.created_at ?? ''), book: /^(book|repeat):/.test(String(r.fingerprint ?? '')),
       });
     }
-    if ((data ?? []).length < PAGE) break;
+    if ((data ?? []).length < PAGE) return out;
   }
-  return out;
+  // Twenty thousand moves since the balance was said, and more beyond: a sum
+  // of the first twenty thousand would be a wrong balance that looks right.
+  throw new Error('Your money book has more moves since its balance than it can add up at once. Say your balance again on the Money tab to start a fresh count.');
 }
 
 /** The book's balance now, or null when there is no book. Throws when its rows cannot be read: a guess here is a runway. */
 export async function bookBalanceNow(profileId: string, finance: Finance | null | undefined, today: string): Promise<number | null> {
   const anchor = anchorOf(finance);
   return anchor ? bookBalance(anchor, await bookRowsSince(profileId, anchor), today) : null;
+}
+
+/**
+ * A settled finance row written back — unless the book's balance was said
+ * again between the read and this write. A settle reads the whole row, works
+ * for a second, and writes the whole row: without the guard, a balance typed in
+ * that second was overwritten by the one read before it, and the book counted
+ * from a number the person had just corrected. Not written, the next settle
+ * starts from the new balance; nothing here needs to retry.
+ */
+export async function writeSettledFinance(profileId: string, prev: Finance, next: Finance): Promise<{ written: boolean; error: string | null }> {
+  const base = copilotDb().from('copilot_profiles').update({ finance: next }).eq('id', profileId);
+  const guarded = prev.book?.at ? base.eq('finance->book->>at', prev.book.at) : base.is('finance->book', null);
+  const { data, error } = await guarded.select('id');
+  return { written: !!data?.length, error: error ? describeDbError(error, 'Could not update runway.') : null };
 }
 
 /* ─── The finance row ─────────────────────────────────────────────────────── */
@@ -503,8 +520,8 @@ export async function refreshFinance(profileId: string): Promise<MoneyRead | nul
     book: await bookBalanceNow(profileId, prev, today),
   });
   if (next === prev) return read;
-  const { error } = await copilotDb().from('copilot_profiles').update({ finance: next }).eq('id', profileId);
-  if (error) throw new Error(describeDbError(error, 'Could not update runway.'));
+  const w = await writeSettledFinance(profileId, prev, next);
+  if (w.error) throw new Error(w.error);
   return read;
 }
 

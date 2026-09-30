@@ -4,6 +4,7 @@
 import type { AgentKey } from '@/lib/copilot/machine';
 import type { MatchGroup } from '@/lib/copilot/matches';
 import type { PathIcon } from '@/lib/copilot/pathway';
+import type { BookIcon } from '@/lib/copilot/money/book';
 
 const base = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24', 'aria-hidden': true };
 
@@ -25,6 +26,30 @@ export const IconFlag = () => (<svg {...base}><path d="M5 21V4" /><path d="M5 4h
 export const IconMoney = () => (<svg {...base}><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" /><path d="M4 7.5v10A2.5 2.5 0 0 0 6.5 20H20V8H6.5A2.5 2.5 0 0 1 4 5.5" /><circle cx="16" cy="14" r="1.2" /></svg>);
 /** Repeats: a row that comes round again. */
 export const IconRepeat = () => (<svg {...base} className="cp2-bk-rep"><path d="M17 2l3 3-3 3" /><path d="M4 11V9a4 4 0 0 1 4-4h12" /><path d="M7 22l-3-3 3-3" /><path d="M20 13v2a4 4 0 0 1-4 4H4" /></svg>);
+/**
+ * What a money row was for (money/book.ts categoryIcon): one glyph per kind,
+ * on the same grid and stroke as the rest, so a day's list reads at a glance.
+ */
+const BOOK_GLYPH: Record<BookIcon, React.ReactElement> = {
+  groceries: <><circle cx="9" cy="20" r="1.2" /><circle cx="17" cy="20" r="1.2" /><path d="M3 4h2l2.3 10.6a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.2L20.5 8H6" /></>,
+  dining: <><path d="M6 3v6a3 3 0 0 0 6 0V3" /><path d="M9 12v9" /><path d="M17 21V3c2 .6 3 3 3 6s-1 4-3 4" /></>,
+  coffee: <><path d="M4 9h13v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z" /><path d="M17 10.5h1.5a2.5 2.5 0 0 1 0 5H16" /><path d="M8 3.5v2.5M12 3.5v2.5" /></>,
+  transport: <><rect x="5" y="3" width="14" height="14" rx="2.5" /><path d="M5 10h14" /><path d="M8 17v3M16 17v3" /><path d="M8.5 13.5h.01M15.5 13.5h.01" /></>,
+  bills: <path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z" />,
+  phone: <><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M11 18h2" /></>,
+  home: <><path d="M3.5 11L12 4l8.5 7" /><path d="M5.5 9.5V20h13V9.5" /><path d="M10 20v-5.5h4V20" /></>,
+  care: <path d="M12 20s-7.5-4.6-7.5-10.2A4.1 4.1 0 0 1 12 7.4a4.1 4.1 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z" />,
+  health: <><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M12 8.5v7M8.5 12h7" /></>,
+  shopping: <><path d="M5.5 8h13l-1 12.5h-11L5.5 8z" /><path d="M9 8a3 3 0 0 1 6 0" /></>,
+  sent: <><path d="M7 17L17 7" /><path d="M8.5 7H17v8.5" /></>,
+  salary: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" /><path d="M3 13h18" /></>,
+  client: <><circle cx="10" cy="8" r="3.5" /><path d="M3.5 20c0-3.6 2.9-6 6.5-6 1.3 0 2.5.3 3.5.8" /><path d="M15 18.5l2 2 4-4" /></>,
+  gift: <><rect x="3.5" y="8" width="17" height="4" rx="1" /><path d="M5.5 12v8h13v-8M12 8v12" /><path d="M12 8C10.5 5 7 4.5 7 6.5S10 8 12 8zm0 0c1.5-3 5-3.5 5-1.5S14 8 12 8z" /></>,
+  in: <><path d="M17 7L7 17" /><path d="M15.5 17H7V8.5" /></>,
+  out: <><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z" /><path d="M9 8h6M9 12h6" /></>,
+};
+export const BookGlyph = ({ icon }: { icon: BookIcon }) => <svg {...base}>{BOOK_GLYPH[icon] ?? BOOK_GLYPH.out}</svg>;
+
 /** You: the person the numbers are about. */
 export const IconYou = () => (<svg {...base}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>);
 

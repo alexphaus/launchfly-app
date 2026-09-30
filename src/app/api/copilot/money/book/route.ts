@@ -3,15 +3,22 @@
 //
 // GET  ?month=2026-09&view=EUR   the month's list and calendar, amounts shown
 //                                in `view` (the book's own currency when absent)
-// POST action=add      a move logged: kind in|out, amount, on, category, note, repeat
+// POST action=add      a move logged: id (the phone's uuid for it, so a retry is
+//                      one row), kind in|out, amount, currency (typed in; the
+//                      book's when absent), on, category, note, repeat
 //      action=edit     one logged row changed (id + the same fields)
 //      action=delete   one logged row gone (id); an upcoming repeat stops its series
 //      action=balance  the balance the book starts from, said again to restart it
+//      action=entry    the currency moves are typed in from now on
 //
 // Every POST answers with the book as it now is, for the month and view the
-// screen was on, so the list never shows a row the server does not have.
-import { MoneyRefusal } from '@/lib/copilot/money/store';
-import { addEntry, deleteEntry, editEntry, loadBook, setBookBalance } from '@/lib/copilot/money/bookstore';
+// screen was on, so the list never shows a row the server does not have — or,
+// with `reply: 'balance'` (the Log money page, which draws no list), with the
+// balance alone: the book is a dozen reads that page would throw away.
+import { MoneyRefusal, bookBalanceNow } from '@/lib/copilot/money/store';
+import { addEntry, deleteEntry, editEntry, loadBook, setBookBalance, setEntryCurrency } from '@/lib/copilot/money/bookstore';
+import { getProfile } from '@/lib/copilot/base';
+import { todayIso } from '@/lib/copilot/db';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
@@ -35,20 +42,33 @@ export async function POST(req: Request) {
   if ('res' in auth) return auth.res;
   const b = await readJson(req);
   const at = { month: str(b.month), view: str(b.view) };
+  const answer = async (extra: Record<string, unknown> = {}) => {
+    if (b.reply === 'balance') {
+      const profile = await getProfile(auth.pid);
+      return json({ ok: true, ...extra, balance: profile ? await bookBalanceNow(auth.pid, profile.finance, todayIso(profile.timezone)) : null });
+    }
+    return json({ ok: true, ...extra, book: await loadBook(auth.pid, at) });
+  };
   try {
     if (b.action === 'add') {
-      const r = await addEntry(auth.pid, b);
-      return json({ ok: true, warning: r.warning, book: await loadBook(auth.pid, at) });
+      await addEntry(auth.pid, b);
+      return await answer();
     }
     if (b.action === 'edit' || b.action === 'delete') {
       const id = str(b.id);
       if (!id) return fail('Which row?');
-      const r = b.action === 'edit' ? { ...(await editEntry(auth.pid, id, b)), stopped: false } : await deleteEntry(auth.pid, id);
-      return json({ ok: true, warning: r.warning, stopped: r.stopped, book: await loadBook(auth.pid, at) });
+      if (b.action === 'edit') {
+        await editEntry(auth.pid, id, b);
+        return await answer();
+      }
+      return await answer(await deleteEntry(auth.pid, id));
     }
     if (b.action === 'balance') {
-      const r = await setBookBalance(auth.pid, b);
-      return json({ ok: true, warning: r.warning, book: await loadBook(auth.pid, at) });
+      await setBookBalance(auth.pid, b);
+      return await answer();
+    }
+    if (b.action === 'entry') {
+      return json({ ok: true, entry: await setEntryCurrency(auth.pid, b.currency) });
     }
     return fail('Unknown action');
   } catch (e) {

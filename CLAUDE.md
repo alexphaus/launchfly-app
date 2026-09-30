@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 61 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 62 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -123,9 +123,18 @@ screen says why. The remote dev sandbox's network policy blocks that host: test
 conversion against a local stand-in on `COPILOT_FX_URL`.
 
 The Money tab (`copilot_transactions.category`, `note`, `repeat`, 20261001)
-needs that migration and nothing else; without it the tab says so. The share
-target (a budget app's Export → Share → Copilot) needs the app reinstalled, or
-Chrome's next refresh of it, to show in the share sheet.
+needs that migration and nothing else; without it the tab says so. Logging a
+move in another currency also needs `20261002_copilot_book_entered.sql`; without
+it that alone is refused, naming the file. The share target (a budget app's
+Export → Share → Copilot) and the Log money shortcut's move to `/copilot2/log`
+need the app reinstalled, or Chrome's next refresh of it; the old shortcut URL
+redirects meanwhile.
+
+**Testing offline:** Playwright's `setOffline` does not cover a service
+worker's own requests, and `public/sw.js` passes the page's API calls through
+itself — so an "offline" test with it quietly sends everything. Stop the server
+instead, with `launchPersistentContext` so the worker, its caches and the
+outbox survive between the phases.
 
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —

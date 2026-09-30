@@ -51,7 +51,7 @@ import { NIGHTLY_COLUMNS, nightlyFromRow, type NightlyOutput, type NightlyRun, t
 import { resolveLlmConfig, resolvePlanConfig } from './agent/llm';
 import { ROADMAP_COLUMNS, ROADMAP_MARK_EVENT, ROADMAP_RUN_KIND, markFromEvent, roadmapRunFromRow, type RoadmapMark, type RoadmapRun } from './roadmap';
 import { EXPERIMENT_EVENT, experimentMarkFromEvent, type ExperimentMark } from './experiment';
-import { bookBalanceNow, loadMoneyRows, moneyGoals, ratesFor, refreshFinance } from './money/store';
+import { bookBalanceNow, loadMoneyRows, moneyGoals, ratesFor, refreshFinance, writeSettledFinance } from './money/store';
 import { financeFromRead, financeFromTyped, moneyHome } from './money/ledger';
 import { latestRate, mainCurrency } from './money/fx';
 import { resolveStatementConfig } from './money/extract';
@@ -939,9 +939,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
       main, latest: (from, to) => latestRate(fx.table, from, to), book,
     });
     if (settled !== was) {
-      const { error } = await db.from('copilot_profiles').update({ finance: settled }).eq('id', profileId);
-      if (error) settleError = describeDbError(error, 'Runway could not be updated from your statements.');
-      else {
+      const w = await writeSettledFinance(profileId, was, settled);
+      if (w.error) settleError = `Runway could not be updated from your statements: ${w.error}`;
+      else if (w.written) {
         profile.finance = settled;
         metrics.runway_months = computeRunwayMonths(settled);
       }

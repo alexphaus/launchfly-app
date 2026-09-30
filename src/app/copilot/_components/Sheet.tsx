@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 
 /** Bottom sheet inside the phone frame. The parent keeps content mounted while it slides out. */
-export default function Sheet({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+export default function Sheet({ open, onClose, children, className }: { open: boolean; onClose: () => void; children: React.ReactNode; className?: string }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -12,7 +12,7 @@ export default function Sheet({ open, onClose, children }: { open: boolean; onCl
   return (
     <>
       <div className={`cp-overlay ${open ? 'open' : ''}`} onClick={onClose} />
-      <div className={`cp-sheet ${open ? 'open' : ''}`} role="dialog" aria-modal={open} aria-hidden={!open}>
+      <div className={`cp-sheet ${open ? 'open' : ''}${className ? ` ${className}` : ''}`} role="dialog" aria-modal={open} aria-hidden={!open}>
         <div className="cp-handle" />
         {children}
       </div>

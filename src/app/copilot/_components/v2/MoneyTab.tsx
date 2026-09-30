@@ -14,15 +14,20 @@
 // to Copilot from the phone's share sheet lands here, imported.
 //
 // Every figure comes off the server's BookView. Nothing here computes one.
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { BookPayload } from '@/lib/copilot/money/bookstore';
-import { bookDayLabel, bookMoney, bookRateLine, parseRepeat, shiftMonth, type BookDay, type BookLine, type CalendarCell } from '@/lib/copilot/money/book';
-import { currencyMark } from '@/lib/copilot/money/fx';
-import { addDay } from '@/lib/copilot/money/ledger';
+//
+// Fast because it waits on nothing it can avoid: it opens on the book it last
+// drew (bookLocal.ts) while the fresh one loads, and a move logged goes into
+// the phone's outbox and the sheet closes — the server is told behind it, and
+// until it answers the move is listed under "Sending".
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { BookPayload, EntryDefault } from '@/lib/copilot/money/bookstore';
+import { bookDayLabel, bookMoney, bookRateLine, categoryIcon, parseRepeat, shiftMonth, type BookDay, type BookLine, type CalendarCell } from '@/lib/copilot/money/book';
 import { get, post } from '../api';
 import type { Actions } from '../shared';
 import type { Arrival } from '../useCopilot';
-import { IconRepeat } from './icons2';
+import { local, readCachedBook, useOutbox, writeCachedBook, type Unsent } from './bookLocal';
+import EntryPad from './EntryPad';
+import { BookGlyph, IconRepeat } from './icons2';
 
 /* ─── State ───────────────────────────────────────────────────────────────── */
 
@@ -32,19 +37,14 @@ type EntryAsk = { kind: 'add' } | { kind: 'edit'; line: BookLine } | { kind: 'ba
 const VIEW_KEY = 'cp2.book.view';
 const ALT_KEY = 'cp2.book.alt';
 const MODE_KEY = 'cp2.book.mode';
-/** Per-phone conveniences only: a blocked store costs the remembered choice, never the screen. */
-const local = {
-  get(k: string): string | null { try { return window.localStorage.getItem(k); } catch { return null; } },
-  set(k: string, v: string | null) { try { if (v == null) window.localStorage.removeItem(k); else window.localStorage.setItem(k, v); } catch { /* per-phone only */ } },
-};
 
 /**
  * The book's state, held by the shell rather than the tab, so switching tabs
  * does not throw it away, and the add sheet and its button can live outside
  * the scrolling content where the tab renders.
  */
-export function useBook(say: (m: string) => void, onMoved: () => void) {
-  const [book, setBook] = useState<BookPayload | null>(null);
+export function useBook(pid: string, say: (m: string) => void, onMoved: () => void) {
+  const [book, setBookState] = useState<BookPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [entry, setEntry] = useState<BookEntry | null>(null);
@@ -52,30 +52,56 @@ export function useBook(say: (m: string) => void, onMoved: () => void) {
   const lastEntry = useRef<BookEntry | null>(null);
   if (entry) lastEntry.current = entry;
   const at = useRef<{ month: string | null; view: string | null; init: boolean }>({ month: null, view: null, init: false });
+  // Which load is the latest: two months tapped through quickly answer out of
+  // order, and the older answer must not draw over the newer month.
+  const seq = useRef(0);
+
+  const setBook = useCallback((b: BookPayload) => {
+    setBookState(b);
+    if (!at.current.month || at.current.month === b.today.slice(0, 7)) writeCachedBook(pid, at.current.view, b);
+  }, [pid]);
 
   const load = useCallback(async (next: { month?: string | null; view?: string | null } = {}) => {
-    if (!at.current.init) at.current = { ...at.current, view: local.get(VIEW_KEY), init: true };
+    if (!at.current.init) {
+      at.current = { ...at.current, view: local.get(VIEW_KEY), init: true };
+      // The book as it was last drawn, at once; the fresh one replaces it a moment later.
+      const cached = readCachedBook<BookPayload>(pid, at.current.view);
+      if (cached && !next.month) setBookState((b) => b ?? cached);
+    }
     at.current = { ...at.current, ...next };
+    const mine = ++seq.current;
     const q = new URLSearchParams();
     if (at.current.month) q.set('month', at.current.month);
     if (at.current.view) q.set('view', at.current.view);
     try {
       const r = await get<{ book: BookPayload }>(`/money/book?${q}`);
+      if (mine !== seq.current) return;
       setBook(r.book);
       setError(null);
     } catch (e) {
+      if (mine !== seq.current) return;
       setError(e instanceof Error ? e.message : 'Could not open your book.');
     }
-  }, []);
+  }, [pid, setBook]);
 
-  /** One write; the answer is the book as it now is. `said` is the toast when it worked and nothing needs saying instead. */
+  const outbox = useOutbox(pid, {
+    extra: () => ({ month: at.current.month, view: at.current.view }),
+    onSent: (data) => {
+      if (data.book) { seq.current++; setBook(data.book as BookPayload); }
+      onMoved();
+    },
+    say,
+  });
+
+  /** An edit, a delete, a balance: waited for, since the sheet shows what it changed. `said` is the toast when it worked. */
   const write = useCallback(async (body: Record<string, unknown>, said: string): Promise<boolean> => {
     setBusy(true);
     try {
-      const r = await post<{ book: BookPayload; warning?: string | null; stopped?: boolean }>('/money/book', { ...body, month: at.current.month, view: at.current.view });
+      const r = await post<{ book: BookPayload; stopped?: boolean }>('/money/book', { ...body, month: at.current.month, view: at.current.view });
+      seq.current++;
       setBook(r.book);
       onMoved();
-      say(r.warning ?? (r.stopped ? `${said} The repeat stopped too.` : said));
+      say(r.stopped ? `${said} The repeat stopped too.` : said);
       return true;
     } catch (e) {
       say(e instanceof Error ? e.message : 'Could not save that.');
@@ -83,13 +109,28 @@ export function useBook(say: (m: string) => void, onMoved: () => void) {
     } finally {
       setBusy(false);
     }
-  }, [onMoved, say]);
+  }, [onMoved, say, setBook]);
+
+  /** The currency moves are typed in from now on. Undefined when it could not be kept — said, and the pad keeps the choice for this move. */
+  const setEntryDefault = useCallback(async (code: string): Promise<EntryDefault | undefined> => {
+    try {
+      const r = await post<{ entry: EntryDefault }>('/money/book', { action: 'entry', currency: code });
+      setBookState((b) => (b ? { ...b, entry: r.entry } : b));
+      return r.entry;
+    } catch (e) {
+      say(e instanceof Error ? e.message : 'Could not keep that currency.');
+      return undefined;
+    }
+  }, [say]);
 
   const setView = useCallback((v: string | null) => { local.set(VIEW_KEY, v); void load({ view: v }); }, [load]);
   const setMonth = useCallback((m: string) => { void load({ month: m }); }, [load]);
   const openEntry = useCallback((e: EntryAsk) => setEntry({ ...e, n: Date.now() }), []);
   const closeEntry = useCallback(() => setEntry(null), []);
-  return { book, error, busy, load, write, setView, setMonth, asked: at.current.view, entry, shownEntry: entry ?? lastEntry.current, openEntry, closeEntry };
+  return {
+    book, error, busy, load, write, setView, setMonth, asked: at.current.view, entry, shownEntry: entry ?? lastEntry.current, openEntry, closeEntry,
+    outbox, setEntryDefault,
+  };
 }
 export type Book = ReturnType<typeof useBook>;
 
@@ -165,6 +206,55 @@ export default function MoneyTab({ book, actions, say, arrival, clearArrival }: 
   return <Started b={b} book={book} actions={actions} say={say} />;
 }
 
+/**
+ * A crash in the tab stays in the tab: without this, one bad row took the
+ * whole app down to a blank page. It says what broke and offers a reload —
+ * the moves waiting in the outbox are on the phone and go after it.
+ */
+export class MoneyTabGuard extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(e: unknown) { return { error: e instanceof Error ? e.message : String(e) }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="cp-card cp2-bk-msg">
+        <h2 className="cp2-bk-h">The Money tab hit an error</h2>
+        <p>{this.state.error}</p>
+        <p className="cp-help">Nothing you logged is lost: it is on the server, or on this phone waiting to be sent.</p>
+        <button className="cp-btn primary" onClick={() => window.location.reload()}>Reload</button>
+      </div>
+    );
+  }
+}
+
+/** Moves on this phone the server has not confirmed: sending, or refused with the reason. */
+export function UnsentMoves({ list, sending, onRetry, onRemove }: { list: Unsent[]; sending: boolean; onRetry: () => void; onRemove: (id: string) => void }) {
+  if (!list.length) return null;
+  const waiting = list.filter((u) => !u.refused);
+  return (
+    <>
+      <div className="cp2-bk-dayhead">
+        <span>{waiting.length && sending ? 'Sending' : 'Not saved yet'}</span>
+        {waiting.length > 0 && !sending && <button className="cp2-bank-inline" onClick={onRetry}>Send now</button>}
+      </div>
+      <div className="cp-list cp2-bk-lines">
+        {list.map((u) => (
+          <div key={u.id} className={`cp2-bk-line cp2-bk-unsent${u.refused ? ' refused' : ''}`}>
+            <span className={`cp2-bk-ico${u.body.kind === 'in' ? ' in' : ''}`} aria-hidden>
+              <BookGlyph icon={categoryIcon(u.body.category as string | null, String(u.body.note ?? ''), u.body.kind === 'in' ? 1 : -1)} />
+            </span>
+            <span className="main">
+              <span className="t">{u.said.replace(/^Logged /, '').replace(/\.$/, '')}</span>
+              <span className="s">{u.refused ? u.error : u.error === 'No connection.' ? 'On this phone, waiting for a connection' : u.error ? `On this phone, not sent yet: ${u.error}` : 'On this phone, sending…'}</span>
+            </span>
+            {u.refused && <button className="cp-btn sm" onClick={() => onRemove(u.id)}>Remove</button>}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function Started({ b, book, actions, say }: { b: BookPayload; book: Book; actions: Actions; say: (m: string) => void }) {
   const [mode, setModeState] = useState<'list' | 'calendar'>('list');
   const [alt, setAltState] = useState<string>(b.main !== b.currency ? b.main : b.currency === 'EUR' ? 'USD' : 'EUR');
@@ -222,6 +312,7 @@ function Started({ b, book, actions, say }: { b: BookPayload; book: Book; action
       </div>
       <p className="cp2-bk-totals">Spent <b>{m(b.totals.spent)}</b> · Came in <b>{m(b.totals.received)}</b></p>
 
+      <UnsentMoves list={book.outbox.unsent} sending={book.outbox.sending} onRetry={() => void book.outbox.flush()} onRemove={book.outbox.remove} />
       {mode === 'list' ? (
         <>
           {b.pending.length > 0 && b.month === b.today.slice(0, 7) && (
@@ -238,6 +329,8 @@ function Started({ b, book, actions, say }: { b: BookPayload; book: Book; action
         <Calendar b={b} onTap={onLine} />
       )}
 
+      {/* A copy that does not depend on this server: every row, as a file on the phone. */}
+      <a className="cp2-bk-export" href="/api/copilot/money/book/export" download>Download everything as CSV</a>
       {/* Room to scroll the last line out from under the add button. */}
       <div className="cp2-bk-end" aria-hidden />
       {b.unlabelled > 0 && (
@@ -274,15 +367,20 @@ function Line({ l, b, when, onTap }: { l: BookLine; b: BookPayload; when?: boole
     rule ? (rule.every === 'week' ? 'weekly' : 'monthly') : null,
     l.source ? `from ${l.source}` : null,
   ].filter(Boolean).join(' · ');
+  // The other figure under the amount: the book's own when shown in another
+  // currency, else what was typed when that was another — "₱790" under "€12".
+  const second = b.view !== b.currency ? bookMoney(Math.abs(l.amount), b.currency)
+    : l.entered ? bookMoney(Math.abs(l.entered.amount), l.entered.currency) : null;
   return (
     <button className={`cp2-bk-line${l.book ? '' : ' read'}`} onClick={() => onTap(l)}>
+      <span className={`cp2-bk-ico${l.amount > 0 ? ' in' : ''}`} aria-hidden><BookGlyph icon={l.icon} /></span>
       <span className="main">
         <span className="t">{l.label}{rule && <IconRepeat />}</span>
         {sub && <span className="s">{sub}</span>}
       </span>
       <span className="amt">
         <b className={l.amount > 0 ? 'in' : ''}>{l.amount > 0 ? '+' : '−'}{bookMoney(Math.abs(l.shown), b.view)}</b>
-        {b.view !== b.currency && <span className="s">{bookMoney(Math.abs(l.amount), b.currency)}</span>}
+        {second && <span className="s">{second}</span>}
       </span>
     </button>
   );
@@ -348,7 +446,10 @@ export function BookFab({ book }: { book: Book }) {
 export function BookSheet({ book }: { book: Book }) {
   const e = book.shownEntry;
   const b = book.book;
-  if (!e || !b) return null;
+  if (!e) return null;
+  // Opened before the book ever loaded on this phone — the shortcut, a first
+  // visit. Said, not a blank sheet.
+  if (!b) return <div className="cp-sheet-embed"><p className="desc">{book.error ?? 'Opening your book…'}</p></div>;
   // The Log money shortcut before the book has a balance: the balance first, since every move counts from it.
   if (!b.started) {
     return (
@@ -368,7 +469,33 @@ export function BookSheet({ book }: { book: Book }) {
       </div>
     );
   }
-  return <EntryForm key={e.n} b={b} book={book} line={e.kind === 'edit' ? e.line : null} />;
+  const line = e.kind === 'edit' ? e.line : null;
+  const upcomingRepeat = !!line?.repeat && line.on > b.today;
+  return (
+    <div className="cp-sheet-embed" key={e.n}>
+      <EntryPad
+        variant="sheet"
+        active={!!book.entry}
+        currency={b.currency}
+        entry={b.entry}
+        onEntry={book.setEntryDefault}
+        enteredReady={b.enteredReady}
+        categories={b.categories}
+        today={b.today}
+        line={line}
+        busy={book.busy}
+        onSubmit={async (body, said) => {
+          // A new move goes through the outbox and the sheet closes at once;
+          // a change to one already there is waited for.
+          const ok = line ? await book.write({ ...body, action: 'edit', id: line.id }, said) : await book.outbox.log(body, said);
+          if (ok) book.closeEntry();
+          return ok;
+        }}
+        onDelete={line ? () => { void book.write({ action: 'delete', id: line.id }, 'Deleted.').then((ok) => { if (ok) book.closeEntry(); }); } : undefined}
+        deleteLabel={upcomingRepeat ? 'Tap again: delete it and stop the repeat' : undefined}
+      />
+    </div>
+  );
 }
 
 function BalanceForm({ b, book, first }: { b: BookPayload; book: Book; first?: boolean }) {
@@ -392,81 +519,5 @@ function BalanceForm({ b, book, first }: { b: BookPayload; book: Book; first?: b
       <button className="cp-btn primary block cp2-bk-save" disabled={book.busy || amount.trim() === ''} onClick={() => void save()}>{first ? 'Start' : 'Save'}</button>
       {!first && <button className="cp-btn block cp2-bk-save" onClick={book.closeEntry}>Back</button>}
     </>
-  );
-}
-
-function EntryForm({ b, book, line }: { b: BookPayload; book: Book; line: BookLine | null }) {
-  const [kind, setKind] = useState<'out' | 'in'>(line && line.amount > 0 ? 'in' : 'out');
-  const [amount, setAmount] = useState(line ? String(Math.abs(line.amount)) : '');
-  const [category, setCategory] = useState<string | null>(line?.category ?? null);
-  const [typing, setTyping] = useState(false);
-  const [note, setNote] = useState(line?.note ?? '');
-  const [on, setOn] = useState(line?.on ?? b.today);
-  const [repeat, setRepeat] = useState<'week' | 'month' | null>(parseRepeat(line?.repeat)?.every ?? null);
-  const [sure, setSure] = useState(false);
-  const yesterday = addDay(b.today, -1);
-  const cats = kind === 'out' ? b.categories.out : b.categories.in;
-  const shown = category && !cats.includes(category) ? [category, ...cats] : cats;
-  const n = Number(amount.replace(/,/g, ''));
-  const what = note.trim() || category || '';
-  const pendingNote = on > b.today ? `Pending until ${bookDayLabel(on, b.today)}: in the list, not in the balance, until then.` : null;
-  const upcomingRepeat = !!line && !!line.repeat && line.on > b.today;
-
-  const save = () => book.write(
-    { action: line ? 'edit' : 'add', id: line?.id, kind, amount, on, category, note, repeat },
-    line ? 'Saved.' : `Logged ${kind === 'out' ? '−' : '+'}${bookMoney(Number.isFinite(n) ? n : 0, b.currency)}${what ? ` · ${what}` : ''}${on > b.today ? `, pending until ${bookDayLabel(on, b.today)}` : ''}.`,
-  ).then((ok) => { if (ok) book.closeEntry(); });
-  const remove = () => {
-    if (!line) return;
-    if (!sure) { setSure(true); return; }
-    void book.write({ action: 'delete', id: line.id }, 'Deleted.').then((ok) => { if (ok) book.closeEntry(); });
-  };
-
-  return (
-    <div className="cp-sheet-embed cp2-bk-form">
-      <div className="cp2-bk-seg wide" role="group" aria-label="Money in or out">
-        <button className={kind === 'out' ? 'on' : ''} aria-pressed={kind === 'out'} onClick={() => { setKind('out'); setCategory(null); }}>Spent</button>
-        <button className={kind === 'in' ? 'on' : ''} aria-pressed={kind === 'in'} onClick={() => { setKind('in'); setCategory(null); }}>Came in</button>
-      </div>
-      <label className="cp2-bk-amtrow">
-        <span className="mark">{currencyMark(b.currency)}</span>
-        <input className="cp2-bk-amt big" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" aria-label={`Amount in ${b.currency}`} autoFocus={!line} />
-      </label>
-
-      <div className="cp-label cp2-bk-flabel">Category</div>
-      <div className="cp-chips cp2-bk-chips">
-        {shown.map((c) => (
-          <button key={c} className={`cp-fchip${category === c ? ' active' : ''}`} aria-pressed={category === c} onClick={() => setCategory(category === c ? null : c)}>{c}</button>
-        ))}
-        {!typing && <button className="cp-fchip" onClick={() => setTyping(true)}>New…</button>}
-      </div>
-      {typing && <input className="cp-input cp2-bk-gap" value={category ?? ''} maxLength={40} onChange={(e) => setCategory(e.target.value || null)} placeholder="Category" aria-label="New category" autoFocus />}
-
-      <input className="cp-input cp2-bk-gap" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" />
-
-      <div className="cp-label cp2-bk-flabel">Day</div>
-      <div className="cp-chips cp2-bk-chips">
-        <button className={`cp-fchip${on === b.today ? ' active' : ''}`} aria-pressed={on === b.today} onClick={() => setOn(b.today)}>Today</button>
-        <button className={`cp-fchip${on === yesterday ? ' active' : ''}`} aria-pressed={on === yesterday} onClick={() => setOn(yesterday)}>Yesterday</button>
-        <input type="date" className={`cp-fchip cp2-bk-date${on !== b.today && on !== yesterday ? ' active' : ''}`} value={on} onChange={(e) => e.target.value && setOn(e.target.value)} aria-label="Another day" />
-      </div>
-      {pendingNote && <p className="cp-help">{pendingNote}</p>}
-
-      <div className="cp-label cp2-bk-flabel">Repeats</div>
-      <div className="cp-chips cp2-bk-chips">
-        <button className={`cp-fchip${!repeat ? ' active' : ''}`} aria-pressed={!repeat} onClick={() => setRepeat(null)}>Once</button>
-        <button className={`cp-fchip${repeat === 'week' ? ' active' : ''}`} aria-pressed={repeat === 'week'} onClick={() => setRepeat('week')}>Weekly</button>
-        <button className={`cp-fchip${repeat === 'month' ? ' active' : ''}`} aria-pressed={repeat === 'month'} onClick={() => setRepeat('month')}>Monthly</button>
-      </div>
-      {repeat && <p className="cp-help">The next one is written ahead, as pending, and counts on its day.</p>}
-      {line?.repeat && !repeat && <p className="cp-help">Saving stops the repeat: the upcoming ones go, the past ones stay.</p>}
-
-      <button className="cp-btn primary block cp2-bk-save" disabled={book.busy || !(n > 0) || !(category || note.trim())} onClick={() => void save()}>{line ? 'Save' : 'Log it'}</button>
-      {line && (
-        <button className="cp-btn block cp2-bk-save cp2-bk-del" disabled={book.busy} onClick={remove}>
-          {sure ? (upcomingRepeat ? 'Tap again: delete it and stop the repeat' : 'Tap again to delete') : 'Delete'}
-        </button>
-      )}
-    </div>
   );
 }

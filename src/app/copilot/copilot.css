@@ -1719,20 +1719,76 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
   font-size: 28px; font-weight: 400; line-height: 1; box-shadow: var(--lift); cursor: pointer;
 }
 
-/* The add sheet */
-.cp-root[data-theme="soft"] .cp2-bk-amtrow { display: flex; align-items: baseline; gap: 6px; padding: 4px 4px 12px; border-bottom: 2px solid var(--line); margin-bottom: 6px; }
-.cp-root[data-theme="soft"] .cp2-bk-amtrow:focus-within { border-bottom-color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-bk-amtrow .mark { font-family: var(--display); font-size: 26px; font-weight: 600; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-bk-amt.big {
-  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 0;
-  font-family: var(--display); font-size: 36px; font-weight: 700; letter-spacing: -0.6px; color: var(--ink);
-}
-.cp-root[data-theme="soft"] .cp2-bk-flabel { margin: 14px 0 8px; }
-.cp-root[data-theme="soft"] .cp2-bk-chips .cp-fchip { padding: 8px 13px; font-size: 12.5px; }
-.cp-root[data-theme="soft"] .cp2-bk-date { font: inherit; font-size: 12.5px; font-weight: 600; min-width: 0; max-width: 150px; }
+/* The balance sheet */
 .cp-root[data-theme="soft"] .cp2-bk-save { margin-top: 18px; }
 .cp-root[data-theme="soft"] .cp2-bk-save + .cp2-bk-save { margin-top: 10px; }
-.cp-root[data-theme="soft"] .cp2-bk-del { color: #A85F2E; }
 .cp-root[data-theme="soft"] .cp2-bk-balrow { align-items: center; margin-top: 4px; }
 .cp-root[data-theme="soft"] .cp2-bk-balrow .cp2-bk-amt { flex: 1; min-width: 0; font-size: 18px; font-weight: 700; }
 .cp-root[data-theme="soft"] .cp2-bk-cur { flex: none; font-weight: 700; color: var(--muted); padding: 0 6px; }
+
+/* Category pictures on each row (money/book.ts categoryIcon): a tinted tile, blue out, green in. */
+.cp-root[data-theme="soft"] .cp2-bk-ico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-bk-ico svg { width: 18px; height: 18px; stroke: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-bk-ico.in { background: var(--ai-tint); }
+.cp-root[data-theme="soft"] .cp2-bk-ico.in svg { stroke: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-bk-line.read .cp2-bk-ico { background: var(--line); }
+.cp-root[data-theme="soft"] .cp2-bk-line.read .cp2-bk-ico svg { stroke: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bk-line.read .cp2-bk-ico.in svg { stroke: var(--ai); }
+
+/* Moves on the phone the server has not confirmed yet */
+.cp-root[data-theme="soft"] .cp2-bk-unsent { cursor: default; }
+.cp-root[data-theme="soft"] .cp2-bk-unsent .s { white-space: normal; }
+.cp-root[data-theme="soft"] .cp2-bk-unsent.refused .s { color: #A85F2E; }
+.cp-root[data-theme="soft"] .cp2-bk-export { display: block; margin: 22px 26px 0; font-size: 12px; font-weight: 600; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+
+/* The add sheet sits over the nav, so it needs none of the nav's clearance: the keypad takes it. */
+.cp-root[data-theme="soft"] .cp-sheet.cp2-bk-sheet { max-height: 94%; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+
+/* The keypad form (v2/EntryPad.tsx) */
+.cp-root[data-theme="soft"] .cp2-pad { display: flex; flex-direction: column; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-pad .cp2-bk-seg.wide { margin-bottom: 0; }
+.cp-root[data-theme="soft"] .cp2-pad .cp-help { margin: -4px 2px 0; }
+.cp-root[data-theme="soft"] .cp2-pad-amount { display: flex; align-items: center; gap: 8px; padding: 2px 4px 8px; border-bottom: 2px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-pad-cur { position: relative; flex: none; display: inline-flex; align-items: center; gap: 3px; font-family: var(--display); font-size: 26px; font-weight: 600; color: var(--muted); cursor: pointer; }
+/* The select covers the mark, invisible: the mark is what shows, the phone's own list is what opens. */
+.cp-root[data-theme="soft"] .cp2-pad-cur select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+.cp-root[data-theme="soft"] .cp2-pad-cur i { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--dim); margin-top: 4px; }
+.cp-root[data-theme="soft"] .cp2-pad-num { flex: 1; min-width: 0; font-family: var(--display); font-size: 38px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.15; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-root[data-theme="soft"] .cp2-pad-num.empty { color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-pad-conv { margin: -4px 4px 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
+/* Two rows that scroll sideways together: the most used categories in view, the rest a swipe away, and the keypad still on screen. */
+.cp-root[data-theme="soft"] .cp2-pad-cats {
+  display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto); gap: 8px; justify-content: start;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; margin: 0 -24px; padding: 2px 24px 4px;
+}
+.cp-root[data-theme="soft"] .cp2-pad-cats::-webkit-scrollbar { display: none; }
+.cp-root[data-theme="soft"] .cp2-pad-cat {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border: 0; border-radius: 999px; padding: 8px 13px 8px 10px;
+  background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.cp-root[data-theme="soft"] .cp2-pad-cat svg { width: 16px; height: 16px; stroke: var(--blue); flex: none; }
+.cp-root[data-theme="soft"] .cp2-pad-cat.in svg { stroke: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-pad-cat.on { background: var(--blue); color: #fff; box-shadow: var(--lift); }
+.cp-root[data-theme="soft"] .cp2-pad-cat.on svg { stroke: #fff; }
+.cp-root[data-theme="soft"] .cp2-pad-when { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.cp-root[data-theme="soft"] .cp2-pad-when .cp-fchip { flex: none; padding: 8px 12px; font-size: 12.5px; }
+.cp-root[data-theme="soft"] .cp2-pad-date { position: relative; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-pad-date input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-pad-rep { font: inherit; font-size: 12.5px; font-weight: 600; appearance: none; -webkit-appearance: none; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-pad-field { padding: 11px 14px; }
+.cp-root[data-theme="soft"] .cp2-pad-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cp-root[data-theme="soft"] .cp2-pad-key {
+  height: 48px; border: 0; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink);
+  font-family: var(--display); font-size: 21px; font-weight: 600; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.cp-root[data-theme="soft"] .cp2-pad-key:active { background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-pad-key svg { width: 22px; height: 22px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+.cp-root[data-theme="soft"] .cp2-pad-go { margin-top: 2px; }
+.cp-root[data-theme="soft"] .cp2-pad-del { color: #A85F2E; }
+
+/* The Log money page (copilot2/log): the pad on the page, no nav under it */
+.cp-root[data-theme="soft"] .cp2-log .cp-content { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+.cp-root[data-theme="soft"] .cp2-log-main .cp2-pad { margin: 6px 22px 0; }
+.cp-root[data-theme="soft"] .cp2-log-main .cp2-pad-cats { margin: 0 -22px; padding-left: 22px; padding-right: 22px; }
+.cp-root[data-theme="soft"] .cp2-log-main .cp2-pad-key { height: 54px; }
+.cp-root[data-theme="soft"] .cp2-log .cp-capacity { text-decoration: none; }

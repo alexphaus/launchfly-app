@@ -1224,6 +1224,44 @@ rows), and every reply to a move carries the new one.
 the grid; another month opens with nothing picked. "Download everything as CSV"
 sits under the list only.
 
+**Said, not typed** (`money/spoken.ts`, `v2/VoiceLog.tsx`). The header's
+corner on every tab is a mic, where the capacity pill was: capacity is a
+setting changed about never, and it is in You → Settings; logging money is what
+the app is opened for several times a day. Say "coffee 130", "grab 240
+yesterday", "salary came in 50,000" or "40 euros lunch": the words show under
+the greeting as they are heard, and the add sheet opens filled in with them
+quoted on top — nothing is logged until "Log it", so a mishearing is caught on
+the screen. The Log money page has the same mic, and fills its pad in place.
+The words come from the browser's own speech recognition (the Web Speech API;
+on Android Chrome, Google's speech service, the one the keyboard's mic uses):
+no per-minute cost and no audio through our server. Where there is none
+(Firefox) the corner is a + that opens the sheet.
+
+`parseSpoken` reads the words with no model, so nothing it fills in was not
+said (invariant 2). The amount is a figure said — digits first, so in "one
+coffee 130" it is 130; "5k", "fifteen hundred" and "1:50" (how recognition
+writes "one fifty") are read; past a billion it is left blank rather than
+wrong. The direction is a word said ("came in", "paid me", "received") or a
+category that is only ever money in. The day is a word said: yesterday,
+kahapon, "three days ago", last Monday, "September 12", "the 28th" (last
+month's when this month has not reached it). The category is one of the
+person's own that was named, plural or not; else the one of theirs whose
+picture (`wordIcon`, the list's pictures matched from the start of a word, so
+"sweater" is not "eat") the words carry — only when exactly one does, since
+two is a guess. What else was said is the note. A currency counts only beside
+the amount, and a word only after it: "I won 500" is not Korean money. Two
+amounts in one breath fill in the first and say the other ("Also heard ₱50:
+log it next"). A currency said is that move's only; the next goes back to the
+default.
+
+Every way the mic stops is said (invariant 13): blocked in site settings, no
+connection (recognition needs one; the typed move still queues offline), no mic,
+nothing heard. Where the move can still be typed, the sheet opens for it. The
+mic loads the book as it starts listening, so a sheet opened from the Path has
+the categories to read against; before the book arrives it says "Opening your
+book…". Playwright has no mic: tests put a stand-in `SpeechRecognition` on the
+page with `addInitScript` that "says" a set phrase.
+
 **Logged in another currency.** Tap the ₱ on the keypad: a select laid over the
 mark. The choice is the default for the next move, kept on the account
 (`finance.book.entry`, `setEntryCurrency`) so the shortcut's first HTML already

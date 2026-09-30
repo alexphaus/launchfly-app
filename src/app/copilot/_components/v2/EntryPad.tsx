@@ -13,6 +13,9 @@
 // the next one, and each is converted into the book's on its own day
 // (bookstore.ts movedColumns). Shared by the Money tab's sheet and the Log
 // money page.
+//
+// A move said to the mic (VoiceLog.tsx) arrives as `spoken` and fills the pad
+// in; the words heard are shown above it, and nothing is logged until "Log it".
 import { useEffect, useRef, useState } from 'react';
 import {
   bookDayLabel, bookMoney, categoryIcon, cleanAmount, parseRepeat, safeAfter, safeAfterLine, safeLine, type BookLine, type SafeToSpend,
@@ -20,7 +23,8 @@ import {
 import type { EntryDefault } from '@/lib/copilot/money/bookstore';
 import { currencyMark } from '@/lib/copilot/money/fx';
 import { addDay } from '@/lib/copilot/money/ledger';
-import { BookGlyph } from './icons2';
+import type { SpokenMove } from '@/lib/copilot/money/spoken';
+import { BookGlyph, IconMic } from './icons2';
 
 export interface EntryPadProps {
   /** The book's currency. */
@@ -47,6 +51,8 @@ export interface EntryPadProps {
   safe?: SafeToSpend | null;
   /** On screen: the amount takes focus when it becomes so. A sheet's body stays mounted after it closes, to slide out. */
   active?: boolean;
+  /** A move said to the mic, read into the fields: the pad starts from it. Read once, as the pad appears. */
+  spoken?: SpokenMove | null;
 }
 
 const OFFERED = ['EUR', 'USD', 'GBP', 'PHP'];
@@ -54,19 +60,21 @@ const OFFERED = ['EUR', 'USD', 'GBP', 'PHP'];
 export default function EntryPad(p: EntryPadProps) {
   const { line, currency } = p;
   const fromEntered = line?.entered && line.entered.currency !== currency ? line.entered : null;
-  const [kind, setKind] = useState<'out' | 'in'>(line && line.amount > 0 ? 'in' : 'out');
-  const [amount, setAmount] = useState(line ? String(Math.abs(fromEntered?.amount ?? line.amount)) : '');
-  const [typedIn, setTypedIn] = useState<string>(fromEntered?.currency ?? (line ? currency : p.entry?.currency ?? currency));
-  const [category, setCategory] = useState<string | null>(line?.category ?? null);
+  const [spoken, setSpoken] = useState<SpokenMove | null>(line ? null : p.spoken ?? null);
+  const [kind, setKind] = useState<'out' | 'in'>(line ? (line.amount > 0 ? 'in' : 'out') : spoken?.kind ?? 'out');
+  const [amount, setAmount] = useState(line ? String(Math.abs(fromEntered?.amount ?? line.amount)) : spoken?.amount ?? '');
+  const [typedIn, setTypedIn] = useState<string>(fromEntered?.currency ?? (line ? currency : spoken?.currency ?? p.entry?.currency ?? currency));
+  const [category, setCategory] = useState<string | null>(line?.category ?? spoken?.category ?? null);
   const [typing, setTyping] = useState(false);
-  const [note, setNote] = useState(line?.note ?? '');
-  const [on, setOn] = useState(line?.on ?? p.today);
+  const [note, setNote] = useState(line?.note ?? spoken?.note ?? '');
+  const [on, setOn] = useState(line?.on ?? spoken?.on ?? p.today);
   const [repeat, setRepeat] = useState<'week' | 'month' | null>(parseRepeat(line?.repeat)?.every ?? null);
   const [sure, setSure] = useState(false);
   const [busy, setBusy] = useState(false);
 
   // The default can arrive after the pad is drawn (the book loaded behind it).
-  const touched = useRef(false);
+  // A currency said to the mic is this move's, and stands.
+  const touched = useRef(!!spoken?.currency);
   useEffect(() => {
     if (line || touched.current) return;
     setTypedIn(p.entry?.currency ?? currency);
@@ -106,7 +114,10 @@ export default function EntryPad(p: EntryPadProps) {
 
   const amountRef = useRef<HTMLInputElement>(null);
   const reset = () => {
-    setAmount(''); setCategory(null); setNote(''); setTyping(false); setOn(p.today); setRepeat(null); setKind('out');
+    setAmount(''); setCategory(null); setNote(''); setTyping(false); setOn(p.today); setRepeat(null); setKind('out'); setSpoken(null);
+    // Back to the default: a currency said to the mic was that move's, and one picked with the ₱ is the default already.
+    touched.current = false;
+    setTypedIn(p.entry?.currency ?? currency);
   };
 
   const submit = async () => {
@@ -120,11 +131,14 @@ export default function EntryPad(p: EntryPadProps) {
   };
 
   // The keyboard up as the pad appears — focus without scrolling, so the
-  // sheet sliding in is not dragged along by the field.
+  // sheet sliding in is not dragged along by the field. Not over a move said
+  // with its amount: the keyboard would cover what the mic filled in, which is
+  // the part to check.
   const active = p.active !== false;
+  const saidAmount = !!p.spoken?.amount;
   useEffect(() => {
-    if (active && !line) amountRef.current?.focus({ preventScroll: true });
-  }, [active, line]);
+    if (active && !line && !saidAmount) amountRef.current?.focus({ preventScroll: true });
+  }, [active, line, saidAmount]);
 
   const pickCurrency = async (code: string) => {
     touched.current = true;
@@ -136,6 +150,19 @@ export default function EntryPad(p: EntryPadProps) {
 
   return (
     <div className={`cp2-pad cp2-pad-${p.variant}`}>
+      {spoken && (
+        <div className="cp2-pad-heard">
+          <IconMic />
+          <div>
+            <q>{spoken.heard}</q>
+            {(!spoken.amount || spoken.more.length > 0) && (
+              <span>
+                {!spoken.amount ? 'No amount heard: type it.' : `Also heard ${spoken.more.map((m) => bookMoney(m, typedIn)).join(', ')}: log ${spoken.more.length === 1 ? 'it' : 'them'} next.`}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       <div className="cp2-bk-seg wide" role="group" aria-label="Money in or out">
         <button className={kind === 'out' ? 'on' : ''} aria-pressed={kind === 'out'} onClick={() => { setKind('out'); setCategory(null); }}>Spent</button>
         <button className={kind === 'in' ? 'on' : ''} aria-pressed={kind === 'in'} onClick={() => { setKind('in'); setCategory(null); }}>Came in</button>

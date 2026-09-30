@@ -561,6 +561,18 @@ export function categoryIcon(category: string | null | undefined, text: string, 
   return amount > 0 ? 'in' : 'out';
 }
 
+/**
+ * The same pictures for words said out loud (money/spoken.ts), each matched
+ * from the start of a word: a picture on a list row is a glance, but one that
+ * picks a category has to be surer — "sweater" is not "eat", "vegas" not "gas".
+ */
+const ICON_WORD_STARTS: Array<[BookIcon, RegExp]> = ICON_WORDS.map(([icon, re]) => [icon, new RegExp(`\\b(?:${re.source})`)]);
+export function wordIcon(text: string): BookIcon | null {
+  const h = text.toLowerCase();
+  for (const [icon, re] of ICON_WORD_STARTS) if (re.test(h)) return icon;
+  return null;
+}
+
 /* ─── The keypad ──────────────────────────────────────────────────────────── */
 
 /**

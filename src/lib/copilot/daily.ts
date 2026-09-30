@@ -10,6 +10,7 @@ import { isNightlyPass, type NightlyOutput, type NightlyStep } from './nightly';
 import { reconcileReplies } from './outcomes';
 import { finishNightlyRun, markNightlyStep } from './store';
 import { refreshFinance } from './money/store';
+import { writeRepeatsDue } from './money/bookstore';
 import { ADAPTERS, runSupply, type SupplyResult } from './supply';
 
 export interface DailyResult {
@@ -20,8 +21,11 @@ export interface DailyResult {
   brief: Pick<BriefResult, 'agent' | 'fellBack' | 'graded' | 'pushed' | 'unsaved'> & { skipped?: string };
   /** The Path's plan. Only the nightly pass redraws it; "Find new matches" leaves it alone. */
   roadmap?: NightlyRoadmap | null;
-  /** Runway settled from the statements before anything reads it. An error here is also said on the Runway sheet, whose load retries the same write. */
-  money?: { settled: boolean } | { error: string };
+  /**
+   * Runway settled from the statements before anything reads it. An error here is also said on the Runway sheet, whose load retries the same write.
+   * `repeats` is the money book's repeats written ahead of their day, or why they were not — also said on the Money tab, which retries.
+   */
+  money?: { settled: boolean; repeats?: number | string } | { error: string };
 }
 
 export interface JobsThenBrief {
@@ -81,7 +85,11 @@ export async function runDaily(
   // Runway first: the plan and the brief both read it off the finance row, and
   // a row left behind by its statements drew a plan with no runway in it while
   // the bank card beside it knew the burn to the peso.
-  try { out.money = { settled: !!(await refreshFinance(profileId)) }; }
+  // The book's repeats before that: a rent whose day came tonight is cash gone.
+  let repeats: number | string;
+  try { const r = await writeRepeatsDue(profileId); repeats = r.error ?? r.written; }
+  catch (e) { repeats = e instanceof Error ? e.message : String(e); }
+  try { out.money = { settled: !!(await refreshFinance(profileId)), repeats }; }
   catch (e) { out.money = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] money settle failed', e); }
   if (opts.supply !== false) {
     await opts.onStep?.('supply');

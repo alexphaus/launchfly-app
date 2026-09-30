@@ -1,11 +1,14 @@
 'use client';
-// The four-tab shell at /copilot2. One question per tab:
+// The four-tab shell at /copilot2 — five tabs since Money, the name kept. One
+// question per tab:
 //
 //   Path      where am I, and what moves it: what was done above, "you are
 //             here" with the one thing to do now, what comes next below
 //   Matches   who is worth contacting — everything it found, filtered
 //   Work      what am I building: the offer, the path to money, the agents
 //             running parts of it, the projects handed over
+//   Money     where did it go: log a move, the list under the balance, the
+//             calendar (MoneyTab.tsx says why this is a tab and not a sheet)
 //   You       how am I doing: money, runway, deep work, the week read back,
 //             goals, settings
 //
@@ -24,7 +27,7 @@
 // would throw away the only comparison worth having. So the data, the routes,
 // the sheets and every action are shared — useCopilot — and only the arrangement
 // is new. Both can be installed and lived with; the one that gets opened wins.
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView } from '@/lib/copilot/nightly';
 import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
@@ -34,15 +37,18 @@ import SheetContent from '../SheetContent';
 import type { Tab2 } from '../shared';
 import { sheetKey, useCopilot } from '../useCopilot';
 import { useDerived } from './derive';
-import { IconMatches, IconPath, IconWork, IconYou } from './icons2';
+import { IconMatches, IconMoney, IconPath, IconWork, IconYou } from './icons2';
 import PathTab from './PathTab';
 import MatchesTab from './MatchesTab';
 import WorkTab from './WorkTab';
+import MoneyTab, { BookFab, BookSheet, useBook } from './MoneyTab';
 import YouTab from './YouTab';
 
-const TABS: Tab2[] = ['path', 'matches', 'work', 'you'];
-const LABEL: Record<Tab2, string> = { path: 'Path', matches: 'Matches', work: 'Work', you: 'You' };
-const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, matches: IconMatches, work: IconWork, you: IconYou };
+const TABS: Tab2[] = ['path', 'matches', 'work', 'money', 'you'];
+const LABEL: Record<Tab2, string> = { path: 'Path', matches: 'Matches', work: 'Work', money: 'Money', you: 'You' };
+const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, matches: IconMatches, work: IconWork, money: IconMoney, you: IconYou };
+/** After the last move logged in a burst, the rest of the app re-reads runway once, not once per coffee. */
+const HOME_AFTER_BOOK_MS = 4_000;
 /**
  * Every tab name either shell has ever used, mapped onto this one. A push or an
  * installed shortcut carrying `?tab=working` lands somewhere sensible here too,
@@ -52,12 +58,22 @@ const ALIAS: Record<string, Tab2> = {
   path: 'path', today: 'path', now: 'path',
   matches: 'matches', pipeline: 'matches', opportunities: 'matches', signals: 'matches',
   work: 'work',
+  money: 'money', book: 'money', cash: 'money',
   you: 'you', working: 'you',
 };
 
 export default function CopilotApp2({ initial }: { initial: HomeData }) {
-  const { home, tab, setTab, actions, sheet, sheetOpen, dismissSheets, briefing, finding, toast, mainRef } =
+  const { home, tab, setTab, actions, sheet, sheetOpen, dismissSheets, briefing, finding, toast, mainRef, say, refresh, arrival, clearArrival } =
     useCopilot<Tab2>(initial, { initialTab: 'path', alias: ALIAS });
+  // A logged move changes runway, which the other tabs read off the home load.
+  const homeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onMoved = useCallback(() => {
+    if (homeTimer.current) clearTimeout(homeTimer.current);
+    homeTimer.current = setTimeout(() => {
+      refresh().catch((e: unknown) => say(`Logged, but the other tabs did not update: ${e instanceof Error ? e.message : String(e)}`));
+    }, HOME_AFTER_BOOK_MS);
+  }, [refresh, say]);
+  const book = useBook(say, onMoved);
   const d = useDerived(home);
   const status = d.status[tab];
   const nightly = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? nightlyView(home.nightly.run, new Date()) : null;
@@ -91,6 +107,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
         {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
         {tab === 'matches' && <MatchesTab home={home} d={d} actions={actions} finding={finding} stage={matchStage} onStage={setMatchStage} />}
         {tab === 'work' && <WorkTab home={home} d={d} actions={actions} briefing={briefing} />}
+        {tab === 'money' && <MoneyTab book={book} actions={actions} say={say} arrival={arrival} clearArrival={clearArrival} />}
         {tab === 'you' && <YouTab home={home} d={d} actions={actions} openMatches={openMatches} />}
       </main>
 
@@ -113,8 +130,13 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
         })}
       </nav>
 
+      {tab === 'money' && <BookFab book={book} />}
+
       <Sheet open={sheetOpen} onClose={dismissSheets}>
         {sheet && <SheetContent key={sheetKey(sheet)} sheet={sheet} home={home} actions={actions} briefing={briefing} />}
+      </Sheet>
+      <Sheet open={!!book.entry} onClose={book.closeEntry}>
+        <BookSheet book={book} />
       </Sheet>
 
       {toast && <div className="cp-toast" role="status">{toast}</div>}

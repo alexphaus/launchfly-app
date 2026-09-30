@@ -108,10 +108,12 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
   const [burn, setBurn] = useState(f.typed_in?.monthly_burn ? String(f.typed_in.monthly_burn.amount) : f.monthly_burn?.toString() ?? '');
   const [burnCurrency, setBurnCurrency] = useState(f.typed_in?.monthly_burn?.currency ?? main);
   const [busy, setBusy] = useState(false);
+  // The Money tab's balance is the cash (ledger.ts financeFromRead); it moves there, with each move logged.
+  const fromBook = f.source?.cash === 'book' || !!f.book;
   const save = async () => {
     setBusy(true);
     await actions.saveFinance({
-      cash: cash === '' ? undefined : Number(cash),
+      cash: cash === '' || fromBook ? undefined : Number(cash),
       monthly_burn: burn === '' ? undefined : Number(burn),
       cash_currency: cashCurrency,
       burn_currency: burnCurrency,
@@ -119,7 +121,8 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
     setBusy(false);
   };
   // Previewed only when both are in the main currency: anything else is converted on save, at the rate the server has.
-  const preview = cashCurrency === main && burnCurrency === main
+  const preview = fromBook ? (burnCurrency === main && f.cash != null ? computeRunwayMonths({ monthly_burn: Number(burn) || undefined, cash: f.cash }) : null)
+    : cashCurrency === main && burnCurrency === main
     ? computeRunwayMonths({ monthly_burn: Number(burn) || undefined, cash: cash === '' ? undefined : Number(cash) })
     : null;
 
@@ -165,13 +168,18 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
         ? <div className="cp-note">From your bank statements: {fromBank.join('; ')}. Type a number to use yours instead — a newer statement replaces it again.</div>
         : !read && home.money?.ready && <div className="cp-note">Or skip the typing: <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>upload a bank statement</button> and both are read off it.</div>}
 
-      <div className="cp-field">
-        <label className="cp-label" htmlFor="cp2-rw-cash">Cash on hand</label>
-        <div className="cp-input-row">
-          <input id="cp2-rw-cash" className="cp-input" inputMode="decimal" autoFocus={askCash || !fromStatementBurn} value={cash} onChange={(e) => setCash(e.target.value)} placeholder="Cash" />
-          <CurrencyPick value={cashCurrency} options={options} onChange={setCashCurrency} label="Currency of the cash" />
+      {fromBook ? (
+        // No cash field: one typed here would be overwritten by the book on the next load.
+        f.source?.cash === 'book' && !f.typed_in?.cash && <div className="cp-note">Cash is your balance on the Money tab. Log a move there and runway follows it.</div>
+      ) : (
+        <div className="cp-field">
+          <label className="cp-label" htmlFor="cp2-rw-cash">Cash on hand</label>
+          <div className="cp-input-row">
+            <input id="cp2-rw-cash" className="cp-input" inputMode="decimal" autoFocus={askCash || !fromStatementBurn} value={cash} onChange={(e) => setCash(e.target.value)} placeholder="Cash" />
+            <CurrencyPick value={cashCurrency} options={options} onChange={setCashCurrency} label="Currency of the cash" />
+          </div>
         </div>
-      </div>
+      )}
       <div className="cp-field">
         <label className="cp-label" htmlFor="cp2-rw-burn">Spent a month</label>
         <div className="cp-input-row">
@@ -180,7 +188,7 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
         </div>
         <div className="cp-help">
           {preview != null ? `That is ${preview} months of runway.`
-            : cashCurrency !== main || burnCurrency !== main ? `Counted in ${main}: converted at the newest ${FX_SOURCE} when you save.`
+            : (!fromBook && cashCurrency !== main) || burnCurrency !== main ? `Counted in ${main}: converted at the newest ${FX_SOURCE} when you save.`
             : 'Enter both to see runway.'}
         </div>
       </div>

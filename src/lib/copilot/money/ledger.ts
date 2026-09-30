@@ -50,6 +50,10 @@ export interface LedgerTx {
   accountId: string | null;
   /** The win this deposit was recorded as, once it was. */
   outcomeId: string | null;
+  /** When the row was written. The book's balance counts logged rows written after it was set. */
+  createdAt?: string;
+  /** Logged in the Money tab rather than read off a statement. */
+  book?: boolean;
   /** As printed. Carried for the note a recorded win keeps; never sent to the screen. */
   description?: string;
 }
@@ -327,7 +331,10 @@ export interface MoneyReadInput {
 
 /** Null when there are no rows: an empty read is not a read. */
 export function moneyRead(input: MoneyReadInput): MoneyRead | null {
-  if (!input.txs.length) return null;
+  // A row dated after today is pending — a bill logged ahead, a repeat's next
+  // one — and money that has not moved is in no figure.
+  const effective = input.txs.filter((t) => t.on <= input.today);
+  if (!effective.length) return null;
 
   // One currency per figure. With a main currency, every row in another is
   // converted into it at the ECB rate for its own day; a row whose currency
@@ -338,14 +345,14 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
   // down on a first load), the figures are in the pile with the most rows.
   const codeOf = (c: string | null) => (c ? toCode(c) ?? c.toUpperCase() : '');
   const tally = new Map<string, number>();
-  for (const t of input.txs) tally.set(codeOf(t.currency), (tally.get(codeOf(t.currency)) ?? 0) + 1);
+  for (const t of effective) tally.set(codeOf(t.currency), (tally.get(codeOf(t.currency)) ?? 0) + 1);
   const main = input.main ? toCode(input.main) ?? input.main.toUpperCase() : null;
   const why = new Map<string, string>();
   const converted = new Map<string, number>();
   let pool: LedgerTx[] = [];
   let figures = '';
   if (main) {
-    for (const t of input.txs) {
+    for (const t of effective) {
       const c = codeOf(t.currency);
       if (!c) continue;
       if (c === main) { pool.push(t); continue; }
@@ -358,7 +365,7 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
   if (!figures) {
     converted.clear();
     figures = [...tally.entries()].filter(([c]) => c).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
-    pool = input.txs.filter((t) => codeOf(t.currency) === figures);
+    pool = effective.filter((t) => codeOf(t.currency) === figures);
   }
   // With no main currency asked for, the figures' own currency is the main one.
   const inMain = main ? figures === main : figures !== '';
@@ -579,14 +586,28 @@ export function financeMark(code: string): string {
  * Returns `prev` itself when nothing changes, so the home screen can settle the
  * row on every load and write only when it moved.
  */
-export function financeFromRead(prev: Finance, read: MoneyRead | null, nowIso: string, opts: { main?: string; latest?: LatestRate } = {}): Finance {
+export function financeFromRead(
+  prev: Finance,
+  read: MoneyRead | null,
+  nowIso: string,
+  opts: { main?: string; latest?: LatestRate; book?: number | null } = {},
+): Finance {
   const main = opts.main ?? toCode(prev.currency) ?? (read ? toCode(read.currency) : null) ?? 'USD';
   const prevCode = toCode(prev.currency) ?? main;
   const next: Finance = { ...prev, source: { ...(prev.source ?? {}) } };
 
   const typedIn: NonNullable<Finance['typed_in']> = { ...(prev.typed_in ?? {}) };
+  // The money book's balance (book.ts bookBalance) is the cash, ahead of any
+  // statement: the person said what they had and has logged every move since,
+  // which is newer than any file. It is kept as typed in the book's currency
+  // and converted below like any number typed in another.
+  const book = prev.book && opts.book != null ? { amount: opts.book, currency: toCode(prev.book.currency) ?? prev.book.currency } : null;
+  const bookGone = !book && prev.source?.cash === 'book';
+  if (book) { next.source!.cash = 'book'; delete next.cash_on; typedIn.cash = { amount: book.amount, currency: book.currency }; }
+  else if (bookGone) { delete next.source!.cash; delete next.cash; delete typedIn.cash; }
   for (const f of ['cash', 'monthly_burn'] as const) {
-    if (prev.source?.[f] === 'statement') { delete typedIn[f]; continue; }
+    if (next.source?.[f] === 'statement') { delete typedIn[f]; continue; }
+    if (f === 'cash' && bookGone) continue;
     const orig = typedIn[f] ?? (prev[f] != null ? { amount: prev[f] as number, currency: prevCode } : null);
     if (!orig) continue;
     if (orig.currency === main) { next[f] = orig.amount; delete typedIn[f]; continue; }
@@ -606,7 +627,7 @@ export function financeFromRead(prev: Finance, read: MoneyRead | null, nowIso: s
     const typedOn = prev.typed_at?.slice(0, 10) ?? null;
     const newer = (f: 'cash' | 'monthly_burn', on: string) => next.source?.[f] !== 'typed' || !typedOn || on >= typedOn;
     // Only a balance for every account: one account's is not what there is.
-    if (read.cash && !read.cash.missing && newer('cash', read.cash.on)) {
+    if (read.cash && !read.cash.missing && next.source?.cash !== 'book' && newer('cash', read.cash.on)) {
       next.cash = Math.round(read.cash.amount * 100) / 100;
       next.cash_on = read.cash.on;
       next.source!.cash = 'statement';
@@ -630,7 +651,7 @@ export function financeFromRead(prev: Finance, read: MoneyRead | null, nowIso: s
 function sameFinance(a: Finance, b: Finance): boolean {
   const shape = (f: Finance) => JSON.stringify([
     f.cash ?? null, f.cash_on ?? null, f.monthly_burn ?? null, f.burn_to ?? null, f.currency ?? null, f.typed_at ?? null,
-    f.source?.cash ?? null, f.source?.monthly_burn ?? null, f.typed_in ?? null, f.main_currency ?? null,
+    f.source?.cash ?? null, f.source?.monthly_burn ?? null, f.typed_in ?? null, f.main_currency ?? null, f.book ?? null,
   ]);
   return shape(a) === shape(b);
 }
@@ -653,10 +674,20 @@ export function financeFromTyped(
   const next: Finance = { currency: financeMark(main), updated_at: nowIso, source };
   if (prev.main_currency) next.main_currency = prev.main_currency;
   const typedIn: NonNullable<Finance['typed_in']> = {};
+  // With a money book the cash is its balance, changed on the Money tab where
+  // the moves are; a cash typed here would be overwritten on the next load.
+  if (prev.book) {
+    next.book = prev.book;
+    if (prev.source?.cash === 'book') {
+      source.cash = 'book';
+      if (prev.cash != null) next.cash = prev.cash;
+      if (prev.typed_in?.cash) typedIn.cash = prev.typed_in.cash;
+    }
+  }
   let typed = false;
   for (const f of ['cash', 'monthly_burn'] as const) {
     const v = input[f];
-    if (v == null) continue;
+    if (v == null || (f === 'cash' && prev.book)) continue;
     const code = codeOf(f);
     if (code === main && v === prev[f] && prev.source?.[f] === 'statement') {
       next[f] = v;
@@ -681,6 +712,12 @@ export function typedInLines(finance: Finance): string[] {
   for (const [f, label] of [['cash', 'Cash'], ['monthly_burn', 'Burn']] as const) {
     const t = finance.typed_in?.[f];
     if (!t) continue;
+    if (f === 'cash' && finance.source?.cash === 'book') {
+      out.push(t.rate != null && finance.cash != null
+        ? `Cash: the Money tab's balance, ${moneyText(t.amount, t.currency)}, which is ${moneyText(finance.cash, main)} (${rateLine(t.currency, main, { rate: t.rate, day: t.day ?? '' }, dayLabel)}, ${FX_SOURCE}).`
+        : `Cash: the Money tab's balance, ${moneyText(t.amount, t.currency)}, and there is no ${t.currency} to ${main} rate yet, so runway leaves it out until there is.`);
+      continue;
+    }
     out.push(t.rate != null && finance[f] != null
       ? `${label}: you typed ${moneyText(t.amount, t.currency)}, which is ${moneyText(finance[f]!, main)} (${rateLine(t.currency, main, { rate: t.rate, day: t.day ?? '' }, dayLabel)}, ${FX_SOURCE}).`
       : `${label}: you typed ${moneyText(t.amount, t.currency)}, and there is no ${t.currency} to ${main} rate yet, so runway leaves it out until there is.`);

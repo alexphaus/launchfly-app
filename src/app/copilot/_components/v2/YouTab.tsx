@@ -91,6 +91,7 @@ function Numbers({ home, d, actions }: { home: HomeData; d: Derived; actions: Ac
             : f?.changesTheAnswer ? `${f.forecastMonths} mo with what is owed`
             // Where the number came from, when it came off a statement: a balance from 25 Sep is not today's.
             : fin?.source?.cash === 'statement' && fin.cash_on ? `${money(fin.cash ?? 0, runCur)} on ${dayLabel(fin.cash_on)} · from your bank`
+            : fin?.source?.cash === 'book' ? `${money(fin.cash ?? 0, runCur)} · your Money tab balance`
             : `${money(fin?.cash ?? 0, runCur)} cash · ${money(fin?.monthly_burn ?? 0, runCur)}/mo`}
         </span>
       </button>

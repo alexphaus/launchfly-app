@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 60 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 61 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -121,6 +121,11 @@ the table they are kept in memory and fetched again after each restart; without
 the network, rows in other currencies are left out of the figures and the
 screen says why. The remote dev sandbox's network policy blocks that host: test
 conversion against a local stand-in on `COPILOT_FX_URL`.
+
+The Money tab (`copilot_transactions.category`, `note`, `repeat`, 20261001)
+needs that migration and nothing else; without it the tab says so. The share
+target (a budget app's Export → Share → Copilot) needs the app reinstalled, or
+Chrome's next refresh of it, to show in the share sheet.
 
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —

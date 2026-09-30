@@ -314,6 +314,8 @@ export function derive(home: HomeData) {
     path: planStatus(asks.length, path.week.streak),
     matches: matchesStatus(counts),
     work: workStatus(team, running),
+    // The balance is the first thing on the tab; a header saying it again is noise.
+    money: null,
     you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : null,
   };
 

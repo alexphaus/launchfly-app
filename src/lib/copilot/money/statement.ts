@@ -36,6 +36,8 @@ export interface StatementRow {
   balance: number | null;
   /** A name for the other side, when whatever read the row gave one. The description decides otherwise. */
   counterparty?: string | null;
+  /** What it was for, when the file says — a budgeting app's category column. The Money tab groups and picks by it. */
+  category?: string | null;
 }
 
 export interface StatementAccount {
@@ -558,7 +560,8 @@ export function parseCsvStatement(text: string, opts: { dateHint?: DateOrder; to
     const cur = pick(r, c.currency).toUpperCase();
     if (/^[A-Z]{3}$/.test(cur)) currencies.set(cur, (currencies.get(cur) ?? 0) + 1);
     rowCurrency.push(/^[A-Z]{3}$/.test(cur) ? cur : '');
-    rows.push({ on, amount, description: description || '(no description)', balance, counterparty: party.trim() ? party.trim().slice(0, 80) : null });
+    const category = pick(r, c.category).trim().slice(0, 40) || null;
+    rows.push({ on, amount, description: description || '(no description)', balance, counterparty: party.trim() ? party.trim().slice(0, 80) : null, category });
   }
   if (!rows.length) {
     if (skipped.scheduled || skipped.internal || skipped.void) throw new Error(`No row in that file is money that has moved. ${skippedLine(skipped)}`);

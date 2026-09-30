@@ -129,6 +129,16 @@ new.
   their own screens. The original brief called this "expand later if validated";
   it has not been validated. Life context belongs as *ranking input* inside the
   You sheet — runway, capacity, goals — never as screens.
+  *One screen reopened in October 2026, with a reason that is new:* money is not
+  life context here, it is the survival test's own input, and it was the one
+  number still a month stale. Its owner spends cash, logs it in a budgeting
+  app, and fed that app's CSV to this one by hand — so runway was always as old
+  as the last export. The **Money tab** is that app's one used screen and
+  nothing else of it: log a move, the list under the balance, the calendar. No
+  charts, no budgets, no analytics — each of those would be a screen about
+  money, which is still declined. What earns the tab is that a logged row is an
+  ordinary transaction every read already takes: runway moves when a coffee is
+  logged. See COPILOT.md → **The money book**.
 - **A decision engine over domains the app cannot observe.** A leverage formula
   ranking "collect the deposit" against "finish the demo" is arithmetic on
   invented numbers until those things are actually in the system. Add the sensor

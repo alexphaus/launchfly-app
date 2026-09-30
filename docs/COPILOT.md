@@ -17,7 +17,7 @@ but none of the business logic. Everything is under:
 
 | Layer | Path |
 | --- | --- |
-| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — four tabs (Path · Matches · Work · You), calm |
+| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — the four-tab layout, five tabs now (Path · Matches · Work · Money · You), calm |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
@@ -301,7 +301,9 @@ answer was that Today and Work were halves of one question. On a time axis they
 are one stream: the Path. For one release the Path replaced both, with the
 machine and the team moved under the numbers on You. Work came back beside it on
 its owner's word — "better for separation, and has important features": the
-Path is what to do and what moved, Work is the business being built.
+Path is what to do and what moved, Work is the business being built. Money
+joined them in October 2026 as the one screen of a budgeting app its owner used
+(see **The money book**); the layout keeps its name.
 
 It is a layout, not a fork. `useCopilot` (`_components/useCopilot.ts`) holds the
 state, the sheet stack and every action, and both `CopilotApp` and `CopilotApp2`
@@ -315,6 +317,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Matches | who is worth contacting, and where each one is | pills (New · To send · Waiting · Replied) · only what the ranker recommends, each card a tile, what it is and where, why, and one action · a draft sent from its own card | `matches.ts` |
 | Work | what am I building | the offer and what it knows about how you work · the path to money · the agents · projects handed over, in full (the ones that need you, the ones running, what it offers to take on, what finished) · the brief for Claude | `machine.ts` |
+| Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move | `money/book.ts` |
 | You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
 `derive.ts` computes all of it once per `HomeData`, from `generatedAt` rather
@@ -1057,7 +1060,9 @@ existing plan redraws for nothing.
 **Deleting it.** Remove one statement and its rows go with it
 (`on delete cascade`), then its account if nothing else is on it. **Delete
 everything read off your bank** (typed DELETE) removes every row, statement,
-payer and account and the cash and burn read off them; what was typed stays.
+payer and account and the cash and burn read off them; what was typed stays,
+and so does what was logged on the Money tab — its rows carry no import and its
+account is `provider = 'book'`.
 Wins already recorded stay in both cases — they are the person's record of
 work — and the sheet says so before the tap.
 
@@ -1088,6 +1093,74 @@ nothing else. PDFs and screenshots need a model — the brief's, or
 `COPILOT_STATEMENT_MODEL` on the same endpoint when the brief's model does not
 take images. Without the migration the Bank statements sheet says it is not set
 up, `/api/copilot/health` names the file, and every other screen is unchanged.
+
+### The money book — the Money tab (`money/book.ts`, `money/bookstore.ts`)
+
+Statements are a month behind by construction: somebody exports, then uploads.
+Its owner spends cash and kept it in a budgeting app whose one used screen was
+log a move, read the list under the balance, glance at the calendar — and fed
+that app's CSV here by hand, so runway was as old as the last export. That
+screen is now the Money tab, and nothing else of that app (DIRECTION.md).
+
+**A logged row is an ordinary transaction.** `copilot_transactions` with
+`import_id` null, in the account `provider = 'book'`, told apart by its
+fingerprint: `book:<uuid>`, or `repeat:<series>:<day>` for one a repeat wrote.
+The read, runway, money in, the plan and the brief take it with no change of
+their own. Only these rows can be edited or deleted from the tab; a file's rows
+change when the file does, on Bank statements.
+
+**The balance is said once.** A budget export prints none, so the person types
+what they have (`finance.book`: currency, balance, the instant and the day). The
+book's currency is fixed from then on. Every row logged *after* that instant, or
+dated after its day, moves it; a row read off a file never does — it was in the
+number they typed. Tapping the balance says it again and restarts the count.
+`financeFromRead` takes the book's balance as the cash (`source.cash = 'book'`),
+ahead of any statement, converted like any number typed in another currency;
+the Runway sheet drops its cash field and says where the cash comes from. The
+rows that move it are read by their own query (`bookBalanceNow`), not taken from
+the read's year of rows, so a book kept longer still matches the tab; unreadable,
+runway is left as it was and the Runway sheet says why. The book account prints
+no balance, so it is left out of the read's accounts — counted as one without,
+every read said "type your cash". A move can be dated up to a year either way.
+
+**Shown in another currency, logged in its own.** `bookView` converts every row
+at its own day's ECB rate, pending ones at today's, the balance at the newest —
+or none at all: a month with a day the rates do not reach is shown whole in the
+book's currency, and says why. A list half in pesos and half in euros adds up to
+nothing.
+
+**The list and the calendar** are computed, never stored: the month's days,
+newest first, each header with what the day spent and received; the calendar
+with each day's spend or its end-of-day balance, worked back from now (so it
+needs a balance and stops at today); a dot on a day money came in.
+
+**Pending and repeats.** A row dated after today is pending: listed under
+Upcoming, in no figure — `moneyRead` ignores it too. A repeat is `weekly` or
+`monthly@<day>` (the 31st comes back after February's 28th); `materializeRepeats`
+writes from each series' *latest* row every row owed up to the first one after
+today, idempotent by fingerprint, bounded at sixty. The tab runs it on open and
+the nightly pass before it settles runway. Deleting an upcoming repeat stops the
+series — otherwise the row before it writes it back on the next open — and so
+does turning repeat off on any of its rows; what already happened stays.
+
+**Getting a file in without a download.** The `/copilot2` manifest has a
+`share_target`: a budget app's Export → Share → Copilot POSTs the file to
+`/copilot2/share`. `public/sw.js` takes that POST, keeps the file in Cache
+Storage and redirects to the Money tab, which uploads it with an ordinary
+same-origin fetch — so it carries the session whatever the phone did with
+cookies on the share. The app registers the worker itself (`useCopilot`): the
+root layout's registration waits for `load`, which has usually fired by then,
+and it often never ran. Without an active worker the POST reaches the route,
+which imports the file through the upload route and redirects with what the
+upload said. A **Log money** shortcut (long-press the icon) opens the add sheet.
+An installed app picks both up when Chrome next refreshes it, or on reinstall.
+iOS has no share target for web apps.
+
+Setup: `supabase/migrations/20261001_copilot_book.sql` (three columns on
+`copilot_transactions`: `category`, `note`, `repeat`). Without it the tab says
+so, the health route names the file, and statements, runway and money in behave
+as before. Budget exports' categories are kept from then on, and backfilled on
+the next upload of the same file.
 
 ## The loop
 
@@ -2202,6 +2275,8 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
 | POST | `/api/copilot/money/import` | multipart `file`: a bank statement. CSV/TSV/OFX, and a PDF whose running balance holds by rules, are read in the request and answer with the import and the screen; any other PDF or a screenshot answers 202 and is read by a model in `after()` (30 a day, 10 MB) |
+| GET/POST | `/api/copilot/money/book` | the Money tab. `GET ?month=YYYY-MM&view=EUR` the month's list, calendar and balance · `POST { action: 'add', kind: in \| out, amount, on, category?, note?, repeat?: week \| month }` · `{ action: 'edit', id, …same }` · `{ action: 'delete', id }` (an upcoming repeat stops its series) · `{ action: 'balance', balance, currency? }` (the currency only the first time). Every POST answers with the book for the month and view sent |
+| POST | `/copilot2/share` | the manifest's share target: multipart `file`. Normally taken by the service worker; this route is the fallback, importing through the upload route and redirecting to the Money tab |
 | GET/POST | `/api/copilot/money` | `GET` the statements, polled while one is read · `POST { action: 'confirm' \| 'discard', id }` · `{ action: 'currency', id, currency }` (three letters, for a file that named none) · `{ action: 'name', key, role: client \| employer \| self \| other \| null, opportunity_id? }` · `{ action: 'forget', confirm: 'DELETE' }` |
 | POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |
 | GET/POST | `/api/copilot/roadmap` | the Path's drawn plan: `POST { action: 'draw', reason? }` writes a `copilot_agent_runs` row of kind `roadmap`, draws in `after()` and returns 202 (or the draw in flight; 12 a day) · `POST { action: 'mark', item, state: done \| dropped \| open }` ticks a step or milestone of the current plan (`copilot_events`, `roadmap_marked`) · `GET` is the latest draw, polled while it runs |
@@ -2389,6 +2464,13 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
 - Two sources for the same money are not reconciled. A card purchase in a bank statement and the same
   purchase logged in a budgeting app are two accounts, so both count. Dedupe is within one account
   (overlapping exports of the same file); across sources the advice is one source per kind of money.
+  The same holds for the Money tab: a move logged there and again in a budget app whose CSV is shared in
+  counts twice in spending (never in the book's balance, which only logged rows move).
+- The book's balance counts every row logged after it was said, back-dated ones included. A move from
+  last week logged today is taken as not yet in the balance typed this morning; if it was, tap the
+  balance and say it again.
+- The share target is Android's: iOS has no share target for installed web apps. There, Bank statements
+  still takes the file.
 - Uploads that name neither a bank nor an account number (most budgeting-app exports) share one
   account, so two different such apps would dedupe against each other on identical day/amount/payee rows.
 - A PDF that prints debits and credits as unsigned figures in two columns loses the column in its text

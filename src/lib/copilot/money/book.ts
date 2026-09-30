@@ -28,6 +28,8 @@ export interface BookAnchor {
   at: string;
   /** YYYY-MM-DD, the person's day it was said on. */
   on: string;
+  /** The currency moves are typed in by default, when another than the book's (BookAnchorRow.entry). */
+  entry?: string | null;
 }
 
 /** A finance row's book, read defensively: written by whichever version ran it. */
@@ -35,7 +37,8 @@ export function anchorOf(f: Finance | null | undefined): BookAnchor | null {
   const b = f?.book;
   if (!b || typeof b.balance !== 'number' || !Number.isFinite(b.balance) || typeof b.at !== 'string' || typeof b.on !== 'string') return null;
   const currency = toCode(b.currency);
-  return currency ? { currency, balance: b.balance, at: b.at, on: b.on } : null;
+  const entry = toCode(b.entry);
+  return currency ? { currency, balance: b.balance, at: b.at, on: b.on, ...(entry && entry !== currency ? { entry } : {}) } : null;
 }
 
 export interface BookRow {
@@ -55,6 +58,12 @@ export interface BookRow {
   book: boolean;
   /** The file a read row came from, for "from DefaultTransactions.csv". */
   source: string | null;
+  /**
+   * What the person typed, when they logged it in another currency than the
+   * book's: €12 in a peso book. `amount` is that, converted on its day and
+   * kept — so the balance never moves when a rate does.
+   */
+  entered?: { amount: number; currency: string } | null;
 }
 
 /* ─── Repeats ─────────────────────────────────────────────────────────────── */
@@ -85,6 +94,18 @@ export function nextRepeat(r: Repeat, on: string): string {
   const nm = m === 12 ? 1 : m + 1;
   const last = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
   return `${ny}-${String(nm).padStart(2, '0')}-${String(Math.min(r.day, last)).padStart(2, '0')}`;
+}
+
+/**
+ * The day a series' row stands for: its date, or the day in its fingerprint
+ * when that is later. A repeat's next row moved to an earlier date keeps the
+ * fingerprint of the day it was written for, and counting from its new date
+ * would ask for that same fingerprint again — the write is ignored as a
+ * duplicate, and the series stops without a word.
+ */
+export function seriesDay(postedOn: string, fingerprint: string): string {
+  const m = /^repeat:[^:]+:(\d{4}-\d{2}-\d{2})$/.exec(fingerprint);
+  return m && m[1] > postedOn ? m[1] : postedOn;
 }
 
 /**
@@ -140,6 +161,10 @@ export interface BookLine {
   category: string | null;
   note: string | null;
   source: string | null;
+  /** What it was for, as a picture: see categoryIcon. */
+  icon: BookIcon;
+  /** Typed in another currency than the book's (BookRow.entered). */
+  entered: { amount: number; currency: string } | null;
 }
 
 export interface BookDay {
@@ -271,11 +296,17 @@ export function bookView(input: {
   };
   const line = (r: BookRow): BookLine => {
     const label = r.note?.trim() || r.category?.trim() || r.description;
+    const entered = r.entered && r.entered.currency !== currency ? r.entered : null;
     return {
       id: r.id, on: r.on, label,
       sub: r.note?.trim() && r.category?.trim() ? r.category.trim() : null,
-      amount: r.amount, shown: shown(r.amount, r.on), book: r.book, repeat: r.repeat,
+      amount: r.amount,
+      // Shown in the currency it was typed in, it is what was typed: €12, not
+      // €12 turned into pesos and back at two rates.
+      shown: entered && entered.currency === view ? entered.amount : shown(r.amount, r.on),
+      book: r.book, repeat: r.repeat,
       category: r.category, note: r.note, source: r.book ? null : r.source,
+      icon: categoryIcon(r.category, `${r.note ?? ''} ${r.description}`, r.amount), entered,
     };
   };
 
@@ -321,17 +352,6 @@ export function bookView(input: {
     });
   }
 
-  // What the picker offers: the person's own categories, most used first, then the usual ones.
-  const tally = (sign: 1 | -1) => {
-    const n = new Map<string, number>();
-    for (const r of rows) {
-      const c = r.category?.trim();
-      if (c && Math.sign(r.amount) === sign) n.set(c, (n.get(c) ?? 0) + 1);
-    }
-    const own = [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([c]) => c);
-    const defaults = (sign > 0 ? DEFAULT_CATEGORIES.in : DEFAULT_CATEGORIES.out).filter((c) => !own.some((o) => o.toLowerCase() === c.toLowerCase()));
-    return [...own, ...defaults].slice(0, CATEGORY_CHIPS);
-  };
 
   const months = rows.map((r) => r.on.slice(0, 7));
   const thisMonth = today.slice(0, 7);
@@ -343,12 +363,27 @@ export function bookView(input: {
     totals: { spent: round2(days.reduce((s, d) => s + d.spent, 0)), received: round2(days.reduce((s, d) => s + d.received, 0)) },
     days, calendar,
     pending: pendingRows.slice(0, 20).map(line),
-    categories: { out: tally(-1), in: tally(1) },
+    categories: bookCategories(rows),
     missing, unlabelled,
   };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** What the picker offers: the person's own categories, most used first, then the usual ones they have not used. */
+export function bookCategories(rows: ReadonlyArray<{ category: string | null; amount: number }>): { out: string[]; in: string[] } {
+  const tally = (sign: 1 | -1) => {
+    const n = new Map<string, number>();
+    for (const r of rows) {
+      const c = r.category?.trim();
+      if (c && Math.sign(r.amount) === sign) n.set(c, (n.get(c) ?? 0) + 1);
+    }
+    const own = [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([c]) => c);
+    const defaults = (sign > 0 ? DEFAULT_CATEGORIES.in : DEFAULT_CATEGORIES.out).filter((c) => !own.some((o) => o.toLowerCase() === c.toLowerCase()));
+    return [...own, ...defaults].slice(0, CATEGORY_CHIPS);
+  };
+  return { out: tally(-1), in: tally(1) };
+}
 
 /**
  * Where a converted book says its rate came from, under the balance: a figure
@@ -359,6 +394,84 @@ export function bookRateLine(v: Pick<BookView, 'currency' | 'view' | 'balance'>)
   if (v.view === v.currency) return null;
   const day = v.balance?.rateDay;
   return `${day ? `rate of ${Number(day.slice(8, 10))} ${MON[Number(day.slice(5, 7)) - 1]}, ` : ''}${FX_SOURCE}`;
+}
+
+/* ─── Pictures for categories ─────────────────────────────────────────────── */
+
+export type BookIcon =
+  | 'groceries' | 'dining' | 'coffee' | 'transport' | 'bills' | 'phone' | 'home' | 'care' | 'health'
+  | 'shopping' | 'sent' | 'salary' | 'client' | 'gift' | 'in' | 'out';
+
+/**
+ * A picture for a row, so a list is read at a glance: by its category first,
+ * then by words in what it says — the person's own categories ("Siomai",
+ * "5G DATA") get one too. A plain arrow in or out when nothing matches: a
+ * wrong picture is worse than a plain one.
+ */
+const ICON_WORDS: Array<[BookIcon, RegExp]> = [
+  ['groceries', /grocer|supermarket|market|palengke|sari.?sari|7.?eleven|minimart/],
+  ['coffee', /coffee|caf[eé]|starbucks|latte|tea\b|milk ?tea/],
+  ['dining', /dining|restaurant|food|eat|lunch|dinner|breakfast|snack|jollibee|mcdo|siomai|grab ?food|foodpanda/],
+  ['transport', /transport|taxi|grab(?! ?food)|jeep|bus|fare|gas|fuel|petrol|parking|toll|mrt|lrt|train|angkas|car\b/],
+  ['phone', /\bload\b|data|5g|4g|internet|wifi|wi-fi|mobile|phone|globe|smart|dito|pldt|converge/],
+  ['bills', /utilit|electric|meralco|water|bill|vps|hosting|subscription|netflix|spotify/],
+  ['home', /hous|rent|condo|apartment|home/],
+  ['health', /health|pharma|medic|doctor|clinic|hospital|dentist|drug/],
+  ['care', /self.?care|care|gym|salon|haircut|barber|spa|massage|beauty/],
+  ['shopping', /purchase|shop|lazada|shopee|cloth|amazon|mall/],
+  ['sent', /sent|transfer|remit|send|gcash out|padala/],
+  ['salary', /salary|wage|payroll|pay ?check|job/],
+  ['client', /client|sale|invoice|customer|project|deposit/],
+  ['gift', /help|gift|family|allowance|donation|support/],
+];
+
+export function categoryIcon(category: string | null | undefined, text: string, amount: number): BookIcon {
+  for (const hay of [category ?? '', text]) {
+    const h = hay.toLowerCase();
+    if (!h.trim()) continue;
+    for (const [icon, re] of ICON_WORDS) if (re.test(h)) return icon;
+  }
+  return amount > 0 ? 'in' : 'out';
+}
+
+/* ─── The keypad ──────────────────────────────────────────────────────────── */
+
+/**
+ * One key on the add sheet's keypad, applied to what is typed so far. Its own
+ * keypad rather than the phone's keyboard: a keyboard only opens on a tap in
+ * the field, covers the categories and has to be closed to reach them — three
+ * steps on every coffee. Two decimals, nine digits, no leading zeros.
+ */
+export function padKey(current: string, key: string): string {
+  if (key === 'clear') return '';
+  if (key === 'back') return current.slice(0, -1);
+  if (key === '.') return current.includes('.') ? current : `${current || '0'}.`;
+  if (!/^\d$/.test(key)) return current;
+  const [whole, cents] = current.split('.');
+  if (cents !== undefined) return cents.length >= 2 ? current : current + key;
+  if (whole === '0') return key;
+  return whole.length >= 9 ? current : current + key;
+}
+
+/**
+ * What was typed in the amount field, kept to what padKey allows. A phone's
+ * number keyboard offers a comma too: here it is a thousands mark ("1,500" is
+ * fifteen hundred), never a decimal point, so it is dropped rather than read.
+ */
+export function cleanAmount(raw: string): string {
+  return [...raw.replace(/[,\s]/g, '')].reduce(padKey, '');
+}
+
+/* ─── Logged in another currency ──────────────────────────────────────────── */
+
+/**
+ * €12 in a peso book, as pesos: at the rate on its day, or the latest before
+ * it (a weekend, today before the ECB publishes). Null without one — the book
+ * does not take a number it would have to guess.
+ */
+export function convertEntry(fx: FxTable, from: string, to: string, amount: number, on: string, today: string): { amount: number; rate: number; day: string } | null {
+  const r = rateOn(fx, from, to, on > today ? today : on);
+  return r ? { amount: Math.round(amount * r.rate * 100) / 100, rate: r.rate, day: r.day } : null;
 }
 
 /**

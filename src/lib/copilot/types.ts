@@ -130,6 +130,8 @@ export interface BookAnchorRow {
   balance: number;
   at: string;
   on: string;
+  /** The currency moves are typed in by default, when it is not the book's: tap ₱ on the add sheet. Converted on each move's day. */
+  entry?: string;
 }
 
 export const OPPORTUNITY_TYPES: OpportunityType[] = ['client', 'people', 'service', 'community', 'signal'];

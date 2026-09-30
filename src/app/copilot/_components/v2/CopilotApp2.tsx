@@ -41,7 +41,7 @@ import { IconMatches, IconMoney, IconPath, IconWork, IconYou } from './icons2';
 import PathTab from './PathTab';
 import MatchesTab from './MatchesTab';
 import WorkTab from './WorkTab';
-import MoneyTab, { BookFab, BookSheet, useBook } from './MoneyTab';
+import MoneyTab, { BookFab, BookSheet, MoneyTabGuard, useBook } from './MoneyTab';
 import YouTab from './YouTab';
 
 const TABS: Tab2[] = ['path', 'matches', 'work', 'money', 'you'];
@@ -73,7 +73,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
       refresh().catch((e: unknown) => say(`Logged, but the other tabs did not update: ${e instanceof Error ? e.message : String(e)}`));
     }, HOME_AFTER_BOOK_MS);
   }, [refresh, say]);
-  const book = useBook(say, onMoved);
+  const book = useBook(home.profile.id, say, onMoved);
   const d = useDerived(home);
   const status = d.status[tab];
   const nightly = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? nightlyView(home.nightly.run, new Date()) : null;
@@ -107,7 +107,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
         {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
         {tab === 'matches' && <MatchesTab home={home} d={d} actions={actions} finding={finding} stage={matchStage} onStage={setMatchStage} />}
         {tab === 'work' && <WorkTab home={home} d={d} actions={actions} briefing={briefing} />}
-        {tab === 'money' && <MoneyTab book={book} actions={actions} say={say} arrival={arrival} clearArrival={clearArrival} />}
+        {tab === 'money' && <MoneyTabGuard><MoneyTab book={book} actions={actions} say={say} arrival={arrival} clearArrival={clearArrival} /></MoneyTabGuard>}
         {tab === 'you' && <YouTab home={home} d={d} actions={actions} openMatches={openMatches} />}
       </main>
 
@@ -135,8 +135,9 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
       <Sheet open={sheetOpen} onClose={dismissSheets}>
         {sheet && <SheetContent key={sheetKey(sheet)} sheet={sheet} home={home} actions={actions} briefing={briefing} />}
       </Sheet>
-      <Sheet open={!!book.entry} onClose={book.closeEntry}>
-        <BookSheet book={book} />
+      {/* Taller than the other sheets, and over the nav: the keypad needs the room the nav's clearance took. */}
+      <Sheet open={!!book.entry} onClose={book.closeEntry} className="cp2-bk-sheet">
+        <MoneyTabGuard><BookSheet book={book} /></MoneyTabGuard>
       </Sheet>
 
       {toast && <div className="cp-toast" role="status">{toast}</div>}

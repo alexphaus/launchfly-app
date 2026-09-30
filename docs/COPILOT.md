@@ -1152,14 +1152,91 @@ cookies on the share. The app registers the worker itself (`useCopilot`): the
 root layout's registration waits for `load`, which has usually fired by then,
 and it often never ran. Without an active worker the POST reaches the route,
 which imports the file through the upload route and redirects with what the
-upload said. A **Log money** shortcut (long-press the icon) opens the add sheet.
-An installed app picks both up when Chrome next refreshes it, or on reinstall.
-iOS has no share target for web apps.
+upload said. An installed app picks the share target up when Chrome next
+refreshes it, or on reinstall. iOS has no share target for web apps.
+
+**Logging fast.** Timed on the owner's phone, a coffee took seven to nine
+seconds from the Log money shortcut: the whole app loaded (fifty reads for the
+Path, matches, plan and numbers), then the book, then the sheet — which opened
+empty until the book arrived — then a tap to wake the keyboard, a swipe to put
+it away because it covered the categories, and one to two seconds after "Log
+it". Measured locally with 100ms per database request, the server was not the
+slow part (the app page is fifty reads but six deep, 0.6s); the waits were the
+book's six reads and the save's twenty, one after another, and everything the
+phone did before the keypad could be touched. So:
+
+- **The shortcut has its own page**, `/copilot2/log` (`loadLogScreen`): the
+  profile, then categories, the balance and the entry rate at once — three
+  reads, 0.23s — with the form in its first HTML. The old shortcut URL
+  (`?tab=money&add=1`) redirects there before the home loads.
+- **The phone's own number keyboard, up at once** (`EntryPad.tsx`): the amount
+  field takes focus as the sheet opens, on the same tap as the +. A keypad drawn
+  on the page was tried and the owner preferred the keyboard their hands know.
+  A phone opens a keyboard only in answer to a tap, so on the Log money page,
+  opened by a shortcut, the first one needs a tap on the amount; after each move
+  the field takes focus again and the keyboard stays up. A comma is a thousands
+  mark ("1,500"), never a decimal point (`cleanAmount`). Enter logs when it is
+  ready, else puts the keyboard away so the categories show.
+- **The save is not waited for.** "Log it" writes the move to the phone's
+  outbox (`bookLocal.ts`) under an id the phone makes, closes the sheet, and
+  sends behind it; the server stores it as `book:<that id>` with `ignoreDuplicates`,
+  so a retry — a dropped answer, the app closed mid-send, two screens flushing
+  the same queue — is one row. It is taken out of the outbox only when the
+  server has it; tried again on reconnect, on return to the screen and every
+  twenty seconds; listed under "Sending" or "Not saved yet" until then. A 400 is
+  the person's to read — it stays with its reason and a Remove button, never
+  retried into the same no. Where the phone cannot keep it (no local storage)
+  the sheet waits for the server, as before.
+- **Offline.** `public/sw.js` keeps the Log money page as last opened
+  (network first, the kept copy only as fallback) and the app's content-hashed
+  `/_next/static/` files the server marks immutable (cache first, newest 300).
+  With no signal the page opens from the phone, works out today from the
+  phone's clock in the person's zone, says it is offline, and queues what is
+  logged. Tested by stopping the server, not by the browser's offline switch,
+  which a service worker's own requests ignore.
+- **The tab opens on the last book drawn** (this month and view, per account),
+  replaced by the fresh one a moment later; the book's reads run at once (0.65s
+  → 0.23s); the save settles runway in `after()`, since every home load settles
+  it again and says so when it cannot. Loads carry a sequence number, so two
+  months tapped through quickly cannot draw the older answer over the newer.
+- **A picture per row** (`categoryIcon`): the category first, then the words
+  in the row ("5G DATA" is a phone, "Siomai" is food, GrabFood is food and Grab
+  is a ride), a plain in/out arrow when nothing matches — a wrong picture is
+  worse than a plain one.
+
+**Logged in another currency.** Tap the ₱ on the keypad: a select laid over the
+mark. The choice is the default for the next move, kept on the account
+(`finance.book.entry`, `setEntryCurrency`) so the shortcut's first HTML already
+knows it. A move typed in euros is converted into the book's currency at the ECB
+rate on its day — the latest before it on a weekend, today's for a pending one —
+and stored in pesos, with what was typed beside it (`entered_amount`,
+`entered_currency`, 20261002): the balance never moves again when a rate does,
+and the list shows "−₱763.13" over "€12", or exactly "−€12" in the euro view. No
+rate for that day, no row: the sheet says so and to log it in the book's
+currency. A repeat of a move typed in euros repeats its peso amount.
+
+**Guarded writes.** A settle reads the whole finance row, works for a second
+and writes the whole row back; a balance said in that second was overwritten by
+the one read before it. `writeSettledFinance` writes only if `finance.book.at`
+is still what it read (`is null` when there was no book) — the same guard as
+setting the entry currency. Not written, the next settle starts from the new
+balance.
+
+**A copy to keep.** "Download everything as CSV" under the list
+(`GET /api/copilot/money/book/export`): every row the book reads — logged,
+repeated, from a file — with what was typed in another currency. The database is
+the only other copy.
+
+**Crashes stay in the tab.** `MoneyTabGuard` catches a render error in the tab
+or its sheet and says what broke, with a reload; before, one bad row blanked the
+whole app. The outbox is on the phone either way.
 
 Setup: `supabase/migrations/20261001_copilot_book.sql` (three columns on
 `copilot_transactions`: `category`, `note`, `repeat`). Without it the tab says
 so, the health route names the file, and statements, runway and money in behave
-as before. Budget exports' categories are kept from then on, and backfilled on
+as before. `20261002_copilot_book_entered.sql` (`entered_amount`,
+`entered_currency`) is needed only to log in another currency; without it that
+one thing is refused with the file's name, and the rows are read without it. Budget exports' categories are kept from then on, and backfilled on
 the next upload of the same file.
 
 ## The loop
@@ -2275,7 +2352,9 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
 | POST | `/api/copilot/money/import` | multipart `file`: a bank statement. CSV/TSV/OFX, and a PDF whose running balance holds by rules, are read in the request and answer with the import and the screen; any other PDF or a screenshot answers 202 and is read by a model in `after()` (30 a day, 10 MB) |
-| GET/POST | `/api/copilot/money/book` | the Money tab. `GET ?month=YYYY-MM&view=EUR` the month's list, calendar and balance · `POST { action: 'add', kind: in \| out, amount, on, category?, note?, repeat?: week \| month }` · `{ action: 'edit', id, …same }` · `{ action: 'delete', id }` (an upcoming repeat stops its series) · `{ action: 'balance', balance, currency? }` (the currency only the first time). Every POST answers with the book for the month and view sent |
+| GET/POST | `/api/copilot/money/book` | the Money tab. `GET ?month=YYYY-MM&view=EUR` the month's list, calendar and balance · `POST { action: 'add', id (the phone's uuid: a retry is one row), kind: in \| out, amount, currency? (typed in; converted at its day's rate), on, category?, note?, repeat?: week \| month }` · `{ action: 'edit', id, …same }` · `{ action: 'delete', id }` (an upcoming repeat stops its series) · `{ action: 'balance', balance, currency? }` (the currency only the first time) · `{ action: 'entry', currency }` (the default to type in). Every POST answers with the book for the month and view sent, or `{ balance }` with `reply: 'balance'` |
+| GET | `/api/copilot/money/book/export` | every row the book reads, as a CSV download |
+| GET | `/copilot2/log` | the Log money shortcut's own page: the keypad, three reads, kept by the service worker for offline |
 | POST | `/copilot2/share` | the manifest's share target: multipart `file`. Normally taken by the service worker; this route is the fallback, importing through the upload route and redirecting to the Money tab |
 | GET/POST | `/api/copilot/money` | `GET` the statements, polled while one is read · `POST { action: 'confirm' \| 'discard', id }` · `{ action: 'currency', id, currency }` (three letters, for a file that named none) · `{ action: 'name', key, role: client \| employer \| self \| other \| null, opportunity_id? }` · `{ action: 'forget', confirm: 'DELETE' }` |
 | POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |

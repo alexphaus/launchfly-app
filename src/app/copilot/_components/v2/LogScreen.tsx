@@ -20,6 +20,7 @@ export default function LogScreen({ pid, data, failed }: { pid: string; data: Lo
     timer.current = setTimeout(() => setToast(null), 2800);
   }, []);
   const [balance, setBalance] = useState(data?.balance ?? null);
+  const [safe, setSafe] = useState(data?.safe ?? null);
   // Today as the phone's clock has it in the person's zone: the page may be
   // the copy the phone kept for offline (public/sw.js), drawn on another day.
   const [today, setToday] = useState(data?.today ?? '');
@@ -38,7 +39,10 @@ export default function LogScreen({ pid, data, failed }: { pid: string; data: Lo
   const [entry, setEntry] = useState<EntryDefault>(data?.entry ?? null);
   const outbox = useOutbox(pid, {
     extra: () => ({ reply: 'balance' }),
-    onSent: (d) => { if (typeof d.balance === 'number') setBalance(d.balance); },
+    onSent: (d) => {
+      if (typeof d.balance === 'number') setBalance(d.balance);
+      if (d.safe !== undefined) setSafe(d.safe as typeof safe);
+    },
     say,
   });
 
@@ -87,6 +91,7 @@ export default function LogScreen({ pid, data, failed }: { pid: string; data: Lo
               entry={entry}
               onEntry={onEntry}
               enteredReady={data.enteredReady}
+              safe={safe}
               categories={data.categories}
               today={today || data.today}
               onSubmit={(body, said) => outbox.log(body, said)}

@@ -21,8 +21,8 @@ import { getProfile, logEvent } from '../base';
 import { copilotDb, describeDbError, todayIso } from '../db';
 import type { BookAnchorRow, Finance, Profile } from '../types';
 import {
-  anchorOf, bookCategories, bookView, checkEntry, convertEntry, parseRepeat, repeatValue, repeatsDue, seriesDay, shiftMonth,
-  type BookAnchor, type BookRow, type BookView,
+  anchorOf, bookCategories, bookView, checkEntry, convertEntry, parseRepeat, repeatValue, repeatsDue, safeToSpend, seriesDay, shiftMonth,
+  type BookAnchor, type BookRow, type BookView, type SafeToSpend,
 } from './book';
 import { currencyForZone, dayLabel } from './ledger';
 import { latestRate, mainCurrency, toCode } from './fx';
@@ -213,7 +213,7 @@ export async function loadBook(profileId: string, opts: { month?: string | null;
     ready: false, notReady: why, started: !!anchor, suggest: { currency: anchor?.currency ?? 'USD', balance: null }, today, main: anchor?.currency ?? 'USD',
     currency: anchor?.currency ?? 'USD', view: anchor?.currency ?? 'USD', balance: null, month, monthLabel: month, first: month, last: month,
     totals: { spent: 0, received: 0 }, days: [], calendar: [], pending: [], categories: { out: [], in: [] }, missing: null, unlabelled: 0,
-    entry: null, enteredReady: false,
+    entry: null, enteredReady: false, safe: null, safeShown: null,
   });
 
   // Everything the screen needs, read at once. These ran one after another —
@@ -270,6 +270,30 @@ export async function loadBook(profileId: string, opts: { month?: string | null;
 
 /* ─── The Log money shortcut ──────────────────────────────────────────────── */
 
+/**
+ * The balance now and what is safe to spend today, for the pages that draw no
+ * list. The rows safe-to-spend reads are today's and the pending ones, so it
+ * asks for those and no more — the book's two years are the list's business.
+ */
+export async function balanceAndSafe(profileId: string, finance: Finance | null | undefined, today: string): Promise<{ balance: number | null; safe: SafeToSpend | null }> {
+  const anchor = anchorOf(finance);
+  if (!anchor) return { balance: null, safe: null };
+  const [balance, ahead] = await Promise.all([
+    bookBalanceNow(profileId, finance, today),
+    copilotDb().from('copilot_transactions').select('posted_on, amount, currency, repeat, description, created_at, fingerprint')
+      .eq('profile_id', profileId).gte('posted_on', today).order('posted_on', { ascending: true }).limit(1000),
+  ]);
+  if (balance == null) return { balance: null, safe: null };
+  // Before 20261001 nothing can repeat or be pending: the balance stands, and there is nothing promised to read.
+  if (ahead.error && !isMissingColumn(ahead.error)) throw new Error(describeDbError(ahead.error, 'Could not read what is coming up.'));
+  const rows = ((ahead.error ? [] : ahead.data ?? []) as unknown as Array<Record<string, unknown>>).map((r) => ({
+    on: String(r.posted_on).slice(0, 10), amount: Number(r.amount), currency: (r.currency as string | null) ?? null,
+    repeat: (r.repeat as string | null) ?? null, description: String(r.description ?? ''), createdAt: String(r.created_at ?? ''),
+    book: /^(book|repeat):/.test(String(r.fingerprint ?? '')),
+  }));
+  return { balance, safe: safeToSpend({ anchor, balance, rows, today }) };
+}
+
 export interface LogScreenData {
   ready: boolean;
   notReady: string | null;
@@ -283,6 +307,8 @@ export interface LogScreenData {
   timezone: string | null;
   entry: EntryDefault;
   balance: number | null;
+  /** What is safe to spend today, for the label over the categories. */
+  safe: SafeToSpend | null;
 }
 
 /**
@@ -295,15 +321,15 @@ export async function loadLogScreen(profileId: string): Promise<LogScreenData | 
   if (!profile) return null;
   const today = todayIso(profile.timezone);
   const anchor = anchorOf(profile.finance);
-  const base = { today, timezone: profile.timezone ?? null, entry: null, balance: null, categories: { out: [], in: [] }, enteredReady: false };
+  const base = { today, timezone: profile.timezone ?? null, entry: null, balance: null, safe: null, categories: { out: [], in: [] }, enteredReady: false };
   if (!anchor) return { ...base, ready: true, notReady: null, started: false, currency: currencyForZone(profile.timezone) ?? 'USD' };
   // The categories, read with 20261002's column so the pad knows whether a move
   // in another currency can be kept — and without it, when it is not there.
   const categories = (cols: string) => copilotDb().from('copilot_transactions').select(cols).eq('profile_id', profileId)
     .not('category', 'is', null).order('posted_on', { ascending: false }).limit(600);
-  let [cats, balance, rate] = await Promise.all([
+  let [cats, snap, rate] = await Promise.all([
     categories(enteredKnownMissing() ? 'category, amount' : 'category, amount, entered_currency'),
-    bookBalanceNow(profileId, profile.finance, today),
+    balanceAndSafe(profileId, profile.finance, today),
     anchor.entry ? entryRate(anchor.entry, anchor.currency, today) : Promise.resolve(null),
   ]);
   let enteredReady = !enteredKnownMissing();
@@ -317,7 +343,7 @@ export async function loadLogScreen(profileId: string): Promise<LogScreenData | 
     throw new Error(describeDbError(cats.error, 'Could not read your book.'));
   }
   return {
-    ready: true, notReady: null, enteredReady, started: true, currency: anchor.currency, today, timezone: profile.timezone ?? null, balance,
+    ready: true, notReady: null, enteredReady, started: true, currency: anchor.currency, today, timezone: profile.timezone ?? null, balance: snap.balance, safe: snap.safe,
     categories: bookCategories((cats.data ?? []) as unknown as Array<{ category: string | null; amount: number }>),
     entry: anchor.entry ? { currency: anchor.entry, rate } : null,
   };

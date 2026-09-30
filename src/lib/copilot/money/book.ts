@@ -137,11 +137,132 @@ export function bookBalance(
   today: string,
 ): number {
   let total = anchor.balance;
-  for (const r of rows) {
-    if (!r.book || r.on > today || toCode(r.currency) !== anchor.currency) continue;
-    if ((r.createdAt ?? '') > anchor.at || r.on > anchor.on) total += r.amount;
-  }
+  for (const r of rows) if (movesBalance(anchor, r, today)) total += r.amount;
   return Math.round(total * 100) / 100;
+}
+
+/** Whether a row is one of those that moved the balance: logged, not pending, in the book's currency, and after it was said. */
+export function movesBalance(
+  anchor: BookAnchor,
+  r: { on: string; currency: string | null; createdAt?: string; book?: boolean },
+  today: string,
+): boolean {
+  if (!r.book || r.on > today || toCode(r.currency) !== anchor.currency) return false;
+  return (r.createdAt ?? '') > anchor.at || r.on > anchor.on;
+}
+
+/* ─── Safe to spend ───────────────────────────────────────────────────────── */
+
+/** The stretch the balance is spread over: a month, the shortest that is not next week's rent. */
+export const SAFE_DAYS = 30;
+
+export interface SafeToSpend {
+  /** Left of today's share, whole units of the book's currency: negative when today is over. */
+  left: number;
+  /** Today's share before anything was spent. Zero when the balance is already spoken for. */
+  perDay: number;
+  days: number;
+  /** Money already promised inside the stretch: the pending moves you logged, repeats carried forward. */
+  committed: number;
+  /** Spent today in the book, before this figure. */
+  spentToday: number;
+  /** The balance spoken for by what is coming up: nothing is safe to spend. */
+  broke: boolean;
+  /** What is spread over the days: the balance with today's spending put back, less what is promised. */
+  pool: number;
+}
+
+/**
+ * What the balance allows today: what is in the book, less what you have
+ * already promised for the next thirty days, spread evenly, less what today has
+ * taken. Worked out from rows you made and nothing else — no forecast of income
+ * or of what you will spend, which is why it is a share and not a prediction.
+ *
+ * Only money going out is promised. A pending "came in" is left out on purpose:
+ * a payment that has not landed is the cheapest thing to be wrong about, and a
+ * figure called safe errs low. A repeat is carried forward through the stretch
+ * (a weekly one is written a week ahead, so it is four rows in a month, not
+ * one).
+ */
+export function safeToSpend(input: {
+  anchor: BookAnchor;
+  /** The book's balance now (bookBalance). */
+  balance: number;
+  rows: ReadonlyArray<{ on: string; amount: number; currency: string | null; repeat?: string | null; description?: string; createdAt?: string; book?: boolean }>;
+  today: string;
+}): SafeToSpend {
+  const { anchor, balance, today } = input;
+  const last = shift(today, SAFE_DAYS - 1);
+  const mine = input.rows.filter((r) => toCode(r.currency) === anchor.currency);
+
+  // Every promised move inside the stretch, once: a pending row, and the
+  // occurrences of its repeat after it. Keyed, because the nightly pass and a
+  // load can both have written the same one.
+  const promised = new Map<string, number>();
+  const promise = (on: string, amount: number, label: string) => {
+    if (amount >= 0 || on <= today || on > last) return;
+    const key = `${on}|${amount}|${label}`;
+    if (!promised.has(key)) promised.set(key, -amount);
+  };
+  for (const r of mine) {
+    if (r.on <= today) continue;
+    promise(r.on, r.amount, r.description ?? '');
+    const rule = parseRepeat(r.repeat);
+    if (!rule) continue;
+    for (let on = nextRepeat(rule, r.on); on <= last; on = nextRepeat(rule, on)) promise(on, r.amount, r.description ?? '');
+  }
+  const committed = round2([...promised.values()].reduce((a, b) => a + b, 0));
+  const spentToday = round2(mine.filter((r) => r.on === today && r.amount < 0 && movesBalance(anchor, r, today)).reduce((a, r) => a - r.amount, 0));
+
+  // The balance already has today's spending out of it: put it back, so that
+  // the share does not shrink with every coffee — what shrinks is what is left.
+  const pool = balance + spentToday - committed;
+  const broke = pool <= 0;
+  const perDay = broke ? 0 : Math.floor(pool / SAFE_DAYS);
+  const left = broke ? -Math.ceil(spentToday) : Math.floor(pool / SAFE_DAYS - spentToday);
+  return { left, perDay, days: SAFE_DAYS, committed, spentToday, broke, pool: round2(pool) };
+}
+
+/**
+ * What would be left today after one more move, while it is being typed: the
+ * label over the categories answers "can I?" before "Log it" does. Signed in the
+ * book's currency. The same rules as safeToSpend — a move today comes off today,
+ * one on another day spreads over the thirty, money not yet arrived counts for
+ * nothing.
+ */
+export function safeAfter(s: SafeToSpend, move: { amount: number; on: string }, today: string): { left: number; broke: boolean } {
+  let pool = s.pool;
+  let spent = s.spentToday;
+  const last = shift(today, s.days - 1);
+  if (move.on === today && move.amount < 0) spent -= move.amount;
+  else if (move.on <= today) pool += move.amount;
+  else if (move.on <= last && move.amount < 0) pool += move.amount;
+  if (pool <= 0) return { left: -Math.ceil(spent), broke: true };
+  return { left: Math.floor(pool / s.days - spent), broke: false };
+}
+
+/** The line under the balance, in the currency shown: "₱2,010 safe to spend today". */
+export function safeLine(s: SafeToSpend | null | undefined, shownLeft: number | null | undefined, view: string): string | null {
+  if (!s || shownLeft == null) return null;
+  if (s.broke) return s.committed > 0 ? 'Nothing safe to spend: what is coming up takes all of it' : 'Nothing safe to spend';
+  return shownLeft >= 0 ? `${bookMoney(shownLeft, view)} safe to spend today` : `${bookMoney(-shownLeft, view)} over today’s safe amount`;
+}
+
+/** The label over the categories while a move is typed: "₱1,850 left today after this". */
+export function safeAfterLine(a: { left: number; broke: boolean }, currency: string): string {
+  if (a.broke) return 'Nothing safe to spend after this';
+  return a.left >= 0 ? `${bookMoney(a.left, currency)} left today after this` : `${bookMoney(-a.left, currency)} over today after this`;
+}
+
+/** Where the figure comes from, in the book's currency: what the person taps the line to read. */
+export function safeWhy(s: SafeToSpend, balance: number, currency: string): string {
+  const m = (n: number) => bookMoney(n, currency);
+  const parts = [`${m(balance)} in your book`];
+  if (s.committed > 0) parts.push(`${m(s.committed)} coming up`);
+  const spent = s.spentToday > 0 ? `; ${m(s.spentToday)} spent today` : '';
+  return s.broke
+    ? `${parts.join(', less ')} leaves nothing to spread.`
+    : `${parts.join(', less ')}, over ${s.days} days is ${m(s.perDay)} a day${spent}. Money that has not arrived is not counted.`;
 }
 
 /* ─── The screen ──────────────────────────────────────────────────────────── */
@@ -206,6 +327,10 @@ export interface BookView {
   missing: string | null;
   /** Rows from a file that named no currency: not in the book until the person says which. */
   unlabelled: number;
+  /** What is safe to spend today, in the book's currency; null without a balance. */
+  safe: SafeToSpend | null;
+  /** `safe.left` in the view currency, whole units. */
+  safeShown: number | null;
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -312,6 +437,8 @@ export function bookView(input: {
 
   const balanceNow = input.anchor && input.anchor.currency === currency ? input.balanceNow ?? bookBalance(input.anchor, rows, today) : null;
   const rate = view === currency ? null : latestRate(input.fx, currency, view);
+  const safe = input.anchor && balanceNow != null ? safeToSpend({ anchor: input.anchor, balance: balanceNow, rows, today }) : null;
+  const safeShown = safe ? (rate ? Math.floor(safe.left * rate.rate) : safe.left) : null;
   const balance = balanceNow == null ? null : {
     amount: balanceNow,
     shown: rate ? Math.round(balanceNow * rate.rate * 100) / 100 : balanceNow,
@@ -364,7 +491,7 @@ export function bookView(input: {
     days, calendar,
     pending: pendingRows.slice(0, 20).map(line),
     categories: bookCategories(rows),
-    missing, unlabelled,
+    missing, unlabelled, safe, safeShown,
   };
 }
 

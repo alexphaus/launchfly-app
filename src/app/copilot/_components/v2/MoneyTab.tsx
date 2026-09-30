@@ -21,7 +21,9 @@
 // until it answers the move is listed under "Sending".
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { BookPayload, EntryDefault } from '@/lib/copilot/money/bookstore';
-import { bookDayLabel, bookMoney, bookRateLine, categoryIcon, parseRepeat, shiftMonth, type BookDay, type BookLine, type CalendarCell } from '@/lib/copilot/money/book';
+import {
+  bookDayLabel, bookMoney, bookRateLine, categoryIcon, parseRepeat, safeLine, safeWhy, shiftMonth, type BookDay, type BookLine, type CalendarCell,
+} from '@/lib/copilot/money/book';
 import { get, post } from '../api';
 import type { Actions } from '../shared';
 import type { Arrival } from '../useCopilot';
@@ -271,6 +273,11 @@ function Started({ b, book, actions, say }: { b: BookPayload; book: Book; action
   const altOn = !!book.asked && book.asked !== b.currency;
   const choices = [...new Set([alt, b.main, 'EUR', 'USD', 'GBP', 'PHP'])].filter((c) => c !== b.currency);
   const rateLine = bookRateLine(b);
+  const safeText = safeLine(b.safe, b.safeShown, b.view);
+  // Why, in the book's own currency — the one the rows are in — and the rate when shown in another.
+  const safeTold = b.safe && b.balance
+    ? `${safeWhy(b.safe, b.balance.amount, b.currency)}${b.view !== b.currency && rateLine ? ` Shown in ${b.view}: ${rateLine}.` : ''}`
+    : '';
   const onLine = (l: BookLine) => {
     if (l.book) book.openEntry({ kind: 'edit', line: l });
     else say(`From ${l.source ?? 'a statement'}. Its rows change when the statement does, on Bank statements.`);
@@ -292,9 +299,11 @@ function Started({ b, book, actions, say }: { b: BookPayload; book: Book; action
         <button className="cp2-bk-bal" onClick={() => book.openEntry({ kind: 'balance' })} aria-label="Change your balance">
           {b.balance ? m(b.balance.shown) : '—'}
         </button>
-        <span className="cp2-bk-sub">
-          {b.balance && b.view !== b.currency ? `${bookMoney(b.balance.amount, b.currency)} logged · ${rateLine}` : 'Tap it to say it again'}
-        </span>
+        {/* What the balance allows today, in the currency shown; tapped, where it comes from. Before, this
+            line said how to change the balance — the balance itself still does that when tapped. */}
+        {safeText
+          ? <button className={`cp2-bk-sub cp2-bk-safe${b.safe && (b.safe.broke || b.safe.left < 0) ? ' over' : ''}`} onClick={() => say(safeTold)}>{safeText}</button>
+          : <span className="cp2-bk-sub">{b.balance && b.view !== b.currency ? `${bookMoney(b.balance.amount, b.currency)} logged · ${rateLine}` : 'Tap it to say it again'}</span>}
       </div>
       {b.notReady && <div className="cp-error cp2-bk-gap">{b.notReady}</div>}
       {b.missing && <div className="cp-note">{b.missing}</div>}
@@ -326,11 +335,11 @@ function Started({ b, book, actions, say }: { b: BookPayload; book: Book; action
             : <div className="cp-empty cp2-bk-empty">Nothing logged in {b.monthLabel}. Tap + to log the first move.</div>}
         </>
       ) : (
-        <Calendar b={b} onTap={onLine} />
+        <Calendar key={b.month} b={b} onTap={onLine} />
       )}
 
       {/* A copy that does not depend on this server: every row, as a file on the phone. */}
-      <a className="cp2-bk-export" href="/api/copilot/money/book/export" download>Download everything as CSV</a>
+      {mode === 'list' && <a className="cp2-bk-export" href="/api/copilot/money/book/export" download>Download everything as CSV</a>}
       {/* Room to scroll the last line out from under the add button. */}
       <div className="cp2-bk-end" aria-hidden />
       {b.unlabelled > 0 && (
@@ -399,7 +408,8 @@ function compact(n: number): string {
 
 function Calendar({ b, onTap }: { b: BookPayload; onTap: (l: BookLine) => void }) {
   const [show, setShow] = useState<'spent' | 'balance'>('spent');
-  const [picked, setPicked] = useState<string | null>(null);
+  // This month opens on today, its moves already under the grid: the day you open the calendar for is usually this one.
+  const [picked, setPicked] = useState<string | null>(b.month === b.today.slice(0, 7) ? b.today : null);
   const lead = b.calendar.length ? new Date(`${b.calendar[0].on}T00:00:00Z`).getUTCDay() : 0;
   const day = picked ? b.days.find((d) => d.on === picked) ?? null : null;
   const value = (c: CalendarCell) => (show === 'spent' ? (c.spent > 0 ? compact(c.spent) : '') : c.balance != null ? compact(c.balance) : '');
@@ -480,6 +490,7 @@ export function BookSheet({ book }: { book: Book }) {
         entry={b.entry}
         onEntry={book.setEntryDefault}
         enteredReady={b.enteredReady}
+        safe={b.safe}
         categories={b.categories}
         today={b.today}
         line={line}

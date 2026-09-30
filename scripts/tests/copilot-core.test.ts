@@ -7880,3 +7880,84 @@ async function moneyBookFaster() {
 }
 
 moneyBookFaster().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Safe to spend: what the balance allows today ─── */
+import {
+  bookView as sView, safeAfter as sAfter, safeAfterLine as sAfterLine, safeLine as sLine, safeToSpend as sSafe, safeWhy as sWhy, type BookRow as SRow,
+} from '../../src/lib/copilot/money/book';
+import { fxTable as sTable } from '../../src/lib/copilot/money/fx';
+
+async function safeToSpendSuite() {
+  const today = '2026-09-30';
+  const anchor = { currency: 'PHP', balance: 60000, at: '2026-09-30T00:00:00Z', on: '2026-09-29' };
+  const row = (r: Partial<SRow> & Pick<SRow, 'id' | 'on' | 'amount'>): SRow => ({
+    currency: 'PHP', description: r.category ?? 'Money', category: null, note: null, repeat: null, createdAt: '2026-09-30T08:00:00Z', book: true, source: null, ...r,
+  });
+
+  /* 1. Nothing promised, nothing spent: the balance over thirty days. */
+  const plain = sSafe({ anchor, balance: 60000, rows: [], today });
+  assert.deepEqual([plain.perDay, plain.left, plain.committed, plain.spentToday, plain.broke], [2000, 2000, 0, 0, false]);
+
+  /* 2. What today spent comes off today's share — the share itself does not shrink with each coffee. */
+  const coffee = [row({ id: 'c', on: today, amount: -150, category: 'Coffee' })];
+  const afterCoffee = sSafe({ anchor, balance: 59850, rows: coffee, today });
+  assert.equal(afterCoffee.perDay, 2000, 'the balance already had the coffee out of it; put back, the share holds');
+  assert.equal(afterCoffee.left, 1850);
+  assert.equal(afterCoffee.spentToday, 150);
+  const fileRow = [row({ id: 'f', on: today, amount: -500, book: false, source: 'budget.csv' })];
+  assert.equal(sSafe({ anchor, balance: 60000, rows: fileRow, today }).spentToday, 0, 'a row read off a file never moved the balance, so it is not taken off twice');
+
+  /* 3. Money already promised in the next thirty days comes off first; a repeat is carried through them. */
+  const rent = [row({ id: 'r', on: '2026-10-01', amount: -8000, category: 'Housing', note: 'Rent', repeat: 'monthly@1' })];
+  const withRent = sSafe({ anchor, balance: 60000, rows: rent, today });
+  assert.equal(withRent.committed, 8000, 'the 1 Oct rent; 1 Nov is past the thirty days');
+  assert.equal(withRent.perDay, Math.floor(52000 / 30));
+  const weekly = [row({ id: 'w', on: '2026-10-07', amount: -500, category: 'Groceries', repeat: 'weekly' })];
+  assert.equal(sSafe({ anchor, balance: 60000, rows: weekly, today }).committed, 2000, '7, 14, 21 and 28 Oct: four of them, not the one written ahead');
+  const doubled = [...weekly, row({ id: 'w2', on: '2026-10-14', amount: -500, category: 'Groceries', description: 'Groceries', repeat: 'weekly' })];
+  assert.equal(sSafe({ anchor, balance: 60000, rows: doubled, today }).committed, 2000, 'the next one already written is not counted twice');
+
+  /* 4. Money that has not arrived is not counted: a figure called safe errs low. */
+  const salary = [row({ id: 's', on: '2026-10-05', amount: 30000, category: 'Salary' })];
+  assert.equal(sSafe({ anchor, balance: 60000, rows: salary, today }).perDay, 2000);
+
+  /* 5. Over today, and spoken for. */
+  const splurge = [row({ id: 'x', on: today, amount: -2600, category: 'Purchases' })];
+  const over = sSafe({ anchor, balance: 57400, rows: splurge, today });
+  assert.equal(over.left, -600);
+  assert.equal(sLine(over, over.left, 'PHP'), '₱600 over today’s safe amount');
+  const broke = sSafe({ anchor, balance: 5000, rows: rent, today });
+  assert.equal(broke.broke, true);
+  assert.equal(sLine(broke, broke.left, 'PHP'), 'Nothing safe to spend: what is coming up takes all of it');
+
+  /* 6. What it says, and why when asked. */
+  assert.equal(sLine(afterCoffee, afterCoffee.left, 'PHP'), '₱1,850 safe to spend today');
+  assert.equal(sLine(null, null, 'PHP'), null, 'no balance said, no line');
+  assert.equal(sWhy(withRent, 60000, 'PHP'), '₱60,000 in your book, less ₱8,000 coming up, over 30 days is ₱1,733 a day. Money that has not arrived is not counted.');
+  assert.equal(sWhy(afterCoffee, 59850, 'PHP'), '₱59,850 in your book, over 30 days is ₱2,000 a day; ₱150 spent today. Money that has not arrived is not counted.');
+
+  /* 6b. While a move is typed: what would be left after it. */
+  assert.deepEqual(sAfter(plain, { amount: -150, on: today }, today), { left: 1850, broke: false }, 'a coffee today comes off today');
+  assert.deepEqual(sAfter(plain, { amount: -3000, on: '2026-10-10' }, today), { left: 1900, broke: false }, 'a bill in ten days spreads over the thirty');
+  assert.deepEqual(sAfter(plain, { amount: -3000, on: '2026-12-10' }, today), { left: 2000, broke: false }, 'past the thirty days it waits its turn');
+  assert.deepEqual(sAfter(plain, { amount: 30000, on: '2026-10-05' }, today), { left: 2000, broke: false }, 'money not arrived counts for nothing');
+  assert.deepEqual(sAfter(plain, { amount: 3000, on: today }, today), { left: 2100, broke: false }, 'money in today is spread too');
+  assert.equal(sAfter(plain, { amount: -61000, on: '2026-10-02' }, today).broke, true);
+  assert.equal(sAfterLine({ left: 1850, broke: false }, 'PHP'), '₱1,850 left today after this');
+  assert.equal(sAfterLine({ left: -600, broke: false }, 'PHP'), '₱600 over today after this');
+
+  /* 7. On the screen: in the book, and in the currency shown. */
+  const rows = [...coffee, ...rent];
+  const v = sView({ rows, anchor, currency: 'PHP', view: 'PHP', today, month: '2026-09', fx: sTable([]), balanceNow: 59850 });
+  assert.equal(v.safe?.left, Math.floor((59850 + 150 - 8000) / 30 - 150));
+  assert.equal(v.safeShown, v.safe?.left);
+  const eur = sView({ rows, anchor, currency: 'PHP', view: 'EUR', today, month: '2026-09', balanceNow: 59850,
+    fx: sTable([{ base: 'PHP', quote: 'EUR', day: '2026-09-29', rate: 0.0157 }, { base: 'PHP', quote: 'EUR', day: '2026-09-30', rate: 0.0157 }]) });
+  assert.equal(eur.safeShown, Math.floor(eur.safe!.left * 0.0157), 'shown in euros at the newest rate, kept in pesos');
+  const unsaid = sView({ rows, anchor: null, currency: 'PHP', view: 'PHP', today, month: '2026-09', fx: sTable([]) });
+  assert.equal(unsaid.safe, null);
+
+  console.log('copilot-core: safe to spend checks passed');
+}
+
+safeToSpendSuite().catch((e) => { console.error(e); process.exit(1); });

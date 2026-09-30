@@ -14,7 +14,9 @@
 // (bookstore.ts movedColumns). Shared by the Money tab's sheet and the Log
 // money page.
 import { useEffect, useRef, useState } from 'react';
-import { bookDayLabel, bookMoney, categoryIcon, cleanAmount, parseRepeat, type BookLine } from '@/lib/copilot/money/book';
+import {
+  bookDayLabel, bookMoney, categoryIcon, cleanAmount, parseRepeat, safeAfter, safeAfterLine, safeLine, type BookLine, type SafeToSpend,
+} from '@/lib/copilot/money/book';
 import type { EntryDefault } from '@/lib/copilot/money/bookstore';
 import { currencyMark } from '@/lib/copilot/money/fx';
 import { addDay } from '@/lib/copilot/money/ledger';
@@ -41,6 +43,8 @@ export interface EntryPadProps {
   onLogged?: () => void;
   /** 'page' stays on screen after a move, cleared for the next. */
   variant: 'sheet' | 'page';
+  /** What is safe to spend today, in the book's currency: said over the categories, and what would be left after this move. */
+  safe?: SafeToSpend | null;
   /** On screen: the amount takes focus when it becomes so. A sheet's body stays mounted after it closes, to slide out. */
   active?: boolean;
 }
@@ -86,6 +90,19 @@ export default function EntryPad(p: EntryPadProps) {
   const blocked = other && !p.enteredReady;
   const ready = n > 0 && !!(category || note.trim()) && !blocked && !busy && !p.busy;
   const what = note.trim() || category || '';
+
+  // The move in the book's currency, when that can be known here: typed in it, or with the default's rate at hand.
+  const inBook = typedIn === currency ? n : p.entry?.currency === typedIn && p.entry.rate ? n * p.entry.rate.rate : null;
+  const safeNow = (() => {
+    const s = p.safe;
+    if (!s || line) return null;
+    if (!(n > 0) || inBook == null) {
+      const text = safeLine(s, s.left, currency);
+      return text ? { text, warn: s.broke || s.left < 0 } : null;
+    }
+    const after = safeAfter(s, { amount: kind === 'out' ? -inBook : inBook, on }, p.today);
+    return { text: safeAfterLine(after, currency), warn: after.broke || after.left < 0 };
+  })();
 
   const amountRef = useRef<HTMLInputElement>(null);
   const reset = () => {
@@ -145,7 +162,9 @@ export default function EntryPad(p: EntryPadProps) {
           scrolled off the right), then the note, the day and the repeat, each
           under its own label. Tall enough that with the keyboard up the amount,
           the categories and the note stay above it. */}
-      <div className="cp-label cp2-pad-label">Category</div>
+      {/* The label over the categories says what is safe to spend today, and while an amount is typed, what would be left
+          after it — "can I?" answered before "Log it". Plain "Category" when editing a move already counted, or with no balance. */}
+      <div className={`cp-label cp2-pad-label${safeNow?.warn ? ' cp2-pad-over' : ''}`}>{safeNow?.text ?? 'Category'}</div>
       <div className="cp-chips cp2-pad-chips" role="group" aria-label="Category">
         {shownCats.map((c) => (
           <button key={c} className={`cp-fchip cp2-pad-chip${category === c ? ' active' : ''}${kind === 'in' ? ' in' : ''}`} aria-pressed={category === c} onClick={() => setCategory(category === c ? null : c)}>

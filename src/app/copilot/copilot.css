@@ -1757,6 +1757,11 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pad-amount:focus-within { border-bottom-color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-pad-conv { margin: -4px 4px 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-pad-label { margin: 6px 2px -2px; }
+/* Over today's safe amount: said in the warm tone the app uses for trouble, not in red — it is a fact, not an alarm. */
+.cp-root[data-theme="soft"] .cp2-pad-label.cp2-pad-over { color: #A85F2E; }
+/* The line under the balance: what is safe to spend today. A button, so it can say where the figure comes from. */
+.cp-root[data-theme="soft"] .cp2-bk-safe { align-self: flex-start; padding: 0; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted); text-align: left; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-bk-safe.over { color: #A85F2E; }
 .cp-root[data-theme="soft"] .cp2-pad-chips .cp-fchip { padding: 8px 13px; font-size: 12.5px; }
 .cp-root[data-theme="soft"] .cp2-pad-chip { display: inline-flex; align-items: center; gap: 6px; }
 .cp-root[data-theme="soft"] .cp2-pad-chip svg { width: 15px; height: 15px; flex: none; stroke: var(--blue); }

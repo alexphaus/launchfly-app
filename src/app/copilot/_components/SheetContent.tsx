@@ -22,6 +22,7 @@ import { whenLabel } from '@/lib/copilot/review';
 import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
 import BankSheet from './BankSheet';
+import OutreachSheet from './v2/Outreach';
 import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
 import { dayLabel } from '@/lib/copilot/money/ledger';
 
@@ -53,6 +54,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'capture': return <CaptureSheet home={home} actions={actions} />;
     case 'focus': return <FocusSheet home={home} actions={actions} />;
     case 'bank': return <BankSheet home={home} actions={actions} />;
+    case 'outreach': return <OutreachSheet home={home} stage={sheet.stage} actions={actions} />;
   }
 }
 

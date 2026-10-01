@@ -7,6 +7,7 @@ import type { AskAnswer } from '@/lib/copilot/ask';
 import type { MarkState } from '@/lib/copilot/roadmap';
 import type { ExperimentState } from '@/lib/copilot/experiment';
 import type { PayeeRole } from '@/lib/copilot/money/ledger';
+import type { OutreachStage } from '@/lib/copilot/matches';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -31,7 +32,7 @@ export type Tab = 'now' | 'working';
  * layouts over one app — a v1 screen that could be told to open `work` would
  * have nothing to render.
  */
-export type Tab2 = 'path' | 'matches' | 'swipe' | 'work' | 'money' | 'you';
+export type Tab2 = 'path' | 'swipe' | 'work' | 'money' | 'you';
 
 export type SheetState =
   | { kind: 'capacity' }
@@ -73,6 +74,11 @@ export type SheetState =
   | { kind: 'move'; id: string }
   /** The confirm card — opened drafts, or replies with no ending — as a sheet. */
   | { kind: 'capture' }
+  /**
+   * Everyone already written to — To send, Waiting, Replied — opened on one of
+   * them (v2/Outreach.tsx). The Matches tab's other pills, after Swipe took New.
+   */
+  | { kind: 'outreach'; stage: OutreachStage }
   /** Log deep work. The one number on You that nothing else can supply. */
   | { kind: 'focus' }
   /** Bank statements: upload, what they say, who paid, and the answers only the person can give. */
@@ -131,12 +137,15 @@ export interface Actions {
   setCapacity(c: Capacity): Promise<void>;
   resetDevice(): Promise<void>;
   // — closed loop —
-  sendAction(id: string, overrides?: { body?: string; subject?: string }): Promise<boolean>;
+  // Each closes the sheet it was answered from, which is the right end for a
+  // sheet about one draft. `stay` is for a list in a sheet (v2/Outreach.tsx):
+  // answering one row must not close the rows still to answer.
+  sendAction(id: string, overrides?: { body?: string; subject?: string }, opts?: { stay?: boolean }): Promise<boolean>;
   /** Manual dispatch: the user sent it from their own app, we just record it. */
-  markSent(id: string, overrides?: { body?: string; subject?: string }): Promise<boolean>;
+  markSent(id: string, overrides?: { body?: string; subject?: string }, opts?: { stay?: boolean }): Promise<boolean>;
   saveOffer(offer: Offer): Promise<boolean>;
   cancelDraft(id: string): Promise<void>;
-  recordOutcome(input: OutcomeInput): Promise<boolean>;
+  recordOutcome(input: OutcomeInput, opts?: { stay?: boolean }): Promise<boolean>;
   draftFor(oppId: string, channel?: Channel): Promise<boolean>;
   findMatches(): Promise<void>;
   /** `cash_currency` / `burn_currency`: what each number was typed in, when not the main currency. `main_currency`: the whole app's, from Settings. */

@@ -268,7 +268,7 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
 
   if (input.freshMatches > 0) {
     return {
-      now: { kind: 'find', key: 'find', title: `Draft for the ${plural(input.freshMatches, 'business', 'businesses')} worth a message`, why: 'Found since you last looked, and nothing written for them yet.', size: null, cta: 'Open Matches' },
+      now: { kind: 'find', key: 'find', title: `Swipe through the ${plural(input.freshMatches, 'business', 'businesses')} worth a message`, why: 'Found since you last looked. Each card comes with its message written; right sends it.', size: null, cta: 'Open Swipe' },
       also: also(),
     };
   }
@@ -335,7 +335,7 @@ export function pathAhead(input: AheadInput): { stops: Stop[]; beyond: Beyond[] 
   const ahead = input.ladder.steps.slice(input.ladder.current).filter((s) => s.key !== 'offer' && s.key !== 'goal' && s.state !== 'done');
   for (const s of ahead) {
     if (s.key === 'sent') {
-      stops.push({ key: 'rung:sent', kind: 'rung', title: 'Your first message', status: null, progress: null, takes: 'One send. The drafts are already written.', when: 'Two minutes, from Matches.', pace: null, early: false });
+      stops.push({ key: 'rung:sent', kind: 'rung', title: 'Your first message', status: null, progress: null, takes: 'One send. The drafts are already written.', when: 'Two minutes, from Swipe.', pace: null, early: false });
     } else if (s.key === 'reply') {
       stops.push({
         key: 'rung:reply', kind: 'rung', title: 'A first reply', status: null, progress: null,

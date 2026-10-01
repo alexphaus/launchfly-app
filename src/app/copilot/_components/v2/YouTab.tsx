@@ -131,10 +131,10 @@ function Week({ home, d, actions, openMatches }: { home: HomeData; d: Derived; a
     else if (t === 'sources') actions.openSheet({ kind: 'watchlist' });
     else if (t === 'projects') actions.setTab('work');
     else if (t === 'focus') actions.openSheet({ kind: 'focus' });
-    else if (t === 'matches') actions.setTab('matches');
+    else if (t === 'matches') actions.setTab('swipe');
     else if (t === 'record') actions.openSheet({ kind: 'ask' });
     else if (t === 'won') actions.openSheet({ kind: 'stage', stage: 'won' });
-    // A reply is followed up where replies are: Matches, on its own pill.
+    // A reply is followed up where replies are: the outreach sheet, on its own pill.
     else if (t === 'replied' || t === 'waiting') openMatches(t);
   };
   const unread = home.recent.unreadable;
@@ -176,7 +176,7 @@ const GLYPH: Record<ReviewKind, PathIcon> = {
 
 /** Where an opened line leads, said at its foot. */
 const OPEN_LABEL: Record<Exclude<ReviewTarget, null>, string> = {
-  queue: 'Open the queue', sources: 'Open your sources', projects: 'Open Work', matches: 'Open Matches',
+  queue: 'Open the queue', sources: 'Open your sources', projects: 'Open Work', matches: 'Open Swipe',
   focus: 'Log time', record: 'Ask your record about it', won: 'See every win', replied: 'Open your replies', waiting: 'See who you are waiting on',
 };
 

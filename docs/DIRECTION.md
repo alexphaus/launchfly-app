@@ -222,7 +222,8 @@ where hours and replies sit side by side.
 numbers on You, its owner found the separation was the point: the Path is what
 to do and what moved, Work is the business being built — the offer, the
 machine, the team and the projects in full. Four tabs: Path · Matches · Work ·
-You. See COPILOT.md → **Four tabs**.
+You. See COPILOT.md → **Four tabs**. (Money joined them later, and Swipe took
+Matches' place: COPILOT.md → **Swipe**.)
 **Then** — the Path as a plan, not a log. The stream put everything on one axis
 and weighted it evenly, so the part a person opens it for — what now, and where
 is this going — was a short list under a long log. Now the evidence above "you
@@ -324,12 +325,15 @@ direction better than "copilot" does.
 
 ## Open, and honest
 
-- **Swipe or Matches.** The deck is back as a sixth tab (COPILOT.md → **Swipe**),
-  because 57 of 76 drafts sat unsent and its owner named why: too little on each
-  card, a message that was not written for them, numbers that were not on
-  WhatsApp. What changed from the deck that was folded away is what "yes" is —
-  the send, with the message on the card — not the gesture. Whichever of the two
-  tabs moves sends per session keeps its place; the other goes.
+- **Swipe, not Matches.** The deck came back as a sixth tab (COPILOT.md →
+  **Swipe**), because 57 of 76 drafts sat unsent and its owner named why: too
+  little on each card, a message that was not written for them, numbers that were
+  not on WhatsApp. What changed from the deck that was folded away is what "yes"
+  is — the send, with the message on the card — not the gesture. After a release
+  side by side its owner kept the deck and dropped the list; who is waiting and
+  who replied moved into a sheet off the deck. Still open: whether it moves sends
+  per session. If swiping goes up and sending does not, the deck made the app
+  feel better and changed nothing, and that is the number to watch.
 - **The loop has never closed end to end.** Zero messages sent from the app.
   Until one goes out and one reply comes back, everything downstream is
   speculation. This is the highest-value thing anyone can do, and it is not a

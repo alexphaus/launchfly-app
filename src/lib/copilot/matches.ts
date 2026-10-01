@@ -255,17 +255,6 @@ export function matchCounts(items: MatchItem[]): MatchCounts {
   return { all: items.length, fresh: items.filter((i) => i.fresh).length, by };
 }
 
-/**
- * The line under the greeting on Matches, counted over what the list shows.
- * The queue is not here: the pills right under this line carry it, and the same
- * number twice in one glance is how the header came to say 61 over a card
- * saying 51.
- */
-export function matchesStatus(counts: MatchCounts): string | null {
-  if (counts.fresh) return `${counts.fresh} new since yesterday`;
-  if (counts.all) return `${counts.all} worth a look`;
-  return null;
-}
 
 /**
  * Whether a typed segment is worth a search. One character is a typo, and it is
@@ -377,6 +366,24 @@ export function stageCards(input: StageInput): Record<Exclude<MatchStage, 'new'>
     .map((r) => card(r, 'replied', r.stage === 'meeting' ? 'Meeting or proposal logged' : 'Replied — log what happened next'));
 
   return { to_send, waiting, replied };
+}
+
+export type OutreachStage = Exclude<MatchStage, 'new'>;
+
+/**
+ * The way from the deck to everyone already written to: which stage it opens
+ * on and what it says. The deck is New and To send one card at a time; who is
+ * waiting and who replied are a list or nothing, and this is the door to it.
+ *
+ * A reply leads, because it is the one thing here that goes cold; then who you
+ * are waiting on; drafts last, since the deck deals them anyway. Nothing at any
+ * stage is nothing said — no door to an empty room.
+ */
+export function outreachLine(n: Record<OutreachStage, number>): { stage: OutreachStage; label: string; replied: boolean } | null {
+  if (n.replied > 0) return { stage: 'replied', label: n.waiting > 0 ? `${n.replied} replied · ${n.waiting} waiting` : `${n.replied} replied`, replied: true };
+  if (n.waiting > 0) return { stage: 'waiting', label: `${n.waiting} waiting`, replied: false };
+  if (n.to_send > 0) return { stage: 'to_send', label: `${n.to_send} draft${n.to_send === 1 ? '' : 's'}`, replied: false };
+  return null;
 }
 
 /* ── Formatting, pure and small ─────────────────────────────────────────── */

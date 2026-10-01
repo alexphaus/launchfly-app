@@ -307,6 +307,8 @@ export interface StageCard {
   /** The business, on Waiting and Replied. */
   oppId: string | null;
   channel: Channel | null;
+  /** A draft to a phone that goes by text or by a call (the Swipe tab's choice), so the button says so. */
+  via?: 'sms' | 'call' | null;
 }
 
 export interface StageInput {
@@ -345,6 +347,7 @@ export function stageCards(input: StageInput): Record<Exclude<MatchStage, 'new'>
       link: q.execution.deep_link ?? null,
       oppId,
       channel: q.execution.channel,
+      via: q.execution.provider === 'sms' || q.execution.provider === 'call' ? q.execution.provider : null,
     };
   });
 

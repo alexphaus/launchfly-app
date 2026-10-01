@@ -17,7 +17,7 @@ but none of the business logic. Everything is under:
 
 | Layer | Path |
 | --- | --- |
-| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — the four-tab layout, five tabs now (Path · Matches · Work · Money · You), calm |
+| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — the four-tab layout, six tabs now (Path · Matches · Swipe · Work · Money · You), calm |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
@@ -316,6 +316,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Matches | who is worth contacting, and where each one is | pills (New · To send · Waiting · Replied) · only what the ranker recommends, each card a tile, what it is and where, why, and one action · a draft sent from its own card | `matches.ts` |
+| Swipe | the same people, one at a time — yes or no | one card the whole screen: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · see **Swipe** below | `deck.ts` |
 | Work | what am I building | the offer and what it knows about how you work · the path to money · the agents · projects handed over, in full (the ones that need you, the ones running, what it offers to take on, what finished) · the brief for Claude | `machine.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move | `money/book.ts` |
 | You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
@@ -1755,6 +1756,92 @@ rate built only from keeps is not a rate.
 session.** If swiping goes up and sending does not, it made the app feel better
 and changed nothing, and it should be reverted.
 
+## Swipe — the deck again, where yes is the send (`deck.ts`, `deckstore.ts`, `v2/SwipeTab.tsx`)
+
+A sixth tab beside Matches, from its owner's account of why 57 of 76 drafts
+never went: "little info about each card, then open it and draft it to check and
+send later; the message is not written for me; many didn't have WhatsApp". The
+stack above was folded away because "yes" was a draft to send later — the cheap
+side won. Here "yes" is the send itself, so both answers cost one flick again.
+It stays beside Matches until one of them is the one that gets used; the metric
+is the stack's: sends per session (the tab's own top line counts them).
+
+**The card is the whole screen**, and carries what the list sent people away to
+open: the listing's photo, what and where, every reason it was picked (not two
+lines of one), the post itself for a find (its Move's `artifact.value`), facts
+off the listing ("4.2★ (6)", "No website" — never a guessed number) and how they
+can be reached. Dealt in this order (`deckCards`): fresh finds, which go cold in
+days; To send, first messages before follow-ups, which wait for their day; then
+the rest of New in the list's own order.
+
+**How they can be reached is said, not assumed.** A Maps phone went into
+`contact.whatsapp` whatever it was, and many on the owner's account were
+landlines: a `wa.me` link to a landline opens an error, a draft that could never
+go. A Philippine number says which it is (`phoneKind`: 639… mobile; 632…, 032…,
+02… landline), so a landline is offered a call, with the message as what to say
+when they pick up, and a mobile WhatsApp, a text or a call. Elsewhere the number
+cannot say, so WhatsApp and a call are both offered. Email and a website's
+contact form are ways too; a find is answered on its own post.
+
+**The message is written for the card before it is shown** — the card on screen
+and the next two — by the brief's model (`DRAFT_SYSTEM`, `draftPrompt`: the
+offer, what the person knows about their own work, the listing or the post, the
+way it will go). It is held to the rules before it reaches a card (`checkDraft`):
+no placeholder, no link but the proof link, and no number whose digits are not in
+the offer, the listing or the post — durations and times of day excepted, since
+they are an ask. A message it refuses, a model that does not answer in 20s, no
+model on the server, or past 300 a day: the card shows the one written from the
+offer (`openerTemplate`, or the To send draft's own text) and says why, under the
+message. Model-written messages are kept on the phone for three days per offer,
+so a reload does not write them again. Tap the message to change it; "Rewrite"
+asks again.
+
+**Right is the send.** From the person's own number or address when they
+connected one (`channelsConfigured`; the button says "Send" and the card "sends
+from your own number"), under the send route's own 40-a-day cap. Otherwise their
+own app opens with it in — WhatsApp, texts, the dialler or mail — and the deck
+asks when they are back: "Did it go?" (a call: "Did you get through?"). A reply
+to a post, or a message for a contact form, is copied and the page opened; "did
+you post it?" is asked the same way. The open happens inside the gesture, since
+a phone opens nothing after a wait, and the record (`action: 'reach'`) is sent
+with `keepalive`, so it survives the page going to the background. "It didn't" on
+WhatsApp brings the card straight back offering the same number as a text or a
+call — not being on WhatsApp is the usual reason. A number that refuses (the
+provider errs) is said in a sentence, and the card offers to send it from their
+own app instead.
+
+**What is recorded is what the list records.** The approved message becomes the
+business's draft (`draftWithBody` — the text read on the card, never the
+template; an open draft is rewritten, never a second queued). Marked opened, so
+someone who never comes back to answer is asked on the Path. "It went" is
+`markSentManually`, with the way it went kept as the execution's `provider`
+(`sms`, `call`), so its link and its day-3 follow-up open the same app
+(`deepLink`); To send says "Call them" for a call. Every answer writes the same
+`triage_answered` event the list writes (`from: 'swipe'`), so the keep-rate that
+orders both learns from both. Not for me on a written draft cancels it (kept as
+cancelled, for the funnel) and sets the business aside; on a business it also
+cancels any draft it has — swiped right, no answer, then not for me left an
+orphan draft in To send whose listing every read had dropped. A post or a site
+has no recipient for a draft: posting marks the find's Move done, and a site
+marks the business acted (`deck_posted`).
+
+**Gestures, and a button for each:** drag right, drag left; Undo (a "not for
+me" is held 8s or until the next answer, then saved — leaving the tab saves it
+with `keepalive`); Later (to the back of the pile); Look up. Sideways is a swipe
+and up-and-down reads the card, so the card scrolls and a swipe can start on the
+message. Arrow keys on a desk. The pile keeps its own order for the session, so
+the home refreshed behind it once after a burst of swipes never reshuffles the
+card under the thumb; a business swiped right that comes back as a draft takes
+its own place in the pile, with the way picked and the words typed. What was
+answered and the session's count are kept for the day on the phone, so a trip to
+Matches does not deal them again.
+
+**Testing it.** Headless Chromium hands `sms:`, `tel:` and `mailto:` to an
+"open external app" prompt that swallows every click after it, so a test records
+them instead — the tab opens them as a clicked link, and `HTMLAnchorElement.prototype.click`
+can be wrapped in an init script. A model stand-in has to answer the Responses
+API (`/v1/responses`), which is what the AI SDK's provider calls.
+
 ## Moves and Jobs
 
 A **Move** is a finished piece of work with something concrete attached. A
@@ -2406,6 +2493,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/commissions/run` | hand live mandates over now (25s budget) |
 | POST | `/api/copilot/obligations` | money owed, either way |
 | POST | `/api/copilot/actions/[id]/opened` | `sendBeacon` target — a draft's deep link was tapped |
+| POST | `/api/copilot/deck` | the Swipe tab, one card at a time, never answering with the home: `{ action: 'draft', kind: business \| draft \| find, id, via: whatsapp \| sms \| call \| email \| site \| post }` the card's message (`from: model \| offer`, `note` when not the model's) · `{ action: 'reach', kind, id, via, body, subject? }` the right swipe (`mode: sent` from their own number, else `open` with the draft's `actionId` and `link`) · `{ action: 'sent', id (the draft's action), via, body?, subject? }` · `{ action: 'unsent', id }` · `{ action: 'posted', kind, id, via }` · `{ action: 'skip', kind, id }` |
 | POST | `/api/copilot/moves/:id` | `{ status: done \| dismissed \| handover }` — `handover` turns a proposed Move into a live mandate |
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
@@ -2524,8 +2612,9 @@ moves is refreshed in place, never demoted. `workingBrief()` feeds
 characters because it sits at the head of every per-source judge prompt.
 
 **Three destinations, and the sheet may only name those three.** It reaches the
-daily read, the per-source judge, and a commissioned worker. It does **not**
-reach a draft: `draftOpener` calls `openerTemplate`, which is built from the
+daily read, the per-source judge, and a commissioned worker — and, since the
+Swipe tab, the messages written for its cards (`writeDeckDraft`). It does **not**
+reach the Draft button's draft: `draftOpener` calls `openerTemplate`, which is built from the
 offer's five strings and has never read this table. The sheet claimed "every
 draft" anyway, and `SECTION.voice.changes` said "changes every draft, which is
 most of what this app produces" — invariant 7 inside the app's own copy, on the
@@ -2625,8 +2714,17 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
 - API sending needs a per-profile channel, and there is no UI to provision one — set
   `linked_business_id` / `email_from` and `send_mode` in the database. Manual dispatch is the
   path everyone else uses, and it is the default.
-- The working file does not reach a draft. Three of its six sections are worth typing
-  mostly for what they would do to one. See the working file section above.
+- The working file does not reach the Draft button's draft (it does reach the Swipe tab's).
+  Three of its six sections are worth typing mostly for what they would do to one. See the
+  working file section above.
+- The Swipe tab's guard on numbers checks that a number's digits are in what the model was
+  given, not what it is used for: a listing with 40 reviews would let "we helped 40 bakeries"
+  through. The prompt forbids it; the guard catches the numbers that are in nothing.
+- A reply posted to a thread or sent through a contact form has no recipient, so it is not a
+  send in the funnel: the find's Move is done, the business acted, and nothing waits for a
+  reply to it.
+- The Swipe pile's own order (Later, put back) lives with the tab: leaving it and coming back
+  deals in the server's order again. What was answered is kept.
 - `budget_minutes` is written, shown as "up to 60 min" and sent in the payload, and
   nothing accounts for it. `dueCommissions` re-dispatches every active mandate nightly
   with no cooldown, so what reads as a total is a per-night allowance with no ledger

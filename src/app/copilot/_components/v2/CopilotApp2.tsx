@@ -28,6 +28,11 @@
 // the sheets and every action are shared — useCopilot — and only the arrangement
 // is new. Both can be installed and lived with; the one that gets opened wins.
 //
+// Swipe (SwipeTab.tsx) is the same matches as Matches, one at a time and the
+// whole screen each, with the message already written: right sends it. It sits
+// beside Matches rather than replacing it until the owner has lived with both —
+// the reasoning that kept two layouts installable side by side.
+//
 // The header's corner is the mic (VoiceLog.tsx): say a move from any tab and
 // the add sheet opens with it filled in. It held the capacity pill, a setting
 // shown on every screen and changed about never; that is in You → Settings.
@@ -41,17 +46,18 @@ import SheetContent from '../SheetContent';
 import type { Tab2 } from '../shared';
 import { sheetKey, useCopilot } from '../useCopilot';
 import { useDerived } from './derive';
-import { IconMatches, IconMoney, IconPath, IconWork, IconYou } from './icons2';
+import { IconMatches, IconMoney, IconPath, IconSwipe, IconWork, IconYou } from './icons2';
 import PathTab from './PathTab';
 import MatchesTab from './MatchesTab';
 import WorkTab from './WorkTab';
 import MoneyTab, { BookFab, BookSheet, MoneyTabGuard, useBook } from './MoneyTab';
 import YouTab from './YouTab';
+import SwipeTab from './SwipeTab';
 import { useVoice, VoiceButton, VoiceLive } from './VoiceLog';
 
-const TABS: Tab2[] = ['path', 'matches', 'work', 'money', 'you'];
-const LABEL: Record<Tab2, string> = { path: 'Path', matches: 'Matches', work: 'Work', money: 'Money', you: 'You' };
-const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, matches: IconMatches, work: IconWork, money: IconMoney, you: IconYou };
+const TABS: Tab2[] = ['path', 'matches', 'swipe', 'work', 'money', 'you'];
+const LABEL: Record<Tab2, string> = { path: 'Path', matches: 'Matches', swipe: 'Swipe', work: 'Work', money: 'Money', you: 'You' };
+const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, matches: IconMatches, swipe: IconSwipe, work: IconWork, money: IconMoney, you: IconYou };
 /** After the last move logged in a burst, the rest of the app re-reads runway once, not once per coffee. */
 const HOME_AFTER_BOOK_MS = 4_000;
 /**
@@ -62,6 +68,7 @@ const HOME_AFTER_BOOK_MS = 4_000;
 const ALIAS: Record<string, Tab2> = {
   path: 'path', today: 'path', now: 'path',
   matches: 'matches', pipeline: 'matches', opportunities: 'matches', signals: 'matches',
+  swipe: 'swipe', deck: 'swipe', triage: 'swipe',
   work: 'work',
   money: 'money', book: 'money', cash: 'money',
   you: 'you', working: 'you',
@@ -101,8 +108,9 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
   const openMatches = (s: MatchStage) => { setMatchStage(s); setTab('matches'); };
 
   return (
-    <div className="cp-frame cp2-frame">
-      <header className="cp-header">
+    <div className={`cp-frame cp2-frame${tab === 'swipe' ? ' cp2-swiping' : ''}`}>
+      {/* No header on Swipe: the card is the screen, as a deck of cards has to be to be read at a glance. */}
+      {tab !== 'swipe' && <header className="cp-header">
         <div>
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
           {/* Tab-aware, and nothing when there is nothing true to say. While the mic is open, what it hears. */}
@@ -111,7 +119,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
         <div className="cp-header-right">
           <VoiceButton voice={voice} onType={() => logMove()} />
         </div>
-      </header>
+      </header>}
 
       <main className="cp-content" ref={mainRef}>
         {/* The nightly pass runs for minutes after its tap has returned, so it is
@@ -121,6 +129,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
           : (briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
         {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
         {tab === 'matches' && <MatchesTab home={home} d={d} actions={actions} finding={finding} stage={matchStage} onStage={setMatchStage} />}
+        {tab === 'swipe' && <SwipeTab home={home} d={d} actions={actions} say={say} refresh={refresh} />}
         {tab === 'work' && <WorkTab home={home} d={d} actions={actions} briefing={briefing} />}
         {tab === 'money' && <MoneyTabGuard><MoneyTab book={book} actions={actions} say={say} arrival={arrival} clearArrival={clearArrival} /></MoneyTabGuard>}
         {tab === 'you' && <YouTab home={home} d={d} actions={actions} openMatches={openMatches} />}

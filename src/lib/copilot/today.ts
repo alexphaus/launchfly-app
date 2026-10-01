@@ -130,7 +130,7 @@ export function doneForYou(input: DoneInput): DoneReport {
       label: `${plural(waiting, 'new match', 'new matches')} worth a look`,
       // "Overnight" and "keeps looking" only while the nightly job is running:
       // a manual look is not a night, and a job that never runs does not keep on.
-      detail: waiting === found ? 'Real listings, deduped — waiting on Matches' : `Out of ${found} it found${fresh ? ' overnight' : ''}`,
+      detail: waiting === found ? 'Real listings, deduped — waiting on Swipe' : `Out of ${found} it found${fresh ? ' overnight' : ''}`,
       tone: 'done',
       target: 'matches',
     } : {

@@ -378,7 +378,7 @@ export function pathLadder(input: LadderInput): { steps: PathStep[]; current: nu
     : `${Math.round(cur).toLocaleString('en-US')} of ${Math.round(target).toLocaleString('en-US')}${g?.unit ? ` ${g.unit}` : ''}`);
   const copy: Record<StepKey, { title: string; done: string; open: string; progress: PathStep['progress'] }> = {
     offer: { title: 'Say what you sell', done: 'Everything it writes starts here', open: 'One sentence. It writes nothing without it', progress: null },
-    sent: { title: 'Send the first message', done: `${plural(input.sent, 'message')} sent so far`, open: 'From your own WhatsApp or email — the drafts are on Matches', progress: null },
+    sent: { title: 'Send the first message', done: `${plural(input.sent, 'message')} sent so far`, open: 'From your own WhatsApp, texts or email — swipe right on Swipe', progress: null },
     reply: { title: 'Get a reply', done: `${plural(input.replied, 'reply', 'replies')} so far`, open: `${plural(input.sent, 'message')} out, no answer yet`, progress: null },
     paid: { title: 'First paying client', done: `${plural(input.won, 'client')} so far`, open: `${plural(input.replied, 'conversation')}, none paid yet`, progress: null },
     repeat: { title: `${REPEAT_WINS} paying clients`, done: 'Something you can repeat, not luck', open: 'One can be luck. Three is something you can repeat', progress: { done: Math.min(input.won, REPEAT_WINS), of: REPEAT_WINS } },

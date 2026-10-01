@@ -455,12 +455,12 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
 
     // — closed loop —
-    async sendAction(id, overrides) {
+    async sendAction(id, overrides, opts) {
       try {
         const r = await post<{ ok: boolean; home: HomeData; execution: { error?: string | null } }>(`/actions/${id}/send`, overrides ?? {});
         setHome(r.home);
         say('Sent. Follow-up drafted for day 3.');
-        closeSheet();
+        if (!opts?.stay) closeSheet();
         return true;
       } catch (e) {
         fail(e, 'Send failed');
@@ -703,12 +703,12 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         return true;
       } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
     },
-    async markSent(id, overrides) {
+    async markSent(id, overrides, opts) {
       try {
         const r = await post<{ home: HomeData }>(`/actions/${id}/sent`, overrides ?? {});
         setHome(r.home);
         say('Logged as sent. Follow-up drafted for day 3.');
-        closeSheet();
+        if (!opts?.stay) closeSheet();
         return true;
       } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
     },
@@ -724,11 +724,11 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     async cancelDraft(id) {
       try { await api(`/actions/${id}/send`, { method: 'DELETE' }); await refresh(); closeSheet(); say('Draft cancelled'); } catch (e) { fail(e, 'Could not cancel'); }
     },
-    async recordOutcome(input: OutcomeInput) {
+    async recordOutcome(input: OutcomeInput, opts) {
       try {
         const r = await post<{ home: HomeData }>('/outcomes', input);
         setHome(r.home);
-        closeSheet();
+        if (!opts?.stay) closeSheet();
         say(input.kind === 'won' ? 'Logged. Goal updated.' : input.kind === 'reply' ? 'Reply logged. Ranking learns from this.' : 'Logged.');
         return true;
       } catch (e) { fail(e, 'Could not record'); return false; }

@@ -6,10 +6,12 @@
 // "yes" is the send itself, not a draft to go and send later. This file is the
 // hand on it.
 //
-//   - The card carries everything the Matches card sent its owner away to open
-//     ("little info on each card, then open it"): the photo, what the place is
-//     and where, every reason it was picked, the post itself for a find, and
-//     how they can actually be reached.
+//   - The card carries everything the old Matches list sent its owner away to
+//     open ("little info on each card, then open it"): the photo, what the
+//     place is and where, every reason it was picked, the post itself for a
+//     find, and how they can actually be reached. It reaches to the foot of the
+//     screen, the buttons and the nav frosted over it, and reads like a
+//     profile: up and down scrolls it, sideways moves the card.
 //   - The message is written for the card before it is shown — the card on
 //     screen and the next two — so by the time a thumb reaches one it is there.
 //     One the model did not write says who did, and why.
@@ -25,15 +27,21 @@
 // The deck keeps its own order for the session, so a home refresh behind it —
 // asked for once, after the last swipe in a burst — never reshuffles the card
 // under the thumb.
+//
+// This tab replaced Matches. What the list did that a deck does not — who is
+// waiting, who replied, the drafts as a list with a way to clear them — is the
+// outreach sheet (Outreach.tsx), one tap from the top of the deck.
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { VIA_LABEL, deckCards, reachLink, type DeckCard, type DeckDraft, type DeckReach, type ReachVia } from '@/lib/copilot/deck';
-import { tintOf } from '@/lib/copilot/matches';
+import { outreachLine, tintOf } from '@/lib/copilot/matches';
+import { PLANS } from '@/lib/copilot/plans';
 import type { HomeData } from '@/lib/copilot/types';
 import { api } from '../api';
-import type { Actions } from '../shared';
+import type { Actions, SheetState } from '../shared';
+import { useShell } from '../shell';
 import { local } from './bookLocal';
 import type { Derived } from './derive';
-import { IconCross, IconExternal, IconPhone, IconSend, IconStar, IconUndo, MatchGlyph } from './icons2';
+import { IconChevron, IconCross, IconExternal, IconPhone, IconSend, IconStar, IconUndo, MatchGlyph } from './icons2';
 
 /** The card on screen and this many after it have their message written ahead. */
 const PREFETCH = 2;
@@ -43,6 +51,16 @@ const UNDO_MS = 8_000;
 const REFRESH_AFTER_MS = 3_000;
 /** How far a card is dragged before letting go answers it. */
 const SWIPE_PX = 100;
+/** A flick: let go moving at least this fast (px/ms) after at least 30px. Gesture libraries settle near 0.3–0.5. */
+const FLICK = 0.4;
+/** Degrees of tilt per pixel dragged, about the card's centre. */
+const TILT = 1 / 18;
+/** How much of the thumb's up-and-down the card follows mid-swipe: some, so it is held, not on a rail. */
+const FOLLOW_Y = 0.3;
+/** The spring back when a drag is let go short. */
+const SETTLE_MS = 280;
+/** Small controls on the card stay controls: a drag never starts on them. */
+const NO_DRAG = 'a, textarea, input, select, .cp2-swp-vias, .cp2-swp-meta, .cp2-swp-msg.err, .cp2-swp-more';
 /** Messages the model wrote are kept on this phone this long, so a reload does not write them again. */
 const DRAFT_CACHE_MS = 3 * 86_400_000;
 const DRAFT_CACHE_MAX = 120;
@@ -98,9 +116,10 @@ function writeDraftCache(pid: string, sig: string, key: string, d: DeckDraft): v
 
 /* ─── The tab ─────────────────────────────────────────────────────────────── */
 
-export default function SwipeTab({ home, d, actions, say, refresh }: {
-  home: HomeData; d: Derived; actions: Actions; say: (m: string) => void; refresh: () => Promise<void>;
+export default function SwipeTab({ home, d, actions, finding, say, refresh }: {
+  home: HomeData; d: Derived; actions: Actions; finding: boolean; say: (m: string) => void; refresh: () => Promise<void>;
 }) {
+  const shell = useShell();
   const pid = home.profile.id;
   const offerSig = useMemo(() => JSON.stringify(home.profile.offer ?? {}), [home.profile.offer]);
   const cards = useMemo(() => deckCards({
@@ -115,7 +134,7 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
   const goneRef = useRef(gone);
   goneRef.current = gone;
   // What was answered this session is remembered on the phone too: the tab is
-  // unmounted by a trip to Matches, and the home it comes back to can be a few
+  // unmounted by a trip to another tab, and the home it comes back to can be a few
   // seconds older than the answers — a card skipped on the way out is not dealt
   // again while the refresh behind it lands.
   const goneKey = `cp2.swipe.gone.${pid}`;
@@ -222,10 +241,56 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
   }, [refresh, say]);
 
   /* Leaving cards: the one answered flies off while the next is already there */
-  const [leaving, setLeaving] = useState<{ card: DeckCard; dir: 'left' | 'right' | 'up'; dx: number } | null>(null);
-  const leave = (card: DeckCard, dir: 'left' | 'right' | 'up', dx = 0) => {
-    setLeaving({ card, dir, dx });
-    window.setTimeout(() => setLeaving((l) => (l?.card.key === card.key ? null : l)), 340);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const underRef = useRef<HTMLDivElement | null>(null);
+  const ghostsRef = useRef<HTMLDivElement | null>(null);
+  /** Where the drag last put the card, so it leaves from there, at the speed it was thrown. */
+  const heldRef = useRef({ dx: 0, dy: 0, vx: 0 });
+  /**
+   * The card answered flies off from where the thumb let it go, looking as it
+   * did: a copy of the card itself, scrolled to where it was being read, so a
+   * message checked at the foot of the card does not jump back to the photo on
+   * its way out. React deals the next card the same frame; the copy lives in a
+   * box React renders empty and never touches, and removes itself.
+   */
+  const leave = (dir: 'left' | 'right' | 'up') => {
+    const el = cardRef.current;
+    const box = ghostsRef.current;
+    const held = heldRef.current;
+    heldRef.current = { dx: 0, dy: 0, vx: 0 };
+    // The card underneath is the same element React deals next (one key), so
+    // it keeps the size the drag had brought it to: let it finish growing.
+    const u = underRef.current;
+    if (u) { u.style.transition = 'transform .22s ease-out, opacity .22s ease-out'; u.style.transform = ''; u.style.opacity = ''; }
+    if (!el || !box || typeof el.animate !== 'function') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const ghost = el.cloneNode(true) as HTMLDivElement;
+    ghost.classList.add('cp2-swp-ghost');
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.setAttribute('inert', '');
+    ghost.style.transition = 'none';
+    // A button press leaves with its answer stamped on, as a drag would have.
+    if (dir !== 'up') ghost.style.setProperty(dir === 'right' ? '--cp2-swp-yes' : '--cp2-swp-no', '1');
+    box.appendChild(ghost);
+    const read = el.querySelector('.cp2-swp-scroll');
+    const copy = ghost.querySelector('.cp2-swp-scroll');
+    if (read && copy) copy.scrollTop = read.scrollTop;
+    const from = el.style.transform || 'translate3d(0, 0, 0)';
+    const w = box.clientWidth || 400;
+    const side = dir === 'right' ? 1 : -1;
+    const to = dir === 'up'
+      ? 'translate3d(0, -105%, 0) scale(0.92)'
+      : `translate3d(${side * w * 1.4}px, ${held.dy + 40}px, 0) rotate(${side * 22}deg)`;
+    // Thrown hard, it goes as fast as it was thrown; let go from a slow drag, at a pace the eye follows.
+    const left = Math.max(0, w * 1.4 - Math.abs(held.dx));
+    const ms = Math.abs(held.vx) > FLICK ? Math.max(160, Math.min(320, left / Math.abs(held.vx))) : 320;
+    const anim = ghost.animate(
+      [{ transform: from, opacity: 1 }, { transform: to, opacity: dir === 'up' ? 0 : 0.85 }],
+      { duration: ms, easing: 'cubic-bezier(.25,.6,.45,1)', fill: 'forwards' },
+    );
+    const done = () => ghost.remove();
+    anim.onfinish = done;
+    anim.oncancel = done;
   };
   const markGone = (key: string) => setGone((g) => new Set(g).add(key));
   const redeal = (key: string, where: 'front' | 'back') => {
@@ -234,8 +299,8 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
   };
 
   // The session's count — the number this tab is judged by (sends, not swipes)
-  // — kept for the day on this phone, so going to Matches and back does not
-  // start it again from nothing.
+  // — kept for the day on this phone, so going to another tab and back does
+  // not start it again from nothing.
   const statsKey = `cp2.swipe.stats.${pid}`;
   const [stats, setStatsState] = useState<{ sent: number; skipped: number }>({ sent: 0, skipped: 0 });
   useEffect(() => {
@@ -280,10 +345,10 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
 
   const [editing, setEditing] = useState<string | null>(null);
 
-  const goLeft = (card: DeckCard, dx = 0) => {
+  const goLeft = (card: DeckCard) => {
     if (pending) return;
     flushSkip();
-    leave(card, 'left', dx);
+    leave('left');
     markGone(card.key);
     setStats((s) => ({ ...s, skipped: s.skipped + 1 }));
     const timer = setTimeout(() => {
@@ -305,18 +370,18 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
   const goLater = (card: DeckCard) => {
     if (pending) return;
     flushSkip();
-    leave(card, 'up');
+    leave('up');
     setOrder((o) => [...o.filter((k) => k !== card.key), card.key]);
   };
 
   /** Right. Returns false when there is nothing to send yet, and the card springs back. */
-  const goRight = (card: DeckCard, dx = 0): boolean => {
+  const goRight = (card: DeckCard): boolean => {
     if (pending) return false;
     const v = viaFor(card);
     if (!v) {
       // A find with nothing to reply on: right keeps it, as Keep did on the list.
       flushSkip();
-      leave(card, 'right', dx);
+      leave('right');
       markGone(card.key);
       post({ action: 'posted', kind: card.kind, id: card.id, via: 'post' })
         .then(() => { settle(); say('Kept.'); })
@@ -340,7 +405,7 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
     flushSkip();
 
     if (owned) {
-      leave(card, 'right', dx);
+      leave('right');
       markGone(card.key);
       reachCall()
         .then((r) => {
@@ -366,7 +431,7 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
       copied = navigator.clipboard?.writeText ? navigator.clipboard.writeText(body).then(() => true, () => false) : Promise.resolve(false);
     }
     if (link) openLink(link);
-    leave(card, 'right', dx);
+    leave('right');
     markGone(card.key);
     const reachP = records ? reachCall() : null;
     reachP?.catch(() => { /* said on the question, where it can be retried */ });
@@ -432,6 +497,8 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (editing || t?.closest('input, textarea, select')) return;
+      // A sheet opened over the deck has the keys, not the card under it.
+      if (document.querySelector('.cp-sheet.open')) return;
       const c = currentRef.current;
       if (!c) return;
       if (e.key === 'ArrowRight') { e.preventDefault(); goRight(c); }
@@ -441,24 +508,50 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  /* The drag, straight onto the card's style: sixty re-renders a second is not a gesture */
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<{ x: number; y: number; t: number; id: number; on: boolean } | null>(null);
-  const setDrag = (dx: number, animate = false) => {
+  /*
+   * The drag, straight onto the card's style: sixty re-renders a second is not
+   * a gesture.
+   *
+   * Why it once moved a little and sprang back on a phone. touch-action is read
+   * from the element touched up to the nearest scroller, and stops there: pan-y
+   * on the card said nothing about a touch inside the card's own scroller, so
+   * the browser took the sideways pan as its own after a few pixels, fired
+   * pointercancel, and the cancel put the card back. pan-y now sits on the
+   * scroller (copilot.css), and the touch guard below covers a browser that
+   * decides on the first touchmove instead.
+   */
+  const dragRef = useRef<{ x: number; y: number; id: number; on: boolean; lx: number; lt: number; vx: number } | null>(null);
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  const setDrag = (dx: number, dy: number, animate = false) => {
+    heldRef.current = { ...heldRef.current, dx, dy };
+    const ease = animate ? `transform ${SETTLE_MS}ms cubic-bezier(.2,.9,.3,1.12), opacity ${SETTLE_MS}ms ease` : 'none';
     const el = cardRef.current;
-    if (!el) return;
-    el.style.transition = animate ? 'transform .24s ease' : 'none';
-    el.style.transform = dx ? `translateX(${dx}px) rotate(${dx / 18}deg)` : '';
-    el.style.setProperty('--cp2-swp-yes', String(Math.max(0, Math.min(1, dx / SWIPE_PX))));
-    el.style.setProperty('--cp2-swp-no', String(Math.max(0, Math.min(1, -dx / SWIPE_PX))));
+    if (el) {
+      el.style.transition = ease;
+      el.style.transform = dx || dy ? `translate3d(${dx}px, ${dy}px, 0) rotate(${dx * TILT}deg)` : '';
+      el.style.setProperty('--cp2-swp-yes', String(Math.max(0, Math.min(1, dx / SWIPE_PX))));
+      el.style.setProperty('--cp2-swp-no', String(Math.max(0, Math.min(1, -dx / SWIPE_PX))));
+    }
+    // The next card comes forward as this one goes, so letting go finds it already in place.
+    const under = underRef.current;
+    if (under) {
+      const p = Math.min(1, Math.abs(dx) / SWIPE_PX);
+      under.style.transition = ease;
+      under.style.transform = p ? `translate3d(0, ${12 * (1 - p)}px, 0) scale(${0.95 + 0.05 * p})` : '';
+      under.style.opacity = p ? String(0.75 + 0.25 * p) : '';
+    }
   };
   const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (editing || pending || e.button > 0) return;
     // The message is most of the card, and a thumb lands on it: a swipe that
     // starts there is still a swipe (a tap still edits it — a drag captured by
-    // the card never clicks the message). Only the small controls are left out.
-    if ((e.target as HTMLElement).closest('a, textarea, input, select, .cp2-swp-vias, .cp2-swp-meta, .cp2-swp-msg.err')) return;
-    dragRef.current = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, on: false };
+    // the card never clicks the message).
+    if ((e.target as HTMLElement).closest(NO_DRAG)) return;
+    const t = performance.now();
+    dragRef.current = { x: e.clientX, y: e.clientY, id: e.pointerId, on: false, lx: e.clientX, lt: t, vx: 0 };
   };
   const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const s = dragRef.current;
@@ -467,34 +560,93 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
     const dy = e.clientY - s.y;
     if (!s.on) {
       // Sideways is a swipe; up and down is reading the card.
-      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { dragRef.current = null; return; }
-      if (Math.abs(dx) < 10) return;
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { dragRef.current = null; return; }
+      if (Math.abs(dx) < 8) return;
       s.on = true;
       e.currentTarget.setPointerCapture?.(e.pointerId);
     }
-    setDrag(dx);
+    // Speed over the last moves, not the whole drag: a flick at the end of a
+    // slow drag is a flick, and a thumb that stopped before letting go is not.
+    const t = performance.now();
+    const dt = t - s.lt;
+    if (dt > 0) {
+      s.vx = 0.7 * ((e.clientX - s.lx) / dt) + 0.3 * s.vx;
+      s.lx = e.clientX;
+      s.lt = t;
+      heldRef.current.vx = s.vx;
+    }
+    setDrag(dx, dy * FOLLOW_Y);
   };
   const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     const s = dragRef.current;
     dragRef.current = null;
     if (!s?.on || !current) return;
     const dx = e.clientX - s.x;
-    const speed = dx / Math.max(1, performance.now() - s.t);
-    const right = dx > SWIPE_PX || (dx > 40 && speed > 0.6);
-    const left = dx < -SWIPE_PX || (dx < -40 && speed < -0.6);
-    if (right && goRight(current, dx)) return;
-    if (left) { goLeft(current, dx); return; }
-    setDrag(0, true);
+    const vx = performance.now() - s.lt > 90 ? 0 : s.vx;
+    heldRef.current.vx = vx;
+    // Past the line and not being pulled back, or thrown that way.
+    const right = (dx > SWIPE_PX && vx > -FLICK) || (dx > 30 && vx > FLICK);
+    const left = (dx < -SWIPE_PX && vx < FLICK) || (dx < -30 && vx < -FLICK);
+    if (right && goRight(current)) return;
+    if (left) { goLeft(current); return; }
+    setDrag(0, 0, true);
   };
-  const onCancel = () => { if (dragRef.current?.on) setDrag(0, true); dragRef.current = null; };
+  const onCancel = () => { if (dragRef.current?.on) setDrag(0, 0, true); dragRef.current = null; };
+
+  // The touch guard. Safari on an older iPhone decides whether a touch scrolls
+  // on its first touchmove and does not read pan-y inside a scroller: a touch
+  // that starts sideways is the card's, said by cancelling its scroll. The
+  // pointer events that move the card keep coming either way, and up and down
+  // is left alone, so the card still scrolls.
+  const dealt = current?.key;
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    let from: { x: number; y: number } | null = null;
+    let sideways: boolean | null = null;
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      const off = e.touches.length !== 1 || editingRef.current || pendingRef.current || (e.target as HTMLElement).closest(NO_DRAG);
+      from = !off && t ? { x: t.clientX, y: t.clientY } : null;
+      sideways = null;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!from || !t) return;
+      if (sideways === null) {
+        const ax = Math.abs(t.clientX - from.x);
+        const ay = Math.abs(t.clientY - from.y);
+        if (ax < 3 && ay < 3) return;
+        sideways = ax > ay;
+      }
+      if (sideways && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [dealt]);
 
   /* ─── What is on screen ─────────────────────────────────────────────────── */
 
   const remaining = live.length;
+  const b = home.billing;
+  // Who is waiting and who replied — the list's other pills — one tap from the deck.
+  const entry = outreachLine({ to_send: d.stages.to_send.length, waiting: d.stages.waiting.length, replied: d.stages.replied.length });
   const top = (
     <div className="cp2-swp-top">
-      <b>{d.noOffer ? 'Swipe' : remaining ? `${remaining} to go` : 'All done'}</b>
-      <span>{stats.sent ? `${stats.sent} sent` : d.noOffer ? '' : 'Right sends · left skips'}</span>
+      <div className="cp2-swp-tally">
+        <b>{d.noOffer ? 'Swipe' : remaining ? `${remaining} to go` : 'All done'}</b>
+        {/* The frame's "finding" banner is under the deck, so the deck says it. */}
+        <span>{finding ? 'Looking for more…' : stats.sent ? `${stats.sent} sent` : d.noOffer || !remaining ? '' : 'Right sends · left skips'}</span>
+      </div>
+      {entry && (
+        <button className={`cp2-swp-outbtn${entry.replied ? ' hot' : ''}`} onClick={() => actions.openSheet({ kind: 'outreach', stage: entry.stage })}>
+          <span>{entry.label}</span><IconChevron />
+        </button>
+      )}
     </div>
   );
 
@@ -511,16 +663,53 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
     );
   }
 
-  const v = current ? viaFor(current) : null;
-  const k = current && v ? dk(current, v) : null;
-  const owned = !!current && current.kind !== 'find' && ((v === 'whatsapp' && home.channels.whatsapp) || (v === 'email' && home.channels.email));
+  const faceOf = (c: DeckCard) => {
+    const fv = viaFor(c);
+    const fk = fv ? dk(c, fv) : null;
+    return {
+      via: fv,
+      key: fk,
+      owned: c.kind !== 'find' && ((fv === 'whatsapp' && home.channels.whatsapp) || (fv === 'email' && home.channels.email)),
+      draft: fk ? drafts[fk] : undefined,
+      edited: fk ? edits[fk] : undefined,
+      hint: hint[c.key] ?? null,
+    };
+  };
+  // The record behind a card — notes, history, every field — as the list's chevron opened it.
+  const moreOf = (c: DeckCard): SheetState | null =>
+    c.oppId ? { kind: 'opp', id: c.oppId }
+    : c.kind === 'business' ? { kind: 'opp', id: c.id }
+    : c.kind === 'draft' ? { kind: 'action', id: c.id }
+    : c.answer === 'move' ? { kind: 'move', id: c.id }
+    : null;
+  const f = current ? faceOf(current) : null;
+  const v = f?.via ?? null;
+  const k = f?.key ?? null;
+  const owned = !!f?.owned;
   const yes = !v ? 'Keep' : owned ? 'Send' : VIA_LABEL[v];
+  const more = current ? moreOf(current) : null;
+  const nf = next ? faceOf(next) : null;
+  const setAside = d.feed.filter((i) => i.below).length;
+  const canLook = d.searching && !finding && b.matches.remaining > 0;
+  const walled = b.matches.remaining === 0 && b.effective !== 'operator';
+  const none = () => {};
 
   return (
     <div className="cp2-swp">
       {top}
       <div className="cp2-swp-stack">
-        {next && <div className="cp2-swp-card cp2-swp-under" aria-hidden><Hero card={next} /></div>}
+        {/* The next card whole, not a picture of one: a drag uncovers what will be there. */}
+        {next && nf && (
+          <div key={next.key} ref={underRef} className="cp2-swp-card cp2-swp-under" aria-hidden inert>
+            <div className="cp2-swp-scroll">
+              <Hero card={next} />
+              <Face
+                card={next} via={nf.via} owned={nf.owned} draft={nf.draft} edited={nf.edited} hint={nf.hint} editing={false}
+                onVia={none} onEdit={none} onEditing={none} onRewrite={none} onMore={null}
+              />
+            </div>
+          </div>
+        )}
         {current ? (
           <div
             key={current.key}
@@ -536,34 +725,49 @@ export default function SwipeTab({ home, d, actions, say, refresh }: {
                 card={current}
                 via={v}
                 owned={owned}
-                draft={k ? drafts[k] : undefined}
-                edited={k ? edits[k] : undefined}
-                hint={hint[current.key] ?? null}
+                draft={f?.draft}
+                edited={f?.edited}
+                hint={f?.hint ?? null}
                 editing={editing === k}
                 onVia={(nv) => { setViaOf((m) => ({ ...m, [current.key]: nv })); setHint((m) => ({ ...m, [current.key]: '' })); }}
                 onEdit={(text) => k && setEdits((m) => ({ ...m, [k]: text }))}
                 onEditing={(on) => setEditing(on ? k : null)}
                 onRewrite={() => { if (!v || !k) return; setEdits((m) => { const n = { ...m }; delete n[k]; return n; }); void loadDraft(current, v, true); }}
+                onMore={more ? () => actions.openSheet(more) : null}
               />
             </div>
           </div>
         ) : (
           <div className="cp2-swp-empty">
-            <b>{stats.sent || stats.skipped ? 'That is everyone for now' : 'Nothing to swipe yet'}</b>
-            <p>
-              {stats.sent || stats.skipped
-                ? `${stats.sent} sent, ${stats.skipped} not for you. New ones arrive as the app finds them.`
-                : d.searching ? 'Matches land here as they are found — the Matches tab has the same people as a list.' : 'Nothing can look for you yet: web search is not set up on this server.'}
-            </p>
-            {d.searching && home.billing.matches.remaining > 0 && <button className="cp-btn primary" onClick={() => void actions.findMatches()}>Look for more now</button>}
+            {finding ? (
+              <><b>Looking now</b><p>Real listings and real pages, not a sample — the first pass takes a minute.</p></>
+            ) : stats.sent || stats.skipped ? (
+              <><b>That is everyone for now</b><p>{stats.sent} sent, {stats.skipped} not for you. New ones arrive as the app finds them.</p></>
+            ) : !d.searching ? (
+              // Said rather than shown as a quiet morning: nothing on this server
+              // can search yet, and the Scout on Work names what is missing.
+              <><b>Nothing can look for you yet</b><p>Web search is not set up on this server. The Scout on Work says what is missing.</p></>
+            ) : (
+              // "Every night" only while the nightly job is running; the Path says when it is not.
+              <><b>Nothing worth your time yet</b><p>{setAside ? `It went through ${setAside} and none were worth a message. ` : ''}{d.done.stale ? 'New ones land here as they are found.' : 'It keeps looking every night, and new ones land here.'}</p></>
+            )}
+            {canLook && <button className="cp-btn primary" onClick={() => void actions.findMatches()}>Look for more now</button>}
+            {walled && (
+              <div className="cp2-swp-wall">
+                <b>Out of matches</b>
+                <p>You have used all {b.matches.limit} on {PLANS[b.effective].name} this month. Everything else keeps running on what you already have — only new supply stops.</p>
+                <a className="cp-btn primary block" href={`${shell}/pricing`}>
+                  See plans — {PLANS[b.effective === 'free' ? 'pro' : 'operator'].limits.matchesPerMonth.toLocaleString()} a month
+                </a>
+              </div>
+            )}
           </div>
         )}
-        {leaving && (
-          <div key={`leave:${leaving.card.key}`} className={`cp2-swp-card cp2-swp-leave ${leaving.dir}`} style={{ ['--cp2-swp-dx' as string]: String(leaving.dx) }} aria-hidden>
-            <Hero card={leaving.card} />
-          </div>
-        )}
+        <div className="cp2-swp-ghosts" ref={ghostsRef} aria-hidden />
       </div>
+
+      {/* Frosted over the foot of the card: the buttons and the nav sit on the card, not under it. */}
+      {current && <div className="cp2-swp-veil" aria-hidden />}
 
       {current && (
         <div className="cp2-swp-bar">
@@ -690,9 +894,11 @@ const MESSAGE_LABEL: Record<ReachVia, string> = {
   site: 'For their contact form — copied when you swipe right', post: 'Your reply — copied when you swipe right',
 };
 
-function Face({ card, via, owned, draft, edited, hint, editing, onVia, onEdit, onEditing, onRewrite }: {
+function Face({ card, via, owned, draft, edited, hint, editing, onVia, onEdit, onEditing, onRewrite, onMore }: {
   card: DeckCard; via: ReachVia | null; owned: boolean; draft: DraftState | undefined; edited: string | undefined; hint: string | null; editing: boolean;
   onVia: (v: ReachVia) => void; onEdit: (text: string) => void; onEditing: (on: boolean) => void; onRewrite: () => void;
+  /** The record behind the card, when there is one: a feed's find carries all of itself on the card. */
+  onMore: (() => void) | null;
 }) {
   const reach = reachLine(card);
   const vias = [...new Set(card.reach.map((r) => r.via))];
@@ -762,6 +968,12 @@ function Face({ card, via, owned, draft, edited, hint, editing, onVia, onEdit, o
             </div>
           )}
         </section>
+      )}
+
+      {onMore && (
+        <button className="cp2-swp-more" onClick={onMore}>
+          <span>More about {card.title}</span><IconChevron />
+        </button>
       )}
     </div>
   );

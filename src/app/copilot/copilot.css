@@ -239,9 +239,6 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 @keyframes cp2-stream-pop { from { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } to { transform: none; } }
 @keyframes cp2-voice-ring { from { transform: scale(0.92); opacity: 0.7; } to { transform: scale(1.32); opacity: 0; } }
 /* A card answered on the Swipe tab leaves from wherever the thumb let it go. */
-@keyframes cp2-swp-out-right { from { transform: translateX(calc(var(--cp2-swp-dx, 0) * 1px)) rotate(calc(var(--cp2-swp-dx, 0) * 0.055deg)); } to { transform: translateX(140%) rotate(22deg); opacity: 0.6; } }
-@keyframes cp2-swp-out-left { from { transform: translateX(calc(var(--cp2-swp-dx, 0) * 1px)) rotate(calc(var(--cp2-swp-dx, 0) * 0.055deg)); } to { transform: translateX(-140%) rotate(-22deg); opacity: 0.6; } }
-@keyframes cp2-swp-out-up { from { transform: none; } to { transform: translateY(-105%) scale(0.92); opacity: 0; } }
 @keyframes cp2-swp-writing { 50% { opacity: 0.45; } }
 
 /* Setup error */
@@ -1075,30 +1072,27 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 /* A note inside a card belongs to the card's own gutter, not the page's. */
 .cp-root[data-theme="soft"] .cp2-frame .cp-card .cp-note { padding-left: 0; padding-right: 0; }
 
-/* ── Matches ───────────────────────────────────────────────────────────── */
-.cp-root[data-theme="soft"] .cp2-chips { display: flex; gap: 8px; overflow-x: auto; padding: 16px 22px 4px; scrollbar-width: none; }
-.cp-root[data-theme="soft"] .cp2-chips::-webkit-scrollbar { display: none; }
-.cp-root[data-theme="soft"] .cp2-chips .cp-fchip { flex: none; }
-.cp-root[data-theme="soft"] .cp2-chips .cp-fchip .n { margin-left: 3px; opacity: 0.62; font-weight: 600; }
+/* ── Outreach (v2/Outreach.tsx): To send, Waiting, Replied, in a sheet ───── */
+/* Room under the pills for their shadow: a scroller clips what overflows it. */
+.cp-root[data-theme="soft"] .cp2-out-pills { display: flex; gap: 8px; overflow-x: auto; margin: 2px -24px 6px; padding: 6px 24px 14px; scrollbar-width: none; }
+.cp-root[data-theme="soft"] .cp2-out-pills::-webkit-scrollbar { display: none; }
+.cp-root[data-theme="soft"] .cp2-out-pills .cp-fchip { flex: none; }
+.cp-root[data-theme="soft"] .cp2-out-pills .cp-fchip .n { margin-left: 3px; opacity: 0.62; font-weight: 600; }
+/* A sheet has its own gutter; a card in it does not add the page's. */
+.cp-root[data-theme="soft"] .cp2-out .cp-card { margin-left: 0; margin-right: 0; }
+.cp-root[data-theme="soft"] .cp2-out .cp2-more { margin: 4px 0 0; }
+.cp-root[data-theme="soft"] .cp2-out-foot { margin-top: 4px; }
 
 .cp-root[data-theme="soft"] .cp2-match { padding-top: 18px; padding-bottom: 16px; }
-.cp-root[data-theme="soft"] .cp2-new { flex: none; align-self: flex-start; margin-top: 3px; font-size: 10px; font-weight: 700; color: #fff; background: var(--blue); border-radius: 999px; padding: 2px 8px; }
-.cp-root[data-theme="soft"] .cp2-new.saved { background: var(--line); color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-match-title { font-family: var(--display); font-size: 16.5px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-match-reason { margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cp-root[data-theme="soft"] .cp2-match-acts { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .cp-root[data-theme="soft"] .cp2-match-acts .cp-btn { padding: 10px 15px; text-decoration: none; }
 .cp-root[data-theme="soft"] .cp2-frame .cp-btn.ghost { background: transparent; box-shadow: none; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-more-info { margin-left: auto; flex: none; width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--line); }
-.cp-root[data-theme="soft"] .cp2-match .cp2-gate { padding: 12px 0 0; color: var(--muted); }
-/* ── Matches: the tile that makes a list scannable, and nothing to configure ──
-   Names are cp2-mthumb / cp2-lookmore / cp2-didit rather than anything shorter:
-   .cp-stage and .cp-steps already exist in this file, and a collision inside
-   .cp-root is not caught by scoping (see CLAUDE.md). */
-/* The pills sit where the tab's content starts; the list keeps its own rhythm under them. */
-.cp-root[data-theme="soft"] .cp2-matchlist { padding-top: 12px; }
-/* A quiet way to look again, not a button asking to be pressed every morning. */
-.cp-root[data-theme="soft"] .cp2-lookmore { display: block; margin: 4px auto 0; padding: 10px 16px; font-size: 13px; font-weight: 600; color: var(--blue); }
+/* ── Outreach: the tile that makes a list scannable ──────────────────────
+   Names are cp2-mthumb / cp2-didit rather than anything shorter: .cp-stage and
+   .cp-steps already exist in this file, and a collision inside .cp-root is not
+   caught by scoping (see CLAUDE.md). */
 /* The one question after a draft goes out in the user's own app. */
 .cp-root[data-theme="soft"] .cp2-didit { font-size: 13px; font-weight: 600; color: var(--ink); margin-right: 2px; }
 
@@ -1129,8 +1123,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-mthumb.t4 { background: rgba(132, 94, 194, 0.13); color: #613F9C; }
 .cp-root[data-theme="soft"] .cp2-mthumb.t5 { background: rgba(96, 110, 140, 0.14); color: #465069; }
 
-
-.cp-root[data-theme="soft"] .cp2-stagefoot { margin: 4px 24px 0; }
 
 /* ── Work: the product, the machine, the team ─────────────────────────── */
 .cp-root[data-theme="soft"] .cp2-product-name { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; margin: 2px 0 8px; }
@@ -1602,7 +1594,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 @media (prefers-reduced-motion: reduce) {
   .cp-root[data-theme="soft"] .cp2-way-reached { animation: none; }
   .cp-root[data-theme="soft"] .cp2-voice-btn.on::after { animation: none; opacity: 0.5; }
-  .cp-root[data-theme="soft"] .cp2-swp-leave { display: none; }
+  .cp-root[data-theme="soft"] .cp2-swp-card { transition: none !important; }
   .cp-root[data-theme="soft"] .cp2-swp-msg.wait i { animation: none; }
   .cp-root[data-theme="soft"] .cp2-stream-back { transition: none; }
   .cp-root[data-theme="soft"] .cp2-rv-chev svg { transition: none; }
@@ -1630,8 +1622,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
    on its header, the calendar, and the add sheet. Names are cp2-bk-*, and none
    is a bare word: .cp-steps once sized every span inside it, and a component
    that reused a common name rendered as grey rectangles (CLAUDE.md). */
-/* Six tabs in the pill: a little less air each so "Matches" keeps one line at 360px. */
-.cp-root[data-theme="soft"] .cp2-nav button { padding: 6px 6px; }
 .cp-root[data-theme="soft"] .cp2-bk-wait { padding-top: 24px; }
 .cp-root[data-theme="soft"] .cp2-bk-msg { margin-top: 14px; }
 .cp-root[data-theme="soft"] .cp2-bk-msg p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.55; color: var(--ink); }
@@ -1810,27 +1800,37 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 
 /* ── The Swipe tab (v2/SwipeTab.tsx) ──────────────────────────────────────
    One match at a time, the whole screen, the message already on it. The deck
-   sits over the tab's content, from the top of the frame to just above the
-   floating nav, with its buttons between the card and the nav — under the
-   thumb, as on every card deck a phone has taught people. Names are cp2-swp-*,
+   sits over the tab's content and the card reaches the foot of the frame; its
+   buttons and the nav float on the card, frosted, under the thumb — read like a
+   profile, the card scrolls up and down and moves sideways. Names are cp2-swp-*,
    none a bare word (CLAUDE.md: .cp-steps once styled every span inside it). */
 .cp-root[data-theme="soft"] .cp2-swp {
   position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--bg);
-  padding: calc(10px + env(safe-area-inset-top)) 12px calc(92px + env(safe-area-inset-bottom));
+  padding: calc(10px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom));
 }
-.cp-root[data-theme="soft"] .cp2-swp-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 4px 8px 10px; font-size: 12.5px; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-swp-top b { font-family: var(--display); font-size: 16px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-swp-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 4px 6px 10px 8px; }
+.cp-root[data-theme="soft"] .cp2-swp-tally { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-swp-tally b { font-family: var(--display); font-size: 16px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-swp-tally span { overflow: hidden; text-overflow: ellipsis; }
+/* The door to everyone already written to. A reply is the warm one, so it is the one in colour. */
+.cp-root[data-theme="soft"] .cp2-swp-outbtn { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 7px 8px 7px 13px; border: 0; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-swp-outbtn svg { width: 15px; height: 15px; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-swp-outbtn.hot { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-swp-outbtn.hot svg { color: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-swp-stack { position: relative; flex: 1; min-height: 0; }
 .cp-root[data-theme="soft"] .cp2-swp-card {
   position: absolute; inset: 0; border-radius: 26px; overflow: hidden; background: var(--surface);
   box-shadow: 0 18px 40px rgba(20, 25, 45, 0.14); touch-action: pan-y; user-select: none; -webkit-user-select: none;
+  will-change: transform;
 }
-.cp-root[data-theme="soft"] .cp2-swp-under { transform: scale(0.95) translateY(12px); opacity: 0.75; pointer-events: none; box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-swp-leave { pointer-events: none; z-index: 6; }
-.cp-root[data-theme="soft"] .cp2-swp-leave.right { animation: cp2-swp-out-right 0.32s ease-in forwards; }
-.cp-root[data-theme="soft"] .cp2-swp-leave.left { animation: cp2-swp-out-left 0.32s ease-in forwards; }
-.cp-root[data-theme="soft"] .cp2-swp-leave.up { animation: cp2-swp-out-up 0.3s ease-in forwards; }
-.cp-root[data-theme="soft"] .cp2-swp-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.cp-root[data-theme="soft"] .cp2-swp-under { transform: translate3d(0, 12px, 0) scale(0.95); opacity: 0.75; pointer-events: none; box-shadow: none; }
+/* A copy of the card answered, flying off (SwipeTab.tsx leave()); it removes itself. */
+.cp-root[data-theme="soft"] .cp2-swp-ghosts { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+.cp-root[data-theme="soft"] .cp2-swp-ghost { pointer-events: none; }
+/* pan-y here, not only on the card: touch-action is read up to the nearest
+   scroller and no further, so on the card it said nothing about a touch inside
+   this one — the browser took a sideways drag as its own and the card sprang back. */
+.cp-root[data-theme="soft"] .cp2-swp-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 
 /* The top of the card: a photo with its name over it, or a tint with initials */
 .cp-root[data-theme="soft"] .cp2-swp-hero { position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 88px 20px 18px; background: var(--line); color: var(--muted); }
@@ -1856,7 +1856,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-swp-hero.photo .cp2-swp-title p { color: #fff; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35); }
 
 /* What it is, why it was picked, the post, and the message */
-.cp-root[data-theme="soft"] .cp2-swp-body { display: flex; flex-direction: column; gap: 18px; padding: 16px 18px 26px; }
+.cp-root[data-theme="soft"] .cp2-swp-body { display: flex; flex-direction: column; gap: 18px; padding: 16px 18px calc(196px + env(safe-area-inset-bottom)); }
 .cp-root[data-theme="soft"] .cp2-swp-facts { display: flex; flex-wrap: wrap; gap: 6px; }
 .cp-root[data-theme="soft"] .cp2-swp-facts span { padding: 5px 10px; border-radius: 999px; background: var(--line); color: var(--muted); font-size: 12px; font-weight: 600; }
 .cp-root[data-theme="soft"] .cp2-swp-facts .reach { background: var(--tint); color: var(--blue); }
@@ -1887,9 +1887,26 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-swp-stamp.no { right: 20px; color: var(--bad); border-color: var(--bad); transform: rotate(12deg); opacity: var(--cp2-swp-no, 0); }
 
 /* The buttons, one per gesture */
-.cp-root[data-theme="soft"] .cp2-swp-bar { display: flex; justify-content: center; align-items: flex-end; gap: 12px; padding: 12px 0 0; }
-.cp-root[data-theme="soft"] .cp2-swp-act { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
-.cp-root[data-theme="soft"] .cp2-swp-act i { display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 50%; background: var(--surface); box-shadow: 0 6px 16px rgba(20, 25, 45, 0.1); }
+/* Over the foot of the card, a frost that thickens toward the nav: what is
+   under the buttons is still there, out of focus, and the buttons read on any
+   photo. Masked rather than faded, so the blur itself fades in. */
+.cp-root[data-theme="soft"] .cp2-swp-veil {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 7; height: calc(206px + env(safe-area-inset-bottom)); pointer-events: none;
+  background: linear-gradient(to top, rgba(238, 241, 247, 0.72), rgba(238, 241, 247, 0.28) 70%, rgba(238, 241, 247, 0));
+  -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-mask-image: linear-gradient(to top, #000 52%, transparent); mask-image: linear-gradient(to top, #000 52%, transparent);
+}
+.cp-root[data-theme="soft"] .cp2-swp-bar {
+  position: absolute; left: 0; right: 0; bottom: calc(94px + env(safe-area-inset-bottom)); z-index: 8;
+  display: flex; justify-content: center; align-items: flex-end; gap: 12px; pointer-events: none;
+}
+.cp-root[data-theme="soft"] .cp2-swp-bar > * { pointer-events: auto; }
+.cp-root[data-theme="soft"] .cp2-swp-act { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 11px; font-weight: 700; text-shadow: 0 0 8px rgba(255, 255, 255, 0.9); cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-swp-act i {
+  display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8); box-shadow: 0 6px 18px rgba(20, 25, 45, 0.14);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
+}
 .cp-root[data-theme="soft"] .cp2-swp-act svg { width: 20px; height: 20px; }
 .cp-root[data-theme="soft"] .cp2-swp-act.no i,
 .cp-root[data-theme="soft"] .cp2-swp-act.yes i { width: 60px; height: 60px; }
@@ -1920,8 +1937,24 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 
 /* The app's toast, on this tab only, at the top: at the bottom it covered the buttons. */
 .cp-root[data-theme="soft"] .cp2-swiping .cp-toast { top: calc(48px + env(safe-area-inset-top)); bottom: auto; }
+/* The nav, on this tab only, is frosted glass over the card rather than a white pill cut out of it. */
+.cp-root[data-theme="soft"] .cp2-swiping .cp2-nav {
+  background: rgba(255, 255, 255, 0.66); box-shadow: 0 10px 30px rgba(20, 25, 45, 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+}
+.cp-root[data-theme="soft"] .cp2-swiping .cp2-nav button.active { background: rgba(79, 99, 210, 0.12); }
+
+/* The record behind a card, at its foot: notes, history, every field. */
+.cp-root[data-theme="soft"] .cp2-swp-more { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 13px 15px; border: 0; border-radius: 14px; background: var(--line); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; text-align: left; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-swp-more span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-swp-more svg { flex: none; width: 16px; height: 16px; color: var(--dim); }
 
 /* Nothing on the pile */
-.cp-root[data-theme="soft"] .cp2-swp-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; padding: 28px; border-radius: 26px; background: var(--surface); text-align: center; }
+.cp-root[data-theme="soft"] .cp2-swp-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: safe center; gap: 10px; height: 100%; padding: 28px 28px calc(104px + env(safe-area-inset-bottom)); border-radius: 26px; background: var(--surface); text-align: center; overflow-y: auto; }
 .cp-root[data-theme="soft"] .cp2-swp-empty b { font-family: var(--display); font-size: 19px; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-swp-empty p { margin: 0 0 6px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+/* Out of matches for the month: said where the pile ran out, with the way to more. */
+.cp-root[data-theme="soft"] .cp2-swp-wall { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 14px; padding: 16px; border-radius: 18px; background: var(--tint); text-align: left; }
+.cp-root[data-theme="soft"] .cp2-swp-wall b { font-size: 15px; }
+.cp-root[data-theme="soft"] .cp2-swp-wall p { margin: 0; font-size: 13px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-swp-wall .cp-btn { text-decoration: none; text-align: center; }

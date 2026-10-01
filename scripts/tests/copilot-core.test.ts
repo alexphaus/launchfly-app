@@ -4957,7 +4957,7 @@ todayTab().catch((e) => { console.error(e); process.exit(1); });
 // checks: nothing appears twice, what was found overnight leads, a listing
 // nobody can reach is not offered, and no guess is printed as a percentage.
 // ---------------------------------------------------------------------------
-import { MATCH_GROUP_LABEL, groupOfKind, groupOfType, matchCounts, matchFeed, matchesStatus } from '../../src/lib/copilot/matches';
+import { MATCH_GROUP_LABEL, groupOfKind, groupOfType, matchCounts, matchFeed } from '../../src/lib/copilot/matches';
 import type { Opportunity as OpportunityV2, PipelineRow as PipelineRowV2 } from '../../src/lib/copilot/types';
 import type { TriageCard as TriageCardV2 } from '../../src/lib/copilot/triage';
 
@@ -5031,8 +5031,7 @@ async function matchesTab() {
   assert.equal(counts.all, feed.length);
   assert.equal(counts.fresh, 2);
   assert.equal(counts.by.clients, 3);
-  assert.equal(matchesStatus(counts), '2 new since yesterday', 'the queue is on the pills, not repeated in the header');
-  assert.equal(matchesStatus(matchCounts([])), null);
+  assert.equal(matchCounts([]).all, 0);
   assert.equal(MATCH_GROUP_LABEL.work, 'Gigs & jobs');
   console.log('copilot-core: matches tab checks passed');
 }
@@ -5138,7 +5137,7 @@ workTab().catch((e) => { console.error(e); process.exit(1); });
 // ---------------------------------------------------------------------------
 import {
   MATCH_STAGES, MATCH_STAGE_LABEL, SHOW_FIT, belowBar, imageOf, matchCounts as matchCountsS, matchFeed as matchFeedS,
-  isSearchableSegment, matchesStatus as matchesStatusS, monogramOf, placeOf, ratingOf, stageCards, tintOf,
+  isSearchableSegment, monogramOf, placeOf, ratingOf, stageCards, tintOf,
 } from '../../src/lib/copilot/matches';
 import { doneForYou as doneForYouS, todayStatus as todayStatusS } from '../../src/lib/copilot/today';
 import type { Execution as ExecutionS, QueueItem as QueueItemS } from '../../src/lib/copilot/types';
@@ -5196,11 +5195,11 @@ async function matchesStaged() {
   assert.equal(by.fit.initials, 'CP');
   assert.deepEqual(feed.filter((i) => i.below).map((i) => i.id).sort(), ['j1', 'j2', 'j3']);
 
-  // 4. The header counts the list it sits over — only what cleared the bar.
+  // 4. What is counted is only what cleared the bar.
   const good = feed.filter((i) => !i.below);
-  assert.equal(matchesStatusS(matchCountsS(good)), '1 new since yesterday');
-  assert.equal(matchesStatusS(matchCountsS(good.map((i) => ({ ...i, fresh: false })))), '1 worth a look');
-  assert.equal(matchesStatusS(matchCountsS([])), null, 'nothing true to say is nothing said');
+  assert.deepEqual([matchCountsS(good).all, matchCountsS(good).fresh], [1, 1]);
+  assert.equal(matchCountsS(good.map((i) => ({ ...i, fresh: false }))).fresh, 0);
+  assert.equal(matchCountsS([]).all, 0, 'nothing found is nothing counted');
   assert.equal(isSearchableSegment('m'), false, 'one letter is a typo, and it is searched exactly as typed');
   assert.equal(isSearchableSegment(' é '), false);
   assert.equal(isSearchableSegment('IT'), true, 'two letters can be a market');
@@ -8175,3 +8174,25 @@ async function swipeDeckSuite() {
 }
 
 swipeDeckSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Outreach: the door from the deck to everyone already written to ─────── */
+
+import { outreachLine as olLine } from '../../src/lib/copilot/matches';
+
+async function outreachSuite() {
+  /* 1. A reply leads, with who is waiting beside it: an answer is what goes cold. */
+  assert.deepEqual(olLine({ to_send: 4, waiting: 9, replied: 2 }), { stage: 'replied', label: '2 replied · 9 waiting', replied: true });
+  assert.deepEqual(olLine({ to_send: 0, waiting: 0, replied: 1 }), { stage: 'replied', label: '1 replied', replied: true });
+
+  /* 2. Then who you are waiting on; drafts last, since the deck deals them anyway. */
+  assert.deepEqual(olLine({ to_send: 4, waiting: 3, replied: 0 }), { stage: 'waiting', label: '3 waiting', replied: false });
+  assert.deepEqual(olLine({ to_send: 1, waiting: 0, replied: 0 }), { stage: 'to_send', label: '1 draft', replied: false });
+  assert.equal(olLine({ to_send: 5, waiting: 0, replied: 0 })?.label, '5 drafts');
+
+  /* 3. Nobody at any stage is nothing said: no door to an empty room. */
+  assert.equal(olLine({ to_send: 0, waiting: 0, replied: 0 }), null);
+
+  console.log('copilot-core: outreach checks passed');
+}
+
+outreachSuite().catch((e) => { console.error(e); process.exit(1); });

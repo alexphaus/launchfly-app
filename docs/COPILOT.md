@@ -17,7 +17,7 @@ but none of the business logic. Everything is under:
 
 | Layer | Path |
 | --- | --- |
-| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — the four-tab layout, six tabs now (Path · Matches · Swipe · Work · Money · You), calm |
+| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — the four-tab layout, five tabs now (Path · Swipe · Work · Money · You), calm |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
@@ -291,8 +291,8 @@ somewhere sensible.
 
 ## Four tabs (`/copilot2`)
 
-A second layout over the same app: **Path**, **Matches**, **Work**, **You**. It
-began as Today, Matches, Work, You, written from its owner's verdict on the
+A second layout over the same app: **Path**, **Swipe**, **Work**, **Money**,
+**You**. It began as Today, Matches, Work, You, written from its owner's verdict on the
 two-tab version ("too many things, nothing that stands out, the purpose lost from
 the original mock-ups; Working? is a log"). Then every redraft of Work met the
 same verdict — "static sections that compete for attention and nothing changes",
@@ -303,7 +303,9 @@ machine and the team moved under the numbers on You. Work came back beside it on
 its owner's word — "better for separation, and has important features": the
 Path is what to do and what moved, Work is the business being built. Money
 joined them in October 2026 as the one screen of a budgeting app its owner used
-(see **The money book**); the layout keeps its name.
+(see **The money book**); the layout keeps its name. Swipe replaced Matches after
+one release side by side: its owner lived with both and kept the deck (see
+**Swipe**).
 
 It is a layout, not a fork. `useCopilot` (`_components/useCopilot.ts`) holds the
 state, the sheet stack and every action, and both `CopilotApp` and `CopilotApp2`
@@ -315,8 +317,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | Tab | The question | What is on it | Pure module |
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
-| Matches | who is worth contacting, and where each one is | pills (New · To send · Waiting · Replied) · only what the ranker recommends, each card a tile, what it is and where, why, and one action · a draft sent from its own card | `matches.ts` |
-| Swipe | the same people, one at a time — yes or no | one card the whole screen: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · see **Swipe** below | `deck.ts` |
+| Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
 | Work | what am I building | the offer and what it knows about how you work · the path to money · the agents · projects handed over, in full (the ones that need you, the ones running, what it offers to take on, what finished) · the brief for Claude | `machine.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move | `money/book.ts` |
 | You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
@@ -673,14 +674,12 @@ world's, never reported as the user's work), and the app's own activity is its
 team's line on Work. Old links to Today (`?tab=today`, `?tab=now`) land on the
 Path.
 
-**Matches is the deck laid flat, and it still learns.** Businesses are answered
-through the triage route, so "Draft opener" and "Not for me" feed the same keep
-rate; `draftFromMatch` opens the new draft straight away, because a match you
-chose and a draft you then have to find in a queue of fifty are two decisions and
-the second is where drafts go to wait. The queue gate survives: with the queue
-backed up, the first tap on Draft states the trade-off and the second proceeds —
-the pattern "Find new" already used. No percentages: the fit score orders the
-list and is never printed, because a "92% match" badge is a guess dressed as a
+**What was the Matches tab is the deck's supply now.** Matches was a filtered
+list of the same people, pills for where each one was, and the paragraphs below
+were written for it. Swipe replaced it (see **Swipe**), and the rules for what is
+shown are the deck's, since `deckCards` deals from the list `matchFeed` judged.
+Every answer still feeds the same keep rate the ranker orders by. No
+percentages: the fit score orders the list and is never printed, because a "92% match" badge is a guess dressed as a
 measurement (invariant 2). Targeting drives businesses only: with none set, feed
 finds still show, under a note that says no businesses are being searched for —
 otherwise someone who watches job feeds would see finds counted on Today and
@@ -711,18 +710,25 @@ run inside `STALE_NIGHT_HOURS`; a job that never runs does not keep on, and
 Today already says so. The header counts the list it sits over. The business
 sheet never prints the score as "% match" (invariant 2).
 
-**Four stages as pills, one shown at a time.** New · To send · Waiting · Replied,
-from `stageCards` over the queue (in the queue's own order) and the pipeline's
-`sent`, `replied` and `meeting` rows. The stage is held by the shell, so Today's
-"send the drafts" ask and its replies row open Matches on the right pill rather
-than a sheet. Each card does the one thing that moves it. **A draft is sent from
+**Everyone already written to, in a sheet** (`v2/Outreach.tsx`). To send ·
+Waiting · Replied, from `stageCards` over the queue (in the queue's own order)
+and the pipeline's `sent`, `replied` and `meeting` rows: the Matches tab's other
+three pills. A deck is the wrong shape for them — "they replied" is not a yes or
+a no, and who you are waiting on is read, not swiped — so they are a sheet,
+opened from the top of the deck (`outreachLine`: a reply leads, since it is what
+goes cold, then who you are waiting on, then drafts), from the Path's "send the
+drafts" ask (on To send) and its replies row and the week's review (on Replied
+or Waiting). Each card does the one thing that moves it. **A draft is sent from
 its own card**: the button is the draft's deep link (`StageCard.link`, wa.me or
 mailto, pre-filled), `markOpened` records the tap, and the card asks "Did it
 go?" in place — Sent logs it (`markSent`), Not yet puts the button back. Where
 the copilot owns the identity the draft would go out under, the button sends it
-instead (invariant 4). The one-at-a-time queue sheet is no longer opened from
-here: it was the same job, out of context. Won and lost are over and are not on
-a list of people to chase; a stage emptied by the last answer falls back to New.
+instead (invariant 4). To send keeps "I am not sending these". Answering a row
+keeps the sheet open (`{ stay: true }` on `markSent`, `sendAction` and
+`recordOutcome`, which otherwise close the sheet they were answered from), and a
+stage emptied by the last answer moves on with the person: the last draft sent
+to Waiting, the last reply to Replied. Won and lost are over and are not on a
+list of people to chase.
 
 **A card says what it is, where, and why.** A tile first — the listing's photo
 when Maps returned one (`image_url`; older rows have none), initials on a
@@ -864,7 +870,7 @@ does having nothing to search: with nothing live and nothing new to plan,
 offer does not say who buys it; everything it could think of was tried) instead
 of returning an empty run that reads as a quiet night. A search cut off by the clock is recorded as such and
 runs first next time. A manual look that brought in nothing and hit a failure
-says which finder failed and why, not a setting to change. Never an empty Matches over a broken
+says which finder failed and why, not a setting to change. Never an empty deck over a broken
 search (invariant 13).
 
 Setup: `EXA_API_KEY`, and the 20260925 migration. Without either, Maps and feeds
@@ -1758,13 +1764,16 @@ and changed nothing, and it should be reverted.
 
 ## Swipe — the deck again, where yes is the send (`deck.ts`, `deckstore.ts`, `v2/SwipeTab.tsx`)
 
-A sixth tab beside Matches, from its owner's account of why 57 of 76 drafts
+The tab that replaced Matches, from its owner's account of why 57 of 76 drafts
 never went: "little info about each card, then open it and draft it to check and
 send later; the message is not written for me; many didn't have WhatsApp". The
 stack above was folded away because "yes" was a draft to send later — the cheap
 side won. Here "yes" is the send itself, so both answers cost one flick again.
-It stays beside Matches until one of them is the one that gets used; the metric
-is the stack's: sends per session (the tab's own top line counts them).
+It sat beside Matches for one release; its owner kept it and dropped the list.
+The metric stays the stack's: sends per session (the tab's own top line counts
+them). Every way into Matches still lands: `?tab=matches` (and `pipeline`,
+`opportunities`, `signals`) opens the deck, the Path's New opens the deck, and
+its other pills open the outreach sheet on the same stage.
 
 **The card is the whole screen**, and carries what the list sent people away to
 open: the listing's photo, what and where, every reason it was picked (not two
@@ -1827,20 +1836,47 @@ marks the business acted (`deck_posted`).
 
 **Gestures, and a button for each:** drag right, drag left; Undo (a "not for
 me" is held 8s or until the next answer, then saved — leaving the tab saves it
-with `keepalive`); Later (to the back of the pile); Look up. Sideways is a swipe
-and up-and-down reads the card, so the card scrolls and a swipe can start on the
-message. Arrow keys on a desk. The pile keeps its own order for the session, so
+with `keepalive`); Later (to the back of the pile); Look up. Arrow keys on a
+desk. "More about …" at the foot of a card opens the record behind it (the
+business, the draft, the Move), as the list's chevron did.
+
+**The card follows the thumb, both ways, as on a dating app.** Up and down
+scrolls the card; sideways moves it, tilting, with a little of the thumb's
+vertical so it is held rather than on a rail. The first version moved a few
+pixels on a phone and sprang back: `touch-action` is read from the element
+touched up to the nearest scroller and stops there, so `pan-y` on the card said
+nothing about a touch inside the card's own scroller, the browser took the
+sideways pan, fired `pointercancel`, and the cancel put the card back. `pan-y` is
+on `.cp2-swp-scroll` now, and a non-passive `touchmove` guard cancels the scroll
+of a touch that starts sideways, for a browser that decides on the first move
+instead. Let go past 100px, or thrown faster than 0.4px/ms after 30px, and it
+goes; pulled back, it does not. The next card sits underneath whole, not as a
+picture of one, and comes forward as this one goes. The card answered leaves as
+a copy of itself, scrolled where it was being read, from where the thumb let go
+and at the speed it was thrown (Web Animations); React deals the next card the
+same frame.
+
+**The card reaches the foot of the screen.** The buttons and the nav float on
+it, frosted (`backdrop-filter`), with a frost that thickens toward the nav over
+its foot; the card's own content scrolls clear of them. The empty pile says why
+it is empty — looking now, nothing can search on this server, nothing cleared
+the bar — and, out of the month's matches, carries the plan wall the list did. The pile keeps its own order for the session, so
 the home refreshed behind it once after a burst of swipes never reshuffles the
 card under the thumb; a business swiped right that comes back as a draft takes
 its own place in the pile, with the way picked and the words typed. What was
 answered and the session's count are kept for the day on the phone, so a trip to
-Matches does not deal them again.
+another tab does not deal them again.
 
 **Testing it.** Headless Chromium hands `sms:`, `tel:` and `mailto:` to an
 "open external app" prompt that swallows every click after it, so a test records
 them instead — the tab opens them as a clicked link, and `HTMLAnchorElement.prototype.click`
 can be wrapped in an init script. A model stand-in has to answer the Responses
-API (`/v1/responses`), which is what the AI SDK's provider calls.
+API (`/v1/responses`), which is what the AI SDK's provider calls. Drive the drag
+with touch, not the mouse: CDP `Input.dispatchTouchEvent` in a `hasTouch`
+context goes through the browser's touch-action handling, and a mouse drag does
+not — the mouse test passed while every phone sprang back. Put `touch-action:
+auto` back on the scroller and drop the guard, and that test reproduces the bug
+(a `pointercancel` mid-drag, the card at rest).
 
 ## Moves and Jobs
 
@@ -2725,6 +2761,8 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
   reply to it.
 - The Swipe pile's own order (Later, put back) lives with the tab: leaving it and coming back
   deals in the server's order again. What was answered is kept.
+- The outreach sheet opens on the stage it was asked for each time: a record opened over it
+  and closed again brings it back on that stage, not the pill last tapped.
 - `budget_minutes` is written, shown as "up to 60 min" and sent in the payload, and
   nothing accounts for it. `dueCommissions` re-dispatches every active mandate nightly
   with no cooldown, so what reads as a total is a per-night allowance with no ledger

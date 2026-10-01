@@ -13,7 +13,7 @@
 import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster, businessMachine, workStatus } from '@/lib/copilot/machine';
-import { matchCounts, matchFeed, matchesStatus, stageCards } from '@/lib/copilot/matches';
+import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
 import { pathAhead, pathHere, pathNow, planStatus, priceOf } from '@/lib/copilot/plan';
@@ -36,7 +36,7 @@ export function derive(home: HomeData) {
   // Sales money: the goal's currency. Runway's is the finance row's, which follows the bank.
   const currency = salesCurrency(home.profile.finance, home.goals);
 
-  /* Matches — first, because Today reports how many of last night's finds are still waiting there. */
+  /* The matches — first, because Today reports how many of last night's finds are still waiting in the deck. */
   const feed = matchFeed({ now, pipeline: home.pipeline, triage: home.triage, moves: home.moves, targetSegments: home.profile.target_segments });
   // The list is the verdict: only what cleared the bar. The header counts the
   // same list, so the two agree.
@@ -312,7 +312,6 @@ export function derive(home: HomeData) {
 
   const status: Record<Tab2, string | null> = {
     path: planStatus(asks.length, path.week.streak),
-    matches: matchesStatus(counts),
     // The deck has no header: the card is the screen, and its own top line counts what is left.
     swipe: null,
     work: workStatus(team, running),

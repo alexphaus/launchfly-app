@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 65 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 66 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -142,7 +142,10 @@ prompt then swallows every click on the page — the test looks like a dead
 button. Wrap `HTMLAnchorElement.prototype.click` in an init script to record
 those links instead (the tab opens them as a clicked link for this reason). The
 cards' messages need a model: a stand-in must answer the Responses API
-(`/v1/responses`), which is what the AI SDK calls.
+(`/v1/responses`), which is what the AI SDK calls. Test the drag with touch, not
+the mouse: a `hasTouch` context and CDP `Input.dispatchTouchEvent`. Only touch
+input goes through `touch-action`, and a mouse-drag test passed while on every
+phone the card moved a few pixels and sprang back (COPILOT.md → **Swipe**).
 
 **Testing the mic:** headless Chromium has no microphone, and its own
 `webkitSpeechRecognition` fails. Put a stand-in `SpeechRecognition` on the page

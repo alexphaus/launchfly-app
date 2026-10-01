@@ -3511,6 +3511,13 @@ async function commissions() {
     // A reach mandate has to tell the worker it may NOT act, or it sends
     // something under somebody's name.
     assert.equal(commissionBrief({ ...base, authority: 'reach' }, profile, null, null).may_autonomously, false);
+
+    // The worker is told what day it is, in the person's own timezone: 23:30 UTC
+    // on Sep 30 is already Oct 1 in Manila. Without it, "from Oct 5" came back
+    // as a question about which year.
+    const late = new Date('2026-09-30T23:30:00Z');
+    assert.equal(commissionBrief(base, profile, null, null, { now: late }).today, '2026-10-01');
+    assert.equal(commissionBrief(base, { ...profile, timezone: 'Not/AZone' }, null, null, { now: late }).today, '2026-09-30', 'an unknown zone falls back to UTC, never throws');
   }
 
   // --- what comes back, untrusted

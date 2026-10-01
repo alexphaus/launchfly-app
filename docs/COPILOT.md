@@ -2571,8 +2571,15 @@ design: the mandate records intent, the second gate decides what runs.
   "who": { name, headline, offer, location, timezone, target_segments, target_area,
            working? },
   "goal": { title, target, unit },
+  "today": "YYYY-MM-DD",
   "log": [ { kind, step, summary, at } ] }
 ```
+
+`today` is the person's own date in their timezone. Without it a worker asked
+"Which year should I use for October 5: 2025 or 2026?" on October 1, 2026 — it
+had the objective, the person and the log, and no idea when now was. The
+reference worker opens its task with it and is told a date without a year means
+the next one; a worker imported before this needs re-importing to read it.
 
 `who` carries no email, no phone, no billing and no id. `who.working` is
 `workingBrief` — live entries only, omitted for an account with no file — and it

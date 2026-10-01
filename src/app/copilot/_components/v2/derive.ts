@@ -313,6 +313,8 @@ export function derive(home: HomeData) {
   const status: Record<Tab2, string | null> = {
     path: planStatus(asks.length, path.week.streak),
     matches: matchesStatus(counts),
+    // The deck has no header: the card is the screen, and its own top line counts what is left.
+    swipe: null,
     work: workStatus(team, running),
     // The balance is the first thing on the tab; a header saying it again is noise.
     money: null,

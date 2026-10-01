@@ -6,6 +6,7 @@
 import { Resend } from 'resend';
 import { getWhatsAppProvider } from '@/lib/whatsapp-provider';
 import { openerTemplate } from './agent/starter';
+import { dialable, type ReachVia } from './deck';
 import { addDays, copilotDb, todayIso } from './db';
 import { getProfile, logEvent, setActionStatus } from './base';
 import { limitsFor } from './plans';
@@ -39,9 +40,19 @@ export function channelsConfigured(profile?: (Pick<Profile, 'linked_business_id'
   };
 }
 
-/** A link that opens the message pre-filled in the user's OWN WhatsApp or mail client. */
-export function deepLink(exec: Pick<Execution, 'channel' | 'recipient' | 'subject' | 'body'>): string {
+/**
+ * A link that opens the message pre-filled in the user's OWN WhatsApp or mail client.
+ *
+ * `provider` says how a message to a phone actually goes when it is not
+ * WhatsApp: the Swipe tab sends to landlines by calling and to mobiles by text
+ * when WhatsApp is not there (deck.ts). A phone channel with 'sms' opens texts
+ * and with 'call' dials — so a follow-up to someone reached by a call opens the
+ * phone, not a WhatsApp link to a landline that cannot receive one.
+ */
+export function deepLink(exec: Pick<Execution, 'channel' | 'recipient' | 'subject' | 'body'> & { provider?: string | null }): string {
   if (exec.channel === 'whatsapp') {
+    if (exec.provider === 'call') return `tel:${dialable(exec.recipient)}`;
+    if (exec.provider === 'sms') return `sms:${dialable(exec.recipient)}?&body=${encodeURIComponent(exec.body)}`;
     return `https://wa.me/${exec.recipient.replace(/\D/g, '')}?text=${encodeURIComponent(exec.body)}`;
   }
   const params = new URLSearchParams();
@@ -51,7 +62,7 @@ export function deepLink(exec: Pick<Execution, 'channel' | 'recipient' | 'subjec
 }
 
 /** Attach the deep link so the client can offer "open in my WhatsApp" for unsent drafts. */
-export function withDeepLink<T extends Pick<Execution, 'channel' | 'recipient' | 'subject' | 'body' | 'approval_state'>>(exec: T): T & { deep_link: string | null } {
+export function withDeepLink<T extends Pick<Execution, 'channel' | 'recipient' | 'subject' | 'body' | 'approval_state'> & { provider?: string | null }>(exec: T): T & { deep_link: string | null } {
   return { ...exec, deep_link: exec.approval_state === 'sent' || exec.approval_state === 'cancelled' ? null : deepLink(exec) };
 }
 
@@ -62,7 +73,7 @@ export function recipientFor(opp: Pick<Opportunity, 'contact'>, channel: Channel
 /** Create a needs_approval execution for an action. Returns null when the opportunity has no contact on that channel. */
 export async function createDraftExecution(
   profileId: string,
-  input: { actionId: string; opportunityId: string; channel: Channel; body: string; subject?: string },
+  input: { actionId: string; opportunityId: string; channel: Channel; body: string; subject?: string; provider?: 'sms' | 'call' | null },
 ): Promise<Execution | null> {
   const db = copilotDb();
   const { data: opp } = await db.from('copilot_opportunities').select('id, contact, title').eq('id', input.opportunityId).eq('profile_id', profileId).maybeSingle();
@@ -72,6 +83,7 @@ export async function createDraftExecution(
   const { data, error } = await db.from('copilot_executions').insert({
     profile_id: profileId, action_id: input.actionId, opportunity_id: input.opportunityId, channel: input.channel,
     recipient, subject: input.subject ?? (input.channel === 'email' ? `Quick note for ${opp.title}` : null), body: input.body,
+    ...(input.provider ? { provider: input.provider } : {}),
   }).select('*').single();
   if (error) throw error;
   return data as Execution;
@@ -115,6 +127,49 @@ export async function draftOpener(
   if (error) throw error;
   const execution = await createDraftExecution(profile.id, { actionId: action.id, opportunityId: opp.id, channel, body: draft });
   return { actionId: action.id, execution };
+}
+
+/**
+ * A draft from the Swipe tab: the message the person read on the card and
+ * swiped right on, not the template. Idempotent like the Draft button — a
+ * business with an open draft already has that draft rewritten to what was
+ * approved, never a second message queued for the same person.
+ *
+ * `via` is kept on the row as its provider when the message goes to a phone by
+ * text or by a call, so the link it opens, and its follow-up's, are the right
+ * app (deepLink).
+ */
+export async function draftWithBody(
+  profile: Profile,
+  opp: Pick<Opportunity, 'id' | 'title' | 'contact'>,
+  channel: Channel,
+  input: { body: string; subject?: string | null; via: ReachVia; detail: string },
+): Promise<{ actionId: string; execution: Execution } | null> {
+  const db = copilotDb();
+  const provider = input.via === 'sms' || input.via === 'call' ? input.via : null;
+  const existing = await openDraftForOpportunity(profile.id, opp.id);
+  if (existing) {
+    const current = await getExecution(profile.id, existing.executionId);
+    if (current && current.channel === channel) {
+      const { data, error } = await db.from('copilot_executions')
+        .update({ body: input.body, subject: channel === 'email' ? (input.subject ?? current.subject) : null, provider })
+        .eq('id', current.id).eq('profile_id', profile.id).select('*').single();
+      if (error) throw error;
+      return { actionId: existing.actionId, execution: data as Execution };
+    }
+    // An open draft on the other channel is a different message to a different
+    // address: it is left for its own card, and this one is written beside it.
+  }
+  const name = opp.contact?.name || opp.title;
+  const { data: action, error } = await db.from('copilot_actions').insert({
+    profile_id: profile.id, kind: 'plan', owner: 'ai', minutes: 3, for_date: todayIso(profile.timezone), opportunity_id: opp.id,
+    title: `Opener to ${name}, ready to review`, detail: input.detail, ai_draft: input.body,
+  }).select('id').single();
+  if (error) throw error;
+  const execution = await createDraftExecution(profile.id, {
+    actionId: action.id, opportunityId: opp.id, channel, body: input.body, subject: input.subject ?? undefined, provider,
+  });
+  return execution ? { actionId: action.id, execution } : null;
 }
 
 /**
@@ -343,7 +398,7 @@ export async function sendExecution(profileId: string, executionId: string, over
  * Same bookkeeping as an API send — the loop does not care which hand pressed
  * the button, only that a message went out and a reply may follow.
  */
-export async function markSentManually(profileId: string, executionId: string, overrides: { body?: string; subject?: string } = {}): Promise<Execution> {
+export async function markSentManually(profileId: string, executionId: string, overrides: { body?: string; subject?: string; via?: ReachVia } = {}): Promise<Execution> {
   const db = copilotDb();
   const exec = await getExecution(profileId, executionId);
   if (!exec) throw new Error('Draft not found');
@@ -353,8 +408,14 @@ export async function markSentManually(profileId: string, executionId: string, o
   const body = (overrides.body ?? exec.body).trim();
   if (!body) throw new Error('Message is empty');
 
+  // How it went, when it was not the channel's own app: a text or a call to the
+  // number, kept so its follow-up opens the same way. The caller says when it
+  // knows (the Swipe tab); otherwise the draft's own is kept, so "Sent" on a
+  // call written to a landline is still recorded as a call.
+  const kept = exec.provider === 'sms' || exec.provider === 'call' ? exec.provider : null;
+  const provider = overrides.via === 'sms' || overrides.via === 'call' ? overrides.via : overrides.via ? 'manual' : kept ?? 'manual';
   const { data: updated } = await db.from('copilot_executions').update({
-    approval_state: 'sent', dispatch: 'manual', provider: 'manual', body,
+    approval_state: 'sent', dispatch: 'manual', provider, body,
     subject: overrides.subject ?? exec.subject ?? null, error: null, sent_at: new Date().toISOString(),
   }).eq('id', exec.id).select('*').single();
 
@@ -393,7 +454,9 @@ async function scheduleFollowUp(profile: Profile, exec: Execution) {
     detail: 'Auto-drafted 3 days after your first message. Edit before sending if they replied elsewhere.',
     ai_draft: followUpTemplate(name, firstName, exec.channel, profile.offer?.proof_url),
   }).select('id').single();
-  if (action) await createDraftExecution(profile.id, { actionId: action.id, opportunityId: opp.id, channel: exec.channel, body: followUpTemplate(name, firstName, exec.channel, profile.offer?.proof_url), subject: exec.subject ? `Re: ${exec.subject}` : undefined });
+  // Reached by a text or a call, followed up the same way: the provider carries it (deepLink).
+  const provider = exec.provider === 'sms' || exec.provider === 'call' ? exec.provider : null;
+  if (action) await createDraftExecution(profile.id, { actionId: action.id, opportunityId: opp.id, channel: exec.channel, body: followUpTemplate(name, firstName, exec.channel, profile.offer?.proof_url), subject: exec.subject ? `Re: ${exec.subject}` : undefined, provider });
 }
 
 export function followUpTemplate(name: string, firstName: string, channel: Channel, proofUrl?: string | null): string {

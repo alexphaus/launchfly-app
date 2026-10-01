@@ -238,6 +238,11 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 @keyframes cp2-plan-turn { to { transform: rotate(360deg); } }
 @keyframes cp2-stream-pop { from { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } to { transform: none; } }
 @keyframes cp2-voice-ring { from { transform: scale(0.92); opacity: 0.7; } to { transform: scale(1.32); opacity: 0; } }
+/* A card answered on the Swipe tab leaves from wherever the thumb let it go. */
+@keyframes cp2-swp-out-right { from { transform: translateX(calc(var(--cp2-swp-dx, 0) * 1px)) rotate(calc(var(--cp2-swp-dx, 0) * 0.055deg)); } to { transform: translateX(140%) rotate(22deg); opacity: 0.6; } }
+@keyframes cp2-swp-out-left { from { transform: translateX(calc(var(--cp2-swp-dx, 0) * 1px)) rotate(calc(var(--cp2-swp-dx, 0) * 0.055deg)); } to { transform: translateX(-140%) rotate(-22deg); opacity: 0.6; } }
+@keyframes cp2-swp-out-up { from { transform: none; } to { transform: translateY(-105%) scale(0.92); opacity: 0; } }
+@keyframes cp2-swp-writing { 50% { opacity: 0.45; } }
 
 /* Setup error */
 .cp-setup { padding: 60px 24px; text-align: center; }
@@ -1597,6 +1602,8 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 @media (prefers-reduced-motion: reduce) {
   .cp-root[data-theme="soft"] .cp2-way-reached { animation: none; }
   .cp-root[data-theme="soft"] .cp2-voice-btn.on::after { animation: none; opacity: 0.5; }
+  .cp-root[data-theme="soft"] .cp2-swp-leave { display: none; }
+  .cp-root[data-theme="soft"] .cp2-swp-msg.wait i { animation: none; }
   .cp-root[data-theme="soft"] .cp2-stream-back { transition: none; }
   .cp-root[data-theme="soft"] .cp2-rv-chev svg { transition: none; }
   .cp-root[data-theme="soft"] .cp2-nightly-track i { transition: none; }
@@ -1623,8 +1630,8 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
    on its header, the calendar, and the add sheet. Names are cp2-bk-*, and none
    is a bare word: .cp-steps once sized every span inside it, and a component
    that reused a common name rendered as grey rectangles (CLAUDE.md). */
-/* Five tabs in the pill: a little less air each so "Matches" keeps one line at 360px. */
-.cp-root[data-theme="soft"] .cp2-nav button { padding: 6px 9px; }
+/* Six tabs in the pill: a little less air each so "Matches" keeps one line at 360px. */
+.cp-root[data-theme="soft"] .cp2-nav button { padding: 6px 6px; }
 .cp-root[data-theme="soft"] .cp2-bk-wait { padding-top: 24px; }
 .cp-root[data-theme="soft"] .cp2-bk-msg { margin-top: 14px; }
 .cp-root[data-theme="soft"] .cp2-bk-msg p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.55; color: var(--ink); }
@@ -1800,3 +1807,121 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pad-heard div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .cp-root[data-theme="soft"] .cp2-pad-heard q { font-size: 13.5px; font-weight: 600; line-height: 1.35; color: var(--ink); overflow-wrap: anywhere; }
 .cp-root[data-theme="soft"] .cp2-pad-heard span { font-size: 12px; line-height: 1.4; color: var(--muted); }
+
+/* ── The Swipe tab (v2/SwipeTab.tsx) ──────────────────────────────────────
+   One match at a time, the whole screen, the message already on it. The deck
+   sits over the tab's content, from the top of the frame to just above the
+   floating nav, with its buttons between the card and the nav — under the
+   thumb, as on every card deck a phone has taught people. Names are cp2-swp-*,
+   none a bare word (CLAUDE.md: .cp-steps once styled every span inside it). */
+.cp-root[data-theme="soft"] .cp2-swp {
+  position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--bg);
+  padding: calc(10px + env(safe-area-inset-top)) 12px calc(92px + env(safe-area-inset-bottom));
+}
+.cp-root[data-theme="soft"] .cp2-swp-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 4px 8px 10px; font-size: 12.5px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-swp-top b { font-family: var(--display); font-size: 16px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-swp-stack { position: relative; flex: 1; min-height: 0; }
+.cp-root[data-theme="soft"] .cp2-swp-card {
+  position: absolute; inset: 0; border-radius: 26px; overflow: hidden; background: var(--surface);
+  box-shadow: 0 18px 40px rgba(20, 25, 45, 0.14); touch-action: pan-y; user-select: none; -webkit-user-select: none;
+}
+.cp-root[data-theme="soft"] .cp2-swp-under { transform: scale(0.95) translateY(12px); opacity: 0.75; pointer-events: none; box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-swp-leave { pointer-events: none; z-index: 6; }
+.cp-root[data-theme="soft"] .cp2-swp-leave.right { animation: cp2-swp-out-right 0.32s ease-in forwards; }
+.cp-root[data-theme="soft"] .cp2-swp-leave.left { animation: cp2-swp-out-left 0.32s ease-in forwards; }
+.cp-root[data-theme="soft"] .cp2-swp-leave.up { animation: cp2-swp-out-up 0.3s ease-in forwards; }
+.cp-root[data-theme="soft"] .cp2-swp-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* The top of the card: a photo with its name over it, or a tint with initials */
+.cp-root[data-theme="soft"] .cp2-swp-hero { position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 88px 20px 18px; background: var(--line); color: var(--muted); }
+/* Enough photo to recognise the place, and the start of the message above the fold: it is what the right swipe approves. */
+.cp-root[data-theme="soft"] .cp2-swp-hero.photo { height: 40%; min-height: 220px; padding: 0; }
+.cp-root[data-theme="soft"] .cp2-swp-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.cp-root[data-theme="soft"] .cp2-swp-hero.photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(12, 14, 24, 0.78), rgba(12, 14, 24, 0) 58%); pointer-events: none; }
+.cp-root[data-theme="soft"] .cp2-swp-hero.t0 { background: rgba(79, 99, 210, 0.12); color: #3A4BB0; }
+.cp-root[data-theme="soft"] .cp2-swp-hero.t1 { background: rgba(61, 153, 133, 0.14); color: #2B7262; }
+.cp-root[data-theme="soft"] .cp2-swp-hero.t2 { background: rgba(214, 158, 46, 0.18); color: #7F560B; }
+.cp-root[data-theme="soft"] .cp2-swp-hero.t3 { background: rgba(201, 90, 120, 0.13); color: #973A56; }
+.cp-root[data-theme="soft"] .cp2-swp-hero.t4 { background: rgba(132, 94, 194, 0.13); color: #613F9C; }
+.cp-root[data-theme="soft"] .cp2-swp-hero.t5 { background: rgba(96, 110, 140, 0.14); color: #465069; }
+.cp-root[data-theme="soft"] .cp2-swp-hero.photo { background: #1A1D29; }
+.cp-root[data-theme="soft"] .cp2-swp-mono { position: absolute; top: 18px; right: 20px; display: inline-flex; align-items: center; justify-content: center; width: 58px; height: 58px; border-radius: 18px; background: rgba(255, 255, 255, 0.7); font-family: var(--display); font-size: 22px; font-weight: 800; }
+.cp-root[data-theme="soft"] .cp2-swp-mono svg { width: 26px; height: 26px; }
+.cp-root[data-theme="soft"] .cp2-swp-badge { position: absolute; top: 18px; left: 18px; z-index: 2; padding: 5px 11px; border-radius: 999px; background: rgba(255, 255, 255, 0.94); color: var(--blue); font-size: 11.5px; font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-swp-title { position: relative; z-index: 2; }
+.cp-root[data-theme="soft"] .cp2-swp-hero.photo .cp2-swp-title { position: absolute; left: 20px; right: 20px; bottom: 18px; }
+.cp-root[data-theme="soft"] .cp2-swp-title h2 { margin: 0; font-family: var(--display); font-size: 24px; font-weight: 800; line-height: 1.15; letter-spacing: -0.3px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-swp-title p { margin: 6px 0 0; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-swp-hero.photo .cp2-swp-title h2,
+.cp-root[data-theme="soft"] .cp2-swp-hero.photo .cp2-swp-title p { color: #fff; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35); }
+
+/* What it is, why it was picked, the post, and the message */
+.cp-root[data-theme="soft"] .cp2-swp-body { display: flex; flex-direction: column; gap: 18px; padding: 16px 18px 26px; }
+.cp-root[data-theme="soft"] .cp2-swp-facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-root[data-theme="soft"] .cp2-swp-facts span { padding: 5px 10px; border-radius: 999px; background: var(--line); color: var(--muted); font-size: 12px; font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-swp-facts .reach { background: var(--tint); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-swp-sec h3 { margin: 0 0 7px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-swp-sec p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-swp-sec p + p { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-swp-post { margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--line); font-size: 14px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cp-root[data-theme="soft"] .cp2-swp-vias { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+.cp-root[data-theme="soft"] .cp2-swp-vias button { padding: 6px 12px; border: 0; border-radius: 999px; background: var(--line); color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-swp-vias button.on { background: var(--blue); color: #fff; }
+.cp-root[data-theme="soft"] .cp2-swp-hint { margin: 0 0 8px !important; font-size: 12.5px !important; font-weight: 600; color: var(--bad) !important; }
+.cp-root[data-theme="soft"] .cp2-swp-msg { display: block; width: 100%; padding: 13px 15px; border: 0; border-radius: 16px; background: var(--tint); color: var(--ink); font: inherit; font-size: 14.5px; line-height: 1.5; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.cp-root[data-theme="soft"] .cp2-swp-subj { display: block; margin-bottom: 6px; }
+.cp-root[data-theme="soft"] .cp2-swp-msg.wait { display: flex; flex-direction: column; gap: 9px; cursor: default; }
+.cp-root[data-theme="soft"] .cp2-swp-msg.wait i { display: block; height: 10px; width: 100%; border-radius: 6px; background: rgba(79, 99, 210, 0.16); animation: cp2-swp-writing 1.3s ease-in-out infinite; }
+.cp-root[data-theme="soft"] .cp2-swp-msg.wait i:nth-child(2) { width: 86%; animation-delay: 0.15s; }
+.cp-root[data-theme="soft"] .cp2-swp-msg.wait i:nth-child(3) { width: 58%; animation-delay: 0.3s; }
+.cp-root[data-theme="soft"] .cp2-swp-msg.wait span { margin-top: 2px; font-size: 12.5px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-swp-msg.err { cursor: default; }
+.cp-root[data-theme="soft"] .cp2-swp-msg.err p { margin: 0 0 10px; font-size: 13px; color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-swp-edit { display: block; width: 100%; padding: 12px 14px; border: 2px solid var(--blue); border-radius: 16px; outline: 0; background: var(--surface); font-size: 14.5px; line-height: 1.5; resize: vertical; }
+.cp-root[data-theme="soft"] .cp2-swp-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-swp-meta button { flex: none; padding: 4px 0; border: 0; background: none; color: var(--blue); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+
+/* Dragged: which way it will go, stamped on the card */
+.cp-root[data-theme="soft"] .cp2-swp-stamp { position: absolute; top: 24px; z-index: 5; padding: 6px 12px; border: 3px solid; border-radius: 10px; background: rgba(255, 255, 255, 0.88); font-family: var(--display); font-size: 19px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; pointer-events: none; }
+.cp-root[data-theme="soft"] .cp2-swp-stamp.yes { left: 20px; color: var(--ai); border-color: var(--ai); transform: rotate(-12deg); opacity: var(--cp2-swp-yes, 0); }
+.cp-root[data-theme="soft"] .cp2-swp-stamp.no { right: 20px; color: var(--bad); border-color: var(--bad); transform: rotate(12deg); opacity: var(--cp2-swp-no, 0); }
+
+/* The buttons, one per gesture */
+.cp-root[data-theme="soft"] .cp2-swp-bar { display: flex; justify-content: center; align-items: flex-end; gap: 12px; padding: 12px 0 0; }
+.cp-root[data-theme="soft"] .cp2-swp-act { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-swp-act i { display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 50%; background: var(--surface); box-shadow: 0 6px 16px rgba(20, 25, 45, 0.1); }
+.cp-root[data-theme="soft"] .cp2-swp-act svg { width: 20px; height: 20px; }
+.cp-root[data-theme="soft"] .cp2-swp-act.no i,
+.cp-root[data-theme="soft"] .cp2-swp-act.yes i { width: 60px; height: 60px; }
+.cp-root[data-theme="soft"] .cp2-swp-act.no i svg,
+.cp-root[data-theme="soft"] .cp2-swp-act.yes i svg { width: 26px; height: 26px; }
+.cp-root[data-theme="soft"] .cp2-swp-act.no i { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-swp-act.yes i { background: var(--blue); color: #fff; box-shadow: var(--lift); }
+.cp-root[data-theme="soft"] .cp2-swp-act.yes span { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-swp-act:disabled,
+.cp-root[data-theme="soft"] .cp2-swp-act.off { opacity: 0.4; cursor: default; }
+
+/* "Not for me", with the way back */
+.cp-root[data-theme="soft"] .cp2-swp-undo { position: absolute; left: 22px; right: 22px; bottom: calc(178px + env(safe-area-inset-bottom)); z-index: 8; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: var(--ink); color: #fff; font-size: 13px; box-shadow: 0 12px 30px rgba(20, 25, 45, 0.25); }
+.cp-root[data-theme="soft"] .cp2-swp-undo span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-swp-undo button { flex: none; padding: 0; border: 0; background: none; color: #B9C5FF; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+
+/* Back from their app: did it go? */
+/* Above the floating nav, not under it: the deck is its own layer below the nav's, so the question sits where the buttons were. */
+.cp-root[data-theme="soft"] .cp2-swp-ask { position: absolute; inset: 0; z-index: 30; display: flex; align-items: flex-end; padding: 0 12px calc(96px + env(safe-area-inset-bottom)); background: rgba(20, 25, 45, 0.38); }
+.cp-root[data-theme="soft"] .cp2-swp-askcard { display: flex; flex-direction: column; gap: 12px; width: 100%; padding: 22px 18px 16px; border-radius: 24px; background: var(--surface); box-shadow: 0 20px 50px rgba(20, 25, 45, 0.25); }
+.cp-root[data-theme="soft"] .cp2-swp-askcard b { font-family: var(--display); font-size: 18px; line-height: 1.3; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-swp-askerr { margin: 0; font-size: 13px; line-height: 1.45; color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-swp-askhint { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-swp-asktext { display: block; margin-top: 6px; padding: 10px 12px; border-radius: 12px; background: var(--line); color: var(--ink); white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
+.cp-root[data-theme="soft"] .cp2-swp-askbtns { display: flex; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-swp-askbtns .cp-btn { flex: 1; }
+.cp-root[data-theme="soft"] .cp2-swp-again { align-self: center; padding: 4px; border: 0; background: none; color: var(--blue); font: inherit; font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* The app's toast, on this tab only, at the top: at the bottom it covered the buttons. */
+.cp-root[data-theme="soft"] .cp2-swiping .cp-toast { top: calc(48px + env(safe-area-inset-top)); bottom: auto; }
+
+/* Nothing on the pile */
+.cp-root[data-theme="soft"] .cp2-swp-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; padding: 28px; border-radius: 26px; background: var(--surface); text-align: center; }
+.cp-root[data-theme="soft"] .cp2-swp-empty b { font-family: var(--display); font-size: 19px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-swp-empty p { margin: 0 0 6px; font-size: 14px; line-height: 1.5; color: var(--muted); }

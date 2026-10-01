@@ -24,6 +24,16 @@ export const IconFlask = () => (<svg {...base}><path d="M9 3h6" /><path d="M10 3
 export const IconFlag = () => (<svg {...base}><path d="M5 21V4" /><path d="M5 4h11l-2 4 2 4H5" /></svg>);
 /** Money: a wallet — the cash that is actually there. */
 export const IconMoney = () => (<svg {...base}><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" /><path d="M4 7.5v10A2.5 2.5 0 0 0 6.5 20H20V8H6.5A2.5 2.5 0 0 1 4 5.5" /><circle cx="16" cy="14" r="1.2" /></svg>);
+/** Swipe: a card on top of another — the matches, one at a time (SwipeTab.tsx). */
+export const IconSwipe = () => (<svg {...base}><rect x="8" y="3.5" width="11" height="15" rx="2.5" transform="rotate(10 13.5 11)" /><rect x="4.5" y="5.5" width="11" height="15" rx="2.5" /></svg>);
+/** Not for me, on the Swipe tab. */
+export const IconCross = () => (<svg {...base}><path d="M6 6l12 12M18 6L6 18" /></svg>);
+/** Send it: the right swipe. */
+export const IconSend = () => (<svg {...base}><path d="M21 3L10 14" /><path d="M21 3l-7 18-4-7-7-4 18-7z" /></svg>);
+/** Take the last one back. */
+export const IconUndo = () => (<svg {...base}><path d="M4 8h10.5a5.5 5.5 0 0 1 0 11H8" /><path d="M8 4L4 8l4 4" /></svg>);
+/** A call, for a landline. */
+export const IconPhone = () => (<svg {...base}><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" /></svg>);
 /** Say a move: the mic in the header (VoiceLog.tsx). */
 export const IconMic = () => (<svg {...base}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0" /><path d="M12 17.5V21" /></svg>);
 /** Repeats: a row that comes round again. */

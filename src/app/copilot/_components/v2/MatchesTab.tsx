@@ -149,7 +149,7 @@ function StageCardView({ card, home, actions }: { card: StageCard; home: HomeDat
   // Server sending only when this copilot owns the identity it would go out
   // under (invariant 4); otherwise the draft's own deep link, in their own app.
   const owned = !!card.channel && home.channels[card.channel];
-  const via = card.channel === 'email' ? 'email' : 'WhatsApp';
+  const via = card.channel === 'email' ? 'email' : card.via === 'sms' ? 'a text' : 'WhatsApp';
 
   return (
     <div className="cp-card cp2-match">
@@ -174,7 +174,7 @@ function StageCardView({ card, home, actions }: { card: StageCard; home: HomeDat
             <button className="cp-btn primary" disabled={busy} onClick={() => void run(() => actions.sendAction(card.draftId!))}>{busy ? 'Sending…' : 'Send'}</button>
           ) : card.link ? (
             <a className="cp-btn primary" href={card.link} target="_blank" rel="noreferrer" onClick={() => { actions.markOpened(card.draftId!); setOpened(true); }}>
-              Send on {via}
+              {card.via === 'call' ? 'Call them' : `Send on ${via}`}
             </a>
           ) : (
             <button className="cp-btn primary" onClick={open}>Open the draft</button>

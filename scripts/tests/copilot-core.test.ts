@@ -8046,3 +8046,132 @@ async function spokenMoveSuite() {
 }
 
 spokenMoveSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The Swipe tab's deck (deck.ts) ──────────────────────────────────────── */
+
+import {
+  businessReach as dkBusinessReach, checkDraft as dkCheck, deckCards as dkCards, draftPrompt as dkPrompt, draftSources as dkSources,
+  factsOf as dkFacts, findReplyTemplate as dkFindReply, phoneKind as dkPhoneKind, phoneReach as dkPhoneReach, reachLink as dkLink,
+  type DeckInput as DkInput,
+} from '../../src/lib/copilot/deck';
+import type { MatchItem as DkItem, StageCard as DkStage } from '../../src/lib/copilot/matches';
+import type { Move as DkMove, PipelineRow as DkRow, QueueItem as DkQueue } from '../../src/lib/copilot/types';
+
+async function swipeDeckSuite() {
+  /* 1. What a number is. A Philippine number says; elsewhere both ways are offered. */
+  assert.deepEqual(dkPhoneKind('639171234567', 'PH'), { kind: 'mobile', dial: '+639171234567' });
+  assert.deepEqual(dkPhoneKind('0917 123 4567', null), { kind: 'mobile', dial: '+639171234567' });
+  assert.deepEqual(dkPhoneKind('63281234567', 'PH'), { kind: 'landline', dial: '+63281234567' }, 'a Manila landline');
+  assert.deepEqual(dkPhoneKind('(02) 8123 4567', 'PH'), { kind: 'landline', dial: '+63281234567' });
+  assert.deepEqual(dkPhoneKind('0321234567', 'PH'), { kind: 'landline', dial: '+63321234567' }, 'Cebu');
+  assert.deepEqual(dkPhoneKind('12125551234', 'US'), { kind: 'unknown', dial: '+12125551234' });
+  assert.deepEqual(dkPhoneReach('63281234567', 'PH').map((r) => r.via), ['call'], 'a landline is called, never WhatsApped');
+  assert.deepEqual(dkPhoneReach('639171234567', 'PH').map((r) => r.via), ['whatsapp', 'sms', 'call']);
+  assert.deepEqual(dkPhoneReach('12125551234', 'US').map((r) => r.via), ['whatsapp', 'call']);
+  assert.deepEqual(dkPhoneReach('12345', null), [], 'too short to dial');
+  assert.deepEqual(dkBusinessReach({ email: 'hi@shop.ph', website: 'https://shop.ph' }, 'PH').map((r) => r.via), ['email', 'site']);
+  assert.deepEqual(dkBusinessReach({ website: 'shop.ph' }, 'PH'), [], 'a site with no scheme is not a link');
+
+  /* 2. The links open the person's own app, filled in. */
+  const msg = { body: 'Hi Rocar, quick one?', subject: 'Plumbing leads' };
+  assert.equal(dkLink({ via: 'whatsapp', to: '+639171234567' }, msg), 'https://wa.me/639171234567?text=Hi%20Rocar%2C%20quick%20one%3F');
+  assert.equal(dkLink({ via: 'sms', to: '+639171234567' }, msg), 'sms:+639171234567?&body=Hi%20Rocar%2C%20quick%20one%3F', 'Android reads ?body, iOS &body');
+  assert.equal(dkLink({ via: 'call', to: '+63281234567' }, msg), 'tel:+63281234567');
+  assert.equal(dkLink({ via: 'email', to: 'hi@shop.ph' }, msg), 'mailto:hi@shop.ph?subject=Plumbing%20leads&body=Hi%20Rocar%2C%20quick%20one%3F', 'spaces as %20, which every mail app reads');
+  assert.equal(dkLink({ via: 'post', to: 'https://reddit.com/r/x/1' }, msg), 'https://reddit.com/r/x/1');
+  assert.equal(dkLink({ via: 'post', to: 'javascript:alert(1)' }, msg), null);
+
+  /* 3. Facts off the listing, never guessed. */
+  assert.deepEqual(dkFacts({ rating: 4.2, reviews_count: 31, pain_signals: ['no_website', 'few_reviews'] }), ['4.2★ (31)', 'No website']);
+  assert.deepEqual(dkFacts({ rating: 0, reviews_count: 0 }), ['No reviews yet']);
+  assert.deepEqual(dkFacts({}), [], 'nothing on file, nothing said');
+
+  /* 4. The deal: fresh finds, then To send, then the rest of New, then follow-ups that are due. */
+  const now = new Date('2026-10-02T08:00:00Z');
+  const opp = (id: string, contact: Record<string, string>, data: Record<string, unknown> = {}) => ({
+    id, type: 'client', title: `Biz ${id}`, reason: `why ${id}`, value_label: null, value_amount: null, currency: null, effort: 'medium', fit_score: 70, score: 70,
+    source: 'google_maps', url: `https://maps.example/${id}`, status: 'new', data: { country_code: 'PH', ...data }, external_id: id, source_kind: 'sourced',
+    contact, scored_at: '2026-10-01T00:00:00Z', created_at: '2026-10-01T00:00:00Z',
+  });
+  const pipeline = [
+    { opportunity: opp('a', { whatsapp: '639171234567' }, { rating: 4.5, reviews_count: 12 }), execution: null, stage: 'not_drafted' },
+    { opportunity: opp('b', { whatsapp: '63281234567' }), execution: null, stage: 'not_drafted' },
+    { opportunity: opp('c', { website: 'https://c.ph' }), execution: null, stage: 'not_drafted' },
+    { opportunity: opp('d', {}), execution: null, stage: 'not_drafted' },
+    { opportunity: opp('q1', { whatsapp: '639181111111' }), execution: null, stage: 'drafted' },
+    { opportunity: opp('q2', { email: 'owner@q2.ph' }), execution: null, stage: 'sent' },
+  ] as unknown as DkRow[];
+  const item = (id: string, over: Partial<DkItem> = {}): DkItem => ({
+    id, from: 'business', answer: 'triage', group: 'clients', title: `Biz ${id}`, reason: `why ${id}`, tag: 'Plumber', sub: 'Plumber · Makati',
+    image: null, initials: 'B', channel: 'whatsapp', url: null, fresh: false, created_at: '2026-10-01T00:00:00Z', saved: false, costLabel: null, judged: true, below: false, ...over,
+  });
+  const items = [
+    item('a'), item('b'), item('c'), item('d'), item('q1'),
+    item('mv-old', { from: 'feed', group: 'work', title: 'Apply to the Inside Sales role', url: 'https://jobboard.ph/1', fresh: false }),
+    item('mv-new', { from: 'feed', group: 'work', title: 'Reply to the HVAC owner', url: 'https://reddit.com/r/hvac/2', fresh: true }),
+  ];
+  const queue = [
+    { id: 'act-q1', title: 'Opener to Biz q1, ready to review', for_date: '2026-10-01', execution: { channel: 'whatsapp', recipient: '639181111111', body: 'Template opener', subject: null, created_at: '2026-09-25T00:00:00Z' } },
+    { id: 'act-fu-due', title: 'Follow-up to Biz q2, ready to review', for_date: '2026-10-02', execution: { channel: 'email', recipient: 'owner@q2.ph', body: 'Follow up', subject: 'Re: hi', created_at: '2026-09-29T00:00:00Z' } },
+    { id: 'act-fu-early', title: 'Follow-up to Biz x, ready to review', for_date: '2026-10-05', execution: { channel: 'whatsapp', recipient: '639180000000', body: 'Too early', subject: null, created_at: '2026-10-02T00:00:00Z' } },
+  ] as unknown as DkQueue[];
+  const stage = (q: string, oppId: string | null): DkStage => ({ key: `q:${q}`, stage: 'to_send', title: `Biz ${oppId}`, sub: 'Plumber · Makati', image: null, initials: 'B', status: 'Written', preview: null, draftId: q, link: null, oppId, channel: 'whatsapp' });
+  const moves = [
+    { id: 'mv-new', job: 'watch', kind: 'earn', headline: 'Reply to the HVAC owner', why: ['They ask for after-hours call handling.', 'From r/hvac, posted 2026-10-01.'], artifact: { kind: 'link', label: 'Open it', value: 'Looking for someone to handle after-hours calls for my HVAC shop.', href: 'https://reddit.com/r/hvac/2' }, cost_label: null, status: 'open', created_at: '2026-10-02T01:00:00Z' },
+  ] as unknown as DkMove[];
+  const input: DkInput = { now, today: '2026-10-02', items, toSend: [stage('act-q1', 'q1'), stage('act-fu-due', 'q2'), stage('act-fu-early', null)], queue, pipeline, moves };
+  const deck = dkCards(input);
+  assert.deepEqual(deck.map((c) => c.key), ['m:mv-new', 'q:act-q1', 'o:a', 'o:b', 'o:c', 'm:mv-old', 'q:act-fu-due'],
+    'fresh find, To send, New in its order (a business already written to is not dealt twice, one with no way to reach is not dealt), a due follow-up; one not yet due waits');
+  const find = deck[0];
+  assert.equal(find.post, 'Looking for someone to handle after-hours calls for my HVAC shop.', 'the post itself, off its Move');
+  assert.deepEqual(find.why, ['They ask for after-hours call handling.', 'From r/hvac, posted 2026-10-01.']);
+  assert.deepEqual(find.reach, [{ via: 'post', to: 'https://reddit.com/r/hvac/2' }]);
+  assert.equal(find.source, 'reddit.com');
+  const draft = deck[1];
+  assert.deepEqual([draft.kind, draft.written?.body, draft.reach.map((r) => r.via)], ['draft', 'Template opener', ['whatsapp', 'sms', 'call']]);
+  assert.deepEqual(deck.find((c) => c.key === 'o:b')?.reach.map((r) => r.via), ['call'], 'the landline is dealt as a call');
+  assert.deepEqual(deck.find((c) => c.key === 'o:c')?.reach.map((r) => r.via), ['site']);
+  assert.deepEqual(deck.find((c) => c.key === 'o:a')?.facts, ['4.5★ (12)']);
+  const fu = deck[deck.length - 1];
+  assert.deepEqual([fu.followUp, fu.reach[0].via], [true, 'email']);
+
+  /* 5. What a model writes is held to the rules before it reaches a card. */
+  const offer = { sells: 'WhatsApp booking automations', for_who: 'clinics and salons', problem: 'missed bookings after hours', price_band: '₱8,000 per setup', proof_url: 'https://alex.ph/demo' };
+  const dInput = { name: 'Alex Cruz', offer, working: null, area: 'Makati', card: { kind: 'business' as const, title: 'Rocar Plumbing', sub: 'Plumber · Makati', why: ['No website, answers on WhatsApp.'], facts: ['4.2★ (31)', 'No website'], post: null, source: null, followUp: false }, via: 'whatsapp' as const };
+  const src = dkSources(dInput);
+  const ok = dkCheck('"Hi Rocar — saw you have 31 reviews and no website. I set up WhatsApp booking for clinics and salons, ₱8,000 per setup. Worth a 10-minute call at 3pm?"', null, src, 'whatsapp', offer.proof_url);
+  assert.ok(ok.ok, 'numbers from the listing and the offer, a duration and a time are fine');
+  if (ok.ok) assert.ok(!ok.body.startsWith('"'), 'the quotes a model wraps a message in are taken off');
+  const invented = dkCheck('Hi Rocar, I helped 40 plumbers double their bookings.', null, src, 'whatsapp', offer.proof_url);
+  assert.deepEqual(invented, { ok: false, why: 'it wrote a number that is not in your offer or their listing (40)' });
+  assert.equal(dkCheck('Hi [Owner Name], quick one.', null, src, 'whatsapp').ok, false, 'a placeholder is refused');
+  assert.equal(dkCheck('See https://evil.example/x for more.', null, src, 'whatsapp', offer.proof_url).ok, false, 'a link you did not give is refused');
+  assert.ok(dkCheck('Here is a demo: www.alex.ph/demo/.', null, src, 'whatsapp', offer.proof_url).ok, 'the proof link, however it is written');
+  const long = dkCheck(`${'This is a sentence about bookings. '.repeat(30)}`, null, src, 'sms');
+  assert.ok(long.ok && long.body.length <= 450 && long.body.endsWith('.'), 'cut at the last sentence that fits a text');
+  const email = dkCheck('Hi, quick note.', ' "Bookings after hours" ', src, 'email');
+  assert.deepEqual(email.ok && email.subject, 'Bookings after hours');
+  const wa = dkCheck('Hi, quick note.', 'A subject', src, 'whatsapp');
+  assert.equal(wa.ok && wa.subject, null, 'a WhatsApp has no subject');
+
+  /* 6. The prompt carries the card, and a follow-up carries the first message. */
+  const p = dkPrompt(dInput);
+  assert.ok(p.includes('Rocar Plumbing (Plumber · Makati)') && p.includes('- No website') && p.includes('a WhatsApp message'));
+  const fp = dkPrompt({ ...dInput, via: 'call', card: { ...dInput.card, followUp: true }, firstMessage: 'Hi Rocar, first note.' });
+  assert.ok(fp.includes('THIS IS A FOLLOW-UP') && fp.includes('Hi Rocar, first note.') && fp.includes('a phone call'));
+  assert.ok(dkPrompt({ ...dInput, card: { ...dInput.card, kind: 'find', post: 'Need a booking bot' }, via: 'post' }).includes('THE POST THEY ARE ANSWERING'));
+
+  /* 6b. A link on a card is a web page, whatever a scraper wrote. */
+  const evil = dkCards({ ...input, pipeline: [{ opportunity: opp('x', { whatsapp: '639171234567', website: 'javascript:alert(1)' }), execution: null, stage: 'not_drafted' }] as unknown as DkRow[], items: [item('x')], toSend: [], queue: [], moves: [] });
+  assert.equal(evil[0].reach.some((r) => r.via === 'site'), false, 'no site way to a javascript: page');
+  assert.equal(evil[0].link, 'https://maps.example/x', 'the listing, not the script');
+
+  /* 7. Without a model, a find still gets a reply in the person's own words. */
+  assert.equal(dkFindReply('Alex Cruz', offer, { title: 'x', group: 'work' }),
+    'Hi — I\'d like to be considered for this. I work on WhatsApp booking automations for clinics and salons. An example: https://alex.ph/demo Happy to share more — what would be most useful? — Alex');
+
+  console.log('copilot-core: swipe deck checks passed');
+}
+
+swipeDeckSuite().catch((e) => { console.error(e); process.exit(1); });

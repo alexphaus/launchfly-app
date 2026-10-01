@@ -324,6 +324,12 @@ direction better than "copilot" does.
 
 ## Open, and honest
 
+- **Swipe or Matches.** The deck is back as a sixth tab (COPILOT.md → **Swipe**),
+  because 57 of 76 drafts sat unsent and its owner named why: too little on each
+  card, a message that was not written for them, numbers that were not on
+  WhatsApp. What changed from the deck that was folded away is what "yes" is —
+  the send, with the message on the card — not the gesture. Whichever of the two
+  tabs moves sends per session keeps its place; the other goes.
 - **The loop has never closed end to end.** Zero messages sent from the app.
   Until one goes out and one reply comes back, everything downstream is
   speculation. This is the highest-value thing anyone can do, and it is not a

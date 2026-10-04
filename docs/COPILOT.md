@@ -318,7 +318,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
-| Work | what am I building | the offer and what it knows about how you work · the path to money · the agents · projects handed over, in full (the ones that need you, the ones running, what it offers to take on, what finished) · the brief for Claude | `machine.ts` |
+| Work | is the business proven, and what moves it | what you sell and the verdict — proven, or the bar and the count against it — with the experiments run on it · the chain: who buys → how they hear → how they say yes → what they pay → how you deliver, each part a bet with its state, its rule and who runs it, the weak link open with what would move it · in the works: one box to hand anything over or copy it for Claude, the weak link's suggestions, the projects with a question answered or a breakage retried on the card · built: what the business has, by whom, gaps first · the agents as one line | `business.ts`, `machine.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move | `money/book.ts` |
 | You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
@@ -739,19 +739,74 @@ segment as the label because the segment is a search term and can be wrong: on
 one live account it was the letter "m". A one-letter segment is refused at every
 write path (`isSearchableSegment`) and named back when it is.
 
-**Work is an illustration with one rule: every part is drawn from rows.** Four
-stages — find, reach, convert, get paid — from the funnel's own counts, with who
-runs each and the one weak link placed on the part of the business it belongs to.
-Five agents — Scout, Watcher, Writer, Researcher, Planner — whose state is when
-they last actually ran and what they last produced, always with its word
-(`AGENT_STATE_LABEL`), never a coloured dot alone. A Researcher with no worker
-connected says "needs setup" rather than looking busy; a Writer on a blank offer
-is setup, not idle (invariant 1). Handed-over work has its home here, in full; a
-project under way and work it offers to take on are also next steps on the Path,
-one line each, because the Path is where the day's order is decided. "Build with
-Claude" is the handoff route's text with one task line on top: the app exports
-what it knows instead of competing with a model on building, which is what
-DIRECTION.md already decided.
+**Work is the business as a chain of bets** (`business.ts`, `v2/WorkTab.tsx`).
+It was an illustration — four stages that were the same for everybody, five agents
+with a dot each, the projects, and a button that copied everything into a chat —
+and its owner's verdict was the brief for what it is now: stale, the path to money
+generic, the team "too heavy for a status", and Build with Claude "could be input
+text for handover". The want was the tab that knows how the business makes money:
+the proven system and how everything is connected, what was built by AI and by
+them, suggestions that pay, experiments — run by an app that suggests, works, and
+asks only when it must.
+
+So there is one spine, and everything that used to be a section hangs off it:
+
+- **Five parts** — who buys, how they hear, how they say yes, what they pay, how
+  you deliver. Each carries what it is in the person's words (the offer, the
+  working file's lines), what the rows show (the funnel, per kind of business and
+  per channel, every win's amount), who runs it (the Scout, the Writer and you,
+  you), and a **state** by a rule written out beside it with its numbers:
+  works · testing · not working · untested · missing. The thresholds are the
+  app's own, not new ones: the app plans on `WORKING_REPLIES` replies in every
+  `RATE_SAMPLE` sends (the funnel checkpoint), counted per whole batch so two by
+  twenty-five clears it and two by a hundred does not; `REPEAT_WINS` wins is
+  something you can repeat; and from `CLOSE_SAMPLE` (`MIN_SAMPLE`, five)
+  conversations, nobody paying says more about the ask or the price than about
+  luck.
+- **Proven means paid, three times, at the price you set.** Not a count of wins:
+  the owner's account had two wins at $1 each, and a count cannot tell those
+  from sales. `diagnose` now keeps every win's amount (`wins`, `bySegment[].paid`),
+  so "a kind of business that pays" is held to the price too. Until then the
+  verdict says the bar and the count against it — "Proven at 3 paid at your
+  $150. So far: 0." — never a forecast (invariant 2).
+- **The weak link opens by itself** (`weakLink`): a part further down that has
+  failed on its own evidence binds everything above it (six meetings and no sale
+  at the price makes more replies worthless until it is fixed); otherwise a part
+  nobody has said (who buys, the price), since it costs a sentence; otherwise the
+  first part of the funnel that does not work yet. Delivery only once selling
+  works — nothing measures it, so it is never "not working", only written or not.
+- **What would move a part** is one of three things and says which: a sheet of
+  yours, a project for your agent (written as a draft and opened on its approve
+  button — never started unseen), or a question for Claude with the whole record
+  pasted. An agent move becomes a Claude one where no worker is connected
+  (invariant 7) or where three projects are already on the go, and says why. The
+  asks carry the instruction, not a second copy of the offer: the worker is sent
+  the offer and the working file with every project, and the brief carries both.
+  Build with Claude's four tasks live here now, on the part each one moves.
+- **The team is placed, not listed.** An agent that failed says so on the part it
+  stopped (`runner.problem`, invariant 13); the roster is one line under Agents —
+  how many are working and the name of every one that is not — with the rows
+  folded under it and the Planner's Run now among them.
+- **In the works** is one box — hand it over, or copy it for Claude — with the weak
+  link's suggestions as chips that fill it, then the projects, small enough that
+  three fit on a screen. A project's question has an answer box on its card, and
+  answering starts it (`unblock` with an answer dispatches in `after()`, the way
+  approving does); a breakage has its retry on the card.
+- **Built** is what the business has to work with, by whom: proof first when there
+  is none (with its way to fill it), the working file, the plan, and every closed
+  project with what it produced — `loadBuiltOutputs` reads every event that
+  carried something, across live and closed projects, because a finished project's
+  links used to be in its own sheet and nowhere else. Not the funnel's numbers:
+  those are on the chain, and the same count twice on one screen is what every
+  redraft here has deleted.
+- **It moves, and says so.** Each part's state is kept per device
+  (`cp2.work.seen:<profile>`), and the next visit names what moved — "How they
+  hear went from Not working to Works". Built marks what is new. No snapshot is no
+  change, the same rule the Path's plan keeps.
+
+The Path is still where the day's order is decided — the plan, the call, the
+experiment to start and grade. Work is what the business is and whether it is
+proven; the experiments fold on it is the ledger, not a second copy of the card.
 
 **You asks three questions of the week** — what created value, what was wasted,
 what has to change — and answers each from rows (`weekReview`). Money is never
@@ -2524,7 +2579,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET/POST | `/api/copilot/working` | the working file: write a line, confirm or decline a reading |
 | DELETE | `/api/copilot/working?id=` | remove a line |
 | GET/POST | `/api/copilot/commissions` | read the thread · write a mandate (always as a draft) |
-| POST | `/api/copilot/commissions/[id]` | `approve` · `unblock` · `stop` · `done` · `seen`. `stop` and `done` carry the close-out verdict `{ worth, amount?, note? }`, and answer with `recorded` plus a `note` when it did not reach the ledger |
+| POST | `/api/copilot/commissions/[id]` | `approve` · `unblock` · `stop` · `done` · `seen`. `approve`, and `unblock` with an `answer`, hand the work to the worker in `after()` and answer `started`. `stop` and `done` carry the close-out verdict `{ worth, amount?, note? }`, and answer with `recorded` plus a `note` when it did not reach the ledger |
 | POST | `/api/copilot/commissions/[id]/result` | **the worker's return leg** (Bearer `COPILOT_INBOUND_SECRET`) |
 | POST | `/api/copilot/commissions/run` | hand live mandates over now (25s budget) |
 | POST | `/api/copilot/obligations` | money owed, either way |
@@ -2786,6 +2841,14 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
   So the refusal decay hears an explicit no and an inferred ignore, and does not hear
   "this does not work". It is the same shape as the bug `REFUSAL_DECAY` exists to fix,
   one level up, and wants its own change with its own test.
+- Work's chain places agents on the part of the business they run, but not yet projects or
+  experiments: a commission and the plan's experiment carry no `link`, so they sit in In the works
+  and the experiments fold rather than on the part they test. The planner tagging an experiment's
+  part, and a project written from a part's move keeping it, is the next change; both need a field,
+  and the commission one a migration.
+- Built counts what a project produced; it does not yet join an asset to the sends it went out in.
+  Which proof link, demo or opener was in which message — and what came back — needs the asset to be
+  a row an execution can point at.
 - Refusals are keyed on `decision.topic`, and only Move-driven calls write a job key
   there: `starterDecision` writes `'sending'`, `'opener'`, `'offer'`. Refusing the
   starter ladder therefore increments a counter `scoreMove` never reads, and the starter

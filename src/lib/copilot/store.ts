@@ -115,7 +115,8 @@ export async function loadDiagnosisRows(profileId: string): Promise<Pick<Diagnos
   const [opportunities, executions, outcomes] = await Promise.all([
     db.from('copilot_opportunities').select('id, status, source, source_kind, data, reason, title, created_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['opportunities']),
     db.from('copilot_executions').select('approval_state, channel, opportunity_id, sent_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['executions']),
-    db.from('copilot_outcomes').select('kind, opportunity_id, occurred_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
+    // `amount` so Work can tell a sale at the person's price from a one-dollar test (business.ts).
+    db.from('copilot_outcomes').select('kind, opportunity_id, occurred_at, amount').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
   ]);
   return { opportunities, executions, outcomes };
 }
@@ -753,7 +754,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -797,6 +798,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadRoadmapMarks(profileId),
     // What the bank says. Never throws: a missing table is `ready: false`, any other failure is `unreadable`.
     loadMoneyRows(profileId),
+    // What the projects produced, for Work's Built. Never throws either.
+    loadBuiltOutputs(profileId),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -1045,6 +1048,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
      * on the user — it is what happened while they were not looking.
      */
     commissions: commissionThreads,
+    built: builtOutputs,
     /**
      * Whether anything is actually on the other end of a commission.
      *
@@ -2075,6 +2079,32 @@ export async function loadCommissionEvents(
       .order('at', { ascending: false }).limit(perCommission)
       .then((r) => (r.error ? [] : ((r.data ?? []) as unknown as CommissionEvent[])))));
   return pages.flat();
+}
+
+/** Rows of output Work's Built reads: enough for a dozen closed projects with a handful of links each. */
+export const BUILT_OUTPUTS = 80;
+
+/**
+ * Every event a project posted with something attached — a link, a document,
+ * a list — across every project, live or closed, newest first. The per-project
+ * read above loads only live ones, so what a finished project produced was in
+ * its own sheet and nowhere else, and "5 finished" was all Work could say about
+ * it. Built counts these per closed project.
+ *
+ * Never throws. A failed read is `unreadable`, said on Work beside the projects
+ * it could not count rather than shown as nothing built (invariant 13).
+ */
+export async function loadBuiltOutputs(profileId: string): Promise<{ rows: Array<{ commission_id: string; at: string }>; unreadable: string | null }> {
+  try {
+    const { data, error } = await copilotDb().from('copilot_commission_events')
+      .select('commission_id, at')
+      .eq('profile_id', profileId).not('artifact', 'is', null)
+      .order('at', { ascending: false }).limit(BUILT_OUTPUTS);
+    if (error) return { rows: [], unreadable: error.message };
+    return { rows: (data ?? []) as Array<{ commission_id: string; at: string }>, unreadable: null };
+  } catch (e) {
+    return { rows: [], unreadable: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function createCommission(profileId: string, input: {

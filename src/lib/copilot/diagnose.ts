@@ -59,6 +59,22 @@ export interface Diagnosis {
   openings: Opening[];
   /** The same read, grouped by the segment the businesses belong to. */
   segments: SegmentOpenings[];
+  /**
+   * All time, per kind of business: what was sent, who answered, who paid. The
+   * "who buys" part of the business on Work (business.ts) is judged on this —
+   * a kind of business that answers is the first thing to prove, and the
+   * funnel's totals cannot say which kind it was. Optional: a diagnosis made
+   * before it existed has to render.
+   */
+  bySegment?: Array<{ segment: string; sent: number; replied: number; won: number; paid?: number[] }>;
+  /** All time, per channel a message went out on. Only channels with a send. */
+  byChannel?: Array<{ channel: string; sent: number; replied: number }>;
+  /**
+   * Every win's amount, all time, oldest first; null where none was logged.
+   * "Proven" on Work means paid at the person's own price, which a count of
+   * wins and a thirty-day sum cannot tell apart from two one-dollar tests.
+   */
+  wins?: Array<number | null>;
   /** True when nothing can honestly be concluded yet. */
   thin: boolean;
   /**
@@ -112,7 +128,8 @@ export interface DiagnoseInput {
   opportunities: Array<Pick<Opportunity, 'status' | 'source' | 'source_kind' | 'data' | 'reason' | 'title'> & Partial<Pick<Opportunity, 'created_at'>> & { id: string }>;
   /** `sent_at` and `occurred_at` date the firsts; rows without them are still counted. */
   executions: Array<Pick<Execution, 'approval_state' | 'channel' | 'opportunity_id'> & Partial<Pick<Execution, 'sent_at'>>>;
-  outcomes: Array<Pick<Outcome, 'kind' | 'opportunity_id'> & Partial<Pick<Outcome, 'occurred_at'>>>;
+  /** `amount` is a win's, when one was logged; rows read without it count as wins of no known amount. */
+  outcomes: Array<Pick<Outcome, 'kind' | 'opportunity_id'> & Partial<Pick<Outcome, 'occurred_at' | 'amount'>>>;
   offer: Offer;
   /** The user's own segments: a grouping key, never counted as openings. */
   targetSegments?: string[];
@@ -268,7 +285,50 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
     wins: earliest(outcomes.filter((o) => o.kind === 'won').map((o) => o.occurred_at), FIRST_WINS),
   };
 
-  return { stages, bottleneck, findings, thin, outsideFunnel, openings, segments, firsts };
+  // Per kind of business. The user's own segment names where a listing's
+  // category matches one, so "pest control" is counted once and not as every
+  // spelling Maps used. A reply counts once per business, as in the funnel.
+  const segFor = new Map<string, string>();
+  for (const o of opportunities) {
+    const seg = segmentOf(o, targetSegments);
+    if (seg) segFor.set(o.id, seg);
+  }
+  // `paid` keeps each win's amount, so "this kind of business pays" can be held
+  // to the person's price on Work rather than counting a one-dollar test.
+  const bySeg = new Map<string, { segment: string; sent: number; replied: number; won: number; paid: number[] }>();
+  const segRow = (oppId: string | null | undefined) => {
+    const seg = oppId ? segFor.get(oppId) : undefined;
+    if (!seg) return null;
+    const row = bySeg.get(seg) ?? { segment: seg, sent: 0, replied: 0, won: 0, paid: [] };
+    bySeg.set(seg, row);
+    return row;
+  };
+  for (const e of sentExecs) { const r = segRow(e.opportunity_id); if (r) r.sent += 1; }
+  for (const id of repliedOpps) { const r = segRow(id); if (r) r.replied += 1; }
+  for (const o of outcomes) {
+    if (o.kind !== 'won') continue;
+    const r = segRow(o.opportunity_id);
+    if (!r) continue;
+    r.won += 1;
+    if (typeof o.amount === 'number' && Number.isFinite(o.amount) && o.amount > 0) r.paid.push(o.amount);
+  }
+  const bySegment = [...bySeg.values()].sort((a, b) => b.won - a.won || b.replied - a.replied || b.sent - a.sent);
+
+  const chans = new Map<string, { channel: string; sent: number; replied: number }>();
+  for (const e of sentExecs) {
+    const row = chans.get(e.channel) ?? { channel: e.channel, sent: 0, replied: 0 };
+    row.sent += 1;
+    if (e.opportunity_id && repliedOpps.has(e.opportunity_id)) row.replied += 1;
+    chans.set(e.channel, row);
+  }
+  const channelRows = [...chans.values()].sort((a, b) => b.sent - a.sent);
+
+  const wins = outcomes
+    .filter((o) => o.kind === 'won')
+    .sort((a, b) => (a.occurred_at ?? '').localeCompare(b.occurred_at ?? ''))
+    .map((o) => (typeof o.amount === 'number' && Number.isFinite(o.amount) ? o.amount : null));
+
+  return { stages, bottleneck, findings, thin, outsideFunnel, openings, segments, firsts, bySegment, byChannel: channelRows, wins };
 }
 
 const label = (ch: string) => (ch === 'whatsapp' ? 'WhatsApp' : 'Email');

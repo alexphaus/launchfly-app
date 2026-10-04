@@ -1,131 +1,22 @@
 // src/lib/copilot/machine.ts
-// The Work tab: the business drawn as the machine it is, and the agents that
-// run parts of it.
+// The agents that run parts of the business, and whether each is well.
 //
-// What was asked for, in its owner's words: "the system or business the user is
-// working on … steps, processes, how the business is formed … see the path to
-// money … employees/AI agents that do work … not another n8n, just an
-// illustration". So this is an illustration with one rule behind it: every
-// stage and every agent is drawn from rows. A stage shows the count the funnel
-// already computes; an agent's state comes from when it last actually ran and
-// what it last actually produced. Nothing is a mock-up of a system the app does
-// not have — a Scout that has never run says so, and a Researcher with no
-// worker connected says "needs setup" rather than looking busy.
-//
-// Four stages, not the funnel's six. The funnel is a measurement; this is the
-// shape of the business — find someone, reach them, turn them into a
-// conversation, get paid — with who does each part. That is what makes it
-// something being built rather than a report being read.
+// It began as the Work tab's whole picture: the business drawn as a machine
+// (find → reach → convert → get paid) beside a roster of five agents. Its
+// owner's verdict on that picture was that the four stages were the same for
+// everybody and the roster was "too heavy for a status", so the business is now
+// a chain of bets (business.ts) and the agents are placed on the part each one
+// runs. What is left here is the roster itself, with one rule behind it: every
+// state comes from when an agent last actually ran and what it last produced. A
+// Scout that has never run says so, and a Researcher with no worker connected
+// says "needs setup" rather than looking busy.
 //
 // Pure: no DB import.
 
 import { blockedOn } from './commission';
-import type { FunnelStage } from './diagnose';
 import type { CommissionThread } from './types';
 
-export type StageKey = 'find' | 'reach' | 'convert' | 'paid';
-export type Owner = 'ai' | 'you' | 'both';
-
-export interface MachineStage {
-  key: StageKey;
-  label: string;
-  owner: Owner;
-  /** Who runs it, in words: "Scout", "Writer drafts, you send". */
-  who: string;
-  count: number;
-  /** "243 found" — the count and what it counts. */
-  countLabel: string;
-  detail: string;
-  /**
-   * Set on the one stage where most is lost, with the count that proves it.
-   * The funnel's bottleneck, placed on the part of the business it belongs to.
-   */
-  weak: string | null;
-}
-
-export interface MachineInput {
-  stages: FunnelStage[];
-  bottleneck: FunnelStage | null;
-  outsideFunnel: number;
-  segments: string[];
-  area: string | null;
-  queueCount: number;
-  wonAmount: number;
-  currency: string;
-  /** The primary currency goal, when there is one. */
-  goal: { title: string; target: number | null; current: number | null } | null;
-  /** The web is searched too, from the offer. Find is not only Maps, and the stage says so. */
-  web?: boolean;
-}
-
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const money = (n: number, c: string) => `${c}${Math.round(n).toLocaleString('en-US')}`;
-
-/**
- * Which part of the business a funnel bottleneck belongs to. The bottleneck is
- * named for the stage the count arrives AT, so "sent" being worst means most
- * stopped at drafted — a reach problem — and "replied" being worst means the
- * messages went out and nobody answered, which is where conversion starts.
- */
-const STAGE_OF_BOTTLENECK: Record<FunnelStage['key'], StageKey> = {
-  matched: 'find', drafted: 'reach', sent: 'reach', replied: 'convert', meeting: 'convert', won: 'paid',
-};
-
-export function businessMachine(input: MachineInput): MachineStage[] {
-  const at = (k: FunnelStage['key']) => input.stages.find((s) => s.key === k)?.count ?? 0;
-  const matched = at('matched');
-  const drafted = at('drafted');
-  const sent = at('sent');
-  const replied = at('replied');
-  const meetings = at('meeting');
-  const won = at('won');
-
-  let weakAt: StageKey | null = null;
-  let weak: string | null = null;
-  if (input.bottleneck) {
-    const i = input.stages.findIndex((s) => s.key === input.bottleneck!.key);
-    const prev = i > 0 ? input.stages[i - 1] : null;
-    if (prev && prev.count > input.bottleneck.count) {
-      weakAt = STAGE_OF_BOTTLENECK[input.bottleneck.key];
-      weak = `${prev.count - input.bottleneck.count} of ${prev.count} stopped at ${prev.label.toLowerCase()} — most is lost here`;
-    }
-  }
-
-  const segs = input.segments.length
-    ? `${input.segments.slice(0, 2).join(', ')}${input.segments.length > 2 ? ` +${input.segments.length - 2}` : ''}`
-    : 'No segments set';
-  const goal = input.goal?.target
-    ? `${input.goal.title}: ${money(input.goal.current ?? 0, input.currency)} of ${money(input.goal.target, input.currency)}`
-    : null;
-
-  const stage = (s: Omit<MachineStage, 'weak'>): MachineStage => ({ ...s, weak: weakAt === s.key ? weak : null });
-  return [
-    stage({
-      key: 'find', label: 'Find', owner: 'ai', who: 'Scout',
-      count: matched, countLabel: `${matched} found`,
-      detail: [
-        input.segments.length ? `${segs}${input.area ? ` in ${input.area}` : ''}` : null,
-        input.web ? (input.segments.length ? 'and the web' : 'The web, from what you sell') : null,
-        !input.segments.length && !input.web ? 'Nothing to search yet' : null,
-      ].filter(Boolean).join(' · '),
-    }),
-    stage({
-      key: 'reach', label: 'Reach', owner: 'both', who: 'Writer drafts, you send',
-      count: sent, countLabel: `${sent} sent`,
-      detail: `${plural(drafted, 'draft')} written${input.queueCount ? ` · ${input.queueCount} waiting on you` : ''}`,
-    }),
-    stage({
-      key: 'convert', label: 'Convert', owner: 'you', who: 'You',
-      count: replied, countLabel: `${replied} replied`,
-      detail: `${plural(meetings, 'meeting')}${input.outsideFunnel ? ` · ${input.outsideFunnel} logged outside the app` : ''}`,
-    }),
-    stage({
-      key: 'paid', label: 'Get paid', owner: 'you', who: 'You',
-      count: won, countLabel: `${won} won`,
-      detail: [input.wonAmount > 0 ? `${money(input.wonAmount, input.currency)} in the last 30 days` : 'Nothing won in the last 30 days', goal].filter(Boolean).join(' · '),
-    }),
-  ];
-}
 
 /* ─── The team ────────────────────────────────────────────────────────────── */
 
@@ -280,13 +171,4 @@ export function agentRoster(input: RosterInput): Agent[] {
     : { key: 'planner', name: 'Planner', role: plannerRole, state: 'idle', line: 'Nothing runs overnight — it only plans when you open the app' };
 
   return [scout, watcher, writer, researcher, planner];
-}
-
-/** The line under the greeting on Work. One line beside the capacity pill at 390px. */
-export function workStatus(agents: Agent[], running: number): string {
-  const working = agents.filter((a) => a.state === 'working').length;
-  return [
-    `${working} of ${agents.length} agents working`,
-    running ? plural(running, 'project') : null,
-  ].filter(Boolean).join(' · ');
 }

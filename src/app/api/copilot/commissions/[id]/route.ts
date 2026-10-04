@@ -67,9 +67,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // "the site wants a login I do not have" is cleared by going and fixing
         // it, not by typing. When there IS one it goes out with the next brief,
         // which is the only reason the worker can stop asking.
-        const c = await unblockCommission(auth.pid, id, typeof b.answer === 'string' ? b.answer : null);
+        const answer = typeof b.answer === 'string' ? b.answer : null;
+        const c = await unblockCommission(auth.pid, id, answer);
         if (!c) return fail('That one is not waiting on you.');
-        return json({ ok: true, commission: c, home: await loadHome(auth.pid) });
+        // An answer goes to the worker now, the way an approval does: a reply
+        // typed on Work that then waits for 21:00 reads, from the phone, like a
+        // reply nobody heard. Only with an answer — a retry with none hands the
+        // work over itself (runCommissionsNow), and doing both would dispatch twice.
+        const started = !!answer?.trim() && !!process.env.COPILOT_JOBS_URL;
+        if (started) {
+          after(async () => {
+            await runJobs(auth.pid, { deadline: Date.now() + DISPATCH_BUDGET_MS, only: ['commission'] })
+              .catch((e: unknown) => console.error('[copilot/commissions] dispatch on answer failed; the nightly pass retries it', e));
+          });
+        }
+        return json({ ok: true, commission: c, started, home: await loadHome(auth.pid) });
       }
       case 'stop':
       case 'done': {

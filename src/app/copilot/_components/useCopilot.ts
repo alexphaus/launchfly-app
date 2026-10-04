@@ -558,13 +558,14 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async createCommission(input) {
       try {
-        const r = await post<{ home: HomeData }>('/commissions', input);
+        const r = await post<{ home: HomeData; commission?: { id: string } | null }>('/commissions', input);
         setHome(r.home);
         // Says what happens next, because what happens next is nothing until
         // they approve it — and a commission that silently sits in draft looks
         // exactly like one the app ignored.
         say('Written. Read it and approve it to start.');
-        return { ok: true };
+        // The id, so a caller can open the draft it just wrote straight onto its approve button.
+        return { ok: true, id: r.commission?.id };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
       }
@@ -578,7 +579,11 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         if (action === 'approve') say(r.started ? 'Approved. It is starting now.' : 'Approved. It runs tonight.');
         // Two different things happened, and which one decides whether the
         // worker stops asking. Saying "carrying on" for both would hide it.
-        if (action === 'unblock') say(answer?.trim() ? 'Sent. It gets your answer on the next run.' : 'Carrying on. It picks up tonight.');
+        if (action === 'unblock') {
+          say(answer?.trim()
+            ? (r.started ? 'Sent. It carries on with your answer now.' : 'Sent. It gets your answer on the next run.')
+            : 'Carrying on. It picks up tonight.');
+        }
         // The toast reports whether the verdict LANDED, not merely that the
         // mandate closed. A worth answer that did not reach the ledger changes
         // nothing about what gets suggested next, and saying "noted" either way

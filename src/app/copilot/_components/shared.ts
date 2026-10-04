@@ -184,7 +184,7 @@ export interface Actions {
   settleWorking(id: string, status: 'live' | 'declined'): Promise<{ ok: boolean; error?: string }>;
   removeWorking(id: string): Promise<void>;
   /** Write a mandate. Always created as a draft — approving is a second act. */
-  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string }>;
+  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string; id?: string }>;
   /** Grant authority, carry on after answering, call it off, finish, or mark read. */
   /**
    * `answer` is the user's reply to a needs_you, and only 'unblock' carries one.

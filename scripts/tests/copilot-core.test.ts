@@ -5048,44 +5048,18 @@ matchesTab().catch((e) => { console.error(e); process.exit(1); });
 // ---------------------------------------------------------------------------
 // The four-tab shell: Work
 //
-// The business as a machine, and the agents that run parts of it. An
-// illustration with one rule: every stage and every agent is drawn from rows.
-// The checks are the ways an illustration lies — a Researcher looking busy with
-// no worker connected, a Writer "ready" on a blank offer, a failed read shown
-// as a working one, a bottleneck on the wrong part of the business.
+// The agents that run parts of the business. A roster with one rule: every
+// state is drawn from rows. The checks are the ways a status lies — a
+// Researcher looking busy with no worker connected, a Writer "ready" on a blank
+// offer, a failed read shown as a working one. (The business itself is the
+// chain, and has its own suite: businessChainSuite, at the end.)
 // ---------------------------------------------------------------------------
-import { AGENT_STATE_LABEL, agentRoster, agoLabel, businessMachine, workStatus, type RosterInput } from '../../src/lib/copilot/machine';
+import { AGENT_STATE_LABEL, agentRoster, agoLabel, type RosterInput } from '../../src/lib/copilot/machine';
 
 async function workTab() {
   const now = new Date('2026-09-24T10:00:00Z');
-  const stages = [
-    { key: 'matched' as const, label: 'Matched', count: 243, rate: null },
-    { key: 'drafted' as const, label: 'Drafted', count: 70, rate: 0.29 },
-    { key: 'sent' as const, label: 'Sent', count: 9, rate: 0.13 },
-    { key: 'replied' as const, label: 'Replied', count: 2, rate: 0.22 },
-    { key: 'meeting' as const, label: 'Meeting', count: 6, rate: null, exceedsPrevious: true },
-    { key: 'won' as const, label: 'Won', count: 2, rate: 0.33 },
-  ];
 
-  // 1. The path to money, from the funnel's own counts.
-  const m = businessMachine({
-    stages, bottleneck: stages[2], outsideFunnel: 8, segments: ['Staycation & resorts', 'Pest control', 'Plumbing'], area: 'Manila',
-    queueCount: 51, wonAmount: 2, currency: '$', goal: { title: 'Revenue', target: 3000, current: 2 },
-  });
-  assert.deepEqual(m.map((s) => s.key), ['find', 'reach', 'convert', 'paid']);
-  assert.deepEqual(m.map((s) => s.count), [243, 9, 2, 2]);
-  assert.equal(m[0].detail, 'Staycation & resorts, Pest control +1 in Manila');
-  assert.equal(m[0].owner, 'ai');
-  assert.equal(m[1].owner, 'both', 'the Writer drafts; only you send — invariant 4');
-  assert.equal(m[1].detail, '70 drafts written · 51 waiting on you');
-  // "Sent" being worst means most stopped at drafted: a reach problem, said with its count.
-  assert.equal(m[1].weak, '61 of 70 stopped at drafted — most is lost here');
-  assert.equal(m.filter((s) => s.weak).length, 1, 'one weak link, not a stage per complaint');
-  assert.equal(m[2].detail, '6 meetings · 8 logged outside the app');
-  assert.equal(m[3].detail, '$2 in the last 30 days · Revenue: $2 of $3,000');
-  assert.equal(businessMachine({ stages, bottleneck: null, outsideFunnel: 0, segments: [], area: null, queueCount: 0, wonAmount: 0, currency: '$', goal: null }).some((s) => s.weak), false);
-
-  // 2. The team. States come from when each last ran and what it produced.
+  // The team. States come from when each last ran and what it produced.
   const base: RosterInput = {
     now, supplyLastRun: '2026-09-24T03:00:00Z', sourced: 243, hasTargeting: true, matchesLeft: 1973,
     sources: [
@@ -5127,7 +5101,6 @@ async function workTab() {
   assert.match(broke.planner.line, /goal_gap: boom/);
 
   assert.equal(agoLabel('2026-09-21T10:00:00Z', now), '3d ago');
-  assert.equal(workStatus(team, 1), '4 of 5 agents working · 1 project');
   console.log('copilot-core: work tab checks passed');
 }
 
@@ -5432,12 +5405,16 @@ async function huntsCore() {
   assert.equal(byId.w1.sub, 'Palawan resorts · a.es');
   assert.equal(byId.p1.sub, 'Owner · Casa Blanca Resort · linkedin.com');
 
-  // 10. Work's path to money says the web is searched too, without a word of configuration.
-  const { businessMachine: bm } = await import('../../src/lib/copilot/machine');
-  const flatM = { stages: [], bottleneck: null, outsideFunnel: 0, queueCount: 0, wonAmount: 0, currency: '$', goal: null };
-  assert.equal(bm({ ...flatM, segments: ['pest control'], area: 'Manila', web: true })[0].detail, 'pest control in Manila · and the web');
-  assert.equal(bm({ ...flatM, segments: [], area: null, web: true })[0].detail, 'The web, from what you sell');
-  assert.equal(bm({ ...flatM, segments: [], area: null })[0].detail, 'Nothing to search yet');
+  // 10. Work's "who buys" says the web is searched too, without a word of configuration.
+  const { businessChain: bc } = await import('../../src/lib/copilot/business');
+  const flatC = {
+    offer: { sells: 'Booking bots' }, said: {}, funnel: { matched: 12, sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, worthAMessage: 0,
+    bySegment: [], byChannel: [], wins: [], queue: 0, wonRecent: { amount: 0, days: 30 }, goal: null, currency: '$', workerConnected: true, agents: [], topOpening: null,
+  };
+  const whoOf = (x: Partial<Parameters<typeof bc>[0]>) => bc({ ...flatC, segments: [], area: null, web: false, ...x }).links[0];
+  assert.equal(whoOf({ segments: ['pest control'], area: 'Manila', web: true }).facts, '12 found on Maps and the web');
+  assert.equal(whoOf({ web: true }).facts, '12 found on the web');
+  assert.equal(whoOf({ funnel: { ...flatC.funnel, matched: 0 } }).facts, 'Nothing to look for yet');
   console.log('copilot-core: hunts checks passed');
 }
 
@@ -8203,3 +8180,202 @@ async function outreachSuite() {
 }
 
 outreachSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Work: the business as a chain of bets ───────────────────────────────── */
+//
+// The checks are the ways a picture of a business lies: a part called working
+// on a one-dollar test, a weak link that sends you to the top of a funnel whose
+// bottom has already failed, a button for a worker nobody connected, a number
+// on screen the rows never held, and a draft written from a blank offer.
+
+import {
+  ASK_MAX, CLOSE_SAMPLE, LINK_KEYS, LINK_STATE_LABEL, builtRows, businessChain, chainChanges, changeLine, parseSeenChain,
+  readWins, safeHref, snapshotChain, suggestedAsks, teamLine, waitingOnYou, weakLink, winsLine, workLine, type ChainInput,
+} from '../../src/lib/copilot/business';
+import { diagnose as diagnoseBz } from '../../src/lib/copilot/diagnose';
+import type { Agent as AgentBz } from '../../src/lib/copilot/machine';
+
+async function businessChainSuite() {
+  const agents: AgentBz[] = [
+    { key: 'scout', name: 'Scout', role: 'r', state: 'working', line: '321 found so far · last looked 7h ago' },
+    { key: 'watcher', name: 'Watcher', role: 'r', state: 'setup', line: 'Nothing to read yet — add a source' },
+    { key: 'writer', name: 'Writer', role: 'r', state: 'ready', line: '72 drafts written' },
+    { key: 'researcher', name: 'Researcher', role: 'r', state: 'failed', line: '1 project stopped — open it to try again' },
+    { key: 'planner', name: 'Planner', role: 'r', state: 'working', line: 'Ran 8h ago' },
+  ];
+  // The owner's account, as the screenshots had it.
+  const alex: ChainInput = {
+    offer: { sells: 'Booking automation, custom AI workflows, no website', for_who: 'Staycation & resorts, Pest control, plumbing', problem: 'Save time', price_band: '$150' },
+    said: { price: ['$70 — Quick Fix', '$150 — Growth', '$300+ — Revenue'], tried: ['700 WhatsApp messages, no sale'] },
+    segments: ['Staycation & resorts', 'Pest control', 'plumbing'], area: 'Manila', web: true,
+    funnel: { matched: 321, sent: 25, replied: 2, meetings: 6, won: 2, outside: 8 },
+    worthAMessage: 40,
+    bySegment: [{ segment: 'pest control', sent: 9, replied: 1, won: 1, paid: [1] }, { segment: 'staycation & resorts', sent: 12, replied: 1, won: 1, paid: [1] }],
+    byChannel: [{ channel: 'whatsapp', sent: 25 }],
+    wins: [1, 1], queue: 21, wonRecent: { amount: 2, days: 30 },
+    goal: { title: 'Save Exit PH [NOV]', target: 1500, current: 0 }, currency: '$', workerConnected: true, agents, topOpening: 'running facebook ads',
+  };
+  const by = (i: ChainInput) => Object.fromEntries(businessChain(i).links.map((l) => [l.key, l]));
+
+  /* 1. The account as it stands: heard, met, paid a dollar twice — not proven, and the weak link is the price. */
+  const c = businessChain(alex);
+  assert.deepEqual(c.links.map((l) => l.key), [...LINK_KEYS]);
+  assert.deepEqual(c.links.map((l) => l.state), ['testing', 'works', 'testing', 'stuck', 'missing']);
+  assert.equal(c.weak, 'pay', 'six meetings and no sale at the price binds everything above it');
+  assert.deepEqual(c.verdict, { proven: false, title: 'Not proven yet', line: 'Proven at 3 paid at your $150. So far: 0.' });
+  const p = by(alex);
+  assert.equal(p.who.what, 'Staycation & resorts, Pest control, plumbing in Manila', 'their words, not a segment list re-typed');
+  assert.equal(p.who.facts, '321 found on Maps and the web · 40 worth a message');
+  assert.equal(p.reach.facts, '25 sent · 2 replies · 21 waiting to send');
+  assert.equal(p.reach.why, '2 replies by 25 sent. The app plans on 2 in every 20.');
+  // Per whole batch of twenty: two replies by a hundred sends is not an opener that works.
+  const hundred = by({ ...alex, funnel: { ...alex.funnel, sent: 100, replied: 2 } }).reach;
+  assert.equal(hundred.state, 'stuck');
+  assert.equal(hundred.why, '100 sent and 2 replies. The app plans on 2 in every 20, so this many sends wanted 10.');
+  assert.equal(p.close.facts, '2 replies · 6 meetings · 2 won');
+  assert.equal(p.pay.facts, '2 paid, at $1 each — none at your $150');
+  assert.equal(p.pay.why, '6 meetings and 2 paid, none at your $150. From 5 on, that says more about the price or the proof than about luck.');
+  assert.ok(p.pay.more.includes('Save Exit PH [NOV]: $0 of $1,500') && p.pay.more.includes('$2 in the last 30 days'));
+  // A part a person runs alone does not claim an agent; a part the Scout runs says so.
+  assert.equal(p.pay.runner.by, 'you');
+  assert.equal(p.who.runner.name, 'Scout', 'a Watcher with no source is not running this part');
+  assert.equal(p.reach.runner.by, 'both', 'the Writer drafts; only you send — invariant 4');
+
+  /* 2. A kind of business "pays" at the person's price, not on a one-dollar test. */
+  assert.equal(p.who.state, 'testing');
+  const paid150 = by({ ...alex, bySegment: [{ segment: 'pest control', sent: 9, replied: 1, won: 1, paid: [150] }] });
+  assert.equal(paid150.who.state, 'works');
+  assert.equal(paid150.who.why, 'pest control paid your $150. A kind of business that pays is the bar, and this one has.');
+  // Two answers from one kind of business is the bar too — the funnel checkpoint's own number.
+  assert.equal(by({ ...alex, bySegment: [{ segment: 'pest control', sent: 9, replied: 2, won: 0 }] }).who.state, 'works');
+
+  /* 3. An opener that missed the bar is not sent more of: the move is new openers, not the queue. */
+  const stuck = by({ ...alex, funnel: { ...alex.funnel, sent: 20, replied: 1, meetings: 0, won: 0 }, wins: [] });
+  assert.equal(stuck.reach.state, 'stuck');
+  assert.deepEqual(stuck.reach.moves.map((m) => m.key), ['reach-openers']);
+  assert.equal(stuck.reach.moves[0].ask, 'Write three new first messages to "Staycation & resorts, Pest control, plumbing", each opening on something specific to their business, like "running facebook ads", in my own words',
+    'a first line from their own matches, their words quoted, and not the offer again — the worker is sent it');
+  assert.equal(businessChain({ ...alex, funnel: { ...alex.funnel, sent: 20, replied: 1, meetings: 0, won: 0 }, wins: [] }).weak, 'reach');
+  // Below the sample it is early, and says how far from a number it is.
+  assert.equal(by({ ...alex, funnel: { ...alex.funnel, sent: 9, replied: 0 } }).reach.why, '11 more sends and the reply rate is a number, not an early read.');
+
+  /* 4. The weak link: a later part that failed on its own evidence binds the ones above it. */
+  const both = businessChain({ ...alex, funnel: { ...alex.funnel, sent: 30, replied: 1, meetings: CLOSE_SAMPLE, won: 0 }, wins: [] });
+  assert.equal(both.links.find((l) => l.key === 'reach')!.state, 'stuck');
+  assert.equal(both.links.find((l) => l.key === 'close')!.state, 'stuck');
+  assert.equal(both.weak, 'close', 'more replies only feed meetings already shown not to convert');
+  // Nothing sent: the first part with something to do.
+  assert.equal(businessChain({ ...alex, funnel: { matched: 40, sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, wins: [], bySegment: [] }).weak, 'reach');
+  // An unsaid price costs one sentence, so it comes before testing.
+  assert.equal(businessChain({ ...alex, offer: { ...alex.offer, price_band: '' }, funnel: { matched: 40, sent: 3, replied: 0, meetings: 0, won: 0, outside: 0 }, wins: [] }).weak, 'pay');
+
+  /* 5. Invariant 1: a blank offer writes nothing, and the chain says so once — on the offer card, not here. */
+  const blank = businessChain({ ...alex, offer: {} });
+  assert.equal(blank.weak, null);
+  assert.equal(blank.verdict.title, 'Not started');
+  const bReach = blank.links.find((l) => l.key === 'reach')!;
+  assert.equal(bReach.state, 'missing');
+  assert.equal(bReach.moves.length, 0, 'no second "write your offer" button');
+  assert.equal(suggestedAsks(blank).some((m) => /opener|first message/i.test(m.ask ?? '')), false, 'nothing drafts from a blank offer');
+
+  /* 6. Invariant 7: no worker, no button that writes a project nothing picks up. */
+  const noWorker = businessChain({ ...alex, workerConnected: false });
+  assert.equal(noWorker.links.flatMap((l) => l.moves).some((m) => m.by === 'ai'), false);
+  assert.ok(noWorker.links.flatMap((l) => l.moves).some((m) => m.by === 'claude'), 'the same asks, for a chat');
+
+  /* 7. Proven only at three paid at the price, and then the open part is whatever is left. */
+  const proven = businessChain({ ...alex, wins: [150, 300, 150, 70], funnel: { ...alex.funnel, won: 4 }, said: { ...alex.said, deliver: ['Two calls, then I build it.'] } });
+  assert.deepEqual(proven.verdict, { proven: true, title: 'Proven', line: '3 paid at your $150 or more. From here it is volume.' });
+  assert.equal(proven.weak, null);
+  assert.equal(businessChain({ ...alex, wins: [150, 300, 150], funnel: { ...alex.funnel, won: 3 } }).weak, 'deliver', 'selling works; delivery is the gap');
+
+  /* 8. Wins said from the amounts, never a sum across a price nobody set. */
+  assert.equal(winsLine(readWins([], '$150'), '$'), 'Nothing paid yet');
+  assert.equal(winsLine(readWins([200], '$150'), '$'), '1 paid, $200 — all at your $150 or more');
+  assert.equal(winsLine(readWins([100, 200, null], '$150'), '$'), '2 paid, $300 in all · 1 with no amount — 1 at your $150 or more');
+  assert.equal(winsLine(readWins([null, null], '$150'), '$'), '2 paid, no amount logged');
+  assert.equal(winsLine(readWins([5, 5], null), '€'), '2 paid, at €5 each');
+
+  /* 9. Every ask fits a project's brief, however long the offer. */
+  const long = businessChain({ ...alex, offer: { ...alex.offer, sells: 'x'.repeat(400), for_who: 'y'.repeat(300) }, funnel: { ...alex.funnel, sent: 30, replied: 0 } });
+  for (const m of long.links.flatMap((l) => l.moves)) if (m.ask) assert.ok(m.ask.length <= ASK_MAX, `${m.key} is ${m.ask.length} characters`);
+
+  /* 10. Every state has its word, and the suggestions are the weak link's first, never a "you" move. */
+  for (const l of c.links) assert.ok(LINK_STATE_LABEL[l.state]);
+  const asks = suggestedAsks(c);
+  assert.ok(asks.length <= 3 && asks.every((m) => m.by !== 'you' && !!m.ask));
+  assert.equal(asks[0].key, 'pay-proof');
+
+  /* 11. Since you last looked: nothing on a first visit, the part that moved after. */
+  assert.deepEqual(chainChanges(null, c.links), []);
+  const seen = parseSeenChain(JSON.parse(JSON.stringify(snapshotChain('2026-10-01T00:00:00Z', businessChain({ ...alex, funnel: { ...alex.funnel, replied: 1 } }).links))));
+  const moved = chainChanges(seen, c.links);
+  assert.deepEqual(moved.map((m) => m.key), ['reach']);
+  assert.equal(changeLine(moved[0]), 'How they hear went from Not working to Works', 'one more reply crossed the bar');
+  assert.equal(parseSeenChain({ at: 'yesterday', states: {} }), null, 'storage is reshaped, not trusted');
+  assert.deepEqual(parseSeenChain({ at: '2026-10-01T00:00:00Z', states: { who: 'great', reach: 'works' } })?.states, { reach: 'works' });
+
+  /* 12. Built: the gap first with its way to fill it, the file, then what was made, newest first. */
+  const proofMove = c.links.find((l) => l.key === 'pay')!.moves.find((m) => m.key === 'pay-proof')!;
+  const rows = builtRows({
+    offer: alex.offer, said: alex.said, working: { filled: 2, total: 6, proposals: 7 },
+    plan: { milestones: 3, at: '2026-10-03T04:00:00Z' },
+    closed: [
+      { id: 'd1', objective: 'Compare three agencies', status: 'done', outcome: 'Worth: delivered', closedAt: '2026-10-02T04:00:00Z', createdAt: '2026-09-28T00:00:00Z' },
+      { id: 'd2', objective: 'Quote QR suppliers', status: 'stopped', outcome: 'Worth nothing', closedAt: '2026-09-30T04:00:00Z', createdAt: '2026-09-20T00:00:00Z' },
+    ],
+    outputs: [{ commissionId: 'd1', at: '2026-10-02T03:00:00Z' }, { commissionId: 'd1', at: '2026-10-02T02:00:00Z' }],
+    proofMove, now: new Date('2026-10-04T04:00:00Z'),
+  });
+  assert.deepEqual(rows.map((r) => r.key), ['proof', 'working', 'plan', 'p:d1'], 'called off with nothing to show was not built');
+  assert.equal(rows[0].gap, true);
+  assert.equal(rows[0].move?.key, 'pay-proof', 'the gap and the chain offer the same thing');
+  assert.equal(rows[1].line, '2 of 6 written · 7 counted from your rows, waiting for your yes');
+  assert.equal(rows[2].line, '3 milestones · drawn 1d ago');
+  assert.equal(rows[3].line, 'Finished 2 Oct · 2 found · Worth: delivered');
+  // A proof link becomes an href only when it is a web address.
+  assert.equal(safeHref('javascript:alert(1)'), null);
+  assert.equal(safeHref('https://alex.ph/demo'), 'https://alex.ph/demo');
+  const withProof = builtRows({ offer: { ...alex.offer, proof_url: 'https://www.alex.ph/demo' }, said: {}, working: { filled: 1, total: 6, proposals: 0 }, plan: null, closed: [], outputs: [], proofMove: null, now: new Date() });
+  assert.deepEqual(withProof.map((r) => [r.key, r.line]), [['working', '1 of 6 written'], ['proof', 'alex.ph']]);
+
+  /* 13. The team in one line: every agent that is not well named, the optional Watcher not nagged. */
+  assert.deepEqual(teamLine(agents), { line: '2 of 5 agents working · Researcher failed', trouble: 1 });
+
+  /* 14. What waits on the person: a draft to approve, a question, a breakage — not work running. */
+  const threads = [
+    threadV2({ id: 'a', status: 'draft' }),
+    threadV2({ id: 'b', status: 'blocked' }, [{ kind: 'needs_you', summary: 'Which year?' }]),
+    threadV2({ id: 'c', status: 'blocked' }, [{ kind: 'failed', summary: '500' }]),
+    threadV2({ id: 'd', status: 'active' }),
+  ];
+  assert.equal(waitingOnYou(threads), 3);
+  assert.equal(workLine(c.verdict, 3), 'Not proven yet · 3 waiting on you');
+  assert.equal(workLine(proven.verdict, 0), 'Proven');
+
+  /* 15. The rows behind it: per kind of business, per channel, and every win's amount, from the funnel's own rows. */
+  const dz = diagnoseBz({
+    opportunities: [
+      { id: 'o1', status: 'acted', source: 'google_maps', source_kind: 'sourced', data: { category: 'Pest control service' }, reason: null, title: 'A' },
+      { id: 'o2', status: 'acted', source: 'google_maps', source_kind: 'sourced', data: { category: 'Plumber' }, reason: null, title: 'B' },
+    ] as never,
+    executions: [
+      { approval_state: 'sent', channel: 'whatsapp', opportunity_id: 'o1', sent_at: '2026-09-01T00:00:00Z' },
+      { approval_state: 'sent', channel: 'email', opportunity_id: 'o2', sent_at: '2026-09-02T00:00:00Z' },
+    ],
+    outcomes: [
+      { kind: 'reply', opportunity_id: 'o1', occurred_at: '2026-09-03T00:00:00Z' },
+      { kind: 'reply', opportunity_id: 'o1', occurred_at: '2026-09-04T00:00:00Z' },
+      { kind: 'won', opportunity_id: 'o1', occurred_at: '2026-09-05T00:00:00Z', amount: 150 },
+      { kind: 'won', opportunity_id: null, occurred_at: '2026-09-06T00:00:00Z', amount: null },
+    ],
+    offer: { sells: 'x' }, targetSegments: ['pest control'],
+  });
+  assert.deepEqual(dz.bySegment?.[0], { segment: 'pest control', sent: 1, replied: 1, won: 1, paid: [150] }, 'two replies from one business are one converted lead');
+  assert.deepEqual(dz.byChannel, [{ channel: 'whatsapp', sent: 1, replied: 1 }, { channel: 'email', sent: 1, replied: 0 }]);
+  assert.deepEqual(dz.wins, [150, null], 'a win with no amount is counted, and not priced');
+
+  console.log('copilot-core: business chain checks passed');
+}
+
+businessChainSuite().catch((e) => { console.error(e); process.exit(1); });

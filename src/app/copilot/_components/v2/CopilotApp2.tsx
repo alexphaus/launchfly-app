@@ -6,8 +6,9 @@
 //             here" with the one thing to do now, what comes next below
 //   Swipe     who is worth contacting — one at a time, the message written,
 //             right sends it
-//   Work      what am I building: the offer, the path to money, the agents
-//             running parts of it, the projects handed over
+//   Work      is the business proven, and what moves it: the offer and its
+//             verdict, the chain of parts each with a state from the rows, the
+//             weak link open, what is in the works and what was built
 //   Money     where did it go: log a move, the list under the balance, the
 //             calendar (MoneyTab.tsx says why this is a tab and not a sheet)
 //   You       how am I doing: money, runway, deep work, the week read back,

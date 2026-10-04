@@ -7,6 +7,7 @@ import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, 
 import { addDays, copilotDb, describeDbError, todayIso } from './db';
 import { horizonFor } from './due';
 import { FOCUS_EVENT, focusFromEvents, type FocusInput } from './focus';
+import { LAB_EVENTS, LAB_TALK, labHome, type LabEventRow } from './lab';
 import { RECENT_DAYS, type AnsweredMove, type RecentLedger, type RecentOutcome } from './review';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
@@ -754,7 +755,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs, labEvents] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -800,6 +801,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadMoneyRows(profileId),
     // What the projects produced, for Work's Built. Never throws either.
     loadBuiltOutputs(profileId),
+    // The Lab's bets, conversations and checkpoints. Never throws; a failed read is said on the tab.
+    loadLabEvents(profileId),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -988,6 +991,19 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
 
   const diagnosis = diagnose({ ...diagRows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now: new Date() });
 
+  // Every bet read against the rows the diagnosis already holds — every send
+  // and every outcome, all time — and the projects already loaded. No read of
+  // its own beyond the events, so a bet and the funnel count the same rows.
+  const lab = labHome({
+    events: labEvents.rows,
+    unreadable: labEvents.unreadable,
+    timezone: profile.timezone,
+    today,
+    sends: diagRows.executions.filter((e) => e.approval_state === 'sent').map((e) => e.sent_at),
+    outcomes: diagRows.outcomes,
+    finished: commissionRows.filter((c) => c.status === 'done').map((c) => c.closed_at),
+  });
+
   // The record is what makes "you keep doing this and it does not work"
   // possible; nothing else in the app can see it.
   const edge = growthEdge(diagnosis, { deadTopic: decisionReview(decisionLog).deadTopic });
@@ -1049,6 +1065,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
      */
     commissions: commissionThreads,
     built: builtOutputs,
+    lab,
     /**
      * Whether anything is actually on the other end of a commission.
      *
@@ -2105,6 +2122,47 @@ export async function loadBuiltOutputs(profileId: string): Promise<{ rows: Array
   } catch (e) {
     return { rows: [], unreadable: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** Lab events read per load: years of bets and a few hundred conversations. */
+export const LAB_EVENT_LIMIT = 500;
+
+/**
+ * The Lab's events — bets, call-offs, conversations, checkpoints — newest
+ * first. Never throws: a failed read is `unreadable`, said on the Lab rather
+ * than shown as a Lab with nothing in it (invariant 13).
+ */
+export async function loadLabEvents(profileId: string): Promise<{ rows: LabEventRow[]; unreadable: string | null }> {
+  try {
+    const { data, error } = await copilotDb().from('copilot_events')
+      .select('id, event_type, payload, created_at')
+      .eq('profile_id', profileId).in('event_type', [...LAB_EVENTS])
+      .order('created_at', { ascending: false }).limit(LAB_EVENT_LIMIT);
+    if (error) return { rows: [], unreadable: error.message };
+    return { rows: (data ?? []) as LabEventRow[], unreadable: null };
+  } catch (e) {
+    return { rows: [], unreadable: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** One Lab event, written as it was validated (lab.ts). Throws with a reason the route can say. */
+export async function insertLabEvent(profileId: string, type: (typeof LAB_EVENTS)[number], payload: Record<string, unknown>): Promise<void> {
+  const { error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: type, payload });
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
+}
+
+/**
+ * Remove one logged conversation. Only a conversation, only this profile's —
+ * the events table holds everything else too. A delete that matched nothing
+ * says so: "Removed" over a row still there is a calm screen over a failure.
+ */
+export async function deleteLabTalk(profileId: string, id: string): Promise<void> {
+  const n = Number(id);
+  if (!Number.isSafeInteger(n) || n <= 0) throw new Error('Not a logged conversation.');
+  const { data, error } = await copilotDb().from('copilot_events').delete()
+    .eq('profile_id', profileId).eq('event_type', LAB_TALK).eq('id', n).select('id');
+  if (error) throw new Error(describeDbError(error, 'Could not remove that.'));
+  if (!data?.length) throw new Error('That conversation was not found. It may already be gone.');
 }
 
 export async function createCommission(profileId: string, input: {

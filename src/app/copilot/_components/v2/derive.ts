@@ -14,6 +14,7 @@ import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster } from '@/lib/copilot/machine';
 import { builtRows, businessChain, teamLine, waitingOnYou, workLine } from '@/lib/copilot/business';
+import { labView } from '@/lib/copilot/lab';
 import { SECTIONS, type WorkingSection } from '@/lib/copilot/working';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
 import { offerIsEmpty } from '@/lib/copilot/offer';
@@ -313,6 +314,11 @@ export function derive(home: HomeData) {
   const work = { chain, built, said, team: teamLine(team), waiting: waitingOnYou(home.commissions) };
   const running = home.commissions.filter((t) => t.commission.status === 'active' || t.commission.status === 'blocked').length;
 
+  /* Lab — one bet at a time, read against the same chain Work draws, so the
+     part a play is offered for is the part Work calls weak, and a checkpoint
+     reads its decision back against the verdicts Work is showing. */
+  const lab = labView(home.lab, { runwayMonths: home.metrics.runway_months, links: chain.links, today: home.recent.today });
+
   const review = weekReview({
     now,
     today: home.recent.today,
@@ -348,6 +354,7 @@ export function derive(home: HomeData) {
     // The deck has no header: the card is the screen, and its own top line counts what is left.
     swipe: null,
     work: workLine(chain.verdict, work.waiting),
+    lab: lab.line,
     // The balance is the first thing on the tab; a header saying it again is noise.
     money: null,
     you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : null,
@@ -357,7 +364,7 @@ export function derive(home: HomeData) {
     now, noOffer, queueCount, oldestDays, queueBacked, currency,
     done, asks, nothingYet, path,
     feed, good, counts, stages, searching,
-    team, running, work,
+    team, running, work, lab,
     review, week,
     status,
   };

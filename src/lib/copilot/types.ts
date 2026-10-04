@@ -11,6 +11,7 @@ import type { WatchSourceKind } from './watch/catalogue';
 import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
+import type { LabHome } from './lab';
 import type { NightlyRun } from './nightly';
 import type { PipelineStage } from './pipeline';
 import type { SourceYield } from './watch/yield';
@@ -459,6 +460,12 @@ export interface HomeData {
    * render.
    */
   built?: { rows: Array<{ commission_id: string; at: string }>; unreadable: string | null };
+  /**
+   * The Lab: every bet read against the rows, the conversations logged, and
+   * the checkpoints (lab.ts). Optional because a payload cached before this
+   * existed has to render.
+   */
+  lab?: LabHome;
   /** False when no worker is configured, so a mandate would never be picked up. */
   workerConnected: boolean;
   /**

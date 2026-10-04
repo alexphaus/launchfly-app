@@ -23,6 +23,7 @@ import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
 import BankSheet from './BankSheet';
 import OutreachSheet from './v2/Outreach';
+import { BetSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
 import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
 import { dayLabel } from '@/lib/copilot/money/ledger';
 
@@ -55,6 +56,9 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'focus': return <FocusSheet home={home} actions={actions} />;
     case 'bank': return <BankSheet home={home} actions={actions} />;
     case 'outreach': return <OutreachSheet home={home} stage={sheet.stage} actions={actions} />;
+    case 'bet': return <BetSheet home={home} playKey={sheet.play} part={sheet.part} actions={actions} />;
+    case 'talk': return <TalkSheet home={home} actions={actions} />;
+    case 'talks': return <TalksSheet home={home} actions={actions} />;
   }
 }
 

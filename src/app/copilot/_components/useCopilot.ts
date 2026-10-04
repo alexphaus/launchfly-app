@@ -29,10 +29,19 @@ const EXPERIMENT_SAID: Record<ExperimentState, string> = {
   unclear: 'Noted. The next plan knows it was not clear either way.',
   ignored: 'Noted.',
 };
+
+/** What each Lab write did, said back. A bet's verdict is never one of them: the rows give it on the next load. */
+const LAB_SAID: Record<LabInput['action'], string> = {
+  open: 'Bet started. Only what happens from today counts.',
+  stop: 'Called off. It stays in what you learned.',
+  talk: 'Logged.',
+  forget: 'Removed.',
+  checkpoint: 'Decided. The next checkpoint reads it back.',
+};
 import { api, del, get, post, upload } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
-import type { Actions, OutcomeInput, SheetState, Tab, Tab2 } from './shared';
+import type { Actions, LabInput, OutcomeInput, SheetState, Tab, Tab2 } from './shared';
 
 export interface CopilotConfig<T extends Tab | Tab2> {
   /** Where the app opens. */
@@ -869,6 +878,16 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         say('Logged.');
         return true;
       } catch (e) { fail(e, 'Could not log that'); return false; }
+    },
+    async lab(input) {
+      try {
+        const r = await post<{ home: HomeData }>('/lab', input);
+        setHome(r.home);
+        say(LAB_SAID[input.action]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };
+      }
     },
     async removeFocus(id) {
       try {

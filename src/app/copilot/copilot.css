@@ -1022,7 +1022,9 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
   --bad-tint: rgba(194, 112, 61, 0.11);
 }
 
-/* ── Nav: four tabs in the pill, with the one count that is an ask ──────── */
+/* ── Nav: six tabs in the pill, with the one count that is an ask. Six fit
+      at 390px on this padding, measured in a browser: 27px to 363px inside a
+      pill that runs 16px to 374px. ───────────────────────────────────────── */
 .cp-root[data-theme="soft"] .cp2-nav { left: 16px; right: 16px; padding: 9px 8px; }
 .cp-root[data-theme="soft"] .cp2-nav button { padding: 6px 12px; gap: 4px; font-size: 10.5px; }
 .cp-root[data-theme="soft"] .cp2-navicon { position: relative; display: inline-flex; }
@@ -1270,6 +1272,120 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-state.failed { color: var(--bad); }
 .cp-root[data-theme="soft"] .cp2-state.failed i { background: var(--bad); }
 .cp-root[data-theme="soft"] .cp2-team .cp-connect { flex: none; align-self: center; }
+
+/* ── Lab (v2/LabTab.tsx): one bet at a time, judged by the rows ─────────
+   cp2-lab-* throughout. The verdict chip is the one colour code here, and its
+   word always travels with it: Passed is the AI's green, Did not pass is
+   --bad, Called off is quiet. */
+.cp-root[data-theme="soft"] .cp2-lab-q { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; margin: 2px 0 8px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-verdict { flex: none; align-self: flex-start; font-style: normal; font-size: 10px; font-weight: 700; white-space: nowrap; border-radius: 999px; padding: 2px 8px; background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-verdict.passed { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-lab-verdict.failed { background: var(--bad-tint); color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-lab-learned .cp2-lab-verdict { align-self: center; }
+
+/* The bet: the belief in quotes, then the one number that decides it. */
+.cp-root[data-theme="soft"] .cp2-lab-partname { flex: none; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--line); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-lab-belief { font-family: var(--display); font-size: 18px; font-weight: 700; line-height: 1.35; letter-spacing: -0.2px; margin: 4px 0 14px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-score { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cp-root[data-theme="soft"] .cp2-lab-n { font-size: 15px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-n b { font-family: var(--display); font-size: 34px; font-weight: 700; line-height: 1; color: var(--ink); margin-right: 2px; }
+.cp-root[data-theme="soft"] .cp2-lab-unit { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-bar { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; margin: 10px 0 10px; }
+.cp-root[data-theme="soft"] .cp2-lab-bar i { display: block; height: 100%; min-width: 0; border-radius: 999px; background: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-lab-tries { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.cp-root[data-theme="soft"] .cp2-lab-pass { font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-src { font-size: 12px; line-height: 1.45; color: var(--muted); margin-top: 3px; }
+.cp-root[data-theme="soft"] .cp2-lab-over { font-size: 12px; line-height: 1.45; font-weight: 600; color: var(--warn); margin-top: 4px; }
+.cp-root[data-theme="soft"] .cp2-lab-playing { margin-top: 14px; padding: 11px 13px; border-radius: 14px; background: var(--line); }
+.cp-root[data-theme="soft"] .cp2-lab-playing p { font-size: 13px; line-height: 1.5; color: var(--ink); margin-top: 3px; }
+.cp-root[data-theme="soft"] .cp2-lab-book { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-lab-prep { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
+.cp-root[data-theme="soft"] .cp2-lab-prep-k { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.cp-root[data-theme="soft"] .cp2-lab-actions .cp2-link { margin-left: auto; padding: 8px 2px; }
+.cp-root[data-theme="soft"] .cp2-lab-stop { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-lab-stop p { font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-stop .cp-btn-row { margin-top: 0; }
+.cp-root[data-theme="soft"] .cp2-lab-lastbet { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-lastbet .cp2-lab-verdict { align-self: center; }
+
+/* The checkpoint: what ended, the last answer read back, then the two answers. */
+.cp-root[data-theme="soft"] .cp2-lab-check-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 4px; }
+.cp-root[data-theme="soft"] .cp2-lab-check-bet { display: flex; gap: 9px; font-size: 13px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-check-bet .cp2-lab-verdict { min-width: 78px; text-align: center; }
+.cp-root[data-theme="soft"] .cp2-lab-readback { margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-readback b { font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-lab-moved { margin-top: 6px; font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-lab-decide { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0 14px; }
+.cp-root[data-theme="soft"] .cp2-lab-opt { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 13px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-lab-opt b { font-size: 14px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-opt span { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-opt.on { background: var(--tint); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.cp-root[data-theme="soft"] .cp2-lab-opt.on b { color: var(--blue); }
+
+/* Plays: the chain as a row of parts, each with its verdict's dot, then the plays for the one picked. */
+/* Wrapped, not scrolled: the part picked is the weak link more often than
+   not, and a row that scrolls put it off the edge of the screen. */
+.cp-root[data-theme="soft"] .cp2-lab-parts { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 20px 6px; }
+.cp-root[data-theme="soft"] .cp2-lab-partchip { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; white-space: nowrap; padding: 8px 13px; border-radius: 999px; background: var(--surface); color: var(--muted); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-lab-partchip i { width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--dim); }
+.cp-root[data-theme="soft"] .cp2-lab-partchip.works i { background: var(--ai); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-lab-partchip.testing i { background: var(--blue); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-lab-partchip.stuck i { background: var(--bad); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-lab-partchip.missing i { box-shadow: none; border: 1.5px dashed var(--dim); }
+.cp-root[data-theme="soft"] .cp2-lab-partchip.on { background: var(--ink); color: #fff; }
+.cp-root[data-theme="soft"] .cp2-lab-partwhy { margin: 8px 24px 4px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-partwhy b { font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-onebet { margin: 8px 24px 0; font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-lab-plays { display: flex; flex-direction: column; gap: 10px; padding: 10px 20px 4px; }
+.cp-root[data-theme="soft"] .cp2-lab-playcard { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 14px 16px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-lab-play-t { font-size: 15px; font-weight: 700; line-height: 1.35; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-play-how { font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-play-pass { font-size: 12px; line-height: 1.45; color: var(--muted); margin-bottom: 4px; }
+.cp-root[data-theme="soft"] .cp2-lab-own { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 13px 16px; border-radius: 20px; border: 1px dashed var(--fill-quiet); font-size: 13.5px; font-weight: 600; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-lab-own span { flex: 1; }
+
+/* Conversations: three counts, the last three, and the log button. */
+.cp-root[data-theme="soft"] .cp2-lab-tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 4px; }
+.cp-root[data-theme="soft"] .cp2-lab-tally span { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; line-height: 1.3; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-tally b { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-talks > .cp-btn { margin-top: 14px; }
+.cp-root[data-theme="soft"] .cp2-lab-talk { display: flex; flex-direction: column; gap: 3px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-lab-talks .cp2-lab-talk:first-of-type { margin-top: 8px; border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-lab-talk-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-lab-talk-top b { flex: 0 1 auto; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-talk-when { flex: none; font-size: 11.5px; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-lab-ended-as { flex: none; margin-left: auto; font-size: 10px; font-weight: 700; white-space: nowrap; border-radius: 999px; padding: 2px 8px; background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-ended-as:is(.time, .intro, .money) { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-lab-talk-s { font-size: 12px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-said { font-size: 13px; line-height: 1.45; font-style: italic; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-talklist { margin-top: 14px; border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-lab-note { font-style: italic; }
+.cp-root[data-theme="soft"] .cp2-lab-nowrap { white-space: nowrap; }
+
+/* The clock: runway in bets. */
+.cp-root[data-theme="soft"] .cp2-lab-clock-n { font-size: 15px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-clock-n b { font-family: var(--display); font-size: 30px; font-weight: 700; color: var(--ink); margin-right: 2px; }
+.cp-root[data-theme="soft"] .cp2-lab-clock-n b.cp2-err { font-size: 18px; color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-lab-clock-s { margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-clock-do { margin-top: 12px; }
+
+/* The bet sheet: counts with a minus and a plus, and the line said back before the button. */
+.cp-root[data-theme="soft"] .cp2-lab-sheet-book { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); margin-bottom: 4px; }
+/* One sentence, not a page: the sheet's textareas start at 120px. */
+.cp-root[data-theme="soft"] .cp-sheet textarea.cp2-lab-belief-in { min-height: 76px; resize: none; font-family: inherit; line-height: 1.45; }
+.cp-root[data-theme="soft"] .cp2-lab-countrow { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-count { flex: none; display: inline-flex; align-items: center; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-lab-count button { width: 38px; height: 38px; font-size: 18px; font-weight: 600; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-lab-count button:disabled { color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-lab-count output { min-width: 30px; text-align: center; font-family: var(--display); font-size: 16px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-preview { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 14px; padding: 12px 14px; border-radius: 16px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-lab-preview-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-lab-preview b { font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-lab-preview-s { font-size: 12px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-lab-warn { margin: 0 0 12px; padding: 11px 13px; border-radius: 14px; background: var(--warn-tint); color: var(--ink); font-size: 12.5px; line-height: 1.5; }
+.cp-root[data-theme="soft"] .cp2-lab-warn .cp2-link { font-size: 12.5px; }
+.cp-root[data-theme="soft"] .cp2-lab-date { margin-top: 10px; max-width: 220px; }
 
 /* ── You: tiles, the week, goals ───────────────────────────────────────── */
 .cp-root[data-theme="soft"] .cp2-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 22px 0; }

@@ -287,6 +287,25 @@ the sensors are one list now — **Records** on You — so a calendar, a CV or a
 bank link is an entry and a sheet, not a new screen. See COPILOT.md → **Money,
 read from the bank, not typed**.
 
+**Then** — Work as the business, judged. Its owner's verdict on the tab that came
+back beside the Path: stale, the path to money generic, the team too heavy for a
+status, Build with Claude better as a box for handing work over. The want was the
+lean playbook — the proven system and how it connects, assets, experiments,
+suggestions that pay — run by an app that suggests, works and asks only when it
+must, unlike a chat that has to be prompted. The answer kept the one thing every
+rejected redraft lacked, a single spine: the business as a chain (who buys, how
+they hear, how they say yes, what they pay, how you deliver), each part a bet
+with a state by the app's own thresholds, the weak link open with what would move
+it, the agents placed on the part they run, and what was built listed by who made
+it. "Proven" is three paid at the person's price, which needed one change below
+the screen: the funnel now keeps every win's amount, because a count could not
+tell two one-dollar tests from two sales. It passes the survival test for the
+usual reason — a harness can write a business model canvas; "six meetings, two
+paid, none at your $150, so the weak link is the price" needs the ledger. What it
+deliberately does not do: build the asset in the app (the worker or a chat does —
+see **What is deliberately not built**), or let an agent act past `read`
+unapproved. See COPILOT.md → **Work is the business as a chain of bets**.
+
 ---
 
 ## Where it actually stands
@@ -325,6 +344,11 @@ direction better than "copilot" does.
 
 ## Open, and honest
 
+- **Whether a verdict changes what gets built.** Work now says which part of the
+  business is the weak link and offers the work that would move it. If the parts it
+  names are the ones projects get handed over for, and the states move after, the
+  chain is doing its job; if the projects stay personal errands beside it, it is a
+  better-drawn report. The count to watch is projects written from a part's move.
 - **Swipe, not Matches.** The deck came back as a sixth tab (COPILOT.md →
   **Swipe**), because 57 of 76 drafts sat unsent and its owner named why: too
   little on each card, a message that was not written for them, numbers that were

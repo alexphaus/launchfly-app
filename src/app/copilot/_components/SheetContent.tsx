@@ -1478,7 +1478,7 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
           </button>
           <p className="cp-help">
             {answer.trim()
-              ? 'It goes out with the next run, so the question is not asked again.'
+              ? 'It goes to the worker with your answer, so the question is not asked again.'
               : 'Not every question needs typing — but without one it has nothing new to go on and may ask again.'}
           </p>
         </>

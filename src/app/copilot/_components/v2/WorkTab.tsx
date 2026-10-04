@@ -1,65 +1,206 @@
 'use client';
-// Work: the business being built, drawn as a machine you can see into.
+// Work: the business, as a chain of bets — and everything else hangs off it.
 //
-//   What you sell        the product, in the owner's words
-//   How it makes money   find → reach → convert → get paid, with who runs each
-//                        part and the count at each step
-//   Your team            the agents, and what each last actually did
-//   Projects             work handed over — the part that runs like having staff
-//   Build with Claude    everything it knows, as one brief, for the work a chat
-//                        does better than a request handler
+//   What you sell        the offer in the owner's words, and the verdict: proven
+//                        or not, the bar and the count against it, and the
+//                        experiments run on it
+//   How it makes money   who buys → how they hear → how they say yes → what they
+//                        pay → how you deliver. Each part is a bet with a state
+//                        from the rows and the rule that gave it; the weak link
+//                        opens with what would move it
+//   In the works         one box to hand anything over, suggestions from the
+//                        weak link, and the projects — a question answered on
+//                        the card, a breakage retried on the card
+//   Built                what the business has to work with, by whom: the gaps
+//                        first, then what was made most recently
+//   Agents               one line; the roster folds under it
 //
-// An illustration, not a workflow builder — its owner asked for exactly that,
-// "not another n8n". What makes it more than a picture is that nothing on it is
-// drawn from a template: every count is the funnel's, every agent state is when
-// it last ran, and a part of the machine that is not set up says so rather than
-// looking busy. See lib/copilot/machine.ts.
+// Why it was rebuilt, in its owner's words: Work was "stale", the path to money
+// "generic", the team "too heavy for a status", and Build with Claude "could be
+// input text for handover". The want was the tab that knows how the business
+// makes money — the proven system and how everything is connected, the assets
+// built by AI and by you, suggestions that pay, experiments — run by an app that
+// suggests, works, and asks only when it must. lib/copilot/business.ts has the
+// rules, and why they are the app's own thresholds and no new ones.
 //
-// Handed-over work finally has a home. It was a block on Now, split by whether
-// it needed you, which was right for Now and meant the thing that feels most
-// like having a team never had a place where you could see the team's work.
-//
-// It was folded into the Path and You for one release, and came back on its
-// owner's word: "better for separation, and has important features". The Path
-// is what to do and what moved; this is the business being built. The Path
-// draws on it — a project under way and work it offers to take on are next
-// steps there, one line each — and here they are in full, with the offer, the
-// machine and the team that the Path has no place for.
-import { useState } from 'react';
-import { AGENT_STATE_LABEL, type Agent, type MachineStage } from '@/lib/copilot/machine';
-import { SECTIONS } from '@/lib/copilot/working';
+// What it is not. Four drafts of a better Work met one verdict before this:
+// static sections competing for attention, content you could get elsewhere. So
+// there is one spine, not five sections. The offer is the chain's subject, the
+// working file's lines are its claims, the funnel's counts are its evidence, the
+// agents sit on the part each one runs, and the projects and what they built are
+// what moves it. And it moves: a part's verdict changes as rows land, and the
+// tab says so the next time you look.
+import { useEffect, useRef, useState } from 'react';
+import {
+  LINK_STATE_LABEL, changeLine, chainChanges, parseSeenChain, snapshotChain, suggestedAsks,
+  type BuiltRow, type BusinessLink, type ChainChange, type LinkKey, type LinkMove, type SeenChain,
+} from '@/lib/copilot/business';
+import { AGENT_STATE_LABEL, type Agent } from '@/lib/copilot/machine';
+import { ANGLE_LABEL, STATE_WORDS, latestMarks } from '@/lib/copilot/experiment';
+import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, blockedOn, commissionChip, splitThreads } from '@/lib/copilot/commission';
+import type { CommissionThread, HomeData } from '@/lib/copilot/types';
 import { shortDay } from '../format';
-import type { HomeData } from '@/lib/copilot/types';
-import { splitThreads } from '@/lib/copilot/commission';
 import type { Actions } from '../shared';
-import { JobCard } from '../CommissionThread';
 import { MoveCard } from '../views/NowView';
 import type { Derived } from './derive';
 import { AgentGlyph, IconChevron, IconExternal } from './icons2';
 
 export default function WorkTab({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
+  const seen = useSeen(home, d);
+  const brief = useBrief(actions);
+  // Three projects on the go is the cap the server keeps. A move for the agent
+  // then offers the chat instead, and says why, rather than failing on the tap.
+  const full = home.commissions.filter((t) => t.commission.status === 'draft' || t.commission.status === 'active' || t.commission.status === 'blocked').length >= MAX_ACTIVE_COMMISSIONS;
   return (
     <>
-      <Product home={home} actions={actions} />
-      <Machine stages={d.machine} actions={actions} />
-      <Team agents={d.team} actions={actions} briefing={briefing} />
-      <Projects home={home} actions={actions} />
-      <BuildWithClaude actions={actions} />
+      <Product home={home} d={d} actions={actions} changes={seen.changes} />
+      <Chain d={d} actions={actions} brief={brief} full={full} />
+      <InTheWorks home={home} d={d} actions={actions} brief={brief} full={full} />
+      <Built home={home} d={d} actions={actions} brief={brief} seenAt={seen.at} full={full} />
+      <Agents agents={d.team} line={d.work.team} actions={actions} briefing={briefing} />
     </>
   );
 }
 
-/* ─── What you sell ───────────────────────────────────────────────────────── */
+/* ─── Since you last looked ───────────────────────────────────────────────── */
 
-function Product({ home, actions }: { home: HomeData; actions: Actions }) {
+/**
+ * What this device last saw: each part's verdict and when. Read once per visit,
+ * so what moved stays said while you look; written back every time the chain
+ * changes. In an effect, never during render — the server has no storage, and a
+ * first paint that differed from its render would not hydrate. A convenience
+ * about the screen: nothing is decided from it, so storage that keeps nothing
+ * costs only the "moved" line.
+ */
+function useSeen(home: HomeData, d: Derived): { changes: ChainChange[]; at: string | null } {
+  const key = `cp2.work.seen:${home.profile.id}`;
+  const prior = useRef<SeenChain | null | undefined>(undefined);
+  const [out, setOut] = useState<{ changes: ChainChange[]; at: string | null }>({ changes: [], at: null });
+  const { links } = d.work.chain;
+  const signature = links.map((l) => `${l.key}:${l.state}`).join(',');
+  useEffect(() => {
+    if (prior.current === undefined) {
+      let raw: string | null = null;
+      try { raw = window.localStorage.getItem(key); } catch { /* storage refused: no memory, said by nothing moving */ }
+      try { prior.current = parseSeenChain(raw ? JSON.parse(raw) : null); } catch { prior.current = null; }
+    }
+    setOut({ changes: chainChanges(prior.current ?? null, links), at: prior.current?.at ?? null });
+    try { window.localStorage.setItem(key, JSON.stringify(snapshotChain(home.generatedAt, links))); } catch { /* as above */ }
+    // Keyed on the verdicts and on when the read was made: a refresh with the
+    // same verdicts still moves "last looked" on, or the next visit would call
+    // things new that were on screen this time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, key, home.generatedAt]);
+  return out;
+}
+
+/* ─── The brief, for a chat ───────────────────────────────────────────────── */
+
+const DEFAULT_ASK = 'Look at everything below and tell me the one thing to build or change next.';
+
+/**
+ * The handoff route's text with one task line on top: everything the app knows,
+ * the working file with its two sources still distinct, and no contact details,
+ * because the destination is a third party. Fetched once and kept, because
+ * Safari refuses a clipboard write that is not inside the tap, and the first tap
+ * spent itself fetching — so the second is a clean gesture, and is asked for.
+ */
+interface Brief { copy(ask: string | null): Promise<{ ok: boolean; note: string }> }
+
+function useBrief(actions: Actions): Brief {
+  const text = useRef<string | null>(null);
+  return {
+    async copy(ask) {
+      if (!text.current) {
+        const r = await actions.handoff();
+        if (!r.ok || !r.text) return { ok: false, note: r.error ?? 'Could not gather what it knows' };
+        text.current = r.text;
+      }
+      const body = `${ask?.trim() || DEFAULT_ASK}\n\nEverything my own app knows about my business is below. Use only what it says, and where it does not say, ask me rather than guess.\n\n${text.current}`;
+      try {
+        await navigator.clipboard.writeText(body);
+        return { ok: true, note: `${body.length.toLocaleString()} characters copied. Open Claude and paste it in.` };
+      } catch {
+        return { ok: false, note: 'Your brief is ready. Tap once more to put it on your clipboard.' };
+      }
+    },
+  };
+}
+
+/* ─── A move: a sheet of yours, a project to approve, or a chat ───────────── */
+
+const MOVE_SUB = {
+  ai: 'Your agent does it — you approve the plan first',
+  claude: 'Copies your whole record into a chat with Claude',
+  full: `Your agent has ${MAX_ACTIVE_COMMISSIONS} projects on the go, so this copies it for Claude instead`,
+} as const;
+
+/** A move for the agent, when the agent cannot take more: the same ask, for a chat. */
+const orChat = (m: LinkMove, full: boolean): LinkMove => (m.by === 'ai' && full ? { ...m, by: 'claude' } : m);
+
+/** One way to act on a move, shared by a part of the chain and a gap in Built, so the two cannot behave differently. */
+function useMove(actions: Actions, brief: Brief) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<{ key: string; text: string; bad: boolean; claude: boolean } | null>(null);
+  const run = async (m: LinkMove, why?: string) => {
+    setNote(null);
+    if (m.by === 'you') {
+      const go = m.go;
+      if (!go) return;
+      if ('sheet' in go) actions.openSheet({ kind: go.sheet });
+      else if ('outreach' in go) actions.openSheet({ kind: 'outreach', stage: go.outreach });
+      else actions.setTab(go.tab);
+      return;
+    }
+    setBusy(m.key);
+    if (m.by === 'ai') {
+      // Written as a draft and opened on its approve button: one more tap, and
+      // the person has read what is being authorised before anything runs.
+      const r = await actions.createCommission({ objective: (m.ask ?? m.label).slice(0, OBJECTIVE_MAX), why: why?.slice(0, 300), authority: 'read' });
+      setBusy(null);
+      if (!r.ok) return setNote({ key: m.key, text: r.error ?? 'Could not hand that over', bad: true, claude: false });
+      if (r.id) actions.openSheet({ kind: 'commission', id: r.id });
+      return;
+    }
+    const r = await brief.copy(m.ask ?? null);
+    setBusy(null);
+    setNote({ key: m.key, text: r.note, bad: false, claude: r.ok });
+  };
+  return { busy, note, run };
+}
+
+function MoveRow({ m, onRun, busy, rerouted }: { m: LinkMove; onRun: () => void; busy: boolean; rerouted: boolean }) {
+  return (
+    <button className={`cp2-bz-move ${m.by}`} disabled={busy} onClick={onRun}>
+      <span className="cp2-bz-move-m">
+        <b>{busy ? (m.by === 'ai' ? 'Writing it…' : 'Gathering…') : m.label}</b>
+        {m.by !== 'you' && <span>{rerouted ? MOVE_SUB.full : MOVE_SUB[m.by]}</span>}
+      </span>
+      <IconChevron />
+    </button>
+  );
+}
+
+function MoveNote({ note }: { note: { text: string; bad: boolean; claude: boolean } }) {
+  return (
+    <p className={`cp-help ${note.bad ? 'cp2-err' : ''}`}>
+      {note.text}
+      {note.claude && <> <a className="cp2-bz-open-claude" href="https://claude.ai/new" target="_blank" rel="noreferrer">Open Claude <IconExternal /></a></>}
+    </p>
+  );
+}
+
+/* ─── What you sell, and whether it is proven ─────────────────────────────── */
+
+function Product({ home, d, actions, changes }: { home: HomeData; d: Derived; actions: Actions; changes: ChainChange[] }) {
   const o = home.profile.offer ?? {};
-  const w = home.workingProgress ?? { filled: 0, total: SECTIONS.length, proposals: 0 };
+  const v = d.work.chain.verdict;
   if (!o.sells?.trim()) {
     return (
       <div className="cp-card cp2-product">
         <div className="cp-eyebrow">What you sell</div>
         <h2 className="cp2-product-name">Not written down yet</h2>
-        <p className="cp2-lede">Everything it drafts, researches and proposes starts from this. With nothing here it writes nothing — a message from a blank offer is not yours.</p>
+        <p className="cp2-lede">Every part below is tested against this. With nothing here it writes nothing — a message from a blank offer is not yours.</p>
         <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'offer' })}>Write your offer — three minutes</button>
       </div>
     );
@@ -72,56 +213,113 @@ function Product({ home, actions }: { home: HomeData; actions: Actions }) {
       </div>
       <h2 className="cp2-product-name">{o.sells}</h2>
       {o.problem && <p className="cp2-product-problem">&ldquo;{o.problem}&rdquo;</p>}
-      <div className="cp2-facts">
-        {o.for_who && <span><b>For</b> {o.for_who}</span>}
-        <span><b>Price</b> {o.price_band || 'not set'}</span>
-        <span><b>Proof</b> {o.proof_url ? <a href={o.proof_url} target="_blank" rel="noreferrer">link</a> : 'none yet'}</span>
+      <div className={`cp2-bz-verdict ${v.proven ? 'proven' : ''}`}>
+        <span className="cp2-bz-verdict-t">{v.title}</span>
+        <span className="cp2-bz-verdict-s">{v.line}</span>
       </div>
-      {/* The offer's other half. Five strings are a headline; this is the
-          business behind it, and the count says how much of it is known. */}
-      <button className="cp2-knows" onClick={() => actions.openSheet({ kind: 'working' })}>
+      {/* The tab moving, said: a part whose verdict changed since this device last looked. */}
+      {changes.length > 0 && (
+        <p className="cp2-bz-moved">
+          Since you last looked: {changes.slice(0, 2).map(changeLine).join('; ')}{changes.length > 2 ? `; and ${changes.length - 2} more` : ''}.
+        </p>
+      )}
+      <Experiments home={home} d={d} actions={actions} />
+    </div>
+  );
+}
+
+/**
+ * The record of what was tried on this business: the plan's experiment being
+ * tried or offered, every verdict it got, and what the person wrote they tried
+ * before the app. One line folded; the Path is where an experiment is started
+ * and graded, so this is the ledger, not a second copy of the card.
+ */
+function Experiments({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+  const [open, setOpen] = useState(false);
+  const plan = d.path.plan;
+  const running = plan.state === 'ready' ? plan.experiment : null;
+  const ended = [...latestMarks(home.roadmap?.experiments ?? []).values()]
+    .filter((m) => m.state !== 'started')
+    .sort((a, b) => b.at.localeCompare(a.at));
+  const tried = d.work.said.tried ?? [];
+  const graded = ended.filter((m) => m.state === 'worked' || m.state === 'failed' || m.state === 'unclear');
+  const worked = graded.filter((m) => m.state === 'worked').length;
+  if (!running && !ended.length && !tried.length) return null;
+  const parts = [
+    running ? (running.stage === 'trying' ? '1 running' : '1 offered') : null,
+    graded.length ? `${graded.length} tested, ${worked} worked` : null,
+    tried.length ? `${tried.length} you tried before` : null,
+  ].filter(Boolean).join(' · ');
+  return (
+    <div className="cp2-bz-tests">
+      <button className="cp2-bz-tests-btn" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
         <span className="cp2-row-main">
-          <span className="t">What it knows about how you work</span>
-          <span className="s">{w.filled} of {w.total} written{w.proposals ? ` · ${w.proposals} counted from your rows, waiting for your yes` : ''}</span>
+          <span className="t">Experiments</span>
+          <span className="s">{parts}</span>
         </span>
         <IconChevron />
       </button>
+      {open && (
+        <div className="cp2-bz-tests-list">
+          {running && (
+            <button className="cp2-bz-test" onClick={() => actions.setTab('path')}>
+              <i className="cp2-bz-test-chip live">{running.stage === 'trying' ? 'Trying' : 'Offered'}</i>
+              <span className="cp2-bz-test-t">{running.exp.title}</span>
+              <span className="cp2-bz-test-s">{running.stage === 'trying' ? `Check on ${shortDay(running.checkOn)} · on the Path` : 'Start it on the Path'}</span>
+            </button>
+          )}
+          {ended.map((m) => (
+            <div key={m.id} className="cp2-bz-test">
+              <i className={`cp2-bz-test-chip ${m.state}`}>{STATE_WORDS[m.state][0].toUpperCase()}{STATE_WORDS[m.state].slice(1)}</i>
+              <span className="cp2-bz-test-t">{m.title || m.id}</span>
+              <span className="cp2-bz-test-s">{[m.angle ? ANGLE_LABEL[m.angle] : null, shortDay(m.at.slice(0, 10))].filter(Boolean).join(' · ')}</span>
+            </div>
+          ))}
+          {tried.map((t, i) => (
+            <div key={`tried-${i}`} className="cp2-bz-test">
+              <i className="cp2-bz-test-chip you">You tried</i>
+              <span className="cp2-bz-test-t">{t}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 /* ─── How it makes money ──────────────────────────────────────────────────── */
 
-const OWNER_LABEL = { ai: 'AI', you: 'You', both: 'AI + you' } as const;
+const RUNNER_LABEL = { ai: 'AI', you: 'You', both: 'AI + you' } as const;
 
-function Machine({ stages, actions }: { stages: MachineStage[]; actions: Actions }) {
-  const open = (s: MachineStage) => {
-    if (s.key === 'find') actions.openSheet({ kind: 'targeting' });
-    else if (s.key === 'reach') actions.openSheet({ kind: 'stage', stage: 'to_send' });
-    else if (s.key === 'convert') actions.openSheet({ kind: 'stage', stage: 'replied' });
-    else actions.openSheet({ kind: 'stage', stage: 'won' });
-  };
+function Chain({ d, actions, brief, full }: { d: Derived; actions: Actions; brief: Brief; full: boolean }) {
+  const { links, weak, verdict } = d.work.chain;
+  // The weak link opens by itself; after a tap, the person decides what is open.
+  const [picked, setPicked] = useState<LinkKey | null | undefined>(undefined);
+  const open = picked === undefined ? weak : picked;
+  const move = useMove(actions, brief);
+  const weakLabel = weak ? links.find((l) => l.key === weak)?.label : null;
   return (
     <>
-      <div className="cp-section"><span className="lead">How it makes money</span><span className="count">counted from your rows</span></div>
-      <ol className="cp-list cp2-flow">
-        {stages.map((s, i) => (
-          <li key={s.key} className={`cp2-step ${s.weak ? 'weak' : ''}`}>
-            <button className="cp2-step-btn" onClick={() => open(s)}>
-              <span className="cp2-step-rail" aria-hidden><span className="cp2-step-n">{i + 1}</span></span>
-              <span className="cp2-step-body">
-                <span className="cp2-step-top">
-                  <span className="cp2-step-name">{s.label}</span>
-                  <span className="cp2-step-count">{s.countLabel}</span>
+      <div className="cp-section">
+        <span className="lead">How it makes money</span>
+        <span className="count">{weakLabel ? `weak link: ${weakLabel.toLowerCase()}` : verdict.proven ? 'everything that sells works' : 'from your rows'}</span>
+      </div>
+      <ol className="cp-list cp2-bz-chain">
+        {links.map((l, i) => (
+          <li key={l.key} className={`cp2-bz-part ${l.state}${open === l.key ? ' open' : ''}`}>
+            <button className="cp2-bz-part-btn" aria-expanded={open === l.key} onClick={() => setPicked(open === l.key ? null : l.key)}>
+              <span className="cp2-bz-rail" aria-hidden><span className="cp2-bz-n">{i + 1}</span></span>
+              <span className="cp2-bz-body">
+                <span className="cp2-bz-top">
+                  <span className="cp2-bz-name">{l.label}</span>
+                  {/* The word travels with the dot — a colour alone is not a verdict. */}
+                  <span className={`cp2-bz-state ${l.state}`}><i />{LINK_STATE_LABEL[l.state]}</span>
                 </span>
-                <span className="cp2-step-who">
-                  <span className={`cp2-owner ${s.owner}`}>{OWNER_LABEL[s.owner]}</span>
-                  {s.who !== 'You' && <span>{s.who}</span>}
-                </span>
-                <span className="cp2-step-detail">{s.detail}</span>
-                {s.weak && <span className="cp2-step-weak">{s.weak}</span>}
+                {l.what && <span className={`cp2-bz-what${open === l.key ? '' : ' cp2-clamp2'}`}>{l.what}</span>}
+                {l.facts && <span className="cp2-bz-facts">{l.facts}</span>}
               </span>
             </button>
+            {open === l.key && <Part link={l} weak={weak === l.key} move={move} full={full} />}
           </li>
         ))}
       </ol>
@@ -129,11 +327,292 @@ function Machine({ stages, actions }: { stages: MachineStage[]; actions: Actions
   );
 }
 
-/* ─── Your team ───────────────────────────────────────────────────────────── */
+function Part({ link: l, weak, move, full }: { link: BusinessLink; weak: boolean; move: ReturnType<typeof useMove>; full: boolean }) {
+  return (
+    <div className="cp2-bz-detail">
+      {weak && <span className="cp2-bz-weak">The weak link</span>}
+      <p className="cp2-bz-why">{l.why}</p>
+      {l.more.map((m) => <p key={m} className="cp2-bz-more">{m}</p>)}
+      {/* Who runs it, where an agent does some of it. A part that is yours alone needs no line saying so. */}
+      {l.runner.by !== 'you' && (
+        <span className="cp2-bz-runner">
+          <span className={`cp2-owner ${l.runner.by}`}>{RUNNER_LABEL[l.runner.by]}</span>
+          {l.runner.name}
+        </span>
+      )}
+      {/* An agent that stopped is said on the part of the business it stopped. */}
+      {l.runner.problem && <p className="cp2-bz-problem">{l.runner.problem}</p>}
+      {l.moves.length > 0 && (
+        <div className="cp2-bz-moves">
+          {l.moves.map((raw) => {
+            const m = orChat(raw, full);
+            return (
+              <div key={m.key}>
+                <MoveRow m={m} rerouted={m.by !== raw.by} busy={move.busy === m.key} onRun={() => void move.run(m, l.why)} />
+                {move.note?.key === m.key && <MoveNote note={move.note} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
-function Team({ agents, actions, briefing }: { agents: Agent[]; actions: Actions; briefing: boolean }) {
-  const working = agents.filter((a) => a.state === 'working').length;
-  const open = (a: Agent) => {
+/* ─── In the works ────────────────────────────────────────────────────────── */
+
+function InTheWorks({ home, d, actions, brief, full }: { home: HomeData; d: Derived; actions: Actions; brief: Brief; full: boolean }) {
+  const jobs = splitThreads(home.commissions ?? []);
+  const live = [...jobs.needsYou, ...jobs.running];
+  // What the app offers to take on. The one on the call is on the Path already.
+  const offers = home.moves.filter((m) => m.artifact?.kind === 'plan');
+  return (
+    <>
+      <div className="cp-section">
+        <span className="lead">In the works</span>
+        {d.work.waiting > 0 && <span className="count">{d.work.waiting} waiting on you</span>}
+      </div>
+      <Composer home={home} d={d} actions={actions} brief={brief} full={full} />
+      {live.length > 0 && (
+        <div className="cp2-projects">
+          {live.map((t) => <Project key={t.commission.id} thread={t} actions={actions} />)}
+        </div>
+      )}
+      {offers.map((m) => (
+        <div key={m.id} className="cp2-offer">
+          <div className="cp2-offer-label">It offers to take this on</div>
+          <MoveCard move={m} actions={actions} />
+        </div>
+      ))}
+      {!live.length && !offers.length && (
+        <p className="cp2-bz-quiet">
+          Nothing handed over. It researches, compares and drafts while you do something else, reports every step here, and never contacts anyone or spends anything.
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * Build with Claude, turned into the way in: one box for anything you would
+ * otherwise do yourself. Handed over, it is a project your agent runs once you
+ * approve it; copied, it is the first line of everything the app knows, for a
+ * chat. The chips are the chain's own suggestions, the weak link's first, and a
+ * tap fills the box rather than sending — it is still yours to edit.
+ */
+function Composer({ home, d, actions, brief, full }: { home: HomeData; d: Derived; actions: Actions; brief: Brief; full: boolean }) {
+  const [text, setText] = useState('');
+  const [picked, setPicked] = useState<LinkMove | null>(null);
+  const [busy, setBusy] = useState<'hand' | 'copy' | null>(null);
+  const [note, setNote] = useState<{ text: string; bad: boolean; claude: boolean } | null>(null);
+  const asks = suggestedAsks(d.work.chain);
+  const why = picked ? d.work.chain.links.find((l) => l.moves.some((m) => m.key === picked.key))?.why : undefined;
+
+  const handOver = async () => {
+    const objective = text.trim();
+    if (!objective) return;
+    // Said before the tap rather than cut by the server: a project's objective
+    // has a limit and a chat does not.
+    if (objective.length > OBJECTIVE_MAX) return setNote({ text: `A project's brief is ${OBJECTIVE_MAX} characters at most — shorten it, or copy it for Claude.`, bad: true, claude: false });
+    setBusy('hand'); setNote(null);
+    const r = await actions.createCommission({ objective, why: why?.slice(0, 300), authority: 'read' });
+    setBusy(null);
+    if (!r.ok) return setNote({ text: r.error ?? 'Could not hand that over', bad: true, claude: false });
+    setText(''); setPicked(null);
+    if (r.id) actions.openSheet({ kind: 'commission', id: r.id });
+  };
+  const copy = async () => {
+    setBusy('copy'); setNote(null);
+    const r = await brief.copy(text.trim() || null);
+    setBusy(null);
+    setNote({ text: r.note, bad: false, claude: r.ok });
+  };
+
+  return (
+    <div className="cp-card cp2-bz-compose">
+      <textarea
+        // Grows with what is in it, so a suggestion is read whole before it is handed over.
+        className="cp-input sm" rows={text ? Math.min(6, Math.max(3, Math.ceil(text.length / 34))) : 2} value={text}
+        aria-label="What should it build, find or work out?"
+        placeholder="What should it build, find or work out?"
+        onChange={(e) => { setText(e.target.value); setNote(null); if (picked && e.target.value !== picked.ask) setPicked(null); }}
+      />
+      {asks.length > 0 && (
+        <div className="cp-chips">
+          {asks.map((m) => (
+            <button key={m.key} className={`cp-fchip ${picked?.key === m.key ? 'active' : ''}`}
+              onClick={() => { setText(m.ask ?? m.label); setPicked(m); setNote(null); }}>{m.label}</button>
+          ))}
+        </div>
+      )}
+      <div className="cp-btn-row">
+        <button className={`cp-btn ${home.workerConnected ? 'primary' : ''}`} disabled={!text.trim() || busy !== null || full} onClick={() => void handOver()}>
+          {busy === 'hand' ? 'Writing it…' : 'Hand it over'}
+        </button>
+        <button className={`cp-btn ${home.workerConnected ? '' : 'primary'}`} disabled={busy !== null} onClick={() => void copy()}>
+          {busy === 'copy' ? 'Gathering…' : 'Copy for Claude'}
+        </button>
+      </div>
+      {note && <MoveNote note={note} />}
+      {/* Said before the tap, not after it: three projects is the cap the server keeps. */}
+      {full && !note && <p className="cp-help">{MAX_ACTIVE_COMMISSIONS} projects are on the go. Finish or stop one to hand over another.</p>}
+      {!home.workerConnected && !full && !note && (
+        <p className="cp-help">No worker is connected to this server, so a project you hand over is written down but nothing picks it up. Copy it for Claude instead, or set <code>COPILOT_JOBS_URL</code>.</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One project, small enough that three fit on a screen. The card used to be one
+ * big button, which meant a question could only be answered by opening the
+ * project, scrolling past its plan and typing there — so the commonest thing a
+ * project wants, an answer, cost the most taps. Now the question has a box on
+ * the card, and a breakage its retry; everything else is one tap into the sheet.
+ */
+function Project({ thread, actions }: { thread: CommissionThread; actions: Actions }) {
+  const c = thread.commission;
+  const r = thread.report;
+  const chip = commissionChip(c, r);
+  const waiting = blockedOn(c, r);
+  const ask = waiting === 'you' ? r.yours[0] ?? null : null;
+  const fault = waiting === 'worker' ? r.stopped[0] ?? null : null;
+  const last = r.did[0] ?? null;
+  const [answer, setAnswer] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const open = () => actions.openSheet({ kind: 'commission', id: c.id });
+
+  const send = async () => {
+    if (!answer.trim()) return;
+    setBusy(true); setError(null);
+    const res = await actions.commissionAction(c.id, 'unblock', undefined, answer.trim());
+    setBusy(false);
+    if (!res.ok) return setError(res.error ?? 'Could not send that');
+    setAnswer('');
+  };
+  // Unblock, then hand it straight back — the sheet's retry, on the card. A
+  // stopped job is not due, so running alone would report nothing to do.
+  const retry = async () => {
+    setBusy(true); setError(null);
+    const res = await actions.commissionAction(c.id, 'unblock');
+    if (!res.ok) { setBusy(false); return setError(res.error ?? 'Could not restart it'); }
+    const run = await actions.runCommissionsNow();
+    setBusy(false);
+    if (!run.ok) setError(run.error ?? 'Restarted, but it could not be handed over just now');
+  };
+
+  return (
+    <div className={`cp2-bz-job ${chip.tone}`}>
+      <button className="cp2-bz-job-head" onClick={open}>
+        <span className="cp2-bz-job-top">
+          <span className={`cp2-bz-chip ${chip.tone}`}>{c.status === 'draft' ? 'Waiting for your OK' : chip.label}</span>
+          {r.progress.total > 0 && c.status !== 'draft' && <span className="cp2-bz-job-n">{r.progress.done} of {r.progress.total} done</span>}
+          {r.fresh > 0 && <span className="cp2-bz-job-new">{r.fresh} new</span>}
+        </span>
+        <span className="cp2-bz-job-ob">{c.objective}</span>
+        {/* What it got done last — one line, enough to tell whether it is worth keeping. */}
+        {!fault && !ask && last && <span className="cp2-bz-job-did">{last.summary}</span>}
+        {c.status === 'active' && !last && <span className="cp2-bz-job-did quiet">Nothing back yet.</span>}
+      </button>
+      {ask && (
+        <div className="cp2-bz-ask">
+          <p className="cp2-bz-ask-q">{ask.summary}</p>
+          <div className="cp2-bz-ask-row">
+            <input
+              className="cp-input sm" value={answer} maxLength={300} placeholder="Your answer" aria-label={`Answer: ${ask.summary}`}
+              onChange={(e) => { setAnswer(e.target.value); setError(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') void send(); }}
+            />
+            <button className="cp-btn primary sm" disabled={busy || !answer.trim()} onClick={() => void send()}>{busy ? 'Sending' : 'Send'}</button>
+          </div>
+        </div>
+      )}
+      {/* A breakage, said once and plainly, with the one useful thing: another go. Nobody can answer a 500. */}
+      {fault && (
+        <div className="cp2-bz-fault">
+          <p>{fault.summary}</p>
+          <button className="cp-btn sm" disabled={busy} onClick={() => void retry()}>{busy ? 'Trying again…' : 'Try again'}</button>
+        </div>
+      )}
+      {c.status === 'draft' && <button className="cp2-bz-job-go" onClick={open}>Read it and approve →</button>}
+      {error && <p className="cp-help cp2-err">{error}</p>}
+    </div>
+  );
+}
+
+/* ─── Built ───────────────────────────────────────────────────────────────── */
+
+const SHOW_BUILT = 5;
+
+function Built({ home, d, actions, brief, seenAt, full }: { home: HomeData; d: Derived; actions: Actions; brief: Brief; seenAt: string | null; full: boolean }) {
+  const [all, setAll] = useState(false);
+  const move = useMove(actions, brief);
+  const rows = d.work.built;
+  const shown = all ? rows : rows.slice(0, SHOW_BUILT);
+  const byAi = rows.filter((r) => !r.gap && r.by !== 'you').length;
+  const byYou = rows.filter((r) => !r.gap && r.by !== 'ai').length;
+  const closed = home.commissions.some((t) => t.commission.status === 'done' || t.commission.status === 'stopped');
+  const go = (r: BuiltRow) => {
+    const o = r.open;
+    if ('sheet' in o) actions.openSheet({ kind: o.sheet });
+    else if ('commission' in o) actions.openSheet({ kind: 'commission', id: o.commission });
+    else if ('tab' in o) actions.setTab(o.tab);
+  };
+  return (
+    <>
+      <div className="cp-section">
+        <span className="lead">Built</span>
+        <span className="count">{[byAi ? `${byAi} with AI` : null, byYou ? `${byYou} by you` : null].filter(Boolean).join(' · ')}</span>
+      </div>
+      <div className="cp-list cp2-rows cp2-bz-built">
+        {shown.map((r) => {
+          const fresh = !!seenAt && !!r.at && r.at > seenAt;
+          const main = (
+            <span className="cp2-row-main">
+              <span className="t cp2-clamp2">{r.title}{fresh && <i className="cp2-bz-new">New</i>}</span>
+              <span className="s cp2-clamp2">{r.line}</span>
+            </span>
+          );
+          const who = <span className={`cp2-owner ${r.by}`}>{r.by === 'you' ? 'You' : r.by === 'both' ? 'You + AI' : r.byName}</span>;
+          if (r.gap) {
+            const m = r.move ? orChat(r.move, full) : null;
+            return (
+              <div key={r.key} className="cp2-row cp2-bz-gap">
+                <button className="cp2-bz-gap-main" onClick={() => go(r)}>{main}</button>
+                {m
+                  ? <button className="cp-connect" disabled={move.busy === m.key} onClick={() => void move.run(m, 'Proof is what a price is believed on.')}>{move.busy === m.key ? '…' : m.by === 'claude' ? 'Ask Claude' : 'Have it drafted'}</button>
+                  : <button className="cp-connect blue" onClick={() => go(r)}>Add it</button>}
+              </div>
+            );
+          }
+          if ('href' in r.open) {
+            return <a key={r.key} className="cp2-row" href={r.open.href} target="_blank" rel="noreferrer">{main}{who}<IconExternal /></a>;
+          }
+          return <button key={r.key} className="cp2-row" onClick={() => go(r)}>{main}{who}</button>;
+        })}
+      </div>
+      {move.note && <div className="cp2-bz-built-note"><MoveNote note={move.note} /></div>}
+      {rows.length > SHOW_BUILT && (
+        <button className="cp2-more" onClick={() => setAll((x) => !x)}>{all ? 'Show fewer' : `Show ${rows.length - SHOW_BUILT} more`}</button>
+      )}
+      {/* A read that failed is not "nothing was built" (invariant 13). */}
+      {home.built?.unreadable && closed && <div className="cp-note">Could not read what the projects produced, so the counts beside them may be short: {home.built.unreadable}</div>}
+    </>
+  );
+}
+
+/* ─── Agents ──────────────────────────────────────────────────────────────── */
+
+/**
+ * The team, as one line. Each agent's work is already on the part of the
+ * business it runs; what is left for a roster is whether each is well, and
+ * that fits on a line — with every one that is not named on it. The rows fold
+ * under it, the Planner's Run now among them.
+ */
+function Agents({ agents, line, actions, briefing }: { agents: Agent[]; line: { line: string; trouble: number }; actions: Actions; briefing: boolean }) {
+  const [open, setOpen] = useState(false);
+  const go = (a: Agent) => {
     if (a.key === 'scout') actions.openSheet({ kind: 'targeting' });
     else if (a.key === 'watcher') actions.openSheet({ kind: 'watchlist' });
     else if (a.key === 'writer') actions.openSheet(a.state === 'setup' ? { kind: 'offer' } : { kind: 'queue' });
@@ -141,16 +620,21 @@ function Team({ agents, actions, briefing }: { agents: Agent[]; actions: Actions
   };
   return (
     <>
-      <div className="cp-section"><span className="lead">Your team</span><span className="count">{working} of {agents.length} working</span></div>
+      <div className="cp-section"><span className="lead">Agents</span></div>
       <div className="cp-list cp2-rows cp2-team">
-        {agents.map((a) => {
+        <button className="cp2-row cp2-bz-team" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
+          <span className="cp2-row-main">
+            <span className={`s ${line.trouble ? 'cp2-bz-team-bad' : ''}`}>{line.line}</span>
+          </span>
+          <IconChevron />
+        </button>
+        {open && agents.map((a) => {
           const body = (
             <>
               <span className={`cp2-agent ${a.key}`}><AgentGlyph agent={a.key} /></span>
               <span className="cp2-row-main">
                 <span className="cp2-agent-top">
                   <span className="t">{a.name}</span>
-                  {/* The word travels with the dot — a colour alone is not a status. */}
                   <span className={`cp2-state ${a.state}`}><i />{AGENT_STATE_LABEL[a.state]}</span>
                 </span>
                 <span className="s">{a.role}</span>
@@ -166,158 +650,9 @@ function Team({ agents, actions, briefing }: { agents: Agent[]; actions: Actions
               <button className="cp-connect ghost" disabled={briefing} onClick={() => void actions.runBrief('manual')}>{briefing ? 'Running' : 'Run now'}</button>
             </div>
           ) : (
-            <button key={a.key} className="cp2-row" onClick={() => open(a)}>{body}<IconChevron /></button>
+            <button key={a.key} className="cp2-row" onClick={() => go(a)}>{body}<IconChevron /></button>
           );
         })}
-      </div>
-    </>
-  );
-}
-
-/* ─── Projects ────────────────────────────────────────────────────────────── */
-
-function Projects({ home, actions }: { home: HomeData; actions: Actions }) {
-  const [showDone, setShowDone] = useState(false);
-  const jobs = splitThreads(home.commissions ?? []);
-  const live = [...jobs.needsYou, ...jobs.running];
-  // What the app offers to take on. The one on the call is on the Path already.
-  const offers = home.moves.filter((m) => m.artifact?.kind === 'plan');
-  return (
-    <>
-      <div className="cp-section">
-        <span className="lead">Projects</span>
-        <button className="cp-connect" onClick={() => actions.openSheet({ kind: 'handover' })}>Hand one over</button>
-      </div>
-      {!home.workerConnected && (
-        <div className="cp-note">No worker is connected to this server, so a project you hand over is written down but nothing picks it up. Set <code>COPILOT_JOBS_URL</code>.</div>
-      )}
-
-      {live.length > 0 && (
-        <div className="cp2-projects">
-          {live.map((t) => <JobCard key={t.commission.id} thread={t} actions={actions} />)}
-        </div>
-      )}
-
-      {offers.map((m) => (
-        <div key={m.id} className="cp2-offer">
-          <div className="cp2-offer-label">It offers to take this on</div>
-          <MoveCard move={m} actions={actions} />
-        </div>
-      ))}
-
-      {!live.length && !offers.length && (
-        <div className="cp-empty">
-          <b>Nothing handed over</b>
-          Give it something you would otherwise do yourself — research, a comparison, a shortlist, a first draft. It works on it overnight with a plan you approve, reports every step here, and never contacts anyone or spends anything.
-        </div>
-      )}
-
-      {jobs.finished.length > 0 && (
-        <>
-          <button className="cp2-more" onClick={() => setShowDone((v) => !v)}>
-            {showDone ? 'Hide finished' : `${jobs.finished.length} finished`}
-          </button>
-          {showDone && (
-            <div className="cp-list cp2-rows">
-              {jobs.finished.map((t) => (
-                <button key={t.commission.id} className="cp2-row" onClick={() => actions.openSheet({ kind: 'commission', id: t.commission.id })}>
-                  <span className="cp2-row-main">
-                    <span className="t cp2-clamp2">{t.commission.objective}</span>
-                    <span className="s cp2-clamp2">
-                      {t.commission.status === 'done' ? 'Finished' : 'Called off'}
-                      {t.commission.closed_at ? ` ${shortDay(t.commission.closed_at.slice(0, 10))}` : ''}
-                      {/* The owner's verdict, which is the only part worth reading later. */}
-                      {t.commission.outcome ? ` · ${t.commission.outcome}` : ' · no verdict recorded'}
-                    </span>
-                  </span>
-                  <IconChevron />
-                </button>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </>
-  );
-}
-
-/* ─── Build with Claude ───────────────────────────────────────────────────── */
-
-/**
- * The work a chat does better than this app: writing, planning, designing.
- *
- * DIRECTION.md already decided this app does not compete with a model on
- * building — it exports what it knows. What was missing was the export being
- * somewhere you would think to use it. The brief is the handoff route's text,
- * unchanged: the working file with its two sources still distinct, the funnel,
- * every call and what came of it, what is stood down — and no contact details,
- * because the destination is a third party.
- *
- * The tasks only add a first line. None of them states a number; every number
- * the model sees comes from the brief under it.
- */
-const TASKS = {
-  onepager: { label: 'Sales one-pager', ask: 'Write a one-page sales sheet I can send to a prospect, in my own voice.' },
-  onboarding: { label: 'Client onboarding', ask: 'Plan how I take a new client from the first yes to delivered, step by step.' },
-  pricing: { label: 'Pricing check', ask: 'Tell me whether what I charge is the problem, from what has closed and what has not.' },
-  automate: { label: 'Automate a step', ask: 'Find the step in how I work that costs me the most time, and design a simple automation for it.' },
-} as const;
-type TaskKey = keyof typeof TASKS;
-const DEFAULT_ASK = 'Look at everything below and tell me the one thing to build or change next.';
-
-function BuildWithClaude({ actions }: { actions: Actions }) {
-  const [task, setTask] = useState<TaskKey | null>(null);
-  const [brief, setBrief] = useState<string | null>(null);
-  const [state, setState] = useState<'idle' | 'loading' | 'copied' | 'ready' | 'error'>('idle');
-  const [note, setNote] = useState<string | null>(null);
-
-  const compose = (text: string) =>
-    `${task ? TASKS[task].ask : DEFAULT_ASK}\n\nEverything my own app knows about my business is below. Use only what it says, and where it does not say, ask me rather than guess.\n\n${text}`;
-
-  const copy = async (text: string) => {
-    const body = compose(text);
-    try {
-      await navigator.clipboard.writeText(body);
-      setState('copied');
-      setNote(`${body.length.toLocaleString()} characters copied. Open Claude and paste it in.`);
-    } catch {
-      // Safari refuses a clipboard write that is not inside the tap, and the
-      // first tap spent itself fetching. The brief is loaded now, so the next
-      // tap is a clean gesture — say so instead of failing quietly.
-      setState('ready');
-      setNote('Your brief is ready. Tap Copy once more to put it on your clipboard.');
-    }
-  };
-
-  const go = async () => {
-    if (brief) return copy(brief);
-    setState('loading'); setNote(null);
-    const r = await actions.handoff();
-    if (!r.ok || !r.text) { setState('error'); setNote(r.error ?? 'Could not gather what it knows'); return; }
-    setBrief(r.text);
-    await copy(r.text);
-  };
-
-  return (
-    <>
-      <div className="cp-section"><span className="lead">Build with Claude</span></div>
-      <div className="cp-card cp2-claude">
-        <p className="cp2-lede">
-          Take the whole business into a chat: your offer, how you work, the funnel, every call it made and
-          what came of it. One brief, pasted — so the answer is about your business, not a business.
-        </p>
-        <div className="cp-chips">
-          {(Object.keys(TASKS) as TaskKey[]).map((k) => (
-            <button key={k} className={`cp-fchip ${task === k ? 'active' : ''}`} onClick={() => setTask(task === k ? null : k)}>{TASKS[k].label}</button>
-          ))}
-        </div>
-        <div className="cp-btn-row">
-          <button className="cp-btn primary" disabled={state === 'loading'} onClick={() => void go()}>
-            {state === 'loading' ? 'Gathering…' : state === 'ready' ? 'Copy' : state === 'copied' ? 'Copy again' : 'Copy the brief'}
-          </button>
-          <a className="cp-btn" href="https://claude.ai/new" target="_blank" rel="noreferrer">Open Claude <IconExternal /></a>
-        </div>
-        {note && <p className={`cp-help ${state === 'error' ? 'cp2-err' : ''}`}>{note}</p>}
       </div>
     </>
   );

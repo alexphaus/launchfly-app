@@ -451,6 +451,14 @@ export interface HomeData {
    * looks like, which is the same screen and the correct one for both.
    */
   commissions: CommissionThread[];
+  /**
+   * What the projects produced: one row per event that carried something — a
+   * link, a document, a list — live or closed, newest first. Work's Built counts
+   * them per closed project. `unreadable` is the read's failure, never shown as
+   * nothing built. Optional because a payload cached before this existed has to
+   * render.
+   */
+  built?: { rows: Array<{ commission_id: string; at: string }>; unreadable: string | null };
   /** False when no worker is configured, so a mandate would never be picked up. */
   workerConnected: boolean;
   /**

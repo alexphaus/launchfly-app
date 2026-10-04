@@ -22,7 +22,7 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { BookPayload, EntryDefault } from '@/lib/copilot/money/bookstore';
 import {
-  bookDayLabel, bookMoney, bookRateLine, categoryIcon, parseRepeat, safeLine, safeWhy, shiftMonth, type BookDay, type BookLine, type CalendarCell,
+  bookDayLabel, bookMoney, bookRateLine, categoryIcon, monthsLabel, parseRepeat, SAFE_DAYS, safeWhy, shiftMonth, type BookDay, type BookLine, type CalendarCell,
 } from '@/lib/copilot/money/book';
 import { parseSpoken } from '@/lib/copilot/money/spoken';
 import { get, post } from '../api';
@@ -35,8 +35,9 @@ import { BookGlyph, IconRepeat } from './icons2';
 /* ─── State ───────────────────────────────────────────────────────────────── */
 
 /** `heard`: the words said to the header's mic, read into the sheet when it has the book's categories (money/spoken.ts). */
-export type BookEntry = ({ kind: 'add'; heard?: string } | { kind: 'edit'; line: BookLine } | { kind: 'balance' }) & { n: number };
-type EntryAsk = { kind: 'add'; heard?: string } | { kind: 'edit'; line: BookLine } | { kind: 'balance' };
+export type BookEntry = EntryAsk & { n: number };
+/** `spread`: how long the balance has to last, opened from the safe-to-spend line under the greeting. */
+type EntryAsk = { kind: 'add'; heard?: string } | { kind: 'edit'; line: BookLine } | { kind: 'balance' } | { kind: 'spread' };
 
 const VIEW_KEY = 'cp2.book.view';
 const ALT_KEY = 'cp2.book.alt';
@@ -275,11 +276,6 @@ function Started({ b, book, actions, say }: { b: BookPayload; book: Book; action
   const altOn = !!book.asked && book.asked !== b.currency;
   const choices = [...new Set([alt, b.main, 'EUR', 'USD', 'GBP', 'PHP'])].filter((c) => c !== b.currency);
   const rateLine = bookRateLine(b);
-  const safeText = safeLine(b.safe, b.safeShown, b.view);
-  // Why, in the book's own currency — the one the rows are in — and the rate when shown in another.
-  const safeTold = b.safe && b.balance
-    ? `${safeWhy(b.safe, b.balance.amount, b.currency)}${b.view !== b.currency && rateLine ? ` Shown in ${b.view}: ${rateLine}.` : ''}`
-    : '';
   const onLine = (l: BookLine) => {
     if (l.book) book.openEntry({ kind: 'edit', line: l });
     else say(`From ${l.source ?? 'a statement'}. Its rows change when the statement does, on Bank statements.`);
@@ -301,11 +297,9 @@ function Started({ b, book, actions, say }: { b: BookPayload; book: Book; action
         <button className="cp2-bk-bal" onClick={() => book.openEntry({ kind: 'balance' })} aria-label="Change your balance">
           {b.balance ? m(b.balance.shown) : '—'}
         </button>
-        {/* What the balance allows today, in the currency shown; tapped, where it comes from. Before, this
-            line said how to change the balance — the balance itself still does that when tapped. */}
-        {safeText
-          ? <button className={`cp2-bk-sub cp2-bk-safe${b.safe && (b.safe.broke || b.safe.left < 0) ? ' over' : ''}`} onClick={() => say(safeTold)}>{safeText}</button>
-          : <span className="cp2-bk-sub">{b.balance && b.view !== b.currency ? `${bookMoney(b.balance.amount, b.currency)} logged · ${rateLine}` : 'Tap it to say it again'}</span>}
+        {/* What the balance allows today is under the greeting, on every tab (CopilotApp2.tsx): the owner
+            asked for it on top, where it is read before anything else on the screen. */}
+        <span className="cp2-bk-sub">{b.balance && b.view !== b.currency ? `${bookMoney(b.balance.amount, b.currency)} logged · ${rateLine}` : 'Tap it to say it again'}</span>
       </div>
       {b.notReady && <div className="cp-error cp2-bk-gap">{b.notReady}</div>}
       {b.missing && <div className="cp-note">{b.missing}</div>}
@@ -474,6 +468,9 @@ export function BookSheet({ book }: { book: Book }) {
       </div>
     );
   }
+  if (e.kind === 'spread') {
+    return <div className="cp-sheet-embed" key={e.n}><SpreadForm b={b} book={book} /></div>;
+  }
   if (e.kind === 'balance') {
     return (
       <div className="cp-sheet-embed" key={e.n}>
@@ -512,6 +509,61 @@ export function BookSheet({ book }: { book: Book }) {
         deleteLabel={upcomingRepeat ? 'Tap again: delete it and stop the repeat' : undefined}
       />
     </div>
+  );
+}
+
+/**
+ * How long the balance has to last, each choice beside what it leaves a day.
+ *
+ * The figure under the greeting used to spread the balance over thirty days
+ * and nothing else, which for someone with no money coming in is a month's
+ * plan for the whole of it. The person picks the stretch because only they
+ * know when money is likely; the app shows what each one allows, and the last
+ * month as it actually went, so the choice is made against their own pace
+ * rather than against a rule.
+ */
+function SpreadForm({ b, book }: { b: BookPayload; book: Book }) {
+  const m = (n: number) => bookMoney(n, b.view);
+  const chosen = b.safe?.months ?? 1;
+  const pick = async (months: number) => {
+    if (months === chosen) { book.closeEntry(); return; }
+    const ok = await book.write({ action: 'spread', months }, `Safe to spend now makes it last ${monthsLabel(months)}.`);
+    if (ok) book.closeEntry();
+  };
+  const pace = b.pace;
+  const rateLine = bookRateLine(b);
+  return (
+    <>
+      <h3>Make it last</h3>
+      <p className="desc">
+        How long does {b.balance ? m(b.balance.shown) : 'your balance'} have to last? Pick when money is sure to come in, not when you hope it will.
+      </p>
+      {b.safeChoices.map((c) => (
+        <button key={c.months} className={`cp-option ${c.months === chosen ? 'active' : ''}`} disabled={book.busy} onClick={() => void pick(c.months)} aria-pressed={c.months === chosen}>
+          <div>
+            <div className="ct">{monthsLabel(c.months)}</div>
+            <div className="cs">
+              {c.broke
+                ? 'What is coming up takes all of it'
+                : `About ${m(c.shown * SAFE_DAYS)} a month${c.committed > 0 ? ` · ${m(c.committedShown)} coming up taken off first` : ''}`}
+            </div>
+          </div>
+          <span className="cp2-bk-spread-v">{c.broke ? m(0) : m(c.shown)}<small> a day</small></span>
+        </button>
+      ))}
+      {pace && (
+        <p className="cp-help">
+          Your last {pace.days} days: {m(pace.perDay)} a day on day-to-day spending, leaving out what repeats.{' '}
+          {pace.cameIn > 0 ? `${m(pace.cameIn)} came in.` : 'Nothing came in.'}
+        </p>
+      )}
+      {b.safe && b.balance && (
+        <p className="cp-help">
+          {safeWhy(b.safe, b.balance.amount, b.currency)}{b.view !== b.currency && rateLine ? ` Shown in ${b.view}: ${rateLine}.` : ''}
+        </p>
+      )}
+      <button className="cp-btn block cp2-bk-save" onClick={book.closeEntry}>Back</button>
+    </>
   );
 }
 

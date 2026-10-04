@@ -1758,9 +1758,14 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pad-label { margin: 6px 2px -2px; }
 /* Over today's safe amount: said in the warm tone the app uses for trouble, not in red — it is a fact, not an alarm. */
 .cp-root[data-theme="soft"] .cp2-pad-label.cp2-pad-over { color: #A85F2E; }
-/* The line under the balance: what is safe to spend today. A button, so it can say where the figure comes from. */
-.cp-root[data-theme="soft"] .cp2-bk-safe { align-self: flex-start; padding: 0; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted); text-align: left; cursor: pointer; }
-.cp-root[data-theme="soft"] .cp2-bk-safe.over { color: #A85F2E; }
+/* The line under the greeting: what is safe to spend today. A button, so it can ask how long the money has to last.
+   In the green the app uses for what is fine, warm when over — and a step larger than the tab's own line below it. */
+.cp-root[data-theme="soft"] .cp2-hd-safe { display: block; margin-top: 4px; padding: 0; border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--ai); text-align: left; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-hd-safe.over { color: #A85F2E; }
+.cp-root[data-theme="soft"] .cp-header .cp2-hd-safe + p { margin-top: 2px; }
+/* Make it last: what each stretch leaves a day, on the right of its row. */
+.cp-root[data-theme="soft"] .cp2-bk-spread-v { flex: none; margin-left: 12px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-bk-spread-v small { font-weight: 500; font-size: 11.5px; opacity: 0.75; }
 .cp-root[data-theme="soft"] .cp2-pad-chips .cp-fchip { padding: 8px 13px; font-size: 12.5px; }
 .cp-root[data-theme="soft"] .cp2-pad-chip { display: inline-flex; align-items: center; gap: 6px; }
 .cp-root[data-theme="soft"] .cp2-pad-chip svg { width: 15px; height: 15px; flex: none; stroke: var(--blue); }

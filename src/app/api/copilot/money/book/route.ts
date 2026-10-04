@@ -10,6 +10,7 @@
 //      action=delete   one logged row gone (id); an upcoming repeat stops its series
 //      action=balance  the balance the book starts from, said again to restart it
 //      action=entry    the currency moves are typed in from now on
+//      action=spread   how many months the balance has to last (months), for safe to spend
 //
 // Every POST answers with the book as it now is, for the month and view the
 // screen was on, so the list never shows a row the server does not have — or,
@@ -17,7 +18,7 @@
 // balance and what is safe to spend today: the book is a dozen reads that page
 // would throw away.
 import { MoneyRefusal } from '@/lib/copilot/money/store';
-import { addEntry, balanceAndSafe, deleteEntry, editEntry, loadBook, setBookBalance, setEntryCurrency } from '@/lib/copilot/money/bookstore';
+import { addEntry, balanceAndSafe, deleteEntry, editEntry, loadBook, setBookBalance, setEntryCurrency, setSpread } from '@/lib/copilot/money/bookstore';
 import { getProfile } from '@/lib/copilot/base';
 import { todayIso } from '@/lib/copilot/db';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
@@ -71,6 +72,10 @@ export async function POST(req: Request) {
     }
     if (b.action === 'entry') {
       return json({ ok: true, entry: await setEntryCurrency(auth.pid, b.currency) });
+    }
+    if (b.action === 'spread') {
+      await setSpread(auth.pid, b.months);
+      return await answer();
     }
     return fail('Unknown action');
   } catch (e) {

@@ -30,6 +30,8 @@ export interface BookAnchor {
   on: string;
   /** The currency moves are typed in by default, when another than the book's (BookAnchorRow.entry). */
   entry?: string | null;
+  /** How many months the balance has to last, when the person chose more than one (BookAnchorRow.months). */
+  months?: number;
 }
 
 /** A finance row's book, read defensively: written by whichever version ran it. */
@@ -38,7 +40,10 @@ export function anchorOf(f: Finance | null | undefined): BookAnchor | null {
   if (!b || typeof b.balance !== 'number' || !Number.isFinite(b.balance) || typeof b.at !== 'string' || typeof b.on !== 'string') return null;
   const currency = toCode(b.currency);
   const entry = toCode(b.entry);
-  return currency ? { currency, balance: b.balance, at: b.at, on: b.on, ...(entry && entry !== currency ? { entry } : {}) } : null;
+  const months = spreadMonths(b.months);
+  return currency
+    ? { currency, balance: b.balance, at: b.at, on: b.on, ...(entry && entry !== currency ? { entry } : {}), ...(months > 1 ? { months } : {}) }
+    : null;
 }
 
 export interface BookRow {
@@ -153,8 +158,31 @@ export function movesBalance(
 
 /* ─── Safe to spend ───────────────────────────────────────────────────────── */
 
-/** The stretch the balance is spread over: a month, the shortest that is not next week's rent. */
+/** A month of the stretch, in days. Fixed rather than calendar, so "2 months" is the same 60 days whichever day it is said on. */
 export const SAFE_DAYS = 30;
+
+/**
+ * How long the balance can be asked to last. One month is the default and the
+ * shortest that is not next week's rent.
+ *
+ * It was the only one, and its owner found it said about 30 a day — €31 off
+ * €908.94 on 4 Oct 2026 — when €330–€400 a month was the pace they could keep. The arithmetic was right
+ * and the question was wrong: spreading a balance over thirty days answers
+ * "what if money comes in next month?", and with no job and nothing coming in
+ * that is the one assumption a figure called safe cannot make. How long the
+ * money has to last is the person's to say, because only they know when the
+ * next money is likely. The app does not guess it: a model projecting income
+ * for someone with none is wrong in exactly the hopeful direction that empties
+ * an account, and the figure would no longer come from rows (invariant 2).
+ */
+export const SPREAD_MONTHS = [1, 2, 3, 6] as const;
+const MAX_SPREAD_MONTHS = 12;
+
+/** A stored or asked-for number of months, held to whole months the screen can offer; one when it is anything else. */
+export function spreadMonths(v: unknown): number {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN;
+  return Number.isInteger(n) && n >= 1 && n <= MAX_SPREAD_MONTHS ? n : 1;
+}
 
 export interface SafeToSpend {
   /** Left of today's share, whole units of the book's currency: negative when today is over. */
@@ -162,6 +190,8 @@ export interface SafeToSpend {
   /** Today's share before anything was spent. Zero when the balance is already spoken for. */
   perDay: number;
   days: number;
+  /** The months the balance is spread over: `days` is this times SAFE_DAYS. */
+  months: number;
   /** Money already promised inside the stretch: the pending moves you logged, repeats carried forward. */
   committed: number;
   /** Spent today in the book, before this figure. */
@@ -174,15 +204,16 @@ export interface SafeToSpend {
 
 /**
  * What the balance allows today: what is in the book, less what you have
- * already promised for the next thirty days, spread evenly, less what today has
- * taken. Worked out from rows you made and nothing else — no forecast of income
- * or of what you will spend, which is why it is a share and not a prediction.
+ * already promised for the stretch it has to last (a month unless you said
+ * longer), spread evenly, less what today has taken. Worked out from rows you
+ * made and nothing else — no forecast of income or of what you will spend,
+ * which is why it is a share and not a prediction.
  *
  * Only money going out is promised. A pending "came in" is left out on purpose:
  * a payment that has not landed is the cheapest thing to be wrong about, and a
  * figure called safe errs low. A repeat is carried forward through the stretch
  * (a weekly one is written a week ahead, so it is four rows in a month, not
- * one).
+ * one; a monthly rent over three months is three rents, not the one written).
  */
 export function safeToSpend(input: {
   anchor: BookAnchor;
@@ -190,9 +221,13 @@ export function safeToSpend(input: {
   balance: number;
   rows: ReadonlyArray<{ on: string; amount: number; currency: string | null; repeat?: string | null; description?: string; createdAt?: string; book?: boolean }>;
   today: string;
+  /** The months to spread over; the anchor's choice when absent. For the screen that compares them (safeChoices). */
+  months?: number;
 }): SafeToSpend {
   const { anchor, balance, today } = input;
-  const last = shift(today, SAFE_DAYS - 1);
+  const months = spreadMonths(input.months ?? anchor.months);
+  const days = months * SAFE_DAYS;
+  const last = shift(today, days - 1);
   const mine = input.rows.filter((r) => toCode(r.currency) === anchor.currency);
 
   // Every promised move inside the stretch, once: a pending row, and the
@@ -218,9 +253,74 @@ export function safeToSpend(input: {
   // the share does not shrink with every coffee — what shrinks is what is left.
   const pool = balance + spentToday - committed;
   const broke = pool <= 0;
-  const perDay = broke ? 0 : Math.floor(pool / SAFE_DAYS);
-  const left = broke ? -Math.ceil(spentToday) : Math.floor(pool / SAFE_DAYS - spentToday);
-  return { left, perDay, days: SAFE_DAYS, committed, spentToday, broke, pool: round2(pool) };
+  const perDay = broke ? 0 : Math.floor(pool / days);
+  const left = broke ? -Math.ceil(spentToday) : Math.floor(pool / days - spentToday);
+  return { left, perDay, days, months, committed, spentToday, broke, pool: round2(pool) };
+}
+
+/** One way to spread the balance, as the Make it last sheet offers it. */
+export interface SafeChoice {
+  months: number;
+  /** Today's share before anything was spent, in the book's currency. */
+  perDay: number;
+  /** What is promised inside this stretch: a longer one carries more rents. */
+  committed: number;
+  broke: boolean;
+}
+
+/**
+ * The same figure over each stretch the sheet offers, plus the one chosen when
+ * it is not among them. Shown side by side, because the number that answers
+ * "how long does this have to last" is the person's, and they choose it better
+ * seeing what each one leaves them a day than reading a rule.
+ */
+export function safeChoices(input: Omit<Parameters<typeof safeToSpend>[0], 'months'>): SafeChoice[] {
+  const chosen = spreadMonths(input.anchor.months);
+  const months = [...new Set<number>([...SPREAD_MONTHS, chosen])].sort((a, b) => a - b);
+  return months.map((m) => {
+    const s = safeToSpend({ ...input, months: m });
+    return { months: m, perDay: s.perDay, committed: s.committed, broke: s.broke };
+  });
+}
+
+/** The window the pace is read over: the same month the default stretch is. */
+const PACE_DAYS = 30;
+/** Under this many days of rows, an average is a day or two of shopping, not a pace. */
+const PACE_MIN_DAYS = 7;
+
+/** What the last month actually looked like, beside what each stretch allows. */
+export interface SpendPace {
+  /** The days the average is over: thirty, or fewer when the book is younger. */
+  days: number;
+  /** Day-to-day spending a day, in the book's currency: what went out, less what repeats. */
+  perDay: number;
+  /** Everything that came in over those days, in the book's currency. */
+  cameIn: number;
+}
+
+/**
+ * The last thirty days, read back: what went out a day, and what came in.
+ *
+ * Repeats are left out of the spending, because the safe figure has already
+ * taken them off before spreading — counting rent in the pace and not in the
+ * share would make every stretch look tighter than the person lives. Rows read
+ * off a file count here even though they never move the balance: this is what
+ * happened, not what is left. Fewer than a week of rows says nothing.
+ */
+export function spendPace(
+  rows: ReadonlyArray<{ on: string; amount: number; repeat?: string | null }>,
+  today: string,
+): SpendPace | null {
+  if (!rows.length) return null;
+  const from = shift(today, -(PACE_DAYS - 1));
+  const earliest = rows.reduce((a, r) => (r.on < a ? r.on : a), today);
+  const start = earliest > from ? earliest : from;
+  const days = Math.round((dayMs(today) - dayMs(start)) / 86_400_000) + 1;
+  if (days < PACE_MIN_DAYS) return null;
+  const inWindow = rows.filter((r) => r.on >= start && r.on <= today);
+  const out = inWindow.filter((r) => r.amount < 0 && !r.repeat).reduce((s, r) => s - r.amount, 0);
+  const cameIn = inWindow.filter((r) => r.amount > 0).reduce((s, r) => s + r.amount, 0);
+  return { days, perDay: round2(out / days), cameIn: round2(cameIn) };
 }
 
 /**
@@ -260,9 +360,15 @@ export function safeWhy(s: SafeToSpend, balance: number, currency: string): stri
   const parts = [`${m(balance)} in your book`];
   if (s.committed > 0) parts.push(`${m(s.committed)} coming up`);
   const spent = s.spentToday > 0 ? `; ${m(s.spentToday)} spent today` : '';
+  const over = (s.months ?? 1) > 1 ? `${s.days} days (${s.months} months)` : `${s.days} days`;
   return s.broke
     ? `${parts.join(', less ')} leaves nothing to spread.`
-    : `${parts.join(', less ')}, over ${s.days} days is ${m(s.perDay)} a day${spent}. Money that has not arrived is not counted.`;
+    : `${parts.join(', less ')}, over ${over} is ${m(s.perDay)} a day${spent}. Money that has not arrived is not counted.`;
+}
+
+/** "1 month", "3 months". */
+export function monthsLabel(n: number): string {
+  return `${n} month${n === 1 ? '' : 's'}`;
 }
 
 /* ─── The screen ──────────────────────────────────────────────────────────── */
@@ -331,6 +437,10 @@ export interface BookView {
   safe: SafeToSpend | null;
   /** `safe.left` in the view currency, whole units. */
   safeShown: number | null;
+  /** Today's share over each stretch the Make it last sheet offers, `shown` in the view currency. Empty without a balance. */
+  safeChoices: Array<SafeChoice & { shown: number; committedShown: number }>;
+  /** The last thirty days' day-to-day spending and what came in, in the view currency (at the newest rate). Null under a week of rows. */
+  pace: SpendPace | null;
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -439,6 +549,17 @@ export function bookView(input: {
   const rate = view === currency ? null : latestRate(input.fx, currency, view);
   const safe = input.anchor && balanceNow != null ? safeToSpend({ anchor: input.anchor, balance: balanceNow, rows, today }) : null;
   const safeShown = safe ? (rate ? Math.floor(safe.left * rate.rate) : safe.left) : null;
+  const safeOptions = input.anchor && balanceNow != null
+    ? safeChoices({ anchor: input.anchor, balance: balanceNow, rows, today }).map((c) => ({
+      ...c,
+      shown: rate ? Math.floor(c.perDay * rate.rate) : c.perDay,
+      committedShown: rate ? Math.round(c.committed * rate.rate * 100) / 100 : c.committed,
+    }))
+    : [];
+  // At the newest rate rather than each row's own: a pace is an average over a
+  // month, and a day with no rate must not blank it the way it blanks a list.
+  const read = spendPace(effective, today);
+  const pace = read && rate ? { ...read, perDay: round2(read.perDay * rate.rate), cameIn: round2(read.cameIn * rate.rate) } : read;
   const balance = balanceNow == null ? null : {
     amount: balanceNow,
     shown: rate ? Math.round(balanceNow * rate.rate * 100) / 100 : balanceNow,
@@ -491,7 +612,7 @@ export function bookView(input: {
     days, calendar,
     pending: pendingRows.slice(0, 20).map(line),
     categories: bookCategories(rows),
-    missing, unlabelled, safe, safeShown,
+    missing, unlabelled, safe, safeShown, safeChoices: safeOptions, pace,
   };
 }
 

@@ -39,7 +39,14 @@
 // The header's corner is the mic (VoiceLog.tsx): say a move from any tab and
 // the add sheet opens with it filled in. It held the capacity pill, a setting
 // shown on every screen and changed about never; that is in You → Settings.
-import { useCallback, useRef } from 'react';
+//
+// Under the greeting, on every tab with a header, is what is safe to spend
+// today. Under the balance on Money it was read only when Money was opened;
+// on top, its owner asked, it is read before every other choice the app puts
+// to them, which is what the number is for. Tapped, it asks how long the money
+// has to last (MoneyTab.tsx SpreadForm).
+import { useCallback, useEffect, useRef } from 'react';
+import { safeLine } from '@/lib/copilot/money/book';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView } from '@/lib/copilot/nightly';
 import type { HomeData } from '@/lib/copilot/types';
@@ -89,6 +96,13 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     }, HOME_AFTER_BOOK_MS);
   }, [refresh, say]);
   const book = useBook(home.profile.id, say, onMoved);
+  // Loaded on open rather than on the Money tab, for the line under the
+  // greeting. The phone's copy draws it at once; the fresh book a moment later.
+  const { load: loadBook } = book;
+  useEffect(() => { void loadBook(); }, [loadBook]);
+  const bk = book.book;
+  const safeText = bk?.ready && bk.started ? safeLine(bk.safe, bk.safeShown, bk.view) : null;
+  const safeOver = !!bk?.safe && (bk.safe.broke || bk.safe.left < 0);
   // The mic opens the book's sheet from any tab, so the book loads as it starts
   // listening: by the time the words are in, the categories they are read
   // against usually are too. The sheet says "Opening your book…" when not.
@@ -118,6 +132,11 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
       {tab !== 'swipe' && <header className="cp-header">
         <div>
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
+          {safeText && (
+            <button className={`cp2-hd-safe${safeOver ? ' over' : ''}`} onClick={() => book.openEntry({ kind: 'spread' })} aria-label={`${safeText}. Change how long it has to last`}>
+              {safeText}
+            </button>
+          )}
           {/* Tab-aware, and nothing when there is nothing true to say. While the mic is open, what it hears. */}
           {voice.listening ? <VoiceLive voice={voice} /> : status && <p>{status}</p>}
         </div>

@@ -199,6 +199,15 @@ export interface CommissionBrief {
   who: ReturnType<typeof whoFor>;
   goal: { title: string; target: number | null; unit: string | null } | null;
   /**
+   * The person's own today, YYYY-MM-DD in their timezone.
+   *
+   * Without it a worker asked "Which year should I use for October 5: 2025 or
+   * 2026?" on a mandate written on October 1, 2026 — it had the objective, the
+   * person and the log, and no idea when now was. A date with no year means the
+   * next one from here, and the worker is told so.
+   */
+  today: string;
+  /**
    * What has already happened on this mandate, oldest first.
    *
    * This field is why the loop can close. A worker raised a needs_you, the user
@@ -288,7 +297,7 @@ export function commissionBrief(
   profile: Profile,
   goal: Goal | null,
   resultUrl: string | null,
-  ctx: { working?: string; events?: CommissionEvent[] } = {},
+  ctx: { working?: string; events?: CommissionEvent[]; now?: Date } = {},
 ): CommissionBrief {
   return {
     kind: 'commission',
@@ -304,8 +313,18 @@ export function commissionBrief(
     result_url: resultUrl,
     who: whoFor(profile, ctx.working ?? ''),
     goal: goal ? { title: goal.title, target: goal.target_value, unit: goal.unit } : null,
+    today: dayIn(profile.timezone, ctx.now ?? new Date()),
     log: briefLog(ctx.events ?? []),
   };
+}
+
+/** A day in a timezone, YYYY-MM-DD; UTC for a zone the platform does not know. */
+function dayIn(timezone: string | null | undefined, at: Date): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: timezone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+  } catch {
+    return at.toISOString().slice(0, 10);
+  }
 }
 
 /* ─── What comes back ─────────────────────────────────────────────────────── */

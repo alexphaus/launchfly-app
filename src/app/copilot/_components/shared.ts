@@ -8,6 +8,8 @@ import type { MarkState } from '@/lib/copilot/roadmap';
 import type { ExperimentState } from '@/lib/copilot/experiment';
 import type { PayeeRole } from '@/lib/copilot/money/ledger';
 import type { OutreachStage } from '@/lib/copilot/matches';
+import type { LinkKey, LinkState } from '@/lib/copilot/business';
+import type { Commitment, LabDecision, LabMetric, Problem } from '@/lib/copilot/lab';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -25,14 +27,14 @@ export type Tab = 'now' | 'working';
 
 /**
  * The tabs of the shell at /copilot2, one question each: where am I and what
- * moves it, who is worth contacting, what am I building, where did the money
- * go, and how am I doing.
+ * moves it, who is worth contacting, what am I building, what am I testing
+ * and did it work, where did the money go, and how am I doing.
  *
  * Its own type rather than a widening of Tab, because the two shells are two
  * layouts over one app — a v1 screen that could be told to open `work` would
  * have nothing to render.
  */
-export type Tab2 = 'path' | 'swipe' | 'work' | 'money' | 'you';
+export type Tab2 = 'path' | 'swipe' | 'work' | 'lab' | 'money' | 'you';
 
 export type SheetState =
   | { kind: 'capacity' }
@@ -86,7 +88,21 @@ export type SheetState =
   /** Money in, opened: who paid, month by month, then the wins logged. */
   | { kind: 'moneyin' }
   /** The currency the whole app counts in (Settings). */
-  | { kind: 'currency' };
+  | { kind: 'currency' }
+  /** The Lab: start a bet, from a play or written from scratch. */
+  | { kind: 'bet'; play?: string; part?: LinkKey }
+  /** The Lab: log one conversation — The Mom Test's record of what was committed. */
+  | { kind: 'talk' }
+  /** The Lab: every conversation logged, with the way to log another. */
+  | { kind: 'talks' };
+
+/** What the Lab can be told. A verdict is not among them: it is the rows'. */
+export type LabInput =
+  | { action: 'open'; bet: { part: LinkKey; belief: string; play: string | null; metric: LabMetric; target: number; tries: { metric: LabMetric; planned: number } | null; days: number } }
+  | { action: 'stop'; id: string; note?: string }
+  | { action: 'talk'; talk: { on?: string; who?: string; problem: Problem; commitment: Commitment; said?: string } }
+  | { action: 'forget'; id: string }
+  | { action: 'checkpoint'; checkpoint: { decision: LabDecision; part?: LinkKey | null; note?: string; chain: Partial<Record<LinkKey, LinkState>> } };
 
 /** What the person can say about their statements. See /api/copilot/money. */
 export type MoneyAnswer =
@@ -267,4 +283,6 @@ export interface Actions {
   uploadStatement(file: File): Promise<{ ok: boolean; error?: string; status?: string }>;
   /** Confirm or discard a statement, say who a payer is, or delete every row read off the bank. */
   answerMoney(answer: MoneyAnswer): Promise<{ ok: boolean; error?: string }>;
+  /** The Lab: open a bet, call one off, log or forget a conversation, answer the checkpoint. */
+  lab(input: LabInput): Promise<{ ok: boolean; error?: string }>;
 }

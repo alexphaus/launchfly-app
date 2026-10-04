@@ -8379,3 +8379,262 @@ async function businessChainSuite() {
 }
 
 businessChainSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The Lab: one bet at a time, judged by the rows ──────────────────────── */
+//
+// The checks are the ways an experiment lies: a line set after the result is
+// in, a send from before the bet counted toward it, a day read in the wrong
+// zone, a one-dollar sale passed off as one at the price, a call-off that
+// erases a pass, the next bet's sends counted on the last one, a logged number
+// shown as a measured one, and a play the app offers that it could never count.
+
+import {
+  BELIEF_MAX as LAB_BELIEF_MAX, BET_DAYS_MAX, DEFAULT_BET_DAYS, LAB_BET, LAB_CHECKPOINT, LAB_METRICS, LAB_STOP, LAB_TALK, METRIC as LAB_METRIC,
+  PLAYS, PLAY_BY_KEY, TARGET_MAX, TRIES_FOR,
+  betPrice, betView, checkpointView, countIn, countedFrom, dayIn, decisionWords, gradeWords, labClock, labFromEvents, labHome, labLine,
+  labView, metricWords as labMetricWords, normalizeBet, normalizeCheckpoint, normalizeTalk, overPlan, passLine, playLine, playsFor, spanWords,
+  suggestBelief, talkCounts,
+  type Bet, type Checkpoint as LabCheckpoint, type DayRows, type LabEventRow, type Talk as LabTalk,
+} from '../../src/lib/copilot/lab';
+import { LINK_KEYS as LAB_PARTS, type BusinessLink as LabLink, type LinkKey as LabPart, type LinkState as LabState } from '../../src/lib/copilot/business';
+import { OBJECTIVE_MAX as LAB_OBJECTIVE_MAX } from '../../src/lib/copilot/commission';
+import { readFileSync as readLabFile } from 'node:fs';
+
+async function labSuite() {
+  const today = '2026-10-04';
+  const bet = (b: Partial<Bet> & Pick<Bet, 'metric' | 'target' | 'days' | 'start'>): Bet => ({
+    id: 'b', part: 'reach', belief: 'They answer', play: null, tries: null, price: null, priceLabel: null, openedAt: `${b.start}T01:00:00Z`, ...b,
+  });
+  const none: DayRows = { sends: [], outcomes: [], finished: [], talks: [] };
+  const talk = (on: string, commitment: LabTalk['commitment'], problem: LabTalk['problem'] = 'yes'): LabTalk => ({ id: `t-${on}-${commitment}`, on, who: null, problem, commitment, said: null, at: `${on}T09:00:00Z` });
+
+  /* 1. A bet is held to what a verdict needs, and refused with what to fix — never coerced into one nobody wrote. */
+  const ctx = { today, price: 150, priceLabel: '$150' };
+  const ok = normalizeBet({ part: 'pay', belief: '  Pest control   pays $150  ', metric: 'paid_at_price', target: '1', tries: { metric: 'sent', planned: 10 }, days: 14, play: 'guarantee' }, ctx);
+  assert.deepEqual(ok, { ok: true, value: { part: 'pay', belief: 'Pest control pays $150', play: 'guarantee', metric: 'paid_at_price', target: 1, tries: { metric: 'sent', planned: 10 }, days: 14, start: today, price: 150, priceLabel: '$150' } });
+  const base = { part: 'reach', belief: 'They answer', metric: 'replied', target: 2, days: 10 };
+  const refused = (raw: Record<string, unknown>, c = ctx) => { const r = normalizeBet(raw, c); return r.ok ? null : r.error; };
+  assert.equal(refused({ ...base, part: 'everything' }), 'Which part of the business is it about?');
+  assert.equal(refused({ ...base, belief: '   ' }), 'Say what you believe, in one sentence.');
+  assert.equal(refused({ ...base, metric: 'vibes' }), 'What should it count?');
+  for (const target of [0, TARGET_MAX + 1, 'lots', null]) assert.equal(refused({ ...base, target }), `The pass line is a count from 1 to ${TARGET_MAX}.`);
+  for (const days of [0, BET_DAYS_MAX + 1]) assert.equal(refused({ ...base, days }), `A bet runs from 1 to ${BET_DAYS_MAX} days.`);
+  assert.equal(refused({ ...base, tries: { metric: 'replied', planned: 10 } }), 'What it takes is a different count, from 1 to 500.', 'a count out of itself is no plan');
+  assert.equal(refused({ ...base, tries: { metric: 'sent', planned: 0 } }), 'What it takes is a different count, from 1 to 500.');
+  // A sale at your price with no price would pass on any payment: the one-dollar test.
+  assert.equal(refused({ ...base, metric: 'paid_at_price', target: 1 }, { today, price: null, priceLabel: null }), 'Say what it costs first: a sale at your price needs a price.');
+  const own = normalizeBet({ ...base, play: 'made-up', belief: 'x'.repeat(400) }, ctx);
+  assert.ok(own.ok && own.value.play === null && own.value.belief.length === LAB_BELIEF_MAX, 'an unknown play is not invented into one; a belief is a sentence');
+  assert.ok(own.ok && own.value.start === today, 'a bet starts the day it is written, whatever the client says');
+
+  // A conversation: today unless said, never a day not lived yet, a month back at most.
+  assert.deepEqual(normalizeTalk({ problem: 'yes', commitment: 'money', who: ' Rico ', said: '' }, today), { ok: true, value: { on: today, who: 'Rico', problem: 'yes', commitment: 'money', said: null } });
+  assert.deepEqual(normalizeTalk({ on: '2026-10-05' }, today), { ok: false, error: 'That day has not happened yet.' });
+  assert.deepEqual(normalizeTalk({ on: '2026-09-03' }, today), { ok: false, error: 'Only the last 30 days can be logged.' });
+  assert.ok(normalizeTalk({ on: '2026-09-04' }, today).ok, 'thirty days back is the edge, and inside it');
+  assert.deepEqual(normalizeTalk({ on: 'last week' }, today), { ok: false, error: 'That is not a day.' });
+  const shrug = normalizeTalk({ problem: 'maybe', commitment: 'a compliment' }, today);
+  assert.ok(shrug.ok && shrug.value.problem === 'unasked' && shrug.value.commitment === 'none', 'an answer it does not know is the honest default, not a yes');
+
+  // The checkpoint: a pivot names the part it changes; the chain is kept only as it can be read back.
+  assert.deepEqual(normalizeCheckpoint({ decision: 'maybe' }, today), { ok: false, error: 'Pivot or persevere?' });
+  assert.deepEqual(normalizeCheckpoint({ decision: 'pivot' }, today), { ok: false, error: 'Which part are you changing?' });
+  assert.deepEqual(
+    normalizeCheckpoint({ decision: 'persevere', part: 'pay', note: ' Keep going ', chain: { who: 'testing', pay: 'great', reach: 'works', other: 'works' } }, today),
+    { ok: true, value: { on: today, decision: 'persevere', part: null, note: 'Keep going', chain: { who: 'testing', reach: 'works' } } },
+  );
+
+  /* 2. What was stored, read back: reshaped rather than trusted, newest first, and the first call-off is the one. */
+  const ev = (id: number, event_type: string, created_at: string, payload: Record<string, unknown>): LabEventRow => ({ id, event_type, created_at, payload });
+  const ledger = labFromEvents([
+    ev(3, LAB_STOP, '2026-09-05T02:00:00Z', { bet: '1', note: 'Nobody answered' }),
+    ev(1, LAB_BET, '2026-09-01T01:00:00Z', { part: 'reach', belief: '  They   answer ', metric: 'replied', target: 2, days: 10, start: '2026-09-01', play: 'one-line', tries: { metric: 'sent', planned: 10 }, price: 150, priceLabel: '$150' }),
+    ev(4, LAB_STOP, '2026-09-06T02:00:00Z', { bet: '1', note: 'A second tap' }),
+    ev(2, LAB_BET, '2026-09-02T01:00:00Z', { part: 'everything', belief: 'x', metric: 'replied', target: 2, days: 10, start: '2026-09-02' }),
+    ev(5, LAB_BET, '2026-09-07T01:00:00Z', { part: 'pay', belief: 'They pay', metric: 'paid', target: 1, days: 7, start: '2026-09-07', play: 'not-a-play', price: -5 }),
+    ev(6, LAB_TALK, '2026-09-08T09:00:00Z', { on: '2026-09-03', who: 'Rico', problem: 'yes', commitment: 'time' }),
+    ev(7, LAB_TALK, '2026-09-08T10:00:00Z', { on: '2026-09-07', problem: 'maybe', commitment: 'hug' }),
+    ev(8, LAB_TALK, '2026-09-08T11:00:00Z', { on: 'yesterday' }),
+    ev(9, LAB_CHECKPOINT, '2026-09-10T11:00:00Z', { on: '2026-09-10', decision: 'pivot', part: 'pay', chain: { pay: 'stuck', who: 'bogus', nope: 'works' } }),
+    ev(10, LAB_CHECKPOINT, '2026-09-11T11:00:00Z', { on: '2026-09-11', decision: 'shrug' }),
+  ]);
+  assert.deepEqual(ledger.bets.map((b) => b.id), ['5', '1'], 'newest first, and a bet that does not hold together is dropped');
+  assert.equal(ledger.bets[1].belief, 'They answer');
+  assert.equal(ledger.bets[1].play, 'one-line');
+  assert.deepEqual(ledger.bets[1].tries, { metric: 'sent', planned: 10 });
+  assert.deepEqual([ledger.bets[0].play, ledger.bets[0].price, ledger.bets[0].priceLabel], [null, null, null], 'no invented play, and no price below nothing');
+  assert.deepEqual(ledger.stopped.get('1'), { at: '2026-09-05T02:00:00Z', note: 'Nobody answered' }, 'a second tap on a stopped bet changes nothing');
+  assert.deepEqual(ledger.talks.map((t) => [t.id, t.problem, t.commitment]), [['7', 'unasked', 'none'], ['6', 'yes', 'time']], 'by the day it happened; a talk with no day is dropped');
+  assert.deepEqual(ledger.checkpoints.map((c) => [c.id, c.decision, c.part, c.chain]), [['9', 'pivot', 'pay', { pay: 'stuck' }]]);
+
+  /* 3. Counting: both ends of the window, a reply once per business, a sale only at the price. */
+  const rows: DayRows = {
+    sends: ['2026-09-01', '2026-09-02', '2026-09-02', '2026-09-05'],
+    outcomes: [
+      { kind: 'reply', day: '2026-09-02', opportunity: 'o1', amount: null },
+      { kind: 'reply', day: '2026-09-03', opportunity: 'o1', amount: null },
+      { kind: 'reply', day: '2026-09-03', opportunity: null, amount: null },
+      { kind: 'reply', day: '2026-09-04', opportunity: null, amount: null },
+      { kind: 'meeting', day: '2026-09-04', opportunity: 'o1', amount: null },
+      { kind: 'won', day: '2026-09-05', opportunity: 'o1', amount: 150 },
+      { kind: 'won', day: '2026-09-05', opportunity: 'o2', amount: 1 },
+      { kind: 'won', day: '2026-09-06', opportunity: 'o3', amount: null },
+      { kind: 'won', day: '2026-09-06', opportunity: 'o4', amount: 300 },
+    ],
+    finished: ['2026-09-03'],
+    talks: [talk('2026-09-02', 'none'), talk('2026-09-03', 'intro')],
+  };
+  const all = (m: (typeof LAB_METRICS)[number], price: number | null = 150) => countIn(m, '2026-09-01', '2026-09-30', rows, price);
+  assert.equal(countIn('sent', '2026-09-02', '2026-09-05', rows, null), 3, 'both ends of the window count');
+  assert.equal(all('replied'), 3, 'one business answering twice is one reply; a reply with no business is one each');
+  assert.deepEqual([all('meetings'), all('paid'), all('talks'), all('committed'), all('handed')], [1, 4, 2, 1, 1]);
+  assert.equal(all('paid_at_price'), 2, 'a dollar test and an amount nobody said are not sales at the price');
+  assert.equal(all('paid_at_price', null), 0, 'with no price there is no sale at it');
+  assert.equal(countIn('sent', '2026-09-05', '2026-09-01', rows, null), 0);
+
+  /* 4. A day is the person's: an evening in Manila is the next morning's date in Manila, not in UTC. */
+  assert.equal(dayIn('2026-09-28T17:00:00Z', 'Asia/Manila'), '2026-09-29');
+  assert.equal(dayIn('2026-09-28T17:00:00Z', 'Not/AZone'), '2026-09-28', 'an unknown zone falls back to UTC rather than throwing');
+  assert.equal(dayIn(null, 'UTC'), null);
+  const zoned = (timezone: string) => labHome({
+    events: [ev(1, LAB_BET, '2026-09-28T17:30:00Z', { part: 'reach', belief: 'They answer', metric: 'sent', target: 5, days: 7, start: '2026-09-29' })],
+    unreadable: null, timezone, today: '2026-09-30',
+    // Before the start in Manila, two inside it, one at Manila's midnight — and one a year old, never read.
+    sends: ['2025-01-01T00:00:00Z', '2026-09-28T15:00:00Z', '2026-09-28T17:00:00Z', '2026-09-29T15:59:00Z', '2026-09-29T16:00:00Z'],
+    outcomes: [], finished: [],
+  }).bets[0].result;
+  assert.equal(zoned('Asia/Manila'), 3, 'only what happened from the start counts, on the person’s calendar');
+  assert.equal(zoned('UTC'), 2);
+
+  /* 5. Where a bet stands. Early is a pass; a pass outlives a call-off; a call-off counts only what came before. */
+  const b1 = bet({ metric: 'replied', target: 2, days: 10, start: '2026-09-01', tries: { metric: 'sent', planned: 10 } });
+  const replies: DayRows = {
+    ...none,
+    sends: ['2026-08-31', '2026-09-01', '2026-09-02', '2026-09-08', '2026-09-09', '2026-09-09'],
+    outcomes: [
+      { kind: 'reply', day: '2026-08-31', opportunity: 'o0', amount: null },
+      { kind: 'reply', day: '2026-09-03', opportunity: 'o1', amount: null },
+      { kind: 'reply', day: '2026-09-04', opportunity: 'o1', amount: null },
+      { kind: 'reply', day: '2026-09-06', opportunity: 'o2', amount: null },
+      { kind: 'reply', day: '2026-09-09', opportunity: 'o3', amount: null },
+    ],
+  };
+  const at = (t: string, stop: string | null = null) => betView(b1, stop, replies, t);
+  assert.deepEqual([at('2026-09-05').state, at('2026-09-05').result, at('2026-09-05').day, at('2026-09-05').last], ['running', 1, 5, '2026-09-10'], 'a reply from before the bet is not the bet’s');
+  const early = at('2026-09-12');
+  assert.deepEqual([early.state, early.ended, early.result, early.tries], ['passed', '2026-09-06', 2, 2], 'it passed the day it crossed, and its counts stop there');
+  assert.deepEqual([at('2026-09-08', '2026-09-05').state, at('2026-09-08', '2026-09-05').ended, at('2026-09-08', '2026-09-05').result], ['stopped', '2026-09-05', 1]);
+  assert.equal(at('2026-09-08', '2026-09-07').state, 'passed', 'calling a bet off after it passed does not unpass it');
+  const short = betView(b1, null, { ...replies, outcomes: replies.outcomes.slice(0, 3) }, '2026-09-11');
+  assert.deepEqual([short.state, short.ended, short.result, short.day], ['failed', '2026-09-10', 1, 10]);
+  assert.equal(overPlan(short), null, 'within the plan, nothing to say');
+  const over = betView(bet({ metric: 'replied', target: 1, days: 14, start: '2026-09-01', tries: { metric: 'sent', planned: 2 } }), null,
+    { ...none, sends: ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-20'], outcomes: [{ kind: 'reply', day: '2026-09-03', opportunity: 'o1', amount: null }] }, '2026-09-20');
+  assert.equal(overPlan(over), '3 messages sent against the 2 planned, so a pass here says less than it looks.', 'what it took is said beside a pass, through the day it passed');
+
+  /* 6. The clock: runway over the pace actually kept, not over how long each bet ran. */
+  const started = (...days: string[]) => days.map((start, i) => betView(bet({ id: `s${i}`, start, metric: 'sent', target: 1, days: 7 }), null, none, today));
+  assert.deepEqual(labClock(3.4, []), { runwayMonths: 3.4, betDays: DEFAULT_BET_DAYS, measured: false, betsLeft: 7 });
+  assert.deepEqual(labClock(3.4, started('2026-09-29')), { runwayMonths: 3.4, betDays: DEFAULT_BET_DAYS, measured: false, betsLeft: 7 }, 'one bet has no pace yet');
+  // Ten days, fourteen, then four after a call-off: the median is ten, not the four.
+  assert.deepEqual(labClock(3.4, started('2026-09-29', '2026-09-25', '2026-09-11', '2026-09-01')), { runwayMonths: 3.4, betDays: 10, measured: true, betsLeft: 10 });
+  assert.equal(labClock(1, started('2026-09-01', '2026-09-11', '2026-09-15')).betDays, 7, 'two gaps: the middle of them');
+  assert.equal(labClock(1, started('2026-09-01', '2026-09-01')).betDays, 1, 'two on one day is a day, not nothing');
+  assert.equal(labClock(null, started('2026-09-01', '2026-09-11')).betsLeft, null, 'no runway, no count — never a guess');
+
+  /* 7. Pivot or persevere: due once a bet has ended and two weeks have passed, and read back on what it was about. */
+  const links = (s: Partial<Record<LabPart, LabState>>) => LAB_PARTS.map((key) => ({ key, state: s[key] ?? 'untested' }) as LabLink);
+  const now = links({ who: 'testing', reach: 'works', close: 'testing', pay: 'stuck', deliver: 'missing' });
+  const passed = betView(bet({ id: 'p', start: '2026-09-11', metric: 'committed', target: 1, days: 14 }), null, { ...none, talks: [talk('2026-09-18', 'money')] }, today);
+  const failed = betView(bet({ id: 'f', start: '2026-09-27', metric: 'paid', target: 3, days: 2 }), null, none, today);
+  const running = betView(bet({ id: 'r', start: '2026-09-29', metric: 'sent', target: 10, days: 14 }), null, none, today);
+  assert.deepEqual([passed.state, passed.ended, failed.state, failed.ended, running.state], ['passed', '2026-09-18', 'failed', '2026-09-28', 'running']);
+  const cp = (on: string, decision: LabCheckpoint['decision'], part: LabPart | null, chain: LabCheckpoint['chain']): LabCheckpoint => ({ id: on, on, decision, part, note: null, chain, at: `${on}T11:00:00Z` });
+  let v = checkpointView({ checkpoints: [], bets: [running], links: now, today });
+  assert.deepEqual([v.due, v.grade, v.nextOn, v.moved], [false, null, null, []], 'nothing ended, nothing to decide');
+  v = checkpointView({ checkpoints: [], bets: [running, failed, passed], links: now, today });
+  assert.deepEqual([v.due, v.ended.map((b) => b.bet.id)], [true, ['f', 'p']], 'the first comes as soon as a bet ends');
+  const last = cp('2026-09-24', 'persevere', null, { who: 'testing', reach: 'stuck', close: 'testing', pay: 'untested', deliver: 'missing' });
+  v = checkpointView({ checkpoints: [last], bets: [failed, passed], links: now, today });
+  assert.deepEqual([v.due, v.ended.map((b) => b.bet.id), v.nextOn], [false, ['f'], '2026-10-08'], 'only what ended after the last answer is up for the next, two weeks on');
+  assert.equal(checkpointView({ checkpoints: [last], bets: [failed], links: now, today: '2026-10-08' }).due, true);
+  assert.equal(checkpointView({ checkpoints: [last], bets: [passed], links: now, today: '2026-10-08' }).due, false, 'two weeks with nothing ended is not a decision');
+  assert.equal(checkpointView({ checkpoints: [cp('2026-09-28', 'persevere', null, {})], bets: [failed], links: now, today: '2026-10-20' }).due, false, 'a bet that ended on the day of the answer was in front of it');
+  assert.equal(v.grade, 'better', 'persevere is read back on the whole chain: 6 then, 8 now');
+  assert.deepEqual(v.moved, [{ key: 'reach', from: 'stuck', to: 'works' }, { key: 'pay', from: 'untested', to: 'stuck' }]);
+  const pivot = (chain: LabCheckpoint['chain']) => checkpointView({ checkpoints: [cp('2026-09-20', 'pivot', 'pay', chain)], bets: [], links: now, today }).grade;
+  assert.equal(pivot({ pay: 'testing', reach: 'stuck' }), 'worse', 'a pivot is read back on the part it changed, and only that part');
+  assert.equal(pivot({ pay: 'stuck' }), 'same');
+  assert.equal(pivot({ reach: 'stuck' }), null, 'no reading of the part kept, nothing to read back against');
+  assert.equal(decisionWords({ decision: 'pivot', part: 'pay' }), 'Pivot what they pay');
+  assert.equal(decisionWords({ decision: 'persevere', part: null }), 'Persevere');
+  assert.equal(gradeWords({ decision: 'pivot', part: 'pay' }, 'worse'), 'What they pay has slipped since.');
+  assert.equal(gradeWords({ decision: 'persevere', part: null }, 'better'), 'The chain has moved forward since.');
+  assert.equal(gradeWords({ decision: 'persevere', part: null }, null), null);
+
+  /* 8. Saying it: the line before the bet, where its count comes from, and the header. */
+  const g = bet({ metric: 'paid_at_price', target: 1, days: 14, start: '2026-09-29', tries: { metric: 'sent', planned: 10 }, price: 150, priceLabel: '$150' });
+  assert.equal(passLine(g, '2026-10-12'), '1 sale at your $150 by 12 Oct, from 10 messages sent');
+  assert.equal(passLine({ metric: 'replied', target: 2, tries: null, priceLabel: null }, '2026-10-13'), '2 replies by 13 Oct');
+  assert.equal(labMetricWords('paid_at_price', 2, null), 'sales at your price', 'no price, no figure invented for one');
+  // A play has no start, so no date: dated from today, a card named a day it could not start on.
+  assert.equal(playLine(PLAY_BY_KEY.get('paid-48h')!, '$150'), '3 payments within 2 days');
+  assert.equal(playLine(PLAY_BY_KEY.get('guarantee')!, '$150'), '1 sale at your $150 within 2 weeks, from 10 messages sent');
+  assert.deepEqual([1, 7, 10, 14, 21, 30].map(spanWords), ['1 day', '1 week', '10 days', '2 weeks', '3 weeks', '30 days']);
+  const day6 = betView(g, null, { ...none, sends: ['2026-09-29', '2026-09-30'] }, today);
+  assert.equal(labLine(day6, false), 'Day 6 of 14 · 0 of 1 sale at your $150');
+  assert.equal(labLine(day6, true), 'Checkpoint · pivot or persevere');
+  assert.equal(labLine(null, false), 'No bet running');
+  // A logged number never reads as a measured one.
+  for (const m of LAB_METRICS) {
+    const said = countedFrom(m, '2026-09-29', '$150');
+    assert.equal(/conversation log/.test(said), LAB_METRIC[m].from === 'log', `${m} says where it comes from`);
+    assert.ok(said.includes('29 Sep'), `${m} says from when`);
+  }
+  assert.match(countedFrom('paid_at_price', '2026-09-29', '$150'), /\$150 or more/);
+  assert.deepEqual(talkCounts([talk('2026-10-04', 'money'), talk('2026-09-05', 'none', 'no'), talk('2026-09-04', 'time')], today), { n: 2, committed: 1, have: 1 }, 'the last thirty days, today included');
+
+  /* 9. A first draft of the belief: one buyer, one thing sold, and a number only when the person said one. */
+  const offer = { sells: 'Booking automation, custom AI workflows, no website', for_who: 'Staycation & resorts, Pest control, plumbing', problem: 'Save time', price_band: '$150' };
+  assert.equal(suggestBelief('pay', offer, '$150'), 'Staycation & resorts pay $150 for booking automation');
+  assert.equal(suggestBelief('who', offer, '$150'), 'Staycation & resorts have the problem I fix: save time');
+  assert.equal(suggestBelief('pay', {}, null), 'They pay my price for what I sell');
+  for (const k of LAB_PARTS) {
+    const s = suggestBelief(k, { sells: 'x'.repeat(300), for_who: 'y'.repeat(300) }, null);
+    assert.ok(s.length <= LAB_BELIEF_MAX, `${k}: a draft fits the field it goes in`);
+    assert.ok(!/\d/.test(suggestBelief(k, { sells: 'Websites', for_who: 'Dentists' }, null)), `${k}: no number the person did not give`);
+  }
+  assert.deepEqual(betPrice('$150', '$'), { price: 150, priceLabel: '$150' });
+  assert.deepEqual(betPrice('₱5k a month', '₱'), { price: 5000, priceLabel: '₱5,000' });
+  assert.deepEqual(betPrice(null, '$'), { price: null, priceLabel: null });
+
+  /* 10. The plays: each one something the app can count, for a part of the business, that its own rules accept. */
+  assert.equal(new Set(PLAYS.map((p) => p.key)).size, PLAYS.length, 'one key, one play');
+  for (const k of LAB_PARTS) assert.ok(playsFor(k).length > 0, `${k} has a play`);
+  for (const p of PLAYS) {
+    assert.equal(PLAY_BY_KEY.get(p.key), p);
+    assert.ok(LAB_METRICS.includes(p.metric), `${p.key} counts something the app counts`);
+    if (p.tries) assert.ok(TRIES_FOR[p.metric].includes(p.tries.metric), `${p.key}: what it takes is the step before what it counts`);
+    if (p.prep) assert.ok(p.prep.ask.length <= LAB_OBJECTIVE_MAX, `${p.key}: its prep fits a project's brief`);
+    const asBet = normalizeBet({ part: p.part, belief: 'A belief', metric: p.metric, target: p.target, tries: p.tries ?? null, days: p.days, play: p.key }, ctx);
+    assert.ok(asBet.ok && asBet.value.play === p.key, `${p.key} passes the rules every bet is held to`);
+    assert.ok(p.book.trim() && p.how.trim() && p.label.trim(), `${p.key} says where it is from and what to do`);
+  }
+
+  /* 11. The tab, derived; and a read that failed is said, never drawn as an empty Lab. */
+  const home = labHome({ events: [], unreadable: 'relation "copilot_events" timed out', timezone: 'UTC', today, sends: [], outcomes: [], finished: [] });
+  const shown = labView(home, { runwayMonths: 3.4, links: now, today });
+  assert.equal(shown.unreadable, 'relation "copilot_events" timed out');
+  const lab = labView({ bets: [running, failed, passed], talks: [], checkpoints: [], unreadable: null }, { runwayMonths: null, links: now, today });
+  assert.deepEqual([lab.current?.bet.id, lab.learned.map((b) => b.bet.id), lab.line, lab.clock.betsLeft], ['r', ['f', 'p'], 'Checkpoint · pivot or persevere', null]);
+  assert.deepEqual(labView(undefined, { runwayMonths: null, links: now, today }).line, 'No bet running', 'a server without the Lab is an empty one');
+
+  /* 12. Nobody marks a bet passed (invariant 10): the route has no way to post a verdict. */
+  const route = readLabFile(new URL('../../src/app/api/copilot/lab/route.ts', import.meta.url), 'utf8');
+  const actions = [...route.matchAll(/case '([a-z_]+)'/g)].map((m) => m[1]).sort();
+  assert.deepEqual(actions, ['checkpoint', 'forget', 'open', 'stop', 'talk'], 'a verdict is the rows’, not a request’s');
+
+  console.log('copilot-core: lab checks passed');
+}
+
+labSuite().catch((e) => { console.error(e); process.exit(1); });

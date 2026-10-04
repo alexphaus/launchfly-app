@@ -291,8 +291,8 @@ somewhere sensible.
 
 ## Four tabs (`/copilot2`)
 
-A second layout over the same app: **Path**, **Swipe**, **Work**, **Money**,
-**You**. It began as Today, Matches, Work, You, written from its owner's verdict on the
+A second layout over the same app: **Path**, **Swipe**, **Work**, **Lab**,
+**Money**, **You**. It began as Today, Matches, Work, You, written from its owner's verdict on the
 two-tab version ("too many things, nothing that stands out, the purpose lost from
 the original mock-ups; Working? is a log"). Then every redraft of Work met the
 same verdict — "static sections that compete for attention and nothing changes",
@@ -305,7 +305,9 @@ Path is what to do and what moved, Work is the business being built. Money
 joined them in October 2026 as the one screen of a budgeting app its owner used
 (see **The money book**); the layout keeps its name. Swipe replaced Matches after
 one release side by side: its owner lived with both and kept the deck (see
-**Swipe**).
+**Swipe**). The Lab joined in October 2026, when its owner asked whether this
+could be the toolkit for someone who has just read The Lean Startup (see **The
+Lab is one bet at a time**).
 
 It is a layout, not a fork. `useCopilot` (`_components/useCopilot.ts`) holds the
 state, the sheet stack and every action, and both `CopilotApp` and `CopilotApp2`
@@ -319,6 +321,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
 | Work | is the business proven, and what moves it | what you sell and the verdict — proven, or the bar and the count against it — with the experiments run on it · the chain: who buys → how they hear → how they say yes → what they pay → how you deliver, each part a bet with its state, its rule and who runs it, the weak link open with what would move it · in the works: one box to hand anything over or copy it for Claude, the weak link's suggestions, the projects with a question answered or a breakage retried on the card · built: what the business has, by whom, gaps first · the agents as one line | `business.ts`, `machine.ts` |
+| Lab | did the bet work | one bet at a time: the belief in your words, the pass line written before it starts, the count against it from the rows, the play it runs and the work an agent can do to get it ready · every two weeks once a bet has ended, pivot or persevere, with the last answer read back · plays from business books for one part of the business, the weak link's first · the conversations you log (The Mom Test) · what you learned, passed or not · runway in bets | `lab.ts`, `business.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move | `money/book.ts` |
 | You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
@@ -807,6 +810,73 @@ So there is one spine, and everything that used to be a section hangs off it:
 The Path is still where the day's order is decided — the plan, the call, the
 experiment to start and grade. Work is what the business is and whether it is
 proven; the experiments fold on it is the ledger, not a second copy of the card.
+
+**The Lab is one bet at a time** (`lab.ts`, `v2/LabTab.tsx`, `v2/LabSheets.tsx`).
+Its owner asked whether the app could be the toolkit for someone who has just
+read The Lean Startup. It could not: the book starts from assumptions bet on
+against a line set in advance, and the app started from an offer already being
+sold, with one experiment the planner wrote and a tap graded. Somebody who closes
+the book does not know what to do on Monday — which play, on what, and did it
+work. The Lab answers those three and nothing else. What it is not was in the
+brief as well: no book summaries (a chat explains a book for free), no canvases
+to fill in (a page of claims with nothing to test them against), no daily quotas
+(a quota counts effort; this counts results).
+
+- **A bet is written before it starts and judged by the rows after.** A part of
+  the business, a belief in a sentence, something countable, a line to reach and
+  a last day, said back in one sentence before the Start button — the pass line,
+  "1 sale at your $150 by 12 Oct, from 10 messages sent". It starts on the
+  person's own today, and nothing before it counts. There is no "mark it passed":
+  the route has no action for a verdict, and a test fails if one appears
+  (invariant 10's reasoning — a bet you could pass by tapping is graded by the
+  one person most hoping it passes). It passes the day its count reaches the
+  line, and its counts close that day, so the next bet's sends are never counted
+  on the last one. It fails when its last day goes by short of the line. A
+  call-off is the person's: it keeps what it counted until then and a line on
+  why, and it does not undo a pass.
+- **It counts what the funnel counts** — the sends, replies once per business,
+  meetings, wins and projects finished that `loadHome` already reads — and the
+  conversations the person logs. A sale at your price is held to the price the
+  offer named when the bet began, so changing the price later cannot rewrite a
+  verdict, and such a bet cannot start without one: the one-dollar test is what
+  the chain already refuses to call a sale. Days are the person's — a Manila
+  evening is the next morning's date in Manila. Under every count it says where
+  the count came from, and a logged number never reads as a measured one.
+  "From 10 messages sent" is the plan, said beside the result; it never decides
+  the verdict, and going past it is said on the bet ("a pass here says less than
+  it looks").
+- **One at a time**, because two bets running at once share every send and
+  neither result would mean anything. The server refuses a second, and refuses
+  to open any while the Lab cannot be read.
+- **Plays** (`PLAYS`) come from business books, and each is something to do with
+  a count the app can read: The Mom Test's ten problem conversations, Crossing
+  the Chasm's one niche, Traction's untried channel, $100M Leads' warm before
+  cold, The Lean Startup's change one thing, Never Split the Difference's ask
+  for a no, $100M Offers' guarantee, Million Dollar Weekend's paid within 48
+  hours, Built to Sell's one package, The E-Myth's hand one step over. A book
+  that is a way of thinking is not here: an entry with no count behind it would
+  be advice dressed as a test. They are shown for one part at a time — the chain
+  as the selector, the weak link first — and a play's prep (interview questions,
+  three first lines) is the same move Work offers, through the same code
+  (`v2/MoveKit.tsx`): a draft for the agent to approve, or a chat with the whole
+  record.
+- **Conversations** are The Mom Test's log: who, whether they have the problem,
+  and what they committed — another call, an intro, money, or nothing, because a
+  compliment is not a result. It is the one count the app cannot take itself,
+  logged up to thirty days back.
+- **The clock** is the book's line that runway is the number of tries left: the
+  runway the bank gives, divided by the pace kept — the median gap between bet
+  starts, not how long each ran, because a call-off on day three would make bets
+  look short. Two weeks until there have been two.
+- **The checkpoint** asks pivot or persevere every two weeks, once a bet has
+  ended since the last answer. The answer is kept with the chain as it stood, and
+  the next checkpoint reads it back — a pivot against the part it changed,
+  persevere against the whole chain: "What they pay has slipped since".
+
+Stored without a migration, as `copilot_events` rows (`lab_bet`,
+`lab_bet_stopped`, `lab_talk`, `lab_checkpoint`), the way deep work and the
+plan's ticks are. A read that fails is said on the tab and never drawn as an
+empty Lab (invariant 13).
 
 **You asks three questions of the week** — what created value, what was wasted,
 what has to change — and answers each from rows (`weekReview`). Money is never
@@ -2594,6 +2664,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET | `/copilot2/log` | the Log money shortcut's own page: the keypad, three reads, kept by the service worker for offline |
 | POST | `/copilot2/share` | the manifest's share target: multipart `file`. Normally taken by the service worker; this route is the fallback, importing through the upload route and redirecting to the Money tab |
 | GET/POST | `/api/copilot/money` | `GET` the statements, polled while one is read · `POST { action: 'confirm' \| 'discard', id }` · `{ action: 'currency', id, currency }` (three letters, for a file that named none) · `{ action: 'name', key, role: client \| employer \| self \| other \| null, opportunity_id? }` · `{ action: 'forget', confirm: 'DELETE' }` |
+| POST | `/api/copilot/lab` | the Lab: `{ action: 'open', bet: { part, belief, play?, metric, target, tries?, days } }` — refused while a bet runs, or while the Lab cannot be read · `{ action: 'stop', id, note? }` · `{ action: 'talk', talk: { on?, who?, problem, commitment, said? } }` · `{ action: 'forget', id }` · `{ action: 'checkpoint', checkpoint: { decision, part?, note?, chain } }`. No action posts a verdict. Each answers with the home (`copilot_events`) |
 | POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |
 | GET/POST | `/api/copilot/roadmap` | the Path's drawn plan: `POST { action: 'draw', reason? }` writes a `copilot_agent_runs` row of kind `roadmap`, draws in `after()` and returns 202 (or the draw in flight; 12 a day) · `POST { action: 'mark', item, state: done \| dropped \| open }` ticks a step or milestone of the current plan (`copilot_events`, `roadmap_marked`) · `GET` is the latest draw, polled while it runs |
 

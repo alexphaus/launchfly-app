@@ -306,6 +306,22 @@ deliberately does not do: build the asset in the app (the worker or a chat does 
 see **What is deliberately not built**), or let an agent act past `read`
 unapproved. See COPILOT.md → **Work is the business as a chain of bets**.
 
+**Then** — the Lab, one bet at a time. Its owner asked whether this could be the
+toolkit for someone who has just read The Lean Startup, then which other books
+fit that founder and what the ideal tab for them would be. The honest answer to
+the first was not yet: the book starts from assumptions bet on against a line
+set in advance, and the app started from an offer already being sold. So a sixth
+tab, which answers what the founder does not know on Monday — which play, on
+which part, and did it work — and nothing else: a bet with a pass line written
+before it starts and read off the rows after, plays from ten books each with a
+count the app can take, The Mom Test's conversation log, runway counted in bets,
+and pivot or persevere every two weeks with the last answer read back. What the
+brief ruled out stays out: book summaries, canvases, daily quotas. It passes the
+survival test for the usual reason — a chat can explain The Mom Test; it cannot
+read two weeks of your sends and payments and say a guarantee moved nothing at
+your price. Nobody marks a bet passed, for the reason a worker cannot mark its
+own homework. See COPILOT.md → **The Lab is one bet at a time**.
+
 ---
 
 ## Where it actually stands

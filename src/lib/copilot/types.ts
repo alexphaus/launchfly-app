@@ -132,8 +132,6 @@ export interface BookAnchorRow {
   on: string;
   /** The currency moves are typed in by default, when it is not the book's: tap ₱ on the add sheet. Converted on each move's day. */
   entry?: string;
-  /** How many months the balance has to last, for safe to spend (money/book.ts SPREAD_MONTHS). Absent: one. */
-  months?: number;
 }
 
 export const OPPORTUNITY_TYPES: OpportunityType[] = ['client', 'people', 'service', 'community', 'signal'];

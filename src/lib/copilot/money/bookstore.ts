@@ -21,7 +21,7 @@ import { getProfile, logEvent } from '../base';
 import { copilotDb, describeDbError, todayIso } from '../db';
 import type { BookAnchorRow, Finance, Profile } from '../types';
 import {
-  anchorOf, bookCategories, bookView, checkEntry, convertEntry, parseRepeat, repeatValue, repeatsDue, safeToSpend, seriesDay, shiftMonth, spreadMonths,
+  anchorOf, bookCategories, bookView, checkEntry, convertEntry, parseRepeat, repeatValue, repeatsDue, safeToSpend, seriesDay, shiftMonth,
   type BookAnchor, type BookRow, type BookView, type SafeToSpend,
 } from './book';
 import { currencyForZone, dayLabel } from './ledger';
@@ -213,7 +213,7 @@ export async function loadBook(profileId: string, opts: { month?: string | null;
     ready: false, notReady: why, started: !!anchor, suggest: { currency: anchor?.currency ?? 'USD', balance: null }, today, main: anchor?.currency ?? 'USD',
     currency: anchor?.currency ?? 'USD', view: anchor?.currency ?? 'USD', balance: null, month, monthLabel: month, first: month, last: month,
     totals: { spent: 0, received: 0 }, days: [], calendar: [], pending: [], categories: { out: [], in: [] }, missing: null, unlabelled: 0,
-    entry: null, enteredReady: false, safe: null, safeShown: null, safeChoices: [], pace: null,
+    entry: null, enteredReady: false, safe: null, safeShown: null,
   });
 
   // Everything the screen needs, read at once. These ran one after another —
@@ -541,8 +541,6 @@ export async function setBookBalance(profileId: string, body: Record<string, unk
   const book: BookAnchorRow = {
     currency, balance: Math.round(raw * 100) / 100, at: new Date().toISOString(), on: todayIso(profile.timezone),
     ...(was?.entry ? { entry: was.entry } : {}),
-    // How long it has to last is about the person, not the number: saying the balance again keeps it.
-    ...(was?.months ? { months: was.months } : {}),
   };
   const finance: Finance = { ...(profile.finance ?? {}), book };
   const { error } = await copilotDb().from('copilot_profiles').update({ finance }).eq('id', profileId);
@@ -570,28 +568,6 @@ export async function setEntryCurrency(profileId: string, raw: unknown): Promise
   if (error) throw new Error(describeDbError(error, 'Could not save that.'));
   if (!data?.length) throw new MoneyRefusal('Your balance was changed just now. Try that again.');
   return code === anchor.currency ? null : { currency: code, rate: await entryRate(code, anchor.currency, today) };
-}
-
-/**
- * How many months the balance has to last, for safe to spend. Kept on the
- * account beside the balance, so the shortcut's page and every phone read the
- * same figure. Written under the same guard as the entry currency, for the
- * same reason: this rewrites the whole finance row.
- */
-export async function setSpread(profileId: string, raw: unknown): Promise<number> {
-  const { profile, anchor } = await bookOf(profileId);
-  const asked = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
-  const months = spreadMonths(asked);
-  if (months !== asked) throw new MoneyRefusal('How many months? A whole number from 1 to 12.');
-  const book: BookAnchorRow = { ...(profile.finance?.book as BookAnchorRow) };
-  if (months === 1) delete book.months;
-  else book.months = months;
-  const { data, error } = await copilotDb().from('copilot_profiles').update({ finance: { ...(profile.finance ?? {}), book } })
-    .eq('id', profileId).eq('finance->book->>at', anchor.at).select('id');
-  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
-  if (!data?.length) throw new MoneyRefusal('Your balance was changed just now. Try that again.');
-  await logEvent(profileId, 'book_spread', { months });
-  return months;
 }
 
 /* ─── A copy to keep ──────────────────────────────────────────────────────── */

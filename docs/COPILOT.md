@@ -1212,34 +1212,18 @@ phone did before the keypad could be touched. So:
   worse than a plain one.
 
 **Safe to spend today** (`safeToSpend`, `safeAfter`). The line under the
-greeting on every tab with a header, and the label over the categories wherever
-a move is logged: what is in the book, less what is already promised in the
-stretch it has to last — pending moves out, and each repeat carried through it
-(a weekly one is four rows a month, not the one written ahead; a monthly rent
-over three months is three rents) — spread evenly, less what today has spent.
-
-The stretch is a month unless the person says longer (`SPREAD_MONTHS`: 1, 2, 3
-or 6, kept as `finance.book.months`). It was only ever a month, and its owner,
-with no job and nothing coming in, read about €30 a day where €330–€400 a month
-was the pace they could keep: a thirty-day spread assumes money arrives next
-month, the one assumption a figure called safe cannot make for someone with
-none in sight. When money is likely is the person's to say, so tapping the line
-opens **Make it last**: each stretch beside what it leaves a day and a month and
-the rents it takes off first, then their last thirty days as they went
-(`spendPace`: day-to-day spending, leaving out what repeats, and what came in),
-then where today's figure comes from. No model picks the stretch or forecasts
-income: one projecting money for someone with none is wrong in exactly the
-hopeful direction that empties an account (invariant 2). Saying the balance
-again keeps the stretch.
+balance, and the label over the categories wherever a move is logged: what is
+in the book, less what is already promised in the next thirty days — pending
+moves out, and each repeat carried through the thirty (a weekly one is four
+rows, not the one written ahead) — spread evenly, less what today has spent.
 Today's spending is put back before the spread, so the share holds through the
 day and only what is left shrinks. Money that has not arrived counts for
 nothing: a pending "came in" is the cheapest thing to be wrong about, and a
 figure called safe errs low. No forecast of income or of habits; from rows the
 person made and nothing else (invariant 2). While an amount is typed the label
 says what would be left after it — "₱1,721 left today after this", warm when
-over — so "can I?" is answered before "Log it". The shell loads the book when
-the app opens rather than when Money does, so the line is there on Path; the
-phone's copy draws it at once. The Log money page gets it with the balance
+over — so "can I?" is answered before "Log it". Tapped, the line says where the
+figure comes from. The Log money page gets it with the balance
 (`balanceAndSafe`: the balance query and one read of today's and the pending
 rows), and every reply to a move carries the new one.
 

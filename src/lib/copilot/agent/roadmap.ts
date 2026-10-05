@@ -31,7 +31,7 @@ import {
   type DueReason, type RoadmapInput, type RoadmapRun,
 } from '../roadmap';
 import {
-  finishRoadmapRun, getProfile, insertExperimentMark, loadCommissions, loadConversations, loadDecisions, loadMoves, loadOwnNotes, loadRecentRows, loadRoadmapMarks, loadRoadmapRuns, loadWorking, startRoadmapRun,
+  finishRoadmapRun, getProfile, insertExperimentMark, loadCommissions, settleBetExperiments, loadConversations, loadDecisions, loadMoves, loadOwnNotes, loadRecentRows, loadRoadmapMarks, loadRoadmapRuns, loadWorking, startRoadmapRun,
 } from '../store';
 import type { Goal, Profile } from '../types';
 import { workingBrief } from '../working';
@@ -130,6 +130,13 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
     if (!cfg) throw new Error('No model is set up on this server, so the plan cannot be drawn.');
     const profile = await getProfile(profileId);
     if (!profile) throw new Error('profile not found');
+    // An experiment made into a bet takes the bet's verdict before the plan is
+    // drawn from the ledger, so a bet that passed is not drawn as still being
+    // tried. Without it the experiment stays open and the Path still shows the
+    // bet's verdict; the plan is drawn either way.
+    await settleBetExperiments(profileId, profile.timezone).catch((e: unknown) => {
+      console.error('[copilot/roadmap] bet verdicts not settled before the draw:', e instanceof Error ? e.message : e);
+    });
 
     const [goals, working, notes, metrics, recent, commissions, runs, marks, jobs, queue, open, talk, decisions, money] = await Promise.all([
       activeGoals(profileId),

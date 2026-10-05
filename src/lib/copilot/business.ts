@@ -38,19 +38,31 @@
 // Then that one, because more of everything above it only feeds a part already
 // shown not to convert.
 //
+// Not every business reaches out. The app counts only what it sends — so for a
+// business whose buyers find it (online, by word of mouth, on a marketplace, in
+// person; FOUND_BY), the parts it cannot count are judged on what the person
+// can: their bets (lab.ts), which are rows too, the conversations they log,
+// the sales they log, and the assets they have (assets.ts). Outreach keeps the
+// funnel's rules exactly; the other four are read through those instead of
+// being called missing for want of sends. Nobody has said and nothing was
+// sent is a question for the person — "how do buyers find you?" — never a
+// default to outreach.
+//
 // It passes DIRECTION.md's survival test for the usual reason. An agent with
 // memory can write a business model canvas from a chat; "6 meetings, 2 paid,
 // none at your $150" needs the ledger.
 //
 // Pure: no DB import.
 
+import type { AssetKind } from './assets';
 import { blockedOn } from './commission';
 import { MIN_SAMPLE } from './diagnose';
 import type { Agent, AgentKey } from './machine';
+import { FOUND_BY_LABEL, foundByOf } from './offer';
 import { REPEAT_WINS } from './pathway';
 import { RATE_SAMPLE, WORKING_REPLIES, priceOf } from './plan';
 import { moneyLabel } from './review';
-import type { CommissionThread, Offer } from './types';
+import type { CommissionThread, FoundBy, Offer } from './types';
 import type { WorkingSection } from './working';
 
 /* ─── The parts ───────────────────────────────────────────────────────────── */
@@ -104,9 +116,13 @@ export const WHO_IN_ASK = 60;
 export type MoveBy = 'you' | 'ai' | 'claude';
 
 export type MoveGo =
-  | { sheet: 'offer' | 'targeting' | 'working' }
+  | { sheet: 'offer' | 'targeting' | 'working' | 'foundby' | 'talk' }
   | { outreach: 'to_send' }
-  | { tab: 'swipe' };
+  | { tab: 'swipe' }
+  /** Start a bet on this part: the bet sheet, opened on it. */
+  | { bet: LinkKey }
+  /** Make or draft an asset of this kind. */
+  | { asset: AssetKind };
 
 export interface LinkMove {
   key: string;
@@ -166,6 +182,25 @@ export interface ChainInput {
   agents: Agent[];
   /** The condition most of their matches share that the offer does not name — a first line a new opener could lead with. */
   topOpening: string | null;
+  /** How buyers find the business, when the person said; else offer.found_by, else read off the sends. */
+  foundBy?: FoundBy | null;
+  /** The Lab's bets, as evidence: a bet's verdict is computed from rows, so it is rows too. Newest first or not: sorted here. */
+  bets?: ChainBet[];
+  /** The conversations the person logged, all time (The Mom Test's log): how many, how many had the problem, how many committed. */
+  talks?: { n: number; problem: number; committed: number };
+  /** The assets that stand for a part, by title: a demo (pay), a script (close), a landing page (reach), a workflow (deliver). */
+  assets?: { demo: string | null; script: string | null; landing: string | null; workflow: string | null };
+}
+
+/** A bet, as the chain reads it: which part, how it stands, and its count said in a line ("3 of 3 commitments"). */
+export interface ChainBet {
+  part: LinkKey;
+  state: 'running' | 'passed' | 'failed' | 'stopped';
+  line: string;
+  /** The person's day it began, for ordering. */
+  start: string;
+  /** "18 Sep": the day it crossed the line, ran out or was called off. Null while it runs. */
+  when: string | null;
 }
 
 export interface Verdict {
@@ -247,13 +282,17 @@ export function businessChain(i: ChainInput): Chain {
   const whoWords = i.offer.for_who?.trim() || (i.segments.length ? saidList(i.segments, 2) : '');
   const whoShort = whoWords && whoWords.length <= WHO_IN_ASK ? `"${whoWords}"` : 'the businesses I sell to';
   const agent = (k: AgentKey) => i.agents.find((a) => a.key === k) ?? null;
+  // Said beats read: the person's word for how buyers find them, else outreach
+  // when the app has sent or found for them, else nobody has said.
+  const found = i.foundBy !== undefined ? { value: i.foundBy, said: i.foundBy != null } : foundByOf(i.offer, i.funnel.sent, i.funnel.matched);
+  const ctx: Ctx = { offerSet, whoShort, ai, agent, found: found.value, outbound: found.value === 'outreach', wins };
 
   const links: BusinessLink[] = [
-    whoLink(i, { offerSet, whoShort, ai, agent }),
-    reachLink(i, { offerSet, whoShort, ai, agent }),
-    closeLink(i, { ai }),
-    payLink(i, wins, { offerSet, whoShort, ai }),
-    deliverLink(i, { ai }),
+    whoLink(i, ctx),
+    reachLink(i, ctx),
+    closeLink(i, ctx),
+    payLink(i, wins, ctx),
+    deliverLink(i, ctx),
   ];
   return { links, weak: weakLink(links, offerSet), verdict: chainVerdict(offerSet, wins, i.currency) };
 }
@@ -264,7 +303,45 @@ interface Ctx {
   whoShort: string;
   ai: MoveBy;
   agent: (k: AgentKey) => Agent | null;
+  /** How buyers find the business, or null when nobody has said and nothing was sent. */
+  found: FoundBy | null;
+  /** Outreach: the app counts this part itself, from what it sends. */
+  outbound: boolean;
+  wins: WinRead;
 }
+
+/* ─── Bets as evidence ────────────────────────────────────────────────────── */
+
+const BET_SAID: Record<ChainBet['state'], string> = { running: 'Running', passed: 'Passed', failed: 'Did not pass', stopped: 'Called off' };
+
+/** The bets on one part, newest first. */
+function betsOn(i: ChainInput, part: LinkKey): ChainBet[] {
+  return (i.bets ?? []).filter((b) => b.part === part).sort((a, b) => b.start.localeCompare(a.start));
+}
+
+/** The record a part's bets leave on it, shown when the part is open: the one running, and the last one that ended. */
+function betMore(bets: ChainBet[]): string[] {
+  const running = bets.find((b) => b.state === 'running');
+  const last = bets.find((b) => b.state !== 'running');
+  return [
+    running ? `A bet is running: ${running.line} so far` : null,
+    last ? `${BET_SAID[last.state]}${last.when ? `, ${last.when}` : ''}: ${last.line}` : null,
+  ].filter((x): x is string => !!x);
+}
+
+/** The newest bet on a part that passed, if any. */
+const passedOf = (bets: ChainBet[]) => bets.find((b) => b.state === 'passed') ?? null;
+
+/** The last two bets that ran out short of the line, with nothing passed since: the part is not working by its own record. */
+function twoShort(bets: ChainBet[]): [ChainBet, ChainBet] | null {
+  const ended = bets.filter((b) => b.state === 'passed' || b.state === 'failed');
+  return ended.length >= 2 && ended[0].state === 'failed' && ended[1].state === 'failed' ? [ended[0], ended[1]] : null;
+}
+
+/** "Bet on how they hear": the move that opens the bet sheet on a part. */
+const betMove = (part: LinkKey, label: string): LinkMove => ({ key: `${part}-bet`, label, by: 'you', go: { bet: part } });
+
+/* ─── The parts ───────────────────────────────────────────────────────────── */
 
 function whoLink(i: ChainInput, c: Ctx): BusinessLink {
   const { matched, sent } = i.funnel;
@@ -274,15 +351,21 @@ function whoLink(i: ChainInput, c: Ctx): BusinessLink {
   const paysAt = (s: ChainInput['bySegment'][number]) => (s.paid ?? []).filter((a) => price == null || a >= price).length;
   const words = i.offer.for_who?.trim() || (i.segments.length ? saidList(i.segments, 3) : null);
   const what = words ? `${words}${i.area ? ` in ${i.area}` : ''}` : null;
+  const bets = betsOn(i, 'who');
+  const passed = passedOf(bets);
+
+  if (!c.outbound) return whoByOwnCount(i, c, what, bets);
+
   const where = [i.segments.length && i.area ? 'Maps' : null, i.web ? 'the web' : null].filter(Boolean).join(' and ');
   const facts = matched
     ? [`${matched} found${where ? ` on ${where}` : ''}`, i.worthAMessage ? `${i.worthAMessage} worth a message` : null].filter(Boolean).join(' · ')
     : where ? 'Nothing found yet' : 'Nothing to look for yet';
   const answering = i.bySegment.filter((s) => s.replied > 0 || s.won > 0);
   const best = [...answering].sort((a, b) => paysAt(b) - paysAt(a) || b.replied - a.replied)[0] ?? null;
-  const more = answering.length
-    ? [`Answered: ${answering.slice(0, 3).map((s) => `${s.segment} ${s.replied} of ${s.sent}${s.won ? `, ${s.won} paid` : ''}`).join(' · ')}`]
-    : [];
+  const more = [
+    ...(answering.length ? [`Answered: ${answering.slice(0, 3).map((s) => `${s.segment} ${s.replied} of ${s.sent}${s.won ? `, ${s.won} paid` : ''}`).join(' · ')}`] : []),
+    ...betMore(bets),
+  ];
 
   // The Scout always looks for this part; the Watcher too once it has a source.
   // Out of matches or a night it did not run is a problem worth saying here:
@@ -302,18 +385,24 @@ function whoLink(i: ChainInput, c: Ctx): BusinessLink {
       why: 'Nobody has said who buys, so nothing is looked for.',
       moves: [{ key: 'who-say', label: 'Say who buys', by: 'you', go: { sheet: 'offer' } }] };
   }
-  if (!sent) {
-    return { key: 'who', label: LINK_LABEL.who, what, facts, more, state: 'untested', runner,
-      why: matched ? `${matched} found and none written to yet. Which kind answers is the first thing to find out.` : 'Nothing found yet, so nothing has been tried.',
-      // Writing to the first few is How they hear's move, and it tests this part too.
-      moves: !matched && !i.segments.length && !i.web ? [{ key: 'who-where', label: 'Say where to look', by: 'you', go: { sheet: 'targeting' } }] : [] };
-  }
   if (best && (paysAt(best) > 0 || best.replied >= WORKING_REPLIES)) {
     return { key: 'who', label: LINK_LABEL.who, what, facts, more, state: 'works', runner,
       why: paysAt(best) > 0
         ? `${best.segment} paid${price != null ? ` your ${moneyLabel(price, i.currency)}` : ''}. A kind of business that pays is the bar, and this one has.`
         : `${best.segment} answered ${best.replied} times. ${WORKING_REPLIES} answers from one kind of business is the bar.`,
       moves: demand ? [demand] : [] };
+  }
+  // A bet on who buys that passed is a buyer found by the person's own count:
+  // the funnel had not shown one yet, and the bet did.
+  if (passed) {
+    return { key: 'who', label: LINK_LABEL.who, what, facts, more, state: 'works', runner,
+      why: `A bet on who buys passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}.`, moves: demand ? [demand] : [] };
+  }
+  if (!sent) {
+    return { key: 'who', label: LINK_LABEL.who, what, facts, more, state: 'untested', runner,
+      why: matched ? `${matched} found and none written to yet. Which kind answers is the first thing to find out.` : 'Nothing found yet, so nothing has been tried.',
+      // Writing to the first few is How they hear's move, and it tests this part too.
+      moves: !matched && !i.segments.length && !i.web ? [{ key: 'who-where', label: 'Say where to look', by: 'you', go: { sheet: 'targeting' } }] : [] };
   }
   return { key: 'who', label: LINK_LABEL.who, what, facts, more, state: 'testing', runner,
     why: answering.length
@@ -322,12 +411,48 @@ function whoLink(i: ChainInput, c: Ctx): BusinessLink {
     moves: demand ? [demand] : [] };
 }
 
+/**
+ * Who buys, where the app does not find them: the person's words, the
+ * conversations they logged, the sales at their price and their bets. A sale
+ * at the price is a buyer found; problem conversations are the test before it.
+ */
+function whoByOwnCount(i: ChainInput, c: Ctx, what: string | null, bets: ChainBet[]): BusinessLink {
+  const t = i.talks ?? { n: 0, problem: 0, committed: 0 };
+  const w = c.wins;
+  const runner = { by: 'you' as const, name: 'You', problem: null };
+  const facts = [
+    t.n ? `${plural(t.n, 'conversation')} logged` : null,
+    t.n ? `${t.problem} have the problem` : null,
+    w.atPrice ? `${w.atPrice} paid your price` : null,
+  ].filter(Boolean).join(' · ') || 'Nothing logged yet';
+  const more = betMore(bets);
+  const base = { key: 'who' as const, label: LINK_LABEL.who, what, facts, more, runner };
+  const ask = c.offerSet ? betMove('who', 'Bet on who buys') : null;
+  if (!what) {
+    return { ...base, state: 'missing', why: 'Nobody has said who buys.', moves: [{ key: 'who-say', label: 'Say who buys', by: 'you', go: { sheet: 'offer' } }] };
+  }
+  const passed = passedOf(bets);
+  if (passed) return { ...base, state: 'works', why: `A bet on who buys passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}.`, moves: [] };
+  if (w.price != null && w.atPrice > 0) {
+    return { ...base, state: 'works', why: `${plural(w.atPrice, 'sale')} at your ${moneyLabel(w.price, i.currency)}: somebody who buys at the price exists.`, moves: [] };
+  }
+  if (t.n || bets.length) {
+    return { ...base, state: 'testing',
+      why: t.n ? `${t.problem} of the ${plural(t.n, 'person', 'people')} you talked to have the problem${t.committed ? `, and ${t.committed} committed to something` : ''}.` : `A bet on it is ${bets[0].state === 'running' ? 'running' : 'done, and did not pass'}.`,
+      moves: ask ? [ask] : [] };
+  }
+  return { ...base, state: 'untested', why: 'Nobody has been asked yet. Ten conversations about the problem is the quickest way to know.', moves: ask ? [ask] : [] };
+}
+
 function reachLink(i: ChainInput, c: Ctx): BusinessLink {
   const { sent, replied } = i.funnel;
+  const bets = betsOn(i, 'reach');
+  if (!c.outbound) return reachByOwnCount(i, c, bets);
+
   const channels = i.byChannel.filter((x) => x.sent > 0).map((x) => CHANNEL_WORD[x.channel] ?? x.channel);
   const what = channels.length ? capital(saidList(channels)) : null;
   const facts = [sent ? `${sent} sent · ${plural(replied, 'reply', 'replies')}` : 'Nothing sent yet', i.queue ? `${i.queue} waiting to send` : null].filter(Boolean).join(' · ');
-  const more = (i.said.voice ?? []).slice(0, 1).map((v) => `How you write: ${v}`);
+  const more = [...(i.said.voice ?? []).slice(0, 1).map((v) => `How you write: ${v}`), ...betMore(bets)];
   const writer = c.agent('writer');
   const runner = { by: 'both' as const, name: 'Writer drafts, you send', problem: writer && (writer.state === 'setup' || writer.state === 'failed') ? writer.line : null };
   const sendWaiting: LinkMove | null = i.queue ? { key: 'reach-send', label: `Send the ${i.queue} waiting`, by: 'you', go: { outreach: 'to_send' } } : null;
@@ -369,13 +494,95 @@ function reachLink(i: ChainInput, c: Ctx): BusinessLink {
     moves: [sendWaiting ?? writeMore].filter((m): m is LinkMove => !!m) };
 }
 
-function closeLink(i: ChainInput, c: Pick<Ctx, 'ai'>): BusinessLink {
-  const { replied, meetings, won, outside } = i.funnel;
-  const facts = replied || meetings || won ? [plural(replied, 'reply', 'replies'), plural(meetings, 'meeting'), `${won} won`].join(' · ') : 'Waits on the first reply';
-  const more = outside ? [`${outside} logged outside the app, for messages that went out some other way`] : [];
+/** What a bet counts for each way buyers arrive, said as the example in "a bet counts it". */
+const OWN_COUNT: Record<Exclude<FoundBy, 'outreach'>, string> = {
+  inbound: 'the enquiries and sign-ups that come in',
+  referrals: 'the introductions people make',
+  marketplace: 'the enquiries the listing brings',
+  local: 'the people who come in or stop to talk',
+};
+
+/**
+ * How they hear, where the app cannot see it: the person's bets count it. Two
+ * passed is a pattern; one passed with somebody paying is the channel doing its
+ * job; two short in a row, with nothing passed since, is the channel not
+ * working by its own record. Nobody has said how buyers arrive and nothing was
+ * sent is a question, not outreach by default.
+ */
+function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink {
   const runner = { by: 'you' as const, name: 'You', problem: null };
+  const more = betMore(bets);
+  const landing = i.assets?.landing ?? null;
+  if (!c.offerSet) {
+    return { key: 'reach', label: LINK_LABEL.reach, what: null, facts: '', more, state: 'missing', runner, moves: [],
+      why: 'Nothing is written from a blank offer — say what you sell first.' };
+  }
+  if (!c.found) {
+    return { key: 'reach', label: LINK_LABEL.reach, what: null, facts: 'Nothing sent through the app', more, state: 'missing', runner,
+      why: 'Nobody has said how buyers find you. The app counts outreach itself; every other way, your bets count.',
+      moves: [{ key: 'reach-how', label: 'Say how buyers find you', by: 'you', go: { sheet: 'foundby' } }] };
+  }
+  const found = c.found as Exclude<FoundBy, 'outreach'>;
+  const what = `${FOUND_BY_LABEL[found]}${landing ? ` · ${landing}` : ''}`;
+  const facts = bets[0] ? `${BET_SAID[bets[0].state]}: ${bets[0].line}` : 'No count yet';
+  const base = { key: 'reach' as const, label: LINK_LABEL.reach, what, facts, more, runner };
+  const passed = bets.filter((b) => b.state === 'passed');
+  const page: LinkMove | null = found === 'inbound' && !landing ? { key: 'reach-landing', label: 'A landing page', by: 'you', go: { asset: 'landing_page' } } : null;
+  const ask = betMove('reach', 'Bet on how they hear');
+  if (passed.length >= 2) {
+    return { ...base, state: 'works', why: `${passed.length} bets on how they hear passed. Twice is a pattern, not luck.`, moves: [] };
+  }
+  if (passed.length && c.wins.count) {
+    return { ...base, state: 'works',
+      why: `A bet on how they hear passed${passed[0].when ? ` on ${passed[0].when}` : ''}, and ${plural(c.wins.count, 'sale')} came in.`, moves: [] };
+  }
+  const short = twoShort(bets);
+  if (short) {
+    return { ...base, state: 'stuck',
+      why: `The last two bets on how they hear did not pass: ${short[0].line}, then ${short[1].line}.`,
+      moves: [ask, page].filter((m): m is LinkMove => !!m) };
+  }
+  if (bets.length) {
+    const b = bets[0];
+    return { ...base, state: 'testing',
+      why: b.state === 'running' ? `A bet is running: ${b.line} so far.` : b.state === 'passed' ? `A bet passed${b.when ? ` on ${b.when}` : ''}: ${b.line}. Once more and it is a pattern.` : `The last bet did not pass: ${b.line}.`,
+      moves: [ask, page].filter((m): m is LinkMove => !!m) };
+  }
+  return { ...base, state: 'untested',
+    why: `The app cannot see this way in, so a bet counts it: ${OWN_COUNT[found]}.`,
+    moves: [ask, page].filter((m): m is LinkMove => !!m) };
+}
+
+function closeLink(i: ChainInput, c: Ctx): BusinessLink {
+  const { replied, meetings, won, outside } = i.funnel;
+  const bets = betsOn(i, 'close');
+  const runner = { by: 'you' as const, name: 'You', problem: null };
+  const scriptMove: LinkMove | null = c.offerSet && !i.assets?.script ? { key: 'close-script', label: 'A sales script', by: 'you', go: { asset: 'script' } } : null;
+
+  if (!c.outbound) {
+    // Conversations the person logged stand in for replies: the app did not
+    // send anything to be replied to.
+    const t = i.talks ?? { n: 0, problem: 0, committed: 0 };
+    const conv = t.n + meetings;
+    const facts = conv || won ? [plural(t.n, 'conversation'), meetings ? plural(meetings, 'meeting') : null, `${won} won`].filter(Boolean).join(' · ') : 'Waits on the first conversation';
+    const base = { key: 'close' as const, label: LINK_LABEL.close, what: i.assets?.script ?? null, facts, more: betMore(bets), runner };
+    const log: LinkMove = { key: 'close-log', label: 'Log a conversation', by: 'you', go: { sheet: 'talk' } };
+    if (!conv && !won) return { ...base, state: 'untested', why: 'Nothing can close before a conversation. Log the ones you have.', moves: [log] };
+    if (won >= REPEAT_WINS) return { ...base, state: 'works', why: `${won} won. At ${REPEAT_WINS} it is something you can repeat, not luck.`, moves: [] };
+    if (conv >= CLOSE_SAMPLE && !won) {
+      return { ...base, state: 'stuck',
+        why: `${plural(conv, 'conversation')} and nobody paid. From ${CLOSE_SAMPLE} on, that says more about the ask than about luck.`,
+        moves: [scriptMove, betMove('close', 'Bet on how they say yes')].filter((m): m is LinkMove => !!m) };
+    }
+    return { ...base, state: 'testing',
+      why: won ? `${won} won so far. At ${REPEAT_WINS} it stops being luck.` : `${plural(conv, 'conversation')} and nothing won yet.`,
+      moves: [scriptMove, log].filter((m): m is LinkMove => !!m) };
+  }
+
+  const facts = replied || meetings || won ? [plural(replied, 'reply', 'replies'), plural(meetings, 'meeting'), `${won} won`].join(' · ') : 'Waits on the first reply';
+  const more = [...(outside ? [`${outside} logged outside the app, for messages that went out some other way`] : []), ...betMore(bets)];
   const onePager: LinkMove = { key: 'close-onepager', label: 'Sales one-pager', by: c.ai, ask: 'Write a one-page sales sheet I can send after someone replies, in my own words' };
-  const base = { key: 'close' as const, label: LINK_LABEL.close, what: null, facts, more, runner };
+  const base = { key: 'close' as const, label: LINK_LABEL.close, what: i.assets?.script ?? null, facts, more, runner };
 
   if (!replied && !meetings && !won) return { ...base, state: 'untested', why: 'Nothing can close before somebody answers.', moves: [] };
   if (won >= REPEAT_WINS) return { ...base, state: 'works', why: `${won} won. At ${REPEAT_WINS} it is something you can repeat, not luck.`, moves: [] };
@@ -392,20 +599,25 @@ function closeLink(i: ChainInput, c: Pick<Ctx, 'ai'>): BusinessLink {
     moves: [onePager] };
 }
 
-function payLink(i: ChainInput, w: WinRead, c: Pick<Ctx, 'offerSet' | 'whoShort' | 'ai'>): BusinessLink {
+function payLink(i: ChainInput, w: WinRead, c: Ctx): BusinessLink {
   const m = (n: number) => moneyLabel(n, i.currency);
-  const { meetings } = i.funnel;
+  // The conversations a price was put to: meetings where the app sent, and the
+  // ones the person logged where it did not.
+  const conv = i.funnel.meetings + (c.outbound ? 0 : (i.talks?.n ?? 0));
   const what = i.offer.price_band?.trim() || null;
+  const bets = betsOn(i, 'pay');
   const more = [
     i.wonRecent.amount > 0 ? `${m(i.wonRecent.amount)} in the last ${i.wonRecent.days} days` : null,
     i.goal?.target ? `${i.goal.title}: ${m(i.goal.current ?? 0)} of ${m(i.goal.target)}` : null,
     i.said.price?.length ? `What you charge: ${i.said.price.join(' · ')}` : null,
+    ...betMore(bets),
   ].filter((x): x is string => !!x);
   const runner = { by: 'you' as const, name: 'You', problem: null };
   const base = { key: 'pay' as const, label: LINK_LABEL.pay, what, facts: winsLine(w, i.currency), more, runner };
   // Proof is what a price is believed on. A demo script is within any worker's
-  // reach — writing — where a built demo is not, and the person records it.
-  const proof: LinkMove | null = !i.offer.proof_url?.trim() && c.offerSet
+  // reach — writing — where a built demo is not, and the person records it. A
+  // demo kept as an asset is proof too, link or not.
+  const proof: LinkMove | null = !i.offer.proof_url?.trim() && !i.assets?.demo && c.offerSet
     ? { key: 'pay-proof', label: 'Demo script', by: c.ai, ask: `Write a short demo script of what I sell, for one of ${c.whoShort}: what they see before and after, for me to record and send` }
     : null;
   const pricing: LinkMove = { key: 'pay-pricing', label: 'Pricing check', by: 'claude', ask: 'Tell me whether what I charge is the problem, from what has closed and what has not.' };
@@ -418,9 +630,9 @@ function payLink(i: ChainInput, w: WinRead, c: Pick<Ctx, 'offerSet' | 'whoShort'
   if (w.atPrice >= REPEAT_WINS) {
     return { ...base, state: 'works', why: `${w.atPrice} paid at your ${m(w.price)} or more. ${REPEAT_WINS} is the bar.`, moves: [] };
   }
-  if (w.count && !w.atPrice && meetings >= CLOSE_SAMPLE) {
+  if (w.count && !w.atPrice && conv >= CLOSE_SAMPLE) {
     return { ...base, state: 'stuck',
-      why: `${meetings} meetings and ${w.count} paid, none at your ${m(w.price)}. From ${CLOSE_SAMPLE} on, that says more about the price or the proof than about luck.`,
+      why: `${c.outbound ? `${conv} meetings` : plural(conv, 'conversation')} and ${w.count} paid, none at your ${m(w.price)}. From ${CLOSE_SAMPLE} on, that says more about the price or the proof than about luck.`,
       moves: [proof, pricing].filter((x): x is LinkMove => !!x) };
   }
   if (!w.count) return { ...base, state: 'untested', why: 'Nothing paid yet.', moves: proof ? [proof] : [] };
@@ -429,19 +641,29 @@ function payLink(i: ChainInput, w: WinRead, c: Pick<Ctx, 'offerSet' | 'whoShort'
     moves: [proof, pricing].filter((x): x is LinkMove => !!x) };
 }
 
-function deliverLink(i: ChainInput, c: Pick<Ctx, 'ai'>): BusinessLink {
+function deliverLink(i: ChainInput, c: Ctx): BusinessLink {
   const lines = i.said.deliver ?? [];
+  const workflow = i.assets?.workflow ?? null;
+  const bets = betsOn(i, 'deliver');
+  const passed = passedOf(bets);
   const runner = { by: 'you' as const, name: 'You', problem: null };
-  if (!lines.length) {
-    return { key: 'deliver', label: LINK_LABEL.deliver, what: null, facts: 'Not written', more: [], state: 'missing', runner,
-      why: 'Nobody has written how a client goes from yes to delivered.',
+  const more = [...lines.slice(workflow ? 0 : 1, 3), ...betMore(bets)];
+  if (!lines.length && !workflow) {
+    return { key: 'deliver', label: LINK_LABEL.deliver, what: null, facts: 'Not written', more: betMore(bets), state: passed ? 'testing' : 'missing', runner,
+      why: passed ? `A bet on delivery passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}. Nothing is written down yet.` : 'Nobody has written how a client goes from yes to delivered.',
       moves: [
         { key: 'deliver-write', label: 'Write how you deliver', by: 'you', go: { sheet: 'working' } },
         { key: 'deliver-onboard', label: 'Client onboarding', by: c.ai, ask: 'Plan how I take a new client from the first yes to delivered, step by step' },
       ] };
   }
-  return { key: 'deliver', label: LINK_LABEL.deliver, what: lines[0], facts: '', more: lines.slice(1, 3), state: 'untested', runner,
-    why: 'What you wrote. Nothing in the app measures delivery yet.',
+  // Delivery is judged by its own bets, where there are any: a step handed
+  // over, or clients served by hand, counted. What is written is a claim.
+  if (passed) {
+    return { key: 'deliver', label: LINK_LABEL.deliver, what: workflow ?? lines[0], facts: '', more, state: 'works', runner,
+      why: `A bet on delivery passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}.`, moves: [] };
+  }
+  return { key: 'deliver', label: LINK_LABEL.deliver, what: workflow ?? lines[0], facts: '', more, state: 'untested', runner,
+    why: workflow ? 'Written down as a workflow. Nothing in the app measures delivery; a bet can.' : 'What you wrote. Nothing in the app measures delivery yet.',
     moves: [{ key: 'deliver-automate', label: 'Automate a step', by: 'claude', ask: 'Find the step in how I deliver that costs me the most time, and design a simple automation for it.' }] };
 }
 
@@ -519,124 +741,11 @@ export function changeLine(c: ChainChange): string {
   return `${LINK_LABEL[c.key]} went from ${LINK_STATE_LABEL[c.from]} to ${LINK_STATE_LABEL[c.to]}`;
 }
 
-/* ─── What the business has built ─────────────────────────────────────────── */
-
-export type BuiltOpen = { sheet: 'offer' | 'working' } | { commission: string } | { tab: 'path' } | { href: string };
-
-export interface BuiltRow {
-  key: string;
-  title: string;
-  line: string;
-  by: 'ai' | 'you' | 'both';
-  byName: string;
-  /** When it was made, for ordering and for "New". Null for what has no date of its own. */
-  at: string | null;
-  /** Something the business does not have yet, said where the things it has are. */
-  gap: boolean;
-  open: BuiltOpen;
-  /** A gap's way to fill it. */
-  move?: LinkMove;
-}
-
-export interface BuiltInput {
-  offer: Offer;
-  said: Partial<Record<WorkingSection, string[]>>;
-  working: { filled: number; total: number; proposals: number };
-  /** The drawn plan, when there is one. */
-  plan: { milestones: number; at: string } | null;
-  /** Closed projects, newest first — what was finished or called off. Live ones are in the works, not built yet. */
-  closed: Array<{ id: string; objective: string; status: 'done' | 'stopped'; outcome: string | null; closedAt: string | null; createdAt: string }>;
-  /** What the projects posted with something attached: a link, a document, a list. */
-  outputs: Array<{ commissionId: string; at: string }>;
-  /** The move that fills the proof gap, from the chain, so the two cannot offer different things. */
-  proofMove: LinkMove | null;
-  now: Date;
-}
-
-/** An http(s) link, or null: a proof link is the one field here that becomes an href. */
-export function safeHref(v: string | null | undefined): string | null {
-  if (!v) return null;
-  try {
-    const u = new URL(v.trim());
-    return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : null;
-  } catch { return null; }
-}
-
-const hostOf = (href: string) => { try { return new URL(href).host.replace(/^www\./, ''); } catch { return href; } };
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-/** "3 Oct", from the date's own digits, so it reads the same in every zone. */
-const dayLabel = (iso: string) => {
-  const [, m, d] = iso.slice(0, 10).split('-').map(Number);
-  return m && d ? `${d} ${MONTHS[m - 1] ?? ''}`.trim() : '';
-};
-
-const agoLabel = (iso: string, now: Date) => {
-  const h = Math.max(0, Math.round((now.getTime() - Date.parse(iso)) / 3_600_000));
-  return h < 1 ? 'just now' : h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
-};
-
-/**
- * What the business has to work with, by whoever made it: what is missing
- * first, then the person's own file, then what was made most recently, then
- * the rest. Not the funnel's numbers — those are on the chain, and the same
- * count twice on one screen is the thing every redraft here has deleted.
- */
-export function builtRows(i: BuiltInput): BuiltRow[] {
-  const gaps: BuiltRow[] = [];
-  const standing: BuiltRow[] = [];
-  const dated: BuiltRow[] = [];
-  const offerSet = !!i.offer.sells?.trim();
-
-  if (offerSet) {
-    const proof = safeHref(i.offer.proof_url);
-    if (proof) standing.push({ key: 'proof', title: 'Proof', line: hostOf(proof), by: 'you', byName: 'You', at: null, gap: false, open: { href: proof } });
-    else gaps.push({ key: 'proof', title: 'Proof', line: 'None yet — a demo, a result or a client’s words', by: 'you', byName: 'Missing', at: null, gap: true, open: { sheet: 'offer' }, ...(i.proofMove ? { move: i.proofMove } : {}) });
-  }
-
-  const w = i.working;
-  const playbook: BuiltRow = {
-    key: 'working', title: 'How you work',
-    line: `${w.filled} of ${w.total} written${w.proposals ? ` · ${w.proposals} counted from your rows, waiting for your yes` : ''}`,
-    by: w.proposals ? 'both' : 'you', byName: w.proposals ? 'You and the app' : 'You', at: null,
-    gap: w.filled === 0, open: { sheet: 'working' },
-  };
-  // Proof first among the gaps: it is the one a price is believed on.
-  if (playbook.gap) gaps.push(playbook); else standing.unshift(playbook);
-
-  if (i.plan) {
-    dated.push({ key: 'plan', title: 'The plan', line: `${plural(i.plan.milestones, 'milestone')} · drawn ${agoLabel(i.plan.at, i.now)}`, by: 'ai', byName: 'Planner', at: i.plan.at, gap: false, open: { tab: 'path' } });
-  }
-
-  const outputsBy = new Map<string, number>();
-  for (const o of i.outputs) outputsBy.set(o.commissionId, (outputsBy.get(o.commissionId) ?? 0) + 1);
-  for (const p of i.closed) {
-    const found = outputsBy.get(p.id) ?? 0;
-    // Called off with nothing to show was not built. It is still in the
-    // project's own sheet; here it would be a row about nothing.
-    if (p.status === 'stopped' && !found) continue;
-    const when = p.closedAt ? ` ${dayLabel(p.closedAt)}` : '';
-    dated.push({
-      key: `p:${p.id}`, title: p.objective,
-      line: [p.status === 'done' ? `Finished${when}` : `Called off${when}`, found ? `${found} found` : null, p.outcome?.trim() || 'no verdict recorded'].filter(Boolean).join(' · '),
-      by: 'ai', byName: 'Researcher', at: p.closedAt ?? p.createdAt, gap: false, open: { commission: p.id },
-    });
-  }
-  dated.sort((a, b) => (b.at ?? '').localeCompare(a.at ?? ''));
-
-  return [...gaps, ...standing.slice(0, 1), ...dated, ...standing.slice(1)];
-}
-
 /* ─── The rest of the tab ─────────────────────────────────────────────────── */
 
 /** Projects that cannot move without the person: a draft to approve, a question, or a breakage to retry. */
 export function waitingOnYou(threads: CommissionThread[]): number {
   return threads.filter((t) => t.commission.status === 'draft' || blockedOn(t.commission, t.report) !== null).length;
-}
-
-/** The line under the greeting on Work: the verdict, and what is waiting on you. */
-export function workLine(verdict: Verdict, waiting: number): string {
-  return [verdict.title, waiting ? `${waiting} waiting on you` : null].filter(Boolean).join(' · ');
 }
 
 /**

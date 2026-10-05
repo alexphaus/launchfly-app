@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { computeRunwayMonths, salesCurrency } from '@/lib/copilot/metrics';
 import { goalDue } from '@/lib/copilot/due';
-import { OFFER_TASK_TITLE, addOpeningToOffer, offerIsEmpty } from '@/lib/copilot/offer';
-import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
+import { FOUND_BY_HINT, FOUND_BY_LABEL, OFFER_TASK_TITLE, addOpeningToOffer, isFoundBy, offerIsEmpty } from '@/lib/copilot/offer';
+import { CAPACITY_META, FOUND_BY, type Action, type Capacity, type Execution, type FoundBy, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, money, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
 import { STAGE_LABEL, type PipelineStage } from '@/lib/copilot/pipeline';
@@ -24,6 +24,7 @@ import { useShell } from './shell';
 import BankSheet from './BankSheet';
 import OutreachSheet from './v2/Outreach';
 import { BetSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
+import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, FoundBySheet, HistorySheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
 import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
 import { dayLabel } from '@/lib/copilot/money/ledger';
 
@@ -44,7 +45,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'targeting': return <TargetingSheet home={home} actions={actions} />;
     case 'account': return <AccountSheet home={home} actions={actions} />;
     case 'won': return <WonSheet home={home} oppId={sheet.oppId} actions={actions} />;
-    case 'offer': return <OfferSheet home={home} actions={actions} />;
+    case 'offer': return <OfferSheet home={home} bet={sheet.bet} actions={actions} />;
     case 'watchlist': return <WatchlistSheet home={home} actions={actions} />;
     case 'money': return <MoneySheet home={home} actions={actions} />;
     case 'commission': return <CommissionSheet home={home} id={sheet.id} actions={actions} />;
@@ -56,9 +57,17 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'focus': return <FocusSheet home={home} actions={actions} />;
     case 'bank': return <BankSheet home={home} actions={actions} />;
     case 'outreach': return <OutreachSheet home={home} stage={sheet.stage} actions={actions} />;
-    case 'bet': return <BetSheet home={home} playKey={sheet.play} part={sheet.part} actions={actions} />;
+    case 'bet': return <BetSheet home={home} playKey={sheet.play} part={sheet.part} ideaKey={sheet.idea} experiment={sheet.experiment} actions={actions} />;
     case 'talk': return <TalkSheet home={home} actions={actions} />;
     case 'talks': return <TalksSheet home={home} actions={actions} />;
+    case 'count': return <CountSheet home={home} betId={sheet.bet} actions={actions} />;
+    case 'sale': return <SaleSheet home={home} outcome={sheet.outcome} actions={actions} />;
+    case 'chain': return <ChainSheet home={home} actions={actions} />;
+    case 'foundby': return <FoundBySheet home={home} actions={actions} />;
+    case 'history': return <HistorySheet home={home} actions={actions} />;
+    case 'asset': return <AssetSheet home={home} id={sheet.id} assetKind={sheet.assetKind} bet={sheet.bet} actions={actions} />;
+    case 'assets': return <AssetsSheet home={home} actions={actions} />;
+    case 'projects': return <ProjectsSheet home={home} actions={actions} />;
   }
 }
 
@@ -823,28 +832,43 @@ function AccountSheet({ home, actions }: { home: HomeData; actions: Actions }) {
   );
 }
 
-function OfferSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+function OfferSheet({ home, bet, actions }: { home: HomeData; bet?: string; actions: Actions }) {
   const o = home.profile.offer ?? {};
   const [sells, setSells] = useState(o.sells ?? '');
   const [forWho, setForWho] = useState(o.for_who ?? home.profile.target_segments.join(', '));
   const [problem, setProblem] = useState(o.problem ?? '');
   const [price, setPrice] = useState(o.price_band ?? '');
   const [proof, setProof] = useState(o.proof_url ?? '');
+  // How buyers find you rides along with the offer; untouched, the saved one is
+  // kept as it is. Picked here, never cleared here: "not sure" is on its own
+  // sheet, so a chip tapped twice cannot quietly do nothing on save.
+  const [foundBy, setFoundBy] = useState<FoundBy | null>(isFoundBy(o.found_by) ? o.found_by : null);
   const [busy, setBusy] = useState(false);
+  const forBet = bet ? home.lab?.bets.find((v) => v.bet.id === bet) ?? null : null;
   const save = async () => {
     setBusy(true);
-    await actions.saveOffer({ sells, for_who: forWho, problem, price_band: price, proof_url: proof });
+    await actions.saveOffer({ sells, for_who: forWho, problem, price_band: price, proof_url: proof, found_by: foundBy ?? undefined }, { bet: forBet?.bet.id ?? null });
     setBusy(false);
   };
   return (
     <>
       <h3>What do you sell?</h3>
       <p className="desc">Every message the copilot drafts is built from this. Without it, drafts fall back to your one-line headline and stay vague.</p>
+      {forBet && <p className="cp-help">This version is kept in your offer&rsquo;s history as written for the bet &ldquo;{forBet.bet.belief}&rdquo;.</p>}
       <div className="cp-field"><label className="cp-label">I sell / I build</label><input className="cp-input sm" autoFocus value={sells} onChange={(e) => setSells(e.target.value)} placeholder="WhatsApp booking automations" maxLength={240} /></div>
       <div className="cp-field"><label className="cp-label">For</label><input className="cp-input sm" value={forWho} onChange={(e) => setForWho(e.target.value)} placeholder="resorts and tour operators" maxLength={120} /></div>
       <div className="cp-field"><label className="cp-label">The problem it solves</label><input className="cp-input sm" value={problem} onChange={(e) => setProblem(e.target.value)} placeholder="enquiries arrive after hours and go unanswered" maxLength={240} /><div className="cp-help">Written as the customer would feel it, not as a feature.</div></div>
       <div className="cp-field"><label className="cp-label">Price band (optional)</label><input className="cp-input sm" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="$400–1,500 per build" maxLength={60} /></div>
       <div className="cp-field"><label className="cp-label">One link that proves it (optional)</label><input className="cp-input sm" type="url" inputMode="url" value={proof} onChange={(e) => setProof(e.target.value)} placeholder="https://…" maxLength={300} /><div className="cp-help">Goes into openers as the example, instead of a vague offer to show one.</div></div>
+      <div className="cp-field">
+        <label className="cp-label">How buyers find you</label>
+        <div className="cp-chips">
+          {FOUND_BY.map((f) => (
+            <button key={f} className={`cp-fchip ${foundBy === f ? 'active' : ''}`} aria-pressed={foundBy === f} onClick={() => setFoundBy(f)}>{FOUND_BY_LABEL[f]}</button>
+          ))}
+        </div>
+        <div className="cp-help">{foundBy ? FOUND_BY_HINT[foundBy] : 'Proof reads how they hear from your sends when you reach out, and from what you log every other way.'}</div>
+      </div>
       <div className="cp-btn-row">
         <button className="cp-btn primary" disabled={busy || !sells.trim()} onClick={save}>Save</button>
         <button className="cp-btn" onClick={actions.closeSheet}>Back</button>

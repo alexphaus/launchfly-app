@@ -13,9 +13,11 @@
 import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster } from '@/lib/copilot/machine';
-import { builtRows, businessChain, teamLine, waitingOnYou, workLine } from '@/lib/copilot/business';
+import { LINK_LABEL, businessChain, teamLine, waitingOnYou } from '@/lib/copilot/business';
+import { assetGaps } from '@/lib/copilot/assets';
+import { historyOf } from '@/lib/copilot/history';
 import { labView } from '@/lib/copilot/lab';
-import { SECTIONS, type WorkingSection } from '@/lib/copilot/working';
+import { chainInputOf, foundOf, proofLine, saidOf } from '@/lib/copilot/proof';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
@@ -242,11 +244,7 @@ export function derive(home: HomeData) {
     swap: plan.state === 'ready' ? null : pathSwap({ now, timezone: home.profile.timezone, focus: home.recent.focus, sentAt, outcomes: home.recent.outcomes, queueCount: noOffer ? 0 : queueCount }),
   };
 
-  /* Work — the business as a chain of bets, what it has built, and the team on one line */
-  // The goal a logged win actually moves: recordOutcome adds the amount to the
-  // highest-priority currency goal, target or not. Showing any other one at the
-  // end of the chain would draw a pipe into the wrong tank.
-  const goal = home.goals.find((g) => g.metric === 'currency') ?? null;
+  /* The team: each agent placed on the part of the business it runs, and one line for Proof */
   const team = agentRoster({
     now,
     supplyLastRun: home.supplyLastRun,
@@ -269,55 +267,51 @@ export function derive(home: HomeData) {
     jobsRan: home.jobsRun?.ran ?? null,
     broke: home.jobsRun?.broke ?? [],
   });
-  // What the person wrote, by section — their words are the claims on the
-  // chain. A reading the app counted is arithmetic, and the chain already
-  // shows the arithmetic.
-  const said: Partial<Record<WorkingSection, string[]>> = {};
-  for (const sec of SECTIONS) {
-    const lines = home.working.filter((w) => w.section === sec && w.status === 'live' && w.source === 'you').map((w) => w.body);
-    if (lines.length) said[sec] = lines;
-  }
-  const chain = businessChain({
-    offer: home.profile.offer ?? {},
-    said,
-    segments: home.profile.target_segments,
-    area: home.profile.target_area || home.profile.location || null,
-    web: webReady,
-    funnel: { matched: count('matched'), sent: count('sent'), replied: count('replied'), meetings: count('meeting'), won: count('won'), outside: d.outsideFunnel },
-    worthAMessage: good.filter((i) => i.from === 'business').length,
-    bySegment: d.bySegment ?? [],
-    byChannel: d.byChannel ?? [],
-    // A diagnosis from before amounts were read still knows how many won: each
-    // is a win of no known amount, never a win of zero.
-    wins: d.wins ?? Array.from({ length: count('won') }, () => null),
-    queue: noOffer ? 0 : queueCount,
-    wonRecent: { amount: home.metrics.won_amount, days: home.metrics.window_days },
-    goal: goal ? { title: goal.title, target: goal.target_value, current: goal.current_value } : null,
-    currency: goal?.unit || currency,
-    workerConnected: home.workerConnected,
+  // The chain is read from the same rows the funnel counts (proof.ts), with the
+  // bets, conversations and assets the person keeps for what the app cannot see.
+  const said = saidOf(home);
+  const found = foundOf(home);
+  const chain = businessChain(chainInputOf(home, {
     agents: team,
+    worthAMessage: good.filter((i) => i.from === 'business').length,
+    webReady,
+    currency,
     topOpening: d.openings[0]?.term ?? null,
-  });
-  const drawn = plan.state === 'ready' ? plan : null;
-  const built = builtRows({
-    offer: home.profile.offer ?? {},
-    said,
-    working: home.workingProgress ?? { filled: 0, total: SECTIONS.length, proposals: 0 },
-    plan: drawn ? { milestones: drawn.phases.reduce((n, ph) => n + ph.milestones.filter((m) => m.state !== 'dropped').length, 0), at: drawn.drawnAt } : null,
-    closed: home.commissions
-      .filter((t) => t.commission.status === 'done' || t.commission.status === 'stopped')
-      .map((t) => ({ id: t.commission.id, objective: t.commission.objective, status: t.commission.status as 'done' | 'stopped', outcome: t.commission.outcome, closedAt: t.commission.closed_at, createdAt: t.commission.created_at })),
-    outputs: (home.built?.rows ?? []).map((r) => ({ commissionId: r.commission_id, at: r.at })),
-    proofMove: chain.links.find((l) => l.key === 'pay')?.moves.find((m) => m.key === 'pay-proof') ?? null,
-    now,
-  });
-  const work = { chain, built, said, team: teamLine(team), waiting: waitingOnYou(home.commissions) };
+  }));
   const running = home.commissions.filter((t) => t.commission.status === 'active' || t.commission.status === 'blocked').length;
 
-  /* Lab — one bet at a time, read against the same chain Work draws, so the
-     part a play is offered for is the part Work calls weak, and a checkpoint
-     reads its decision back against the verdicts Work is showing. */
+  /* Proof — the verdict, the bet that moves it, the assets, the history. One
+     tab, because whether the business is proven and what is being bet to find
+     out are one question: the part a play is offered for is the part the
+     verdict calls weak, and a checkpoint reads its decision back against the
+     verdicts on the same screen. */
   const lab = labView(home.lab, { runwayMonths: home.metrics.runway_months, links: chain.links, today: home.recent.today });
+  const assets = home.assets?.assets ?? [];
+  const states = Object.fromEntries(chain.links.map((l) => [l.key, l.state]));
+  const proof = {
+    chain,
+    said,
+    found,
+    lab,
+    /** Every bet, newest first, for what links to one: an asset made for it, a row in the history. */
+    bets: home.lab?.bets ?? [],
+    assets,
+    assetsUnreadable: home.assets?.unreadable ?? null,
+    gaps: assetGaps({ assets, offer: home.profile.offer, weak: chain.weak, foundBy: found.value, states }),
+    history: historyOf({
+      bets: home.lab?.bets ?? [],
+      checkpoints: home.lab?.checkpoints ?? [],
+      talks: home.lab?.talks ?? [],
+      assets,
+      projects: home.commissions.map((t) => ({ id: t.commission.id, objective: t.commission.objective, status: t.commission.status, outcome: t.commission.outcome, closedAt: t.commission.closed_at })),
+      wins: home.wins ?? [],
+      experiments: home.roadmap?.experiments ?? [],
+      currency,
+      timezone: home.profile.timezone,
+    }),
+    team: teamLine(team),
+    waiting: waitingOnYou(home.commissions),
+  };
 
   const review = weekReview({
     now,
@@ -353,8 +347,7 @@ export function derive(home: HomeData) {
     path: planStatus(asks.length, path.week.streak),
     // The deck has no header: the card is the screen, and its own top line counts what is left.
     swipe: null,
-    work: workLine(chain.verdict, work.waiting),
-    lab: lab.line,
+    proof: proofLine(chain, { current: lab.current, checkpoint: lab.checkpoint, part: lab.current ? LINK_LABEL[lab.current.bet.part].toLowerCase() : null }, proof.waiting),
     // The balance is the first thing on the tab; a header saying it again is noise.
     money: null,
     you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : null,
@@ -364,7 +357,7 @@ export function derive(home: HomeData) {
     now, noOffer, queueCount, oldestDays, queueBacked, currency,
     done, asks, nothingYet, path,
     feed, good, counts, stages, searching,
-    team, running, work, lab,
+    team, running, proof,
     review, week,
     status,
   };

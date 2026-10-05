@@ -7,7 +7,7 @@
 // They read like a stranger's template — because they were — and none got sent.
 // Nothing should draft from a blank, and the rule has to live server-side.
 
-import type { Offer } from './types';
+import { FOUND_BY, type FoundBy, type Offer } from './types';
 
 /** The one "you" task the plan carries instead of drafts when the offer is empty. */
 export const OFFER_TASK_TITLE = 'Set your offer so drafts are written in your words';
@@ -19,6 +19,41 @@ export const SELLS_MAX = 240;
 export const PROBLEM_MAX = 240;
 
 const norm = (s?: string | null) => (s ?? '').trim().toLowerCase();
+
+/** How buyers find you, the way a person would say it. */
+export const FOUND_BY_LABEL: Record<FoundBy, string> = {
+  outreach: 'You reach out',
+  inbound: 'They find you online',
+  referrals: 'Word of mouth',
+  marketplace: 'A marketplace',
+  local: 'In person',
+};
+
+/** What each covers, so the choice is not a guess. */
+export const FOUND_BY_HINT: Record<FoundBy, string> = {
+  outreach: 'Messages, calls and emails you send first',
+  inbound: 'Search, social posts, content and ads bring them to you',
+  referrals: 'Clients, friends and partners send them',
+  marketplace: 'A platform lists you: Upwork, Fiverr, Etsy, an app store',
+  local: 'A shop, a stall, events and walk-ins',
+};
+
+/** A stored value held to the list: anything else is "not said", never a guess at what was meant. */
+export function isFoundBy(v: unknown): v is FoundBy {
+  return typeof v === 'string' && (FOUND_BY as readonly string[]).includes(v);
+}
+
+/**
+ * How buyers find this business: what the person said, else outreach when the
+ * app has sent for them or found businesses to write to — finding them is what
+ * outreach starts with, and nothing else here does — else nobody has said.
+ * `said` keeps the two apart, so a screen can show an inferred channel as
+ * inferred.
+ */
+export function foundByOf(offer: Offer | null | undefined, sent: number, matched = 0): { value: FoundBy | null; said: boolean } {
+  if (isFoundBy(offer?.found_by)) return { value: offer!.found_by!, said: true };
+  return { value: sent > 0 || matched > 0 ? 'outreach' : null, said: false };
+}
 
 /** An offer with nothing in `sells` cannot produce a message that is the user's. */
 export function offerIsEmpty(offer?: Offer | null): boolean {

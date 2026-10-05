@@ -1,6 +1,7 @@
 // Line icons for the four-tab shell, drawn on the same 24px grid and stroke as
 // icons.tsx so the two sets sit together. Glyphs rather than emoji: an emoji is
 // a different picture on every phone, and on some it is a box.
+import type { AssetKind } from '@/lib/copilot/assets';
 import type { AgentKey } from '@/lib/copilot/machine';
 import type { MatchGroup } from '@/lib/copilot/matches';
 import type { PathIcon } from '@/lib/copilot/pathway';
@@ -10,12 +11,14 @@ const base = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinec
 
 /** Today: the day's one thing. */
 export const IconToday = () => (<svg {...base}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>);
-/** Work: the thing being built. */
-export const IconWork = () => (<svg {...base}><path d="M12 3l9 5-9 5-9-5 9-5z" /><path d="M3 13l9 5 9-5" /></svg>);
+/** Proof: a shield with a tick — whether the business holds, and what is being bet to find out. */
+export const IconProof = () => (<svg {...base}><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" /><path d="M8.8 12.2l2.2 2.2 4.4-4.6" /></svg>);
 /** Path: from where you were to where you are going — two points and the way between. */
 export const IconPath = () => (<svg {...base}><circle cx="6" cy="19" r="2" /><circle cx="18" cy="5" r="2" /><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16" /></svg>);
 /** Will it work: a gauge — where the pace sits against what the goal needs. */
 export const IconGauge = () => (<svg {...base}><path d="M4 17a8 8 0 1 1 16 0" /><path d="M12 17l4-5" /><circle cx="12" cy="17" r="1" /></svg>);
+/** A bet: a line to reach, aimed at before it starts. */
+export const IconTarget = () => (<svg {...base}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.8" fill="currentColor" /></svg>);
 /** An experiment: one thing tried on purpose, to find something out. */
 export const IconFlask = () => (<svg {...base}><path d="M9 3h6" /><path d="M10 3v6.5L4.8 18.4A1.7 1.7 0 0 0 6.3 21h11.4a1.7 1.7 0 0 0 1.5-2.6L14 9.5V3" /><path d="M7.5 15h9" /></svg>);
 /** The goal at the end of the path. */
@@ -112,7 +115,7 @@ export function MatchGlyph({ group }: { group: MatchGroup }) {
 /**
  * One glyph per kind of thing that moved, so the stream reads at a glance: who
  * looked, who wrote, who sent, who answered. The agents keep their roster glyph
- * — the Scout's lens on Path is the Scout on Work.
+ * — the Scout's lens on Path is the Scout on Proof.
  */
 export function PathGlyph({ icon }: { icon: PathIcon }) {
   switch (icon) {
@@ -135,5 +138,23 @@ export function PathGlyph({ icon }: { icon: PathIcon }) {
     case 'focus': return (<svg {...base}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>);
     case 'done': return <IconCheck />;
     case 'star': return <IconStar />;
+  }
+}
+
+/** One glyph per kind of asset (assets.ts), so a list of them reads as what each is before what it is called. */
+export function AssetGlyph({ kind }: { kind: AssetKind }) {
+  switch (kind) {
+    // A tag: what it is and what it costs.
+    case 'offer': return (<svg {...base}><path d="M3 12V4h8l9.5 9.5-8 8L3 12z" /><circle cx="7.5" cy="8.5" r="1.3" /></svg>);
+    // A play button: what a buyer sees working.
+    case 'demo': return (<svg {...base}><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M10 9.2v5.6l4.6-2.8L10 9.2z" /></svg>);
+    // Lines spoken: what you say.
+    case 'script': return (<svg {...base}><path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L3 21l2-5.6A8.4 8.4 0 1 1 21 11.5Z" /><path d="M8.5 10h7M8.5 13.5h4.5" /></svg>);
+    // A browser window: one page.
+    case 'landing_page': return (<svg {...base}><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 9h18" /><path d="M6 6.5h.01M8.5 6.5h.01" /><path d="M7 13h10M7 16.5h6" /></svg>);
+    // Steps joined: from yes to delivered.
+    case 'workflow': return (<svg {...base}><rect x="3" y="3.5" width="7" height="6" rx="1.5" /><rect x="14" y="14.5" width="7" height="6" rx="1.5" /><path d="M6.5 9.5v3.5a2 2 0 0 0 2 2H14" /></svg>);
+    // A scale: one price, weighed.
+    case 'price_test': return (<svg {...base}><path d="M12 4v16M7 20h10" /><path d="M5 7h14" /><path d="M5 7l-2.5 6a2.5 2.5 0 0 0 5 0L5 7zM19 7l-2.5 6a2.5 2.5 0 0 0 5 0L19 7z" /></svg>);
   }
 }

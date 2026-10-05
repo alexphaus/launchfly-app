@@ -30,6 +30,7 @@ import {
 } from '@/lib/copilot/roadmap';
 import { dateLabel } from '@/lib/copilot/due';
 import { ANGLE_LABEL, type ExperimentState, type ExperimentView } from '@/lib/copilot/experiment';
+import { resultLine, type BetView } from '@/lib/copilot/lab';
 import { VERDICT_WORDS, type GoalOutlook } from '@/lib/copilot/outlook';
 import type { NextStep } from '@/lib/copilot/pathway';
 import type { Actions } from '../shared';
@@ -132,11 +133,19 @@ function RecordSays({ lines }: { lines: string[] }) {
 /**
  * The plan's one experiment (experiment.ts): a move the person would probably
  * not have written, with the evidence for it, a test sized to a day, and what
- * would show it worked. Offered, it asks to be tried or set aside; being tried,
- * it asks how it went — hardest on its check date, but answerable any day.
- * Nothing here is graded for them: the verdict is their tap.
+ * would show it worked. Offered, it asks to be tried or set aside — or made a
+ * bet on Proof, where the rows judge it instead of a tap. Being tried by hand,
+ * it asks how it went, hardest on its check date. Made a bet, the bet decides
+ * it, and the card says how the bet stands instead of asking.
  */
-export function ExperimentCard({ view, goalTitle, today, actions }: { view: ExperimentView; goalTitle: string | null; today: string; actions: Actions }) {
+export function ExperimentCard({ view, goalTitle, today, actions, bet, canBet, onBet }: {
+  view: ExperimentView; goalTitle: string | null; today: string; actions: Actions;
+  /** The bet this experiment was made into, when it was: its verdict is the experiment's. */
+  bet: BetView | null;
+  /** No bet is running, so this one can become the bet. */
+  canBet: boolean;
+  onBet: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const x = view.exp;
@@ -147,7 +156,7 @@ export function ExperimentCard({ view, goalTitle, today, actions }: { view: Expe
   };
   // Folded to the line each stage turns on: offered, why it is worth a day;
   // being tried, what would show it worked. The rest is a tap on the card.
-  const offered = view.stage === 'offered';
+  const offered = view.stage === 'offered' && !bet;
   return (
     <div className="cp2-way-row cp2-exp">
       <span className="cp2-way-node sm cp2-exp-node"><IconFlask /></span>
@@ -160,18 +169,33 @@ export function ExperimentCard({ view, goalTitle, today, actions }: { view: Expe
           {(open || !offered) && <span className="cp2-exp-line"><b>It worked if</b>{x.watch}</span>}
           {open && goalTitle && <span className="cp2-plan-for">For {goalTitle}</span>}
         </button>
-        {offered ? (
-          <span className="cp2-way-acts">
-            <button className="cp-btn primary sm" disabled={busy} onClick={() => void act('started')}>Try it</button>
-            <button className="cp-btn sm" disabled={busy} onClick={() => void act('dropped')}>Not for me</button>
-          </span>
+        {bet ? (
+          // Made a bet: the rows decide it, so there is nothing to tap here but the way to the bet.
+          <>
+            <span className="cp2-exp-when">
+              {bet.state === 'running'
+                ? `A bet on Proof decides it · day ${bet.day} of ${bet.bet.days}, ${resultLine(bet)}`
+                : `The bet ${bet.state === 'passed' ? 'passed' : bet.state === 'failed' ? 'did not pass' : 'was called off'}: ${resultLine(bet)}. The plan hears it when it is next drawn.`}
+            </span>
+            <span className="cp2-way-acts">
+              <button className="cp-btn sm" onClick={() => actions.setTab('proof')}>See the bet</button>
+            </span>
+          </>
+        ) : offered ? (
+          <>
+            <span className="cp2-way-acts">
+              <button className="cp-btn primary sm" disabled={busy} onClick={() => void act('started')}>Try it</button>
+              <button className="cp-btn sm" disabled={busy} onClick={() => void act('dropped')}>Not for me</button>
+            </span>
+            {canBet && <button className="cp2-exp-bet" onClick={onBet}>Or make it a bet, and let the rows judge it</button>}
+          </>
         ) : (
           <>
             <span className="cp2-exp-when">
-              {view.due ? 'Its check date is here. Did it work?' : `Trying it · check on ${dateLabel(view.checkOn, today)}`}
+              {view.stage === 'trying' && view.due ? 'Its check date is here. Did it work?' : view.stage === 'trying' ? `Trying it · check on ${dateLabel(view.checkOn, today)}` : ''}
             </span>
             <span className="cp2-way-acts">
-              <button className={`cp-btn sm ${view.due ? 'primary' : ''}`} disabled={busy} onClick={() => void act('worked')}>It worked</button>
+              <button className={`cp-btn sm ${view.stage === 'trying' && view.due ? 'primary' : ''}`} disabled={busy} onClick={() => void act('worked')}>It worked</button>
               <button className="cp-btn sm" disabled={busy} onClick={() => void act('failed')}>It didn&rsquo;t</button>
               <button className="cp-btn sm" disabled={busy} onClick={() => void act('unclear')}>Can&rsquo;t tell</button>
             </span>
@@ -357,13 +381,13 @@ function SetAsideRow({ m, actions }: { m: MilestoneView; actions: Actions }) {
  * A step the plan gave the agent says so and carries its button in plain sight:
  * one tap hands it over and starts it (handOverStep). It used to sit behind a
  * tap on the step's words, write a draft with no goal and no plan, and wait to
- * be approved on Work and then for 21:00 — so work the plan had already judged a
+ * be approved under Projects and then for 21:00 — so work the plan had already judged a
  * machine could do waited a day unless somebody went looking. Once handed over,
  * the row says where the project stands and opens it. Handing over is not
  * doing: the tick stays the person's.
  */
 const PROJECT_STATE: Record<string, string> = {
-  draft: 'Waiting for your approval on Work',
+  draft: 'Waiting for your approval',
   active: 'With your agent',
   blocked: 'Your agent needs you',
   done: 'Your agent finished it',

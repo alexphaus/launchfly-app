@@ -12,6 +12,7 @@ import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { LabHome } from './lab';
+import type { AssetsHome } from './assets';
 import type { NightlyRun } from './nightly';
 import type { PipelineStage } from './pipeline';
 import type { SourceYield } from './watch/yield';
@@ -73,7 +74,22 @@ export interface Offer {
   problem?: string;      // "enquiries arrive after hours and go unanswered"
   price_band?: string;   // "$400-1,500 per build"
   proof_url?: string;    // one link that shows the work
+  /**
+   * How buyers find the business. The app counts only outreach itself, so
+   * Proof reads every other way through the person's own bets and logs
+   * (business.ts). Unset and nothing sent is "nobody has said"; unset with
+   * sends is outreach, read off the rows.
+   */
+  found_by?: FoundBy;
 }
+
+/**
+ * How buyers find a business, in the five ways that change what the app can
+ * count: outreach it sends and counts itself; the other four it cannot see, so
+ * the person's own counts stand in for the rows there.
+ */
+export const FOUND_BY = ['outreach', 'inbound', 'referrals', 'marketplace', 'local'] as const;
+export type FoundBy = (typeof FOUND_BY)[number];
 
 /** How to reach the other side of an opportunity. All optional; sourced rows fill what they can. */
 export interface Contact { name?: string; whatsapp?: string; email?: string; website?: string }
@@ -466,6 +482,21 @@ export interface HomeData {
    * existed has to render.
    */
   lab?: LabHome;
+  /**
+   * The business's assets — offer, demo, script, landing page, workflow, price
+   * test — each with its versions, who made each, and the bet behind it
+   * (assets.ts). Optional because a payload cached before this existed has to
+   * render; `unreadable` is said on Proof, never shown as no assets.
+   */
+  assets?: AssetsHome;
+  /**
+   * Every sale logged, all time, newest first: when, how much, and who where a
+   * business was named. Proof's history reads it; the funnel's own counts are
+   * the diagnosis's, so the two cannot disagree about how many.
+   */
+  wins?: Array<{ at: string; amount: number | null; who: string | null }>;
+  /** Whether this server has a model, so Proof offers what a model writes only where one can. Invariant 7. */
+  ai?: boolean;
   /** False when no worker is configured, so a mandate would never be picked up. */
   workerConnected: boolean;
   /**

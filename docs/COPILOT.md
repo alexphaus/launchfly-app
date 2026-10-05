@@ -17,7 +17,7 @@ but none of the business logic. Everything is under:
 
 | Layer | Path |
 | --- | --- |
-| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — the four-tab layout, five tabs now (Path · Swipe · Work · Money · You), calm |
+| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — the four-tab layout, five tabs now (Path · Swipe · Proof · Money · You), calm |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
@@ -291,8 +291,8 @@ somewhere sensible.
 
 ## Four tabs (`/copilot2`)
 
-A second layout over the same app: **Path**, **Swipe**, **Work**, **Lab**,
-**Money**, **You**. It began as Today, Matches, Work, You, written from its owner's verdict on the
+A second layout over the same app: **Path**, **Swipe**, **Proof**, **Money**,
+**You**. It began as Today, Matches, Work, You, written from its owner's verdict on the
 two-tab version ("too many things, nothing that stands out, the purpose lost from
 the original mock-ups; Working? is a log"). Then every redraft of Work met the
 same verdict — "static sections that compete for attention and nothing changes",
@@ -306,8 +306,10 @@ joined them in October 2026 as the one screen of a budgeting app its owner used
 (see **The money book**); the layout keeps its name. Swipe replaced Matches after
 one release side by side: its owner lived with both and kept the deck (see
 **Swipe**). The Lab joined in October 2026, when its owner asked whether this
-could be the toolkit for someone who has just read The Lean Startup (see **The
-Lab is one bet at a time**).
+could be the toolkit for someone who has just read The Lean Startup, and within
+the month Proof replaced both Work and the Lab (see **Proof**): Work said which
+part of the business was weak, the Lab ran the bet on it, and two tabs asked one
+question in two places.
 
 It is a layout, not a fork. `useCopilot` (`_components/useCopilot.ts`) holds the
 state, the sheet stack and every action, and both `CopilotApp` and `CopilotApp2`
@@ -320,8 +322,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
-| Work | is the business proven, and what moves it | what you sell and the verdict — proven, or the bar and the count against it — with the experiments run on it · the chain: who buys → how they hear → how they say yes → what they pay → how you deliver, each part a bet with its state, its rule and who runs it, the weak link open with what would move it · in the works: one box to hand anything over or copy it for Claude, the weak link's suggestions, the projects with a question answered or a breakage retried on the card · built: what the business has, by whom, gaps first · the agents as one line | `business.ts`, `machine.ts` |
-| Lab | did the bet work | one bet at a time: the belief in your words, the pass line written before it starts, the count against it from the rows, the play it runs and the work an agent can do to get it ready · every two weeks once a bet has ended, pivot or persevere, with the last answer read back · plays from business books for one part of the business, the weak link's first · the conversations you log (The Mom Test) · what you learned, passed or not · runway in bets | `lab.ts`, `business.ts` |
+| Proof | is the business proven, and what is being bet to find out | what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play, the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet · the history, everything above dated · conversations, projects and agents, a line each | `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move | `money/book.ts` |
 | You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
@@ -390,7 +391,7 @@ log of what already happened", in its owner's words). The rules are in `plan.ts`
   (`WORKER_CLOSE_MS`); hours you logged, on the day worked; a step reached. Not
   what the app did — finds, drafts, a project's steps, a Move ticked off — and not
   a send on its own, which teaches nothing until something comes back. What the
-  app did is on Work. Days before this week carry their date ("Sat 12 Sep"): a
+  app did is under Projects and Agents on Proof. Days before this week carry their date ("Sat 12 Sep"): a
   weekday alone named two Saturdays. An empty fortnight says so, with the sends
   that explain it.
 - **A step reached is a moment where it happened**, directly under the answer or
@@ -622,8 +623,8 @@ finish alone; the planner hands it steps within that, never contacting, posting,
 applying, spending or signing. A step it can do carries **Hand it to your agent**
 in plain sight: one tap writes the project with its goal and a plan ending in "report back
 with links, checked against" the milestone's done-when, approves it (read
-authority), and dispatches it in `after()` — not at 21:00. Approving a project on
-Work also starts it now. The step then says where the project stands and opens it;
+authority), and dispatches it in `after()` — not at 21:00. Approving a project under
+Projects also starts it now. The step then says where the project stands and opens it;
 the tick stays the person's.
 
 **The Path reads light.** Each block above was right, and together they buried
@@ -674,7 +675,7 @@ while it waits and a receipt once answered; "needs you" is the move and the chip
 beside it; "worth doing" is this week's steps; and "done for you" is split by
 what it was — an answer is evidence (a reply `reconcileReplies` matched is the
 world's, never reported as the user's work), and the app's own activity is its
-team's line on Work. Old links to Today (`?tab=today`, `?tab=now`) land on the
+team's line on Proof. Old links to Today (`?tab=today`, `?tab=now`) land on the
 Path.
 
 **What was the Matches tab is the deck's supply now.** Matches was a filtered
@@ -742,141 +743,183 @@ segment as the label because the segment is a search term and can be wrong: on
 one live account it was the letter "m". A one-letter segment is refused at every
 write path (`isSearchableSegment`) and named back when it is.
 
-**Work is the business as a chain of bets** (`business.ts`, `v2/WorkTab.tsx`).
-It was an illustration — four stages that were the same for everybody, five agents
-with a dot each, the projects, and a button that copied everything into a chat —
-and its owner's verdict was the brief for what it is now: stale, the path to money
-generic, the team "too heavy for a status", and Build with Claude "could be input
-text for handover". The want was the tab that knows how the business makes money:
-the proven system and how everything is connected, what was built by AI and by
-them, suggestions that pay, experiments — run by an app that suggests, works, and
-asks only when it must.
+**Proof: is it proven, and what is being bet to find out** (`proof.ts`,
+`v2/ProofTab.tsx`, `v2/ProofSheets.tsx`). It replaced two tabs. Work was the
+business as a chain of bets — the verdict, the parts, the weak link, the
+projects, what was built — and the Lab was one bet at a time on that weak link.
+Its owner found them answering one question in two places: the verdict on one,
+the bet that moves it on the other, and a checkpoint on the Lab read back against
+a chain drawn on Work. The brief for the one tab: replace both; not only for a
+business that sells by outreach, which is how the owner's account runs; powered
+by a model so it is not the same tab every time it is opened; clean panels;
+assets as first-class things, each with who made it, its version and the bet that
+produced it; and the history in one place. The rule underneath all of it is the
+app's usual one: **a model proposes, the rows judge**. A model writes ideas for a
+bet and drafts of an asset; nothing it writes decides a verdict, and nothing it
+writes is the person's until they keep it.
 
-So there is one spine, and everything that used to be a section hangs off it:
+On the screen, top to bottom:
 
-- **Five parts** — who buys, how they hear, how they say yes, what they pay, how
-  you deliver. Each carries what it is in the person's words (the offer, the
-  working file's lines), what the rows show (the funnel, per kind of business and
-  per channel, every win's amount), who runs it (the Scout, the Writer and you,
-  you), and a **state** by a rule written out beside it with its numbers:
-  works · testing · not working · untested · missing. The thresholds are the
-  app's own, not new ones: the app plans on `WORKING_REPLIES` replies in every
-  `RATE_SAMPLE` sends (the funnel checkpoint), counted per whole batch so two by
-  twenty-five clears it and two by a hundred does not; `REPEAT_WINS` wins is
-  something you can repeat; and from `CLOSE_SAMPLE` (`MIN_SAMPLE`, five)
-  conversations, nobody paying says more about the ask or the price than about
-  luck.
-- **Proven means paid, three times, at the price you set.** Not a count of wins:
-  the owner's account had two wins at $1 each, and a count cannot tell those
-  from sales. `diagnose` now keeps every win's amount (`wins`, `bySegment[].paid`),
-  so "a kind of business that pays" is held to the price too. Until then the
-  verdict says the bar and the count against it — "Proven at 3 paid at your
-  $150. So far: 0." — never a forecast (invariant 2).
-- **The weak link opens by itself** (`weakLink`): a part further down that has
-  failed on its own evidence binds everything above it (six meetings and no sale
-  at the price makes more replies worthless until it is fixed); otherwise a part
-  nobody has said (who buys, the price), since it costs a sentence; otherwise the
-  first part of the funnel that does not work yet. Delivery only once selling
-  works — nothing measures it, so it is never "not working", only written or not.
-- **What would move a part** is one of three things and says which: a sheet of
-  yours, a project for your agent (written as a draft and opened on its approve
-  button — never started unseen), or a question for Claude with the whole record
-  pasted. An agent move becomes a Claude one where no worker is connected
-  (invariant 7) or where three projects are already on the go, and says why. The
-  asks carry the instruction, not a second copy of the offer: the worker is sent
-  the offer and the working file with every project, and the brief carries both.
-  Build with Claude's four tasks live here now, on the part each one moves.
-- **The team is placed, not listed.** An agent that failed says so on the part it
-  stopped (`runner.problem`, invariant 13); the roster is one line under Agents —
-  how many are working and the name of every one that is not — with the rows
-  folded under it and the Planner's Run now among them.
-- **In the works** is one box — hand it over, or copy it for Claude — with the weak
-  link's suggestions as chips that fill it, then the projects, small enough that
-  three fit on a screen. A project's question has an answer box on its card, and
-  answering starts it (`unblock` with an answer dispatches in `after()`, the way
-  approving does); a breakage has its retry on the card.
-- **Built** is what the business has to work with, by whom: proof first when there
-  is none (with its way to fill it), the working file, the plan, and every closed
-  project with what it produced — `loadBuiltOutputs` reads every event that
-  carried something, across live and closed projects, because a finished project's
-  links used to be in its own sheet and nowhere else. Not the funnel's numbers:
-  those are on the chain, and the same count twice on one screen is what every
-  redraft here has deleted.
-- **It moves, and says so.** Each part's state is kept per device
-  (`cp2.work.seen:<profile>`), and the next visit names what moved — "How they
-  hear went from Not working to Works". Built marks what is new. No snapshot is no
-  change, the same rule the Path's plan keeps.
+- **The verdict.** What you sell, how buyers find you, proven or not — "Proven at
+  3 paid at your $150. So far: 0." — and the chain as five dots in a row, each with
+  its state's word, the weak link named under them with its rule. A tap opens the
+  chain whole (the parts below). Under it, runway in bets and the last checkpoint
+  read back. "Since you last looked" names a part that moved, per device, under
+  the key Work used, so what a device saw there carries over.
+- **The bet**, one at a time — or the checkpoint, or the way to pick one.
+- **Assets**, the gaps first, each with who made the version in use.
+- **History**, the four newest; all of it, by month and kind, behind a tap.
+- **Behind it**: conversations, projects and agents, a line each.
 
-The Path is still where the day's order is decided — the plan, the call, the
-experiment to start and grade. Work is what the business is and whether it is
-proven; the experiments fold on it is the ledger, not a second copy of the card.
+**Five parts, each a bet with a rule** (`business.ts`). Who buys, how they hear,
+how they say yes, what they pay, how you deliver. Each carries what it is in the
+person's words, what the rows show, who runs it, and a state by a rule written out
+beside it with its numbers: works · testing · not working · untested · missing.
+The thresholds are the app's own: `WORKING_REPLIES` replies in every
+`RATE_SAMPLE` sends (the funnel checkpoint), counted per whole batch so two by
+twenty-five clears it and two by a hundred does not; `REPEAT_WINS` wins is
+something you can repeat; and from `CLOSE_SAMPLE` (`MIN_SAMPLE`, five)
+conversations, nobody paying says more about the ask or the price than about
+luck. **Proven means paid, three times, at the price you set** — the owner's
+account had two wins at $1 each, and a count of wins cannot tell those from
+sales. **The weak link** opens by itself (`weakLink`): a part further down that
+failed on its own evidence binds everything above it; otherwise a part nobody has
+said, since it costs a sentence; otherwise the first part of the funnel that does
+not work yet; delivery only once selling works. **What would move a part** is a
+sheet of yours, a project for your agent (written as a draft and opened on its
+approve button), a question for Claude with the whole record pasted, a bet on
+that part, or an asset to make — and an agent move becomes a Claude one where no
+worker is connected (invariant 7) or three projects are on the go. An agent that
+failed says so on the part it stopped (invariant 13).
 
-**The Lab is one bet at a time** (`lab.ts`, `v2/LabTab.tsx`, `v2/LabSheets.tsx`).
-Its owner asked whether the app could be the toolkit for someone who has just
-read The Lean Startup. It could not: the book starts from assumptions bet on
-against a line set in advance, and the app started from an offer already being
-sold, with one experiment the planner wrote and a tap graded. Somebody who closes
-the book does not know what to do on Monday — which play, on what, and did it
-work. The Lab answers those three and nothing else. What it is not was in the
-brief as well: no book summaries (a chat explains a book for free), no canvases
-to fill in (a page of claims with nothing to test them against), no daily quotas
-(a quota counts effort; this counts results).
+**How buyers find you** (`offer.found_by`: outreach · inbound · referrals ·
+marketplace · local) decides how the chain is read. The app counts outreach
+itself — finds, sends, replies. Every other way it cannot see buyers arrive, so
+it does not pretend to: who buys is read from the conversations logged, sales at
+the price and bets that passed; how they hear from the person's own bets on it —
+two passed is a pattern, one passed with a sale is the channel doing its job, two
+short in a row is not working; how they say yes and what they pay count the
+conversations logged where the funnel counts meetings. Said beats read: unsaid,
+it is outreach once the app has found or sent anything for the account, and
+otherwise nobody knows — the chain asks rather than defaulting to outreach, and
+the screen says when the channel was read rather than said. The owner's account
+reads exactly as it did. It is set on its own sheet or on the offer sheet, kept
+when the offer is saved without it, and is not part of the offer's history: no
+message says it.
 
-- **A bet is written before it starts and judged by the rows after.** A part of
-  the business, a belief in a sentence, something countable, a line to reach and
-  a last day, said back in one sentence before the Start button — the pass line,
-  "1 sale at your $150 by 12 Oct, from 10 messages sent". It starts on the
-  person's own today, and nothing before it counts. There is no "mark it passed":
-  the route has no action for a verdict, and a test fails if one appears
-  (invariant 10's reasoning — a bet you could pass by tapping is graded by the
-  one person most hoping it passes). It passes the day its count reaches the
-  line, and its counts close that day, so the next bet's sends are never counted
-  on the last one. It fails when its last day goes by short of the line. A
-  call-off is the person's: it keeps what it counted until then and a line on
-  why, and it does not undo a pass.
-- **It counts what the funnel counts** — the sends, replies once per business,
-  meetings, wins and projects finished that `loadHome` already reads — and the
-  conversations the person logs. A sale at your price is held to the price the
-  offer named when the bet began, so changing the price later cannot rewrite a
-  verdict, and such a bet cannot start without one: the one-dollar test is what
-  the chain already refuses to call a sale. Days are the person's — a Manila
-  evening is the next morning's date in Manila. Under every count it says where
-  the count came from, and a logged number never reads as a measured one.
-  "From 10 messages sent" is the plan, said beside the result; it never decides
-  the verdict, and going past it is said on the bet ("a pass here says less than
-  it looks").
-- **One at a time**, because two bets running at once share every send and
-  neither result would mean anything. The server refuses a second, and refuses
-  to open any while the Lab cannot be read.
-- **Plays** (`PLAYS`) come from business books, and each is something to do with
-  a count the app can read: The Mom Test's ten problem conversations, Crossing
-  the Chasm's one niche, Traction's untried channel, $100M Leads' warm before
-  cold, The Lean Startup's change one thing, Never Split the Difference's ask
-  for a no, $100M Offers' guarantee, Million Dollar Weekend's paid within 48
-  hours, Built to Sell's one package, The E-Myth's hand one step over. A book
-  that is a way of thinking is not here: an entry with no count behind it would
-  be advice dressed as a test. They are shown for one part at a time — the chain
-  as the selector, the weak link first — and a play's prep (interview questions,
-  three first lines) is the same move Work offers, through the same code
-  (`v2/MoveKit.tsx`): a draft for the agent to approve, or a chat with the whole
-  record.
-- **Conversations** are The Mom Test's log: who, whether they have the problem,
-  and what they committed — another call, an intro, money, or nothing, because a
-  compliment is not a result. It is the one count the app cannot take itself,
-  logged up to thirty days back.
-- **The clock** is the book's line that runway is the number of tries left: the
-  runway the bank gives, divided by the pace kept — the median gap between bet
-  starts, not how long each ran, because a call-off on day three would make bets
-  look short. Two weeks until there have been two.
-- **The checkpoint** asks pivot or persevere every two weeks, once a bet has
-  ended since the last answer. The answer is kept with the chain as it stood, and
-  the next checkpoint reads it back — a pivot against the part it changed,
-  persevere against the whole chain: "What they pay has slipped since".
+**One bet at a time, judged by the rows** (`lab.ts`). A part, a belief in a
+sentence, something countable, a line and a last day, said back as the pass line
+before Start — "1 sale at your $150 by 12 Oct, from 10 messages sent". It starts
+on the person's own today; nothing before it counts. There is no "mark it
+passed": neither route has an action for a verdict, and a test fails if one
+appears (invariant 10's reasoning). It passes the day its count reaches the line,
+and its counts close that day; it fails when its last day goes by short; a
+call-off keeps what it counted and a line on why, and does not undo a pass.
+What it can count is what the funnel counts — sends, replies once per business,
+meetings, wins, projects finished — the conversations the person logs, and **a
+count of their own** (`logged`, with their word for it: "sign-ups", "enquiries",
+"walk-ins"), logged per bet and per day inside the bet's days, for the ways in
+the app cannot see. A logged number never reads as a measured one: the line
+under the count says where it comes from. Sends and replies are not offered to a
+business whose buyers do not come through them (`metricsFor`), and a play's plan
+counted in sends is dropped for one (`playFor`) — the line stays. One at a time,
+because two bets share every count; the server refuses a second, and refuses any
+while the record cannot be read.
 
-Stored without a migration, as `copilot_events` rows (`lab_bet`,
-`lab_bet_stopped`, `lab_talk`, `lab_checkpoint`), the way deep work and the
-plan's ticks are. A read that fails is said on the tab and never drawn as an
-empty Lab (invariant 13).
+On the card: the count and the bar, what it took so far (quieter: it is the plan,
+never the verdict), the play, and **the work done for it** — the projects tied to
+it (`lab_link`, written when a project is handed over from the bet or its prep),
+the assets made for it, and the conversations or counts logged since it began —
+so a bet with nothing done for it on day nine says so. **Get it ready** is the
+play's prep: an asset drafted by AI for the bet or written by you, or a project or
+a chat as before. **Hand part of this bet over** writes a project tied to it.
+And **the one place its next count happens** (`betNext`): Swipe for sends and
+replies; who replied, for a sale or a meeting where buyers are written to; a
+sheet to log a sale, a meeting or a count where they are not — a sale logged
+there carries no business and lands on the goal like any other.
+
+**With none running**, the card asks what you believe that you have not tested,
+on the weak part first, with the last bet's result. First come **ideas a model
+wrote for this business** (`ideas.ts`, `proofai.ts writeIdeas`): three, from the
+person's words, the chain with its rules and numbers, the bets already run and how
+each ended, the conversations logged and the assets there are — asked for once a
+visit when there are none, or when the record has moved since the last were
+written (a bet ended, or two weeks went by: `ideasStale`), and again on a tap.
+Each is held to what a bet is before it is kept — a count this business can keep,
+a line in range, a plan that is the step before the count, no placeholder — so
+any idea on screen can become a bet as it stands. A reason that cites a number
+the person never gave loses the reason; a book not on the list is not named. Then
+**plays from books** (`PLAYS`), filtered by how buyers find you: The Mom Test,
+Crossing the Chasm, Traction, $100M Leads, The Lean Startup, Building a
+StoryBrand, The Referral Engine, Never Split the Difference, $100M Offers,
+Million Dollar Weekend, Built to Sell, The E-Myth — each something to do with a
+count, never advice dressed as a test. Then your own. Without a model on the
+server there is no ideas button at all (invariant 7); the books are there.
+
+**The checkpoint** asks pivot or persevere every two weeks, once a bet has ended
+since the last answer, kept with the chain as it stood and read back next time —
+a pivot against the part it changed, persevere against the whole chain. **The
+clock** is runway in bets: the runway the bank gives over the pace kept (the
+median gap between bet starts).
+
+**Assets** (`assets.ts`): the offer, a demo, a script, a landing page, a
+workflow, a price test. An asset is an identity and a list of versions; each
+version says who made it (AI or you), when, from which bet or project, and holds
+a link, a text or both. Nothing is edited in place: a change is the next version,
+and the history is the list. **The offer** is one asset with a fixed id. The
+profile row keeps the version in use, because every draft is written from it
+(invariant 1), and every save records a version — the first save records the
+offer it replaces too, undated, because it was written before the history began
+and a date it does not have would be invented. A version the AI wrote is not the
+offer until the person makes it theirs (`adopt`), which goes through the same
+save that rewrites the waiting drafts; how buyers find you is kept as the person
+said it. An offer changed where the history does not reach shows as the version
+in use, undated. A demo with a link can be made the proof every message carries.
+**Gaps** are the assets missing where they would matter now, two at most, the
+weak part's first: no demo while the price is unproven, no landing page where
+buyers find you online, no script while closing is stuck, no workflow once
+selling works. **A draft by AI** (`proofai.ts draftAsset`) is written from the
+offer, the working file as written, the part it is for and the bet, and is held
+to the rule a message is (deck.ts `checkDraft`): no placeholder, no link the
+person did not give, and no number that is not in their words or rows
+(`numberOutside`; a step's number, a duration and a time of day are
+instructions, not claims) — refused, not repaired, and the screen says which.
+Only the two newest bodies per asset travel with the home payload; older ones
+are fetched from `/api/copilot/assets?id=` when opened. A read that fails is said
+and no version is written over it (invariant 13).
+
+**History** (`history.ts`) is the gap its owner named: every record had its own
+screen and its own clock, so "what did we try last month, and what came of it"
+had nowhere to be answered. It is built from rows that already exist — nothing is
+written for it, and nothing in it is a model's summary: bets started and how each
+ended (one that did not pass stays: it is the cheapest lesson the business
+gets), checkpoints with their line, conversations that ended in a commitment (a
+compliment is not history), every dated asset version with who made it,
+projects finished or stopped, sales with their amount and who where known, and
+the plan's experiment verdicts (not the ones the app inferred). What the person
+wrote they tried before the app is at the foot, in their words.
+
+**Behind it**: the conversation log (The Mom Test's: who, whether they have the
+problem, what they committed), the projects — the box to hand anything over or
+copy it for Claude, the projects on the go with a question answered or a
+breakage retried on the card, what the app offers to take on, and what finished,
+with the bet each was for — and the agents as one line, the roster folded under
+it.
+
+**The Path keeps its job** — the plan, the call, the day's move — with three
+links to Proof: the bet running (or a checkpoint due) as one line under "you are
+here"; the plan's experiment can **become the bet** ("Or make it a bet, and let
+the rows judge it"), opening the bet sheet with the experiment's test, check days
+and the part its kind works on; and an experiment made a bet shows the bet's
+progress or verdict instead of asking for a tap. When the bet ends, its verdict
+becomes the experiment's (`experimentVerdicts`: passed is worked, did not pass is
+failed, called off is could not tell), written by `settleBetExperiments` before
+the next plan is drawn, so the planner hears what the rows said.
+
+Stored without a migration, as `copilot_events` rows: the bets' `lab_bet`,
+`lab_bet_stopped`, `lab_talk`, `lab_checkpoint`, `lab_count`, `lab_link`,
+`lab_ideas`, and the assets' `asset_version`, `asset_retired`,
+`asset_restored`. A read that fails is said on the tab and never drawn as empty.
 
 **You asks three questions of the week** — what created value, what was wasted,
 what has to change — and answers each from rows (`weekReview`). Money is never
@@ -893,8 +936,8 @@ it was stopped with no verdict at all; the sentence `closeCommission` writes is
 read only when the ledger row is missing, matched against `worthSentence` itself. An empty block
 says why it is empty, and `recent.unreadable` names any read that failed, so a
 broken read never renders as a quiet week (invariant 13). The funnel, openings
-and segments left the tab; the funnel is still one tap away as the path to money
-on Work, and "Ask your own record" still answers by counting.
+and segments left the tab; the funnel is still one tap away as the chain on
+Proof, and "Ask your own record" still answers by counting.
 
 **Line by line, and the cards move.** The value card used to answer in sentences —
 "You did 2 things it put in front of you — Apply today to the Maintenance
@@ -984,7 +1027,7 @@ seconds where a Maps segment takes ninety, and an interactive run's deadline
 cuts whatever comes last — and is metered like Maps, because Exa charges per
 search (invariant 6 protects the free adapters, not the paid ones).
 
-**A search that cannot run is said, on Work.** The searches have no screen, so
+**A search that cannot run is said, on Proof.** The searches have no screen, so
 the Scout does it: a missing table, a search whose last run failed, or a run
 that failed before any search did turns the Scout's row to Failed with the
 reason (`RosterInput.searchProblem`). That last kind — a plan that could not be
@@ -2625,7 +2668,9 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/context` | `{ content, kind?, regenerate? }` — "tell the copilot" |
 | POST | `/api/copilot/goals` | create / update a goal |
 | POST | `/api/copilot/targeting` | `{ target_segments, target_area }` |
-| POST | `/api/copilot/offer` | `{ sells, for_who, problem, price_band, proof_url }` |
+| POST | `/api/copilot/offer` | `{ sells, for_who, problem, price_band, proof_url, found_by?, bet? }` — every change is recorded as a version of the offer; `bet` ties that version to the bet it was written for |
+| POST | `/api/copilot/lab` | the bets: `open` (with `idea`, `unit`, `experiment`), `stop`, `talk`, `forget`, `count`, `uncount`, `link` (a project to a bet), `checkpoint`, `ideas` (three from a model, for one part), `found_by` — never a verdict |
+| GET/POST | `/api/copilot/assets` | `GET ?id=` one asset whole · `POST` `add`, `version`, `draft` (by AI), `retire`, `restore`, `adopt` (make a version of the offer yours), `proof` (a demo's link as the proof) |
 | POST | `/api/copilot/finance` | `{ monthly_burn, cash, currency }` |
 | POST | `/api/copilot/opportunities/:id` | `{ status: saved \| dismissed \| acted \| new }` |
 | POST | `/api/copilot/opportunities/:id/draft` | draft an opener onto today's plan, send-ready |
@@ -2912,14 +2957,17 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
   So the refusal decay hears an explicit no and an inferred ignore, and does not hear
   "this does not work". It is the same shape as the bug `REFUSAL_DECAY` exists to fix,
   one level up, and wants its own change with its own test.
-- Work's chain places agents on the part of the business they run, but not yet projects or
-  experiments: a commission and the plan's experiment carry no `link`, so they sit in In the works
-  and the experiments fold rather than on the part they test. The planner tagging an experiment's
-  part, and a project written from a part's move keeping it, is the next change; both need a field,
-  and the commission one a migration.
-- Built counts what a project produced; it does not yet join an asset to the sends it went out in.
-  Which proof link, demo or opener was in which message — and what came back — needs the asset to be
-  a row an execution can point at.
+- The chain places agents on the part of the business they run, and a bet shows the projects tied
+  to it (`lab_link`); a project written from a part's own move is not yet tied to that part, and the
+  plan's experiment reaches a part only by becoming a bet (`experimentPart` guesses one from its
+  angle, and the person can move it). The planner tagging an experiment's part, and a commission
+  keeping the part it was written for, need a field — the commission one a migration.
+- An asset is versioned and tied to the bet it was made for, but not to the sends it went out in.
+  Which proof link, demo or opener was in which message — and what came back — needs a version to be
+  something an execution can point at.
+- A count the person logs (`lab_count`) and a sale logged from Proof are dated the day they are
+  logged on, or a day chosen inside the bet; a sale has no "earlier" yet, so one logged a day late
+  counts on the day it was logged.
 - Refusals are keyed on `decision.topic`, and only Move-driven calls write a job key
   there: `starterDecision` writes `'sending'`, `'opener'`, `'offer'`. Refusing the
   starter ladder therefore increments a counter `scoreMove` never reads, and the starter

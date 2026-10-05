@@ -8,8 +8,10 @@ import type { MarkState } from '@/lib/copilot/roadmap';
 import type { ExperimentState } from '@/lib/copilot/experiment';
 import type { PayeeRole } from '@/lib/copilot/money/ledger';
 import type { OutreachStage } from '@/lib/copilot/matches';
+import type { AssetKind } from '@/lib/copilot/assets';
 import type { LinkKey, LinkState } from '@/lib/copilot/business';
-import type { Commitment, LabDecision, LabMetric, Problem } from '@/lib/copilot/lab';
+import type { BetIdea, Commitment, LabDecision, LabMetric, Problem } from '@/lib/copilot/lab';
+import type { FoundBy } from '@/lib/copilot/types';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -27,14 +29,14 @@ export type Tab = 'now' | 'working';
 
 /**
  * The tabs of the shell at /copilot2, one question each: where am I and what
- * moves it, who is worth contacting, what am I building, what am I testing
- * and did it work, where did the money go, and how am I doing.
+ * moves it, who is worth contacting, is the business proven and what is being
+ * bet to find out, where did the money go, and how am I doing.
  *
  * Its own type rather than a widening of Tab, because the two shells are two
- * layouts over one app — a v1 screen that could be told to open `work` would
+ * layouts over one app — a v1 screen that could be told to open `proof` would
  * have nothing to render.
  */
-export type Tab2 = 'path' | 'swipe' | 'work' | 'lab' | 'money' | 'you';
+export type Tab2 = 'path' | 'swipe' | 'proof' | 'money' | 'you';
 
 export type SheetState =
   | { kind: 'capacity' }
@@ -46,7 +48,8 @@ export type SheetState =
   | { kind: 'targeting' }
   | { kind: 'account' }
   | { kind: 'won'; oppId: string }
-  | { kind: 'offer' }
+  /** The offer. `bet` ties the version saved here to the bet it was rewritten for. */
+  | { kind: 'offer'; bet?: string }
   | { kind: 'you' }
   | { kind: 'opening'; term: string }
   /** The send queue, one draft at a time. See QueueSheet for why it is not a list. */
@@ -89,20 +92,70 @@ export type SheetState =
   | { kind: 'moneyin' }
   /** The currency the whole app counts in (Settings). */
   | { kind: 'currency' }
-  /** The Lab: start a bet, from a play or written from scratch. */
-  | { kind: 'bet'; play?: string; part?: LinkKey }
-  /** The Lab: log one conversation — The Mom Test's record of what was committed. */
+  /**
+   * Proof: start a bet — from a play in the catalogue, an idea a model wrote
+   * (by its key, read from the ideas on hand), the plan's experiment, or
+   * written from scratch on a part.
+   */
+  | { kind: 'bet'; play?: string; part?: LinkKey; idea?: string; experiment?: BetFromExperiment }
+  /** Proof: log one conversation — The Mom Test's record of what was committed. */
   | { kind: 'talk' }
-  /** The Lab: every conversation logged, with the way to log another. */
-  | { kind: 'talks' };
+  /** Proof: every conversation logged, with the way to log another. */
+  | { kind: 'talks' }
+  /** Proof: log the person's own count for a bet ("3 sign-ups"). */
+  | { kind: 'count'; bet: string }
+  /** Proof: a sale or a meeting logged where no business in the app is attached to it. */
+  | { kind: 'sale'; outcome: 'won' | 'meeting' }
+  /** Proof: the chain, whole — each part's rule, its evidence and what would move it. */
+  | { kind: 'chain' }
+  /** Proof: how buyers find the business. */
+  | { kind: 'foundby' }
+  /** Proof: the history, whole, by month. */
+  | { kind: 'history' }
+  /** Proof: one asset — by id — or a new one of a kind, optionally for a bet. */
+  | { kind: 'asset'; id?: string; assetKind?: AssetKind; bet?: string }
+  /** Proof: every asset, put away ones too. */
+  | { kind: 'assets' }
+  /** Proof: the projects — handing work over, the ones live, the ones finished. */
+  | { kind: 'projects' };
 
-/** What the Lab can be told. A verdict is not among them: it is the rows'. */
+/** The plan's experiment, as a bet sheet opens on it: the bet takes the experiment's verdict when it ends. */
+export interface BetFromExperiment {
+  id: string;
+  title: string;
+  test: string;
+  watch: string;
+  days: number;
+  part: LinkKey;
+}
+
+/** What a bet can be told. A verdict is not among them: it is the rows'. */
 export type LabInput =
-  | { action: 'open'; bet: { part: LinkKey; belief: string; play: string | null; metric: LabMetric; target: number; tries: { metric: LabMetric; planned: number } | null; days: number } }
+  | {
+      action: 'open';
+      bet: {
+        part: LinkKey; belief: string; play: string | null; idea?: BetIdea | null; metric: LabMetric; unit?: string | null; target: number;
+        tries: { metric: LabMetric; planned: number } | null; days: number; experiment?: string | null;
+      };
+    }
   | { action: 'stop'; id: string; note?: string }
   | { action: 'talk'; talk: { on?: string; who?: string; problem: Problem; commitment: Commitment; said?: string } }
   | { action: 'forget'; id: string }
+  | { action: 'count'; bet: string; count: { n: number; on?: string; note?: string } }
+  | { action: 'uncount'; id: string }
+  | { action: 'link'; bet: string; commission: string }
+  | { action: 'ideas'; part: LinkKey }
+  | { action: 'found_by'; found_by: FoundBy | null }
   | { action: 'checkpoint'; checkpoint: { decision: LabDecision; part?: LinkKey | null; note?: string; chain: Partial<Record<LinkKey, LinkState>> } };
+
+/** What an asset can be told (/api/copilot/assets). Every write is a version or a put-away; nothing is edited in place. */
+export type AssetInput =
+  | { action: 'add'; asset: { kind: AssetKind; title?: string; url?: string; body?: string; note?: string }; bet?: string | null }
+  | { action: 'version'; id: string; asset: { title?: string; url?: string; body?: string; note?: string }; bet?: string | null }
+  | { action: 'draft'; kind?: AssetKind; id?: string; bet?: string | null; ask?: string }
+  | { action: 'retire' | 'restore'; id: string }
+  | { action: 'adopt'; version: string }
+  | { action: 'proof'; id: string };
 
 /** What the person can say about their statements. See /api/copilot/money. */
 export type MoneyAnswer =
@@ -159,7 +212,8 @@ export interface Actions {
   sendAction(id: string, overrides?: { body?: string; subject?: string }, opts?: { stay?: boolean }): Promise<boolean>;
   /** Manual dispatch: the user sent it from their own app, we just record it. */
   markSent(id: string, overrides?: { body?: string; subject?: string }, opts?: { stay?: boolean }): Promise<boolean>;
-  saveOffer(offer: Offer): Promise<boolean>;
+  /** `bet`: the bet this version of the offer was written for, kept in the offer's history. */
+  saveOffer(offer: Offer, opts?: { bet?: string | null }): Promise<boolean>;
   cancelDraft(id: string): Promise<void>;
   recordOutcome(input: OutcomeInput, opts?: { stay?: boolean }): Promise<boolean>;
   draftFor(oppId: string, channel?: Channel): Promise<boolean>;
@@ -283,6 +337,8 @@ export interface Actions {
   uploadStatement(file: File): Promise<{ ok: boolean; error?: string; status?: string }>;
   /** Confirm or discard a statement, say who a payer is, or delete every row read off the bank. */
   answerMoney(answer: MoneyAnswer): Promise<{ ok: boolean; error?: string }>;
-  /** The Lab: open a bet, call one off, log or forget a conversation, answer the checkpoint. */
+  /** Bets: open one, call one off, log or forget a conversation or a count, tie a project to one, answer the checkpoint, ask for ideas, say how buyers find you. */
   lab(input: LabInput): Promise<{ ok: boolean; error?: string }>;
+  /** Assets: add one, a new version, a draft by AI, put away or bring back, make a drafted offer yours, use a demo as proof. */
+  assets(input: AssetInput): Promise<{ ok: boolean; error?: string; id?: string; rewritten?: number }>;
 }

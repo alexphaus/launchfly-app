@@ -41,8 +41,10 @@ import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 import { CallCard, FirstRun } from '../views/NowView';
 import type { Derived } from './derive';
-import { IconAlert, IconArrow, IconCheck, IconChevron, IconFlag, IconRedraw, IconStar, IconSwap, IconYou, PathGlyph } from './icons2';
+import { IconAlert, IconArrow, IconCheck, IconChevron, IconFlag, IconProof, IconRedraw, IconStar, IconSwap, IconYou, PathGlyph } from './icons2';
 import { planServesOneGoal } from '@/lib/copilot/roadmap';
+import { resultLine } from '@/lib/copilot/lab';
+import { experimentPart } from '@/lib/copilot/proof';
 import { AlsoThisWeek, DrawnPlanHead, ExperimentCard, GoalMarkers, HereVerdict, IconMilestone, PhaseBlock, PlanPending, type Handed } from './PathPlan';
 
 export default function PathTab({ home, d, actions, briefing, finding, openMatches }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean; finding: boolean; openMatches: (s: MatchStage) => void }) {
@@ -80,6 +82,8 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
   // the card above, so its step below is a pointer to it rather than a second copy.
   const callTitle = d.path.now.kind === 'call' && home.decision?.response === 'pending' ? home.decision.headline : null;
   const experimentGoal = experiment?.exp.goalId ? home.goals.find((g) => g.id === experiment.exp.goalId)?.title ?? null : null;
+  // The experiment made a bet, the newest one: its verdict is the experiment's (lab.ts experimentVerdicts).
+  const experimentBet = experiment ? d.proof.bets.find((v) => v.bet.experiment === experiment.exp.id) ?? null : null;
   useAutoDraw(home, d, actions);
 
   // A brand new account has no evidence, no plan to speak of and nothing to
@@ -128,6 +132,7 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
         {/* Since this device last showed the path; the step itself is in the evidence, where it happened.
             Under the fact rather than over it, so the node stays level with "You are here". */}
         {reached && <span className="cp2-way-reached"><IconStar />Reached: {REACHED[reached.key]}</span>}
+        <BetHere d={d} actions={actions} />
       </div>
 
       <section className="cp2-way-ahead">
@@ -161,7 +166,19 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
                         {/* After the first phase's steps, not before them: the one thing worth trying that is
                             not more of the same sits beside the week it would change. In front of it, a card
                             this size pushed the steps a screen further from the move. */}
-                        {experiment && <ExperimentCard view={experiment} goalTitle={experimentGoal} today={home.recent.today} actions={actions} />}
+                        {experiment && (
+                          <ExperimentCard
+                            view={experiment} goalTitle={experimentGoal} today={home.recent.today} actions={actions}
+                            bet={experimentBet} canBet={!d.proof.lab.current && !d.proof.lab.unreadable}
+                            onBet={() => actions.openSheet({
+                              kind: 'bet',
+                              experiment: {
+                                id: experiment.exp.id, title: experiment.exp.title, test: experiment.exp.test, watch: experiment.exp.watch,
+                                days: experiment.exp.checkDays, part: experimentPart(experiment.exp.angle, d.proof.chain.weak),
+                              },
+                            })}
+                          />
+                        )}
                       </>
                     )}
                   </PhaseBlock>
@@ -204,6 +221,30 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
       <Tell home={home} actions={actions} briefing={briefing} />
       <BackToNow hereRef={hereRef} away={away} />
     </div>
+  );
+}
+
+/**
+ * The bet running, under where you are. Proof is where a bet is judged and the
+ * Path is where the day's move is; this one line between them says what the
+ * days are being bet on, and that a checkpoint is waiting when one is.
+ */
+function BetHere({ d, actions }: { d: Derived; actions: Actions }) {
+  const lab = d.proof.lab;
+  const cur = lab.current;
+  if (lab.unreadable || (!cur && !lab.checkpoint.due)) return null;
+  const line = cur
+    ? [`Day ${cur.day} of ${cur.bet.days}`, resultLine(cur), cur.bet.tries && cur.tries != null ? `${cur.tries} of ${cur.bet.tries.planned} planned` : null, lab.checkpoint.due ? 'checkpoint due' : null].filter(Boolean).join(' · ')
+    : 'Pivot or persevere: the bets that ended, read back';
+  return (
+    <button className="cp2-way-bet" onClick={() => actions.setTab('proof')}>
+      <span className="cp2-way-bet-i"><IconProof /></span>
+      <span className="cp2-way-bet-m">
+        <b className="cp2-clamp1">{cur ? `Your bet: “${cur.bet.belief}”` : 'A checkpoint is due'}</b>
+        <span>{line}</span>
+      </span>
+      <IconChevron />
+    </button>
   );
 }
 

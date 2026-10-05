@@ -1,9 +1,9 @@
 'use client';
-// The ways a tab acts on a move: a sheet of the person's own, a project for the
-// agent to approve, or the whole record copied for a chat with Claude. Work's
-// chain and Built, and the Lab's plays, all hand work over through these — so a
-// move cannot behave one way on one tab and another way on the next, and the
-// agent's cap is said the same everywhere it bites.
+// The ways a screen acts on a move: a sheet of the person's own, a project for
+// the agent to approve, or the whole record copied for a chat with Claude.
+// Proof's chain, its bet and its projects all hand work over through these — so
+// a move cannot behave one way in one place and another way in the next, and
+// the agent's cap is said the same everywhere it bites.
 import { useRef, useState } from 'react';
 import type { LinkMove } from '@/lib/copilot/business';
 import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX } from '@/lib/copilot/commission';
@@ -66,13 +66,16 @@ export const orChat = (m: LinkMove, full: boolean): LinkMove => (m.by === 'ai' &
 export function useMove(actions: Actions, brief: Brief) {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ key: string; text: string; bad: boolean; claude: boolean } | null>(null);
-  const run = async (m: LinkMove, why?: string) => {
+  /** `onCreated` hears the project a move for the agent wrote, so a bet can claim the work done for it. */
+  const run = async (m: LinkMove, why?: string, onCreated?: (id: string) => void | Promise<void>) => {
     setNote(null);
     if (m.by === 'you') {
       const go = m.go;
       if (!go) return;
       if ('sheet' in go) actions.openSheet({ kind: go.sheet });
       else if ('outreach' in go) actions.openSheet({ kind: 'outreach', stage: go.outreach });
+      else if ('bet' in go) actions.openSheet({ kind: 'bet', part: go.bet });
+      else if ('asset' in go) actions.openSheet({ kind: 'asset', assetKind: go.asset });
       else actions.setTab(go.tab);
       return;
     }
@@ -83,7 +86,10 @@ export function useMove(actions: Actions, brief: Brief) {
       const r = await actions.createCommission({ objective: (m.ask ?? m.label).slice(0, OBJECTIVE_MAX), why: why?.slice(0, 300), authority: 'read' });
       setBusy(null);
       if (!r.ok) return setNote({ key: m.key, text: r.error ?? 'Could not hand that over', bad: true, claude: false });
-      if (r.id) actions.openSheet({ kind: 'commission', id: r.id });
+      if (r.id) {
+        await onCreated?.(r.id);
+        actions.openSheet({ kind: 'commission', id: r.id });
+      }
       return;
     }
     const r = await brief.copy(m.ask ?? null);

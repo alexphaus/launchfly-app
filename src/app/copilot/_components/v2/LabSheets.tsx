@@ -1,6 +1,7 @@
 'use client';
-// The Lab's sheets: start a bet, log a conversation, and the conversations in
-// full. LabTab.tsx is the screen; lib/copilot/lab.ts has the rules.
+// The bets' sheets: start a bet, log a conversation, and the conversations in
+// full. They were the Lab's; Proof (ProofTab.tsx) is the screen now, and
+// lib/copilot/lab.ts has the rules.
 //
 // A bet is written here and nowhere else, and only before it starts. The line
 // it has to reach, what it counts and its last day are said back in one
@@ -10,15 +11,17 @@ import { useState } from 'react';
 import { LINK_KEYS, LINK_LABEL, type LinkKey } from '@/lib/copilot/business';
 import { shiftDay } from '@/lib/copilot/focus';
 import {
-  BELIEF_MAX, COMMITMENTS, COMMITMENT_LABEL, DEFAULT_BET_DAYS, LAB_METRICS, METRIC, PLANNED_MAX, PLAY_BY_KEY, PROBLEMS, PROBLEM_LABEL,
-  SAID_MAX, TALK_BACK_DAYS, TARGET_MAX, TRIES_FOR, WHO_MAX,
-  betPrice, countedFrom, dayWords, metricWords, passLine, spanWords, suggestBelief, talkCounts,
+  BELIEF_MAX, COMMITMENTS, COMMITMENT_LABEL, DEFAULT_BET_DAYS, METRIC, PLANNED_MAX, PLAY_BY_KEY, PROBLEMS, PROBLEM_LABEL,
+  SAID_MAX, TALK_BACK_DAYS, TARGET_MAX, TRIES_FOR, UNIT_MAX, WHO_MAX,
+  betPrice, countedFrom, dayWords, metricWords, metricsFor, passLine, playFor, spanWords, suggestBelief, talkCounts,
   type Commitment, type LabMetric, type Problem, type Talk,
 } from '@/lib/copilot/lab';
 import { salesCurrency } from '@/lib/copilot/metrics';
+import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
+import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
-import type { HomeData } from '@/lib/copilot/types';
-import type { Actions } from '../shared';
+import type { FoundBy, HomeData } from '@/lib/copilot/types';
+import type { Actions, BetFromExperiment } from '../shared';
 
 /** A custom bet's first count, by the part it is about: the number that part lives or dies by. */
 const PART_METRIC: Record<LinkKey, LabMetric> = { who: 'committed', reach: 'replied', close: 'meetings', pay: 'paid_at_price', deliver: 'handed' };
@@ -55,7 +58,7 @@ export function TalkRow({ talk: t, today, onForget }: { talk: Talk; today: strin
 }
 
 /** A count with a minus and a plus. Past ten a step is five: nobody plans 37 sends one tap at a time. */
-function Count({ value, min, max, onChange, label, coarse }: { value: number; min: number; max: number; onChange: (n: number) => void; label: string; coarse?: boolean }) {
+export function Count({ value, min, max, onChange, label, coarse }: { value: number; min: number; max: number; onChange: (n: number) => void; label: string; coarse?: boolean }) {
   const down = coarse && value > 10 ? 5 : 1;
   const up = coarse && value >= 10 ? 5 : 1;
   return (
@@ -69,32 +72,61 @@ function Count({ value, min, max, onChange, label, coarse }: { value: number; mi
 
 /* ─── Start a bet ─────────────────────────────────────────────────────────── */
 
-export function BetSheet({ home, playKey, part: asked, actions }: { home: HomeData; playKey?: string; part?: LinkKey; actions: Actions }) {
-  const play = playKey ? PLAY_BY_KEY.get(playKey) ?? null : null;
+/**
+ * The count a bet on each way buyers arrive is decided by, when the app cannot
+ * see them arrive: the person's own word for it, which they can change.
+ */
+const UNIT_FOR: Record<FoundBy, string> = { outreach: 'bookings', inbound: 'enquiries', referrals: 'introductions', marketplace: 'enquiries', local: 'walk-ins' };
+
+/**
+ * A bet, written before it starts: from a play in the catalogue, an idea a
+ * model wrote (looked up by its key among the ideas on hand), the plan's
+ * experiment, or from scratch on a part. A play or an idea fixes what it
+ * counts; the line, the plan and the length are still the person's to set.
+ */
+export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, actions }: {
+  home: HomeData; playKey?: string; part?: LinkKey; ideaKey?: string; experiment?: BetFromExperiment; actions: Actions;
+}) {
+  const found = foundOf(home).value;
+  const catalogue = playKey ? PLAY_BY_KEY.get(playKey) ?? null : null;
+  const play = catalogue ? playFor(catalogue, found) : null;
+  const idea = !play && ideaKey && asked ? home.lab?.ideas?.[asked]?.ideas.find((x) => x.key === ideaKey) ?? null : null;
+  // What the bet starts from, when it starts from something that fixes the count.
+  const fixed = play ?? idea;
   const today = home.recent.today;
   const offer = home.profile.offer ?? {};
   const { price, priceLabel } = betPrice(offer.price_band, salesCurrency(home.profile.finance, home.goals));
-  const first = play?.part ?? asked ?? 'who';
-  const firstMetric = play?.metric ?? (PART_METRIC[first] === 'paid_at_price' && price == null ? 'paid' : PART_METRIC[first]);
+  const allowed = metricsFor(found);
+  /** A custom bet's first count, by the part: the number that part lives or dies by, among the ones this business can keep. */
+  const firstMetric = (k: LinkKey): LabMetric => {
+    const m = PART_METRIC[k] === 'paid_at_price' && price == null ? 'paid' : PART_METRIC[k];
+    return allowed.includes(m) ? m : 'logged';
+  };
+  const first: LinkKey = fixed?.part ?? experiment?.part ?? asked ?? 'who';
   const [part, setPart] = useState<LinkKey>(first);
   // A first draft from the offer, for the person to make theirs. Rewritten
   // with the part until they type in it; never after.
-  const [belief, setBelief] = useState(() => suggestBelief(first, offer, priceLabel));
+  const [belief, setBelief] = useState(() => suggestBelief(first, offer, priceLabel, found));
   const [typed, setTyped] = useState(false);
-  const [metric, setMetric] = useState<LabMetric>(firstMetric);
-  const [target, setTarget] = useState(play?.target ?? 2);
-  const [tries, setTries] = useState<{ metric: LabMetric; planned: number } | null>(play?.tries ?? null);
-  const [days, setDays] = useState(play?.days ?? DEFAULT_BET_DAYS);
+  const [metric, setMetric] = useState<LabMetric>(fixed?.metric ?? firstMetric(first));
+  const [unit, setUnit] = useState(fixed?.unit ?? (found ? UNIT_FOR[found] : 'sign-ups'));
+  const [target, setTarget] = useState(fixed?.target ?? 2);
+  const [tries, setTries] = useState<{ metric: LabMetric; planned: number } | null>(fixed?.tries ?? null);
+  const [days, setDays] = useState(fixed?.days ?? experiment?.days ?? DEFAULT_BET_DAYS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const running = home.lab?.bets.find((b) => b.state === 'running') ?? null;
   const needsPrice = !!METRIC[metric].priced && price == null;
-  const dayChoices = [...new Set([...DAY_CHOICES, play?.days ?? DEFAULT_BET_DAYS])].sort((a, b) => a - b);
+  const needsUnit = metric === 'logged' && !unit.trim();
+  const dayChoices = [...new Set([...DAY_CHOICES, fixed?.days ?? experiment?.days ?? DEFAULT_BET_DAYS])].sort((a, b) => a - b);
+  const triesFor = TRIES_FOR[metric].filter((m) => allowed.includes(m));
+  const shownUnit = metric === 'logged' ? unit.trim() || null : null;
 
   const pickPart = (k: LinkKey) => {
     setPart(k);
-    if (!typed) setBelief(suggestBelief(k, offer, priceLabel));
+    if (!typed) setBelief(suggestBelief(k, offer, priceLabel, found));
+    if (!fixed) pickMetric(firstMetric(k));
   };
   const pickMetric = (m: LabMetric) => {
     setMetric(m);
@@ -103,7 +135,15 @@ export function BetSheet({ home, playKey, part: asked, actions }: { home: HomeDa
   };
   const start = async () => {
     setBusy(true); setError(null);
-    const r = await actions.lab({ action: 'open', bet: { part, belief: belief.trim(), play: play?.key ?? null, metric, target, tries, days } });
+    // Where the play came from, kept on the bet: a play the catalogue does not
+    // hold is said by its own words, so the bet can say what it ran.
+    const from = idea
+      ? { label: idea.label, how: idea.how, from: idea.book ? `AI, after ${idea.book}` : 'AI, from your record', prep: idea.prep }
+      : experiment ? { label: experiment.title, how: experiment.test, from: 'Your plan' } : null;
+    const r = await actions.lab({
+      action: 'open',
+      bet: { part, belief: belief.trim(), play: play?.key ?? null, idea: from, metric, unit: shownUnit, target, tries, days, experiment: experiment?.id ?? null },
+    });
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not start it');
     actions.closeSheet();
@@ -112,14 +152,16 @@ export function BetSheet({ home, playKey, part: asked, actions }: { home: HomeDa
   return (
     <>
       {play && <div className="cp2-lab-sheet-book">{play.book}</div>}
-      <h3>{play ? play.label : 'Your own bet'}</h3>
+      {idea && <div className="cp2-lab-sheet-book">By AI{idea.book ? ` · after ${idea.book}` : ', from your record'}</div>}
+      {experiment && <div className="cp2-lab-sheet-book">From your plan</div>}
+      <h3>{play?.label ?? idea?.label ?? experiment?.title ?? 'Your own bet'}</h3>
       <p className="desc">
-        {play
-          ? play.how
-          : 'A belief, a count that could prove it wrong, and a day. Written before it starts, so the result cannot move the line.'}
+        {play?.how ?? idea?.how ?? (experiment
+          ? `${experiment.test} It worked if: ${experiment.watch.replace(/[.!?\s]+$/, '')}. As a bet, the rows judge it instead of a tap, and the plan hears the verdict.`
+          : 'A belief, a count that could prove it wrong, and a day. Written before it starts, so the result cannot move the line.')}
       </p>
 
-      {!play && (
+      {!fixed && (
         <div className="cp-field">
           <label className="cp-label">Which part of the business</label>
           <div className="cp-chips">
@@ -139,31 +181,43 @@ export function BetSheet({ home, playKey, part: asked, actions }: { home: HomeDa
         <p className="cp-help">In your words, one sentence the count below could prove wrong.</p>
       </div>
 
-      {!play && (
+      {!fixed && (
         <div className="cp-field">
           <label className="cp-label">What decides it</label>
           <div className="cp-chips">
-            {LAB_METRICS.map((m) => (
-              <button key={m} className={`cp-fchip ${metric === m ? 'active' : ''}`} aria-pressed={metric === m} onClick={() => pickMetric(m)}>{cap(metricWords(m, 2, priceLabel))}</button>
+            {allowed.map((m) => (
+              <button key={m} className={`cp-fchip ${metric === m ? 'active' : ''}`} aria-pressed={metric === m} onClick={() => pickMetric(m)}>
+                {m === 'logged' ? 'Something you count' : cap(metricWords(m, 2, priceLabel))}
+              </button>
             ))}
           </div>
+          {/* Where buyers do not come through the app's sends, its sends cannot decide anything: said, not hidden. */}
+          {found && found !== 'outreach' && <p className="cp-help">Sends and replies are left out: buyers find you {FOUND_BY_LABEL[found].toLowerCase()}, not through what the app sends.</p>}
+        </div>
+      )}
+
+      {metric === 'logged' && (
+        <div className="cp-field">
+          <label className="cp-label" htmlFor="cp2-lab-unit">What you will count</label>
+          <input id="cp2-lab-unit" className="cp-input sm" value={unit} maxLength={UNIT_MAX} onChange={(e) => setUnit(e.target.value)} placeholder="sign-ups" />
+          <p className="cp-help">A word or two, plural: sign-ups, enquiries, orders, walk-ins. You log them as they come in.</p>
         </div>
       )}
 
       <div className="cp-field">
         <label className="cp-label">The line it has to reach</label>
         <div className="cp2-lab-countrow">
-          <Count value={target} min={1} max={TARGET_MAX} onChange={setTarget} label={metricWords(metric, 2, priceLabel)} />
-          <span>{metricWords(metric, target, priceLabel)}</span>
+          <Count value={target} min={1} max={TARGET_MAX} onChange={setTarget} label={metricWords(metric, 2, priceLabel, shownUnit)} />
+          <span>{metricWords(metric, target, priceLabel, shownUnit)}</span>
         </div>
       </div>
 
-      {TRIES_FOR[metric].length > 0 && (
+      {triesFor.length > 0 && (
         <div className="cp-field">
           <label className="cp-label">From how many — optional</label>
           <div className="cp-chips">
             <button className={`cp-fchip ${!tries ? 'active' : ''}`} aria-pressed={!tries} onClick={() => setTries(null)}>No plan</button>
-            {TRIES_FOR[metric].map((m) => (
+            {triesFor.map((m) => (
               <button
                 key={m} className={`cp-fchip ${tries?.metric === m ? 'active' : ''}`} aria-pressed={tries?.metric === m}
                 onClick={() => setTries({ metric: m, planned: tries?.planned ?? 10 })}
@@ -190,8 +244,8 @@ export function BetSheet({ home, playKey, part: asked, actions }: { home: HomeDa
 
       <div className="cp2-lab-preview">
         <span className="cp2-lab-preview-k">Pass line</span>
-        <b>{passLine({ metric, target, tries, priceLabel }, shiftDay(today, days - 1))}</b>
-        <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel)}</span>
+        <b>{passLine({ metric, target, tries, priceLabel, unit: shownUnit }, shiftDay(today, days - 1))}</b>
+        <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel, shownUnit)}</span>
       </div>
 
       {/* Said before the tap, with the way to fix it, rather than refused after it. */}
@@ -203,12 +257,12 @@ export function BetSheet({ home, playKey, part: asked, actions }: { home: HomeDa
       )}
       {running && (
         <div className="cp-note cp2-lab-warn">
-          One bet at a time: &ldquo;{running.bet.belief}&rdquo; runs until {dayWords(running.last)}. Let it finish, or call it off on the Lab, first — two at once would share every send.
+          One bet at a time: &ldquo;{running.bet.belief}&rdquo; runs until {dayWords(running.last)}. Let it finish, or call it off on Proof, first — two at once would share every count.
         </div>
       )}
       {error && <div className="cp-error">{error}</div>}
 
-      <button className="cp-btn primary block" disabled={busy || !belief.trim() || needsPrice || !!running} onClick={() => void start()}>
+      <button className="cp-btn primary block" disabled={busy || !belief.trim() || needsPrice || needsUnit || !!running} onClick={() => void start()}>
         {busy ? 'Starting…' : 'Start the bet'}
       </button>
       <p className="cp-help">Only what happens from today counts. Nobody marks it passed: it passes when the count reaches the line.</p>

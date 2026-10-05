@@ -5405,7 +5405,7 @@ async function huntsCore() {
   assert.equal(byId.w1.sub, 'Palawan resorts · a.es');
   assert.equal(byId.p1.sub, 'Owner · Casa Blanca Resort · linkedin.com');
 
-  // 10. Work's "who buys" says the web is searched too, without a word of configuration.
+  // 10. The chain's "who buys" says the web is searched too, without a word of configuration.
   const { businessChain: bc } = await import('../../src/lib/copilot/business');
   const flatC = {
     offer: { sells: 'Booking bots' }, said: {}, funnel: { matched: 12, sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, worthAMessage: 0,
@@ -5414,7 +5414,10 @@ async function huntsCore() {
   const whoOf = (x: Partial<Parameters<typeof bc>[0]>) => bc({ ...flatC, segments: [], area: null, web: false, ...x }).links[0];
   assert.equal(whoOf({ segments: ['pest control'], area: 'Manila', web: true }).facts, '12 found on Maps and the web');
   assert.equal(whoOf({ web: true }).facts, '12 found on the web');
-  assert.equal(whoOf({ funnel: { ...flatC.funnel, matched: 0 } }).facts, 'Nothing to look for yet');
+  assert.equal(whoOf({ funnel: { ...flatC.funnel, matched: 0 }, foundBy: 'outreach' }).facts, 'Nothing to look for yet');
+  // Nothing found, sent or said: not outreach by default. Read through what the person logs, and the chain asks how buyers find them.
+  assert.equal(whoOf({ funnel: { ...flatC.funnel, matched: 0 } }).facts, 'Nothing logged yet');
+  assert.deepEqual(bc({ ...flatC, segments: [], area: null, web: false, funnel: { ...flatC.funnel, matched: 0 } }).links[1].moves.map((m) => m.go), [{ sheet: 'foundby' }]);
   console.log('copilot-core: hunts checks passed');
 }
 
@@ -8181,7 +8184,7 @@ async function outreachSuite() {
 
 outreachSuite().catch((e) => { console.error(e); process.exit(1); });
 
-/* ─── Work: the business as a chain of bets ───────────────────────────────── */
+/* ─── The chain of bets behind Proof ──────────────────────────────────────── */
 //
 // The checks are the ways a picture of a business lies: a part called working
 // on a one-dollar test, a weak link that sends you to the top of a funnel whose
@@ -8189,9 +8192,10 @@ outreachSuite().catch((e) => { console.error(e); process.exit(1); });
 // on screen the rows never held, and a draft written from a blank offer.
 
 import {
-  ASK_MAX, CLOSE_SAMPLE, LINK_KEYS, LINK_STATE_LABEL, builtRows, businessChain, chainChanges, changeLine, parseSeenChain,
-  readWins, safeHref, snapshotChain, suggestedAsks, teamLine, waitingOnYou, weakLink, winsLine, workLine, type ChainInput,
+  ASK_MAX, CLOSE_SAMPLE, LINK_KEYS, LINK_STATE_LABEL, businessChain, chainChanges, changeLine, parseSeenChain,
+  readWins, snapshotChain, suggestedAsks, teamLine, waitingOnYou, weakLink, winsLine, type ChainInput,
 } from '../../src/lib/copilot/business';
+import { proofLine as proofLineBz } from '../../src/lib/copilot/proof';
 import { diagnose as diagnoseBz } from '../../src/lib/copilot/diagnose';
 import type { Agent as AgentBz } from '../../src/lib/copilot/machine';
 
@@ -8315,29 +8319,54 @@ async function businessChainSuite() {
   assert.equal(parseSeenChain({ at: 'yesterday', states: {} }), null, 'storage is reshaped, not trusted');
   assert.deepEqual(parseSeenChain({ at: '2026-10-01T00:00:00Z', states: { who: 'great', reach: 'works' } })?.states, { reach: 'works' });
 
-  /* 12. Built: the gap first with its way to fill it, the file, then what was made, newest first. */
-  const proofMove = c.links.find((l) => l.key === 'pay')!.moves.find((m) => m.key === 'pay-proof')!;
-  const rows = builtRows({
-    offer: alex.offer, said: alex.said, working: { filled: 2, total: 6, proposals: 7 },
-    plan: { milestones: 3, at: '2026-10-03T04:00:00Z' },
-    closed: [
-      { id: 'd1', objective: 'Compare three agencies', status: 'done', outcome: 'Worth: delivered', closedAt: '2026-10-02T04:00:00Z', createdAt: '2026-09-28T00:00:00Z' },
-      { id: 'd2', objective: 'Quote QR suppliers', status: 'stopped', outcome: 'Worth nothing', closedAt: '2026-09-30T04:00:00Z', createdAt: '2026-09-20T00:00:00Z' },
-    ],
-    outputs: [{ commissionId: 'd1', at: '2026-10-02T03:00:00Z' }, { commissionId: 'd1', at: '2026-10-02T02:00:00Z' }],
-    proofMove, now: new Date('2026-10-04T04:00:00Z'),
-  });
-  assert.deepEqual(rows.map((r) => r.key), ['proof', 'working', 'plan', 'p:d1'], 'called off with nothing to show was not built');
-  assert.equal(rows[0].gap, true);
-  assert.equal(rows[0].move?.key, 'pay-proof', 'the gap and the chain offer the same thing');
-  assert.equal(rows[1].line, '2 of 6 written · 7 counted from your rows, waiting for your yes');
-  assert.equal(rows[2].line, '3 milestones · drawn 1d ago');
-  assert.equal(rows[3].line, 'Finished 2 Oct · 2 found · Worth: delivered');
-  // A proof link becomes an href only when it is a web address.
-  assert.equal(safeHref('javascript:alert(1)'), null);
-  assert.equal(safeHref('https://alex.ph/demo'), 'https://alex.ph/demo');
-  const withProof = builtRows({ offer: { ...alex.offer, proof_url: 'https://www.alex.ph/demo' }, said: {}, working: { filled: 1, total: 6, proposals: 0 }, plan: null, closed: [], outputs: [], proofMove: null, now: new Date() });
-  assert.deepEqual(withProof.map((r) => [r.key, r.line]), [['working', '1 of 6 written'], ['proof', 'alex.ph']]);
+  /* 12. A business whose buyers do not arrive through the app's sends is read through what the person logs. */
+  const quiet = { ...alex, funnel: { matched: 0, sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, bySegment: [], byChannel: [], wins: [], queue: 0, wonRecent: { amount: 0, days: 30 } };
+  // Nobody said how, and nothing was sent: a question, not outreach by default.
+  const unsaid = by({ ...quiet, foundBy: null });
+  assert.equal(unsaid.reach.state, 'missing');
+  assert.deepEqual(unsaid.reach.moves.map((m) => m.go), [{ sheet: 'foundby' }]);
+  assert.equal(businessChain({ ...quiet, foundBy: null }).weak, 'reach');
+  // Said: inbound. The app cannot see them arrive, so a bet counts it.
+  const inbound = (x: Partial<ChainInput> = {}) => by({ ...quiet, foundBy: 'inbound', ...x });
+  assert.equal(inbound().reach.state, 'untested');
+  assert.equal(inbound().reach.why, 'The app cannot see this way in, so a bet counts it: the enquiries and sign-ups that come in.');
+  assert.deepEqual(inbound().reach.moves.map((m) => m.key), ['reach-bet', 'reach-landing'], 'a bet, and the page buyers would find');
+  assert.deepEqual(inbound({ assets: { demo: null, script: null, landing: 'Booking page', workflow: null } }).reach.moves.map((m) => m.key), ['reach-bet']);
+  assert.equal(inbound({ assets: { demo: null, script: null, landing: 'Booking page', workflow: null } }).reach.what, 'They find you online · Booking page');
+  type BetOn = NonNullable<ChainInput['bets']>[number];
+  const betOn = (part: BetOn['part'], state: BetOn['state'], start: string): BetOn =>
+    ({ part, state, start, line: `${state === 'passed' ? 5 : 1} of 5 enquiries`, when: state === 'running' ? null : '4 Oct' });
+  assert.equal(inbound({ bets: [betOn('reach', 'running', '2026-10-01')] }).reach.state, 'testing');
+  assert.equal(inbound({ bets: [betOn('reach', 'failed', '2026-09-20'), betOn('reach', 'failed', '2026-09-01')] }).reach.state, 'stuck', 'two short in a row is the channel not working by its own record');
+  assert.equal(inbound({ bets: [betOn('reach', 'passed', '2026-09-20'), betOn('reach', 'passed', '2026-09-01')] }).reach.state, 'works', 'twice is a pattern');
+  assert.equal(inbound({ bets: [betOn('reach', 'passed', '2026-09-20')], wins: [150] }).reach.state, 'works', 'one pass with somebody paying is the channel doing its job');
+  // A pass, then a miss: not two short in a row, so still being tested.
+  assert.equal(inbound({ bets: [betOn('reach', 'failed', '2026-09-20'), betOn('reach', 'passed', '2026-09-01')] }).reach.state, 'testing');
+  // Who buys: conversations about the problem, a sale at the price, or a bet that passed.
+  assert.equal(inbound().who.state, 'untested');
+  assert.equal(inbound({ talks: { n: 4, problem: 3, committed: 1 } }).who.why, '3 of the 4 people you talked to have the problem, and 1 committed to something.');
+  assert.equal(inbound({ wins: [150] }).who.state, 'works', 'a sale at the price is a buyer found');
+  assert.equal(inbound({ wins: [1] }).who.state, 'untested', 'a one-dollar test is not one');
+  assert.equal(inbound({ bets: [betOn('who', 'passed', '2026-09-20')] }).who.state, 'works');
+  // How they say yes: logged conversations stand in for replies the app never saw.
+  assert.equal(inbound().close.state, 'untested');
+  assert.deepEqual(inbound().close.moves.map((m) => m.go), [{ sheet: 'talk' }]);
+  assert.equal(inbound({ talks: { n: CLOSE_SAMPLE, problem: 2, committed: 0 } }).close.state, 'stuck', 'five conversations and nobody paid says more about the ask');
+  assert.equal(inbound({ talks: { n: 2, problem: 2, committed: 0 }, funnel: { ...quiet.funnel, won: 1 }, wins: [150] }).close.state, 'testing');
+  // What they pay: conversations count toward the sample a price is judged on.
+  assert.equal(inbound({ talks: { n: CLOSE_SAMPLE, problem: 2, committed: 0 }, wins: [20] }).pay.state, 'stuck');
+  assert.equal(inbound({ talks: { n: CLOSE_SAMPLE, problem: 2, committed: 0 }, wins: [20] }).pay.why, '5 conversations and 1 paid, none at your $150. From 5 on, that says more about the price or the proof than about luck.');
+  // A demo kept as an asset is proof: the chain stops asking for one.
+  assert.ok(by(alex).pay.moves.some((m) => m.key === 'pay-proof'));
+  assert.ok(!by({ ...alex, assets: { demo: 'Booking bot walkthrough', script: null, landing: null, workflow: null } }).pay.moves.some((m) => m.key === 'pay-proof'));
+  // Delivery is judged by its own bets: written down is a claim, a bet that passed is evidence.
+  assert.equal(inbound({ assets: { demo: null, script: null, landing: null, workflow: 'Kick-off, build, hand-over' } }).deliver.state, 'untested');
+  assert.equal(inbound({ assets: { demo: null, script: null, landing: null, workflow: 'Kick-off, build, hand-over' } }).deliver.what, 'Kick-off, build, hand-over');
+  assert.equal(inbound({ assets: { demo: null, script: null, landing: null, workflow: 'Steps' }, bets: [betOn('deliver', 'passed', '2026-09-20')] }).deliver.state, 'works');
+  // Outreach said out loud reads exactly as the rows did: the owner's account is unchanged by any of this.
+  assert.deepEqual(businessChain({ ...alex, foundBy: 'outreach' }).links.map((l) => l.state), c.links.map((l) => l.state));
+  // A passed bet on who buys is evidence in the outreach reading too.
+  assert.equal(by({ ...alex, bets: [betOn('who', 'passed', '2026-09-20')] }).who.state, 'works');
 
   /* 13. The team in one line: every agent that is not well named, the optional Watcher not nagged. */
   assert.deepEqual(teamLine(agents), { line: '2 of 5 agents working · Researcher failed', trouble: 1 });
@@ -8350,8 +8379,11 @@ async function businessChainSuite() {
     threadV2({ id: 'd', status: 'active' }),
   ];
   assert.equal(waitingOnYou(threads), 3);
-  assert.equal(workLine(c.verdict, 3), 'Not proven yet · 3 waiting on you');
-  assert.equal(workLine(proven.verdict, 0), 'Proven');
+  // Proof's line under the greeting: the verdict, the bet or the checkpoint, and what waits on the person.
+  const noBet = { current: null, checkpoint: { due: false }, part: null };
+  assert.equal(proofLineBz(c, noBet, 3), 'Not proven · no bet running · 3 waiting on you');
+  assert.equal(proofLineBz(proven, noBet, 0), 'Proven · no bet running');
+  assert.equal(proofLineBz(blank, { ...noBet, checkpoint: { due: true } }, 0), 'Not started · checkpoint due');
 
   /* 15. The rows behind it: per kind of business, per channel, and every win's amount, from the funnel's own rows. */
   const dz = diagnoseBz({
@@ -8380,7 +8412,7 @@ async function businessChainSuite() {
 
 businessChainSuite().catch((e) => { console.error(e); process.exit(1); });
 
-/* ─── The Lab: one bet at a time, judged by the rows ──────────────────────── */
+/* ─── Bets: one at a time, judged by the rows ─────────────────────────────── */
 //
 // The checks are the ways an experiment lies: a line set after the result is
 // in, a send from before the bet counted toward it, a day read in the wrong
@@ -8403,7 +8435,7 @@ import { readFileSync as readLabFile } from 'node:fs';
 async function labSuite() {
   const today = '2026-10-04';
   const bet = (b: Partial<Bet> & Pick<Bet, 'metric' | 'target' | 'days' | 'start'>): Bet => ({
-    id: 'b', part: 'reach', belief: 'They answer', play: null, tries: null, price: null, priceLabel: null, openedAt: `${b.start}T01:00:00Z`, ...b,
+    id: 'b', part: 'reach', belief: 'They answer', play: null, idea: null, unit: null, tries: null, price: null, priceLabel: null, experiment: null, openedAt: `${b.start}T01:00:00Z`, ...b,
   });
   const none: DayRows = { sends: [], outcomes: [], finished: [], talks: [] };
   const talk = (on: string, commitment: LabTalk['commitment'], problem: LabTalk['problem'] = 'yes'): LabTalk => ({ id: `t-${on}-${commitment}`, on, who: null, problem, commitment, said: null, at: `${on}T09:00:00Z` });
@@ -8411,7 +8443,7 @@ async function labSuite() {
   /* 1. A bet is held to what a verdict needs, and refused with what to fix — never coerced into one nobody wrote. */
   const ctx = { today, price: 150, priceLabel: '$150' };
   const ok = normalizeBet({ part: 'pay', belief: '  Pest control   pays $150  ', metric: 'paid_at_price', target: '1', tries: { metric: 'sent', planned: 10 }, days: 14, play: 'guarantee' }, ctx);
-  assert.deepEqual(ok, { ok: true, value: { part: 'pay', belief: 'Pest control pays $150', play: 'guarantee', metric: 'paid_at_price', target: 1, tries: { metric: 'sent', planned: 10 }, days: 14, start: today, price: 150, priceLabel: '$150' } });
+  assert.deepEqual(ok, { ok: true, value: { part: 'pay', belief: 'Pest control pays $150', play: 'guarantee', idea: null, metric: 'paid_at_price', unit: null, target: 1, tries: { metric: 'sent', planned: 10 }, days: 14, start: today, price: 150, priceLabel: '$150', experiment: null } });
   const base = { part: 'reach', belief: 'They answer', metric: 'replied', target: 2, days: 10 };
   const refused = (raw: Record<string, unknown>, c = ctx) => { const r = normalizeBet(raw, c); return r.ok ? null : r.error; };
   assert.equal(refused({ ...base, part: 'everything' }), 'Which part of the business is it about?');
@@ -8585,12 +8617,13 @@ async function labSuite() {
   assert.equal(labLine(day6, false), 'Day 6 of 14 · 0 of 1 sale at your $150');
   assert.equal(labLine(day6, true), 'Checkpoint · pivot or persevere');
   assert.equal(labLine(null, false), 'No bet running');
-  // A logged number never reads as a measured one.
+  // A logged number never reads as a measured one: the app's own counts are "Counted from", the person's "From".
   for (const m of LAB_METRICS) {
-    const said = countedFrom(m, '2026-09-29', '$150');
-    assert.equal(/conversation log/.test(said), LAB_METRIC[m].from === 'log', `${m} says where it comes from`);
+    const said = countedFrom(m, '2026-09-29', '$150', 'sign-ups');
+    assert.equal(said.startsWith('From '), LAB_METRIC[m].from === 'log', `${m} says where it comes from`);
     assert.ok(said.includes('29 Sep'), `${m} says from when`);
   }
+  assert.equal(countedFrom('logged', '2026-09-29', null, 'sign-ups'), 'From the sign-ups you log since 29 Sep: your count, not the app\'s.');
   assert.match(countedFrom('paid_at_price', '2026-09-29', '$150'), /\$150 or more/);
   assert.deepEqual(talkCounts([talk('2026-10-04', 'money'), talk('2026-09-05', 'none', 'no'), talk('2026-09-04', 'time')], today), { n: 2, committed: 1, have: 1 }, 'the last thirty days, today included');
 
@@ -8616,7 +8649,7 @@ async function labSuite() {
     assert.ok(LAB_METRICS.includes(p.metric), `${p.key} counts something the app counts`);
     if (p.tries) assert.ok(TRIES_FOR[p.metric].includes(p.tries.metric), `${p.key}: what it takes is the step before what it counts`);
     if (p.prep) assert.ok(p.prep.ask.length <= LAB_OBJECTIVE_MAX, `${p.key}: its prep fits a project's brief`);
-    const asBet = normalizeBet({ part: p.part, belief: 'A belief', metric: p.metric, target: p.target, tries: p.tries ?? null, days: p.days, play: p.key }, ctx);
+    const asBet = normalizeBet({ part: p.part, belief: 'A belief', metric: p.metric, unit: p.unit, target: p.target, tries: p.tries ?? null, days: p.days, play: p.key }, ctx);
     assert.ok(asBet.ok && asBet.value.play === p.key, `${p.key} passes the rules every bet is held to`);
     assert.ok(p.book.trim() && p.how.trim() && p.label.trim(), `${p.key} says where it is from and what to do`);
   }
@@ -8632,9 +8665,288 @@ async function labSuite() {
   /* 12. Nobody marks a bet passed (invariant 10): the route has no way to post a verdict. */
   const route = readLabFile(new URL('../../src/app/api/copilot/lab/route.ts', import.meta.url), 'utf8');
   const actions = [...route.matchAll(/case '([a-z_]+)'/g)].map((m) => m[1]).sort();
-  assert.deepEqual(actions, ['checkpoint', 'forget', 'open', 'stop', 'talk'], 'a verdict is the rows’, not a request’s');
+  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'link', 'open', 'stop', 'talk', 'uncount'], 'a verdict is the rows’, not a request’s');
 
   console.log('copilot-core: lab checks passed');
 }
 
 labSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Proof: assets, the history, ideas a model writes, the bet on screen ─── */
+//
+// The checks are the ways Proof could lie: a model's draft standing as the
+// person's offer, a version given a date it does not have, a number in a draft
+// the person never gave, an idea for a count this business cannot keep, a
+// history that drops the bet that failed, a sale read as outreach for a shop
+// whose buyers walk in, and a tab that says the same thing every time it opens.
+
+import {
+  ASSET_RESTORED as PF_RESTORED, ASSET_RETIRED as PF_RETIRED, ASSET_VERSION as PF_VERSION, BODIES_KEPT as PF_BODIES_KEPT, BODY_MAX as PF_BODY_MAX, OFFER_ASSET as PF_OFFER,
+  assetGaps as pfGaps, assetsFromEvents as pfAssets, assetsHome as pfAssetsHome, checkAssetDraft as pfCheck, normalizeAssetInput as pfNormAsset,
+  numberOutside as pfNumberOutside, sameOffer as pfSameOffer, versionLine as pfVersionLine, webLink as pfWebLink,
+  type AssetDraftContext as PfDraftCtx, type AssetEventRow as PfRow,
+} from '../../src/lib/copilot/assets';
+import { historyDay as pfHistoryDay, historyMonths as pfHistoryMonths, historyOf as pfHistoryOf } from '../../src/lib/copilot/history';
+import { ideasPrompt as pfIdeasPrompt, normalizeIdeas as pfNormIdeas } from '../../src/lib/copilot/ideas';
+import {
+  LAB_BET as PF_LAB_BET, LAB_COUNT as PF_LAB_COUNT, LAB_IDEAS as PF_LAB_IDEAS, LAB_LINK as PF_LAB_LINK,
+  betView as pfBetView, experimentVerdicts as pfVerdicts, ideaFromStored as pfIdeaFromStored, labFromEvents as pfLabFromEvents,
+  metricsFor as pfMetricsFor, normalizeBet as pfNormBet, normalizeTally as pfNormTally, playsFor as pfPlaysFor, suggestBelief as pfSuggest,
+  type Bet as PfBet, type DayRows as PfDayRows,
+} from '../../src/lib/copilot/lab';
+import { foundByOf as pfFoundByOf } from '../../src/lib/copilot/offer';
+import {
+  assetMakers as pfMakers, betNext as pfBetNext, betWork as pfBetWork, experimentPart as pfExpPart, ideasStale as pfIdeasStale, offerDraftWaiting as pfDraftWaiting,
+} from '../../src/lib/copilot/proof';
+import { readFileSync as readProofFile } from 'node:fs';
+
+async function proofSuite() {
+  const ev = (id: number, event_type: string, created_at: string, payload: Record<string, unknown>): PfRow => ({ id, event_type, created_at, payload });
+  const offer = { sells: 'Booking automation', for_who: 'Pest control', problem: 'Missed calls lose bookings', price_band: '$150' };
+  const today = '2026-10-04';
+
+  /* 1. An asset as the person writes it: a kind, and a link or a text — never a button to nowhere. */
+  assert.deepEqual(pfNormAsset({ kind: 'demo', url: 'loom.com/share/abc' }), { ok: true, value: { kind: 'demo', title: 'Demo', body: null, url: 'https://loom.com/share/abc', note: null } });
+  assert.deepEqual(pfNormAsset({ kind: 'demo', url: 'javascript:alert(1)' }), { ok: false, error: 'That link is not a web address. It should start with https://' });
+  assert.deepEqual(pfNormAsset({ kind: 'script' }), { ok: false, error: 'Add a link to it, or write it out.' });
+  assert.deepEqual(pfNormAsset({ kind: 'offer', body: 'x' }), { ok: false, error: 'The offer is changed on its own sheet, where every draft is rewritten from it.' });
+  assert.deepEqual(pfNormAsset({ kind: 'poster', body: 'x' }), { ok: false, error: 'What kind of asset is it?' });
+  const scriptBody = pfNormAsset({ kind: 'script', body: 'Line one   \r\n\r\n\r\n\r\nLine two' });
+  assert.ok(scriptBody.ok && scriptBody.value.body === 'Line one\n\nLine two', 'line breaks are a script’s structure: kept, not flattened');
+  assert.equal(pfWebLink('ftp://x.com'), null);
+  assert.equal(pfWebLink('https://x.com/a'), 'https://x.com/a');
+
+  /* 2. The offer's history: the version in use is the profile's, a draft by AI is not it, and nothing is given a date it does not have. */
+  const only = pfAssets([], offer);
+  assert.deepEqual([only.length, only[0].id, only[0].versions.length, only[0].current.at, only[0].live, only[0].current.note], [1, PF_OFFER, 1, null, 1, 'Written before the history began']);
+  const v1 = { asset: PF_OFFER, kind: 'offer', by: 'you', undated: true, offer: { sells: 'Booking bots' } };
+  const v2 = { asset: PF_OFFER, kind: 'offer', by: 'you', offer };
+  const v3 = { asset: PF_OFFER, kind: 'offer', by: 'ai', model: 'm', offer: { ...offer, problem: 'After-hours calls go unanswered' }, note: 'add a guarantee', bet: '42' };
+  const rows = [ev(3, PF_VERSION, '2026-10-03T00:00:00Z', v3), ev(1, PF_VERSION, '2026-09-01T00:00:00Z', v1), ev(2, PF_VERSION, '2026-09-20T00:00:00Z', v2)];
+  const [o] = pfAssets(rows, offer);
+  assert.deepEqual(o.versions.map((v) => [v.n, v.by, v.at]), [[3, 'ai', '2026-10-03T00:00:00Z'], [2, 'you', '2026-09-20T00:00:00Z'], [1, 'you', null]]);
+  assert.deepEqual([o.current.n, o.live], [2, 2], 'the version in use is the one every draft is written from, not the newest');
+  assert.deepEqual([o.versions[0].model, o.versions[0].bet, o.versions[0].note], ['m', '42', 'add a guarantee']);
+  const waiting = pfDraftWaiting(pfAssets(rows, offer));
+  assert.deepEqual([waiting?.asset.id, waiting?.n], [PF_OFFER, 3], 'a draft by AI waits for the person to keep or leave');
+  assert.equal(pfDraftWaiting(pfAssets(rows, v3.offer)), null, 'once adopted, nothing waits');
+  assert.equal(pfAssets(rows, v3.offer)[0].live, 3);
+  // Changed where the history does not reach: the offer in use is shown as it is, undated, after the recorded ones.
+  const elsewhere = pfAssets(rows, { ...offer, price_band: '$200' })[0];
+  assert.deepEqual([elsewhere.current.n, elsewhere.current.at, elsewhere.current.note, elsewhere.live], [4, null, 'Changed where the history does not reach', 4]);
+  // How buyers find you is said by no message, so it is not a new version of the offer.
+  assert.ok(pfSameOffer(offer, { ...offer, found_by: 'inbound' }));
+
+  /* 3. Every other asset: its kind fixed by its first version, each change the next one, put away and brought back. */
+  const demo = (id: number, at: string, p: Record<string, unknown>) => ev(id, PF_VERSION, at, { asset: 'd1', kind: 'demo', ...p });
+  const assets = pfAssets([
+    demo(10, '2026-09-10T00:00:00Z', { by: 'ai', title: 'Demo script', body: 'Before. After.', bet: '7' }),
+    demo(11, '2026-09-12T00:00:00Z', { by: 'you', kind: 'script', title: 'Recorded', url: 'https://loom.com/x' }),
+    ev(12, PF_RETIRED, '2026-09-13T00:00:00Z', { asset: 'd1' }),
+    ev(13, PF_VERSION, '2026-09-14T00:00:00Z', { asset: 's1', kind: 'script', by: 'you', title: 'Opener', body: 'Hi' }),
+    ev(14, PF_VERSION, '2026-09-15T00:00:00Z', { asset: 'x1', kind: 'offer', by: 'you', body: 'sneaky' }),
+    ev(15, PF_VERSION, '2026-09-16T00:00:00Z', { asset: 'e1', kind: 'demo', by: 'you' }),
+  ], offer);
+  const d1 = assets.find((a) => a.id === 'd1')!;
+  assert.deepEqual([d1.kind, d1.versions.length, d1.current.by, d1.firstBy, d1.retired], ['demo', 2, 'you', 'ai', true], 'the first version names the kind for good');
+  assert.equal(assets.some((a) => a.id === 'x1'), false, 'only the offer is the offer');
+  assert.equal(assets.some((a) => a.id === 'e1'), false, 'a version with nothing in it is not kept');
+  assert.deepEqual(assets.map((a) => a.id), [PF_OFFER, 's1', 'd1'], 'the offer first, then the newest change, put away last');
+  const restored = pfAssets([demo(10, '2026-09-10T00:00:00Z', { by: 'ai', body: 'x' }), ev(12, PF_RETIRED, '2026-09-13T00:00:00Z', { asset: 'd1' }), ev(16, PF_RESTORED, '2026-09-14T00:00:00Z', { asset: 'd1' })], null);
+  assert.deepEqual(restored.map((a) => [a.id, a.retired]), [['d1', false]], 'brought back; and no offer said, no offer asset');
+
+  /* 4. The home payload carries the newest bodies; older ones come whole from the asset route. */
+  const many = pfAssetsHome({ events: [1, 2, 3, 4].map((n) => demo(20 + n, `2026-09-2${n}T00:00:00Z`, { by: 'you', body: `v${n}` })), unreadable: null, offer: null });
+  assert.deepEqual(many.assets[0].versions.map((v) => [v.n, v.body, v.trimmed]), [[4, 'v4', false], [3, 'v3', false], [2, null, true], [1, null, true]]);
+  assert.equal(PF_BODIES_KEPT, 2);
+  assert.equal(pfVersionLine({ n: 3, by: 'ai', at: '2026-10-04T00:00:00Z' }, (d) => d.slice(5, 10)), 'v3 · by AI · 10-04');
+  assert.equal(pfVersionLine({ n: 1, by: 'you', at: null }, (d) => d), 'v1 · by you');
+
+  /* 5. What is missing, where it would matter now: two at most, the weak part's first, nothing for a blank offer. */
+  const states = { who: 'testing', reach: 'works', close: 'stuck', pay: 'stuck', deliver: 'missing' };
+  assert.deepEqual(pfGaps({ assets: [], offer, weak: 'close', foundBy: 'outreach', states }).map((g) => g.kind), ['script', 'demo']);
+  assert.deepEqual(pfGaps({ assets: [], offer, weak: 'pay', foundBy: 'outreach', states }).map((g) => g.kind), ['demo', 'script']);
+  assert.deepEqual(pfGaps({ assets: [], offer: { ...offer, proof_url: 'https://x.com' }, weak: 'pay', foundBy: 'outreach', states }).map((g) => g.kind), ['script'], 'a proof link is the proof');
+  assert.deepEqual(pfGaps({ assets: [], offer, weak: 'reach', foundBy: 'inbound', states: { ...states, reach: 'untested', close: 'untested' } }).map((g) => g.kind), ['landing_page', 'demo'], 'buyers who find you online find a page first');
+  assert.deepEqual(pfGaps({ assets: [], offer: {}, weak: null, foundBy: null, states }), []);
+  assert.deepEqual(pfGaps({ assets: [], offer, weak: 'deliver', foundBy: 'outreach', states: { who: 'works', reach: 'works', close: 'works', pay: 'works', deliver: 'missing' } }).map((g) => g.kind), ['workflow']);
+  assert.deepEqual(pfGaps({ assets: restored, offer, weak: 'pay', foundBy: 'outreach', states }).map((g) => g.kind), ['script'], 'a demo kept is no gap');
+
+  /* 6. A model's draft is held to what the person gave it: no number, link or placeholder of its own. */
+  const ctx: PfDraftCtx = { kind: 'script', offer, foundBy: 'outreach', working: 'I answer every call within ten minutes', bet: null, part: null, previous: null, ask: null };
+  assert.ok(pfCheck({ title: 'Opener', body: '1. Ask about the last missed call.\n2. Offer a 15-minute walkthrough at 3pm.\n3. Say the price: $150.' }, ctx).ok, 'a step number, a duration and a time of day are instructions; $150 is the person’s');
+  assert.deepEqual(pfCheck({ title: 'Opener', body: 'We have helped 40 clients save 30% of their bookings.' }, ctx), { ok: false, why: 'it wrote a number that is not in your offer, your notes or your rows (40)' });
+  assert.deepEqual(pfCheck({ title: 'Opener', body: 'Hi [NAME], quick question.' }, ctx), { ok: false, why: 'it left a placeholder in it' });
+  assert.deepEqual(pfCheck({ title: 'Opener', body: 'See https://example.com/case' }, ctx), { ok: false, why: 'it put in a link you did not give (https://example.com/case)' });
+  assert.ok(pfCheck({ title: 'Opener', body: 'See www.alex.ph/demo.' }, { ...ctx, offer: { ...offer, proof_url: 'https://alex.ph/demo' } }).ok, 'a link the person gave, however it is written');
+  assert.deepEqual(pfCheck({ title: 'Book 3 calls', body: 'Hi.' }, ctx), { ok: false, why: 'its title carried a placeholder or a number that is not yours' });
+  assert.deepEqual(pfCheck({ body: '' }, ctx), { ok: false, why: 'the model wrote nothing' });
+  // An offer: its fields, and the person's price — a model that names its own price has not drafted their offer.
+  const offerCtx: PfDraftCtx = { ...ctx, kind: 'offer' };
+  const offerDraft = pfCheck({ title: 'Guaranteed bookings', sells: 'Booking automation with a guarantee', for_who: 'Pest control', problem: 'Missed calls', price_band: '' }, offerCtx);
+  assert.ok(offerDraft.ok && offerDraft.offer?.price_band === '$150' && offerDraft.offer.sells === 'Booking automation with a guarantee');
+  assert.deepEqual(pfCheck({ sells: 'Booking automation', price_band: '$99' }, offerCtx), { ok: false, why: 'it wrote a number that is not in your offer, your notes or your rows (99)' });
+  assert.deepEqual(pfCheck({ body: 'no offer fields' }, offerCtx), { ok: false, why: 'the model wrote no offer' });
+  // Too long is cut at the last paragraph or sentence that fits, never mid-word.
+  const longDraft = pfCheck({ title: 'Page', body: `${'Para one is here. '.repeat(200)}\n\n${'Para two. '.repeat(400)}` }, { ...ctx, kind: 'landing_page' });
+  assert.ok(longDraft.ok && longDraft.body.length <= PF_BODY_MAX && /\.$/.test(longDraft.body));
+  assert.equal(pfNumberOutside('ten minutes, 10 minutes, step 2', []), null);
+
+  /* 7. The history: every bet and how it ended, newest first; a compliment is not history, and no date is guessed. */
+  const pfBet = (b: Partial<PfBet> & Pick<PfBet, 'id' | 'metric' | 'target' | 'days' | 'start'>): PfBet => ({
+    part: 'reach', belief: 'They answer', play: null, idea: null, unit: null, tries: null, price: null, priceLabel: null, experiment: null, openedAt: `${b.start}T01:00:00Z`, ...b,
+  });
+  const none: PfDayRows = { sends: [], outcomes: [], finished: [], talks: [] };
+  const ended = pfBetView(pfBet({ id: 'b1', metric: 'sent', target: 5, days: 3, start: '2026-09-20' }), null, none, today);
+  const live = pfBetView(pfBet({ id: 'b2', metric: 'sent', target: 5, days: 14, start: '2026-10-01' }), null, none, today);
+  const history = pfHistoryOf({
+    bets: [live, ended],
+    checkpoints: [{ id: 'c1', on: '2026-09-25', decision: 'pivot', part: 'reach', note: 'Salons never answered', chain: {}, at: '2026-09-25T10:00:00Z' }],
+    talks: [
+      { id: 't1', on: '2026-09-26', who: 'Rico', problem: 'yes', commitment: 'money', said: 'Send the invoice', at: '2026-09-26T09:00:00Z' },
+      { id: 't2', on: '2026-09-27', who: 'Ana', problem: 'yes', commitment: 'none', said: 'Love it', at: '2026-09-27T09:00:00Z' },
+    ],
+    assets: pfAssets(rows, offer),
+    projects: [
+      { id: 'p1', objective: 'Compare three agencies', status: 'done', outcome: 'Worth: delivered', closedAt: '2026-09-28T04:00:00Z' },
+      { id: 'p2', objective: 'Still going', status: 'active', outcome: null, closedAt: null },
+    ],
+    wins: [{ at: '2026-09-29T08:00:00Z', amount: 150, who: 'Rapid Plumbing' }, { at: '2026-09-30T08:00:00Z', amount: null, who: null }],
+    experiments: [
+      { id: 'x1', title: 'Ask Mara', angle: 'ask_one', state: 'worked', at: '2026-09-24T08:00:00Z' },
+      { id: 'x2', title: 'Left untried', angle: null, state: 'ignored', at: '2026-09-24T08:00:00Z', inferred: true },
+    ],
+    currency: '$', timezone: 'UTC',
+  });
+  assert.deepEqual(history.map((e) => e.key), [
+    'asset-3', 'bet-start-b2', 'win-2026-09-30T08:00:00Z-1', 'win-2026-09-29T08:00:00Z-0', 'project-p1', 'talk-t1', 'checkpoint-c1',
+    'experiment-x1-worked-2026-09-24T08:00:00Z', 'bet-end-b1', 'bet-start-b1', 'asset-2',
+  ], 'the undated first offer, the compliment, the work still running and the inferred mark are not in it');
+  const byKey = Object.fromEntries(history.map((e) => [e.key, e]));
+  assert.deepEqual([byKey['bet-end-b1'].title, byKey['bet-end-b1'].tone, byKey['bet-end-b1'].line], ['Did not pass: “They answer”', 'bad', '0 of 5 messages sent'], 'a bet that failed stays, said as one');
+  assert.deepEqual([byKey['asset-3'].title, byKey['asset-3'].by, byKey['asset-3'].line, byKey['asset-3'].asset], ['Offer v3: Booking automation', 'ai', 'add a guarantee', 'offer']);
+  assert.deepEqual([byKey['win-2026-09-29T08:00:00Z-0'].title, byKey['win-2026-09-29T08:00:00Z-0'].line], ['Paid $150', 'Rapid Plumbing']);
+  assert.equal(byKey['win-2026-09-30T08:00:00Z-1'].title, 'A sale, no amount logged', 'never a sale of nothing');
+  assert.equal(byKey['talk-t1'].title, 'Rico committed money');
+  assert.deepEqual(pfHistoryMonths(history, today).map((m) => [m.label, m.entries.length]), [['October', 2], ['September', 9]]);
+  assert.equal(pfHistoryMonths([{ ...history[0], day: '2025-12-01' }], today)[0].label, 'December 2025');
+  assert.deepEqual([pfHistoryDay(today, today), pfHistoryDay('2026-10-03', today), pfHistoryDay('2026-09-03', today)], ['Today', 'Yesterday', '3 Sep']);
+
+  /* 8. Ideas a model writes are held to what a bet is, for counts this business can keep. */
+  const ideas = pfNormIdeas({ ideas: [
+    { label: 'Reply faster to enquiries', how: 'Answer every enquiry within the hour for two weeks.', metric: 'logged', unit: 'Enquiries', target: 5, days: 14, book: 'traction', why: 'Your page brings 12 visits a day.' },
+    { label: 'Message ten salons', how: 'Write to ten salons.', metric: 'replied', target: 2, days: 7 },
+    { label: 'Ask three clients', how: 'Ask for one name each.', metric: 'committed', target: 2, tries: { metric: 'talks', planned: 3 }, days: 7, book: 'A Book Nobody Wrote', why: '3 of the 4 people you talked to have the problem.', prep: { label: 'The ask', asset: 'script' } },
+    { label: 'Logged without a word', how: 'x', metric: 'logged', target: 3, days: 7 },
+    { label: 'Too big', how: 'y', metric: 'talks', target: 500, days: 7 },
+    { label: 'Hi [NAME]', how: 'z', metric: 'talks', target: 2, days: 7 },
+    { label: 'ask three clients', how: 'The same again.', metric: 'talks', target: 2, days: 7 },
+    { label: 'Fourth good one', how: 'A fine idea.', metric: 'talks', target: 2, days: 7 },
+    { label: 'Fifth good one', how: 'Another.', metric: 'talks', target: 2, days: 7 },
+  ] }, { part: 'reach', foundBy: 'inbound', sources: ['Booking automation', '$150', '3 of the 4 people you talked to'] });
+  assert.deepEqual(ideas.map((i) => i.label), ['Reply faster to enquiries', 'Ask three clients', 'Fourth good one'],
+    'three at most; a count the business cannot keep, a logged count with no word, a line out of range, a placeholder and a repeat are dropped');
+  assert.deepEqual([ideas[0].unit, ideas[0].book, ideas[0].why], ['enquiries', 'Traction', null], 'its own word, a book from the list, and no reason resting on a number nobody gave');
+  assert.deepEqual([ideas[1].book, ideas[1].why, ideas[1].tries, ideas[1].prep], [null, '3 of the 4 people you talked to have the problem.', { metric: 'talks', planned: 3 }, { label: 'The ask', asset: 'script' }]);
+  // The prompt offers only the counts this business can keep, and never a plan with nothing after "from".
+  const bare = { offer, working: null, links: [], bets: [], talks: { n: 0, problem: 0, committed: 0 }, assets: [] };
+  const inboundPrompt = pfIdeasPrompt({ ...bare, part: 'reach', foundBy: 'inbound' });
+  assert.ok(!/"sent"|"replied"/.test(inboundPrompt) && /"logged"/.test(inboundPrompt), 'no sends or replies offered to a business whose buyers find it');
+  assert.ok(!/from (;|\))/.test(inboundPrompt), 'every "from" names a count');
+  assert.ok(/"replied"/.test(pfIdeasPrompt({ ...bare, part: 'reach', foundBy: 'outreach' })));
+  // Stored ideas are reshaped, not trusted.
+  assert.equal(pfIdeaFromStored({ label: 'x', how: 'y', metric: 'logged', target: 3, days: 7 }, 'reach'), null);
+  assert.equal(pfIdeaFromStored({ label: 'x', how: 'y', metric: 'talks', target: 3, days: 7, prep: { label: 'p', asset: 'poster' } }, 'reach')?.prep, null);
+
+  /* 9. The bet on screen: where its next count happens, by how buyers arrive, and what was done for it. */
+  assert.deepEqual(pfBetNext('replied', 'outreach', null), { label: 'Open Swipe', go: 'swipe' });
+  assert.deepEqual(pfBetNext('paid_at_price', 'outreach', null), { label: 'Who replied', go: 'replied' });
+  assert.deepEqual(pfBetNext('paid_at_price', 'local', null), { label: 'Log a sale', go: 'sale' }, 'a shop logs a sale; nobody replied to anything');
+  assert.deepEqual(pfBetNext('meetings', null, null), { label: 'Log a meeting', go: 'meeting' });
+  assert.deepEqual(pfBetNext('logged', 'inbound', 'sign-ups'), { label: 'Log sign-ups', go: 'count' });
+  assert.deepEqual(pfBetNext('handed', 'outreach', null), { label: 'Hand a step over', go: 'projects' });
+  const workBet = pfBetView(pfBet({ id: '9', metric: 'committed', target: 2, days: 14, start: '2026-09-28', tries: { metric: 'talks', planned: 5 } }), null, none, today);
+  const rico = { id: 't', on: '2026-09-30', who: 'Rico', problem: 'yes' as const, commitment: 'time' as const, said: null, at: '2026-09-30T00:00:00Z' };
+  const work = pfBetWork(workBet, {
+    links: { '9': ['c1', 'gone'] },
+    commissions: [threadV2({ id: 'c1', status: 'active' }), threadV2({ id: 'c2', status: 'active' })],
+    assets: pfAssets([ev(30, PF_VERSION, '2026-09-29T00:00:00Z', { asset: 'sc', kind: 'script', by: 'ai', body: 'Hi', bet: '9' }), ev(31, PF_VERSION, '2026-09-29T00:00:00Z', { asset: 'other', kind: 'demo', by: 'you', body: 'x' })], null),
+    talks: [rico, { id: 'old', on: '2026-09-20', who: null, problem: 'no', commitment: 'none', said: null, at: '2026-09-20T00:00:00Z' }],
+    tallies: [],
+  });
+  assert.deepEqual([work.projects.map((t) => t.commission.id), work.assets.map((a) => a.id), work.talks, work.tallies], [['c1'], ['sc'], { n: 1, last: rico }, null],
+    'its projects, its assets, and only the conversations since it began');
+
+  /* 10. Ideas are written again when the record moves: a bet ended since, or two weeks went by. */
+  assert.equal(pfIdeasStale(null, [], today), true, 'none yet');
+  assert.equal(pfIdeasStale({ at: '2026-10-02T00:00:00Z' }, [live], today), false);
+  assert.equal(pfIdeasStale({ at: '2026-09-21T00:00:00Z' }, [ended], today), true, 'a bet ended after they were written');
+  assert.equal(pfIdeasStale({ at: '2026-09-23T00:00:00Z' }, [ended], today), false);
+  assert.equal(pfIdeasStale({ at: '2026-09-19T00:00:00Z' }, [], '2026-10-03'), true, 'two weeks on, the same three ideas are the same tab');
+
+  /* 11. Who made what, by the version in use. */
+  assert.deepEqual(pfMakers(pfAssets(rows, offer)), { ai: 0, you: 1, line: '1 by you' }, 'a draft waiting is not the offer in use');
+  assert.deepEqual(pfMakers(pfAssets(rows, v3.offer)), { ai: 1, you: 0, line: '1 by AI' });
+
+  /* 12. The plan's experiment, made a bet: it starts on the part its kind works on, and takes the bet's verdict. */
+  assert.equal(pfExpPart('change_channel', 'pay'), 'reach');
+  assert.equal(pfExpPart('subtract', 'pay'), 'pay');
+  assert.equal(pfExpPart('subtract', null), 'who');
+  const fromPlan = (state: 'running' | 'passed' | 'failed' | 'stopped') => ({ ...ended, bet: { ...ended.bet, experiment: 'x9' }, state });
+  assert.deepEqual(pfVerdicts([fromPlan('passed')], []), [{ id: 'x9', title: 'They answer', state: 'worked' }]);
+  assert.deepEqual(pfVerdicts([fromPlan('failed')], []).map((v) => v.state), ['failed']);
+  assert.deepEqual(pfVerdicts([fromPlan('stopped')], []).map((v) => v.state), ['unclear'], 'called off is could not tell, never a failure');
+  assert.deepEqual(pfVerdicts([fromPlan('running')], []), [], 'a bet still running has no verdict to give');
+  assert.deepEqual(pfVerdicts([fromPlan('passed')], [{ id: 'x9', state: 'worked', at: '2026-09-25T00:00:00Z' }]), [], 'said once, not again');
+  assert.equal(pfVerdicts([fromPlan('passed')], [{ id: 'x9', state: 'worked', at: '2026-09-01T00:00:00Z' }]).length, 1, 'a verdict from before this bet is not this bet’s');
+
+  /* 13. A count the person keeps, and the plays for a business whose buyers find it. */
+  const loggedBet = pfNormBet({ part: 'reach', belief: 'Enquiries come in', metric: 'logged', unit: 'Enquiries', target: 5, days: 14, idea: { label: 'Reply faster', how: 'Within the hour.', from: 'AI, from your record', prep: { label: 'The page', asset: 'landing_page' } }, experiment: 'x9' }, { today, price: null, priceLabel: null });
+  assert.deepEqual(loggedBet.ok && [loggedBet.value.unit, loggedBet.value.idea, loggedBet.value.experiment],
+    ['enquiries', { label: 'Reply faster', how: 'Within the hour.', from: 'AI, from your record', prep: { label: 'The page', asset: 'landing_page' } }, 'x9']);
+  assert.deepEqual(pfNormBet({ part: 'reach', belief: 'x', metric: 'logged', target: 5, days: 14 }, { today, price: null, priceLabel: null }), { ok: false, error: 'Say what you will count, in a word or two: "sign-ups", "enquiries", "orders".' });
+  const badExp = pfNormBet({ part: 'reach', belief: 'x', metric: 'talks', target: 5, days: 14, experiment: 'not a slug!' }, { today, price: null, priceLabel: null });
+  assert.ok(badExp.ok && badExp.value.experiment === null, 'an experiment id is a slug or nothing');
+  const tallyBet = { id: '9', start: '2026-09-28', days: 14, metric: 'logged' as const };
+  assert.deepEqual(pfNormTally({ n: 3 }, tallyBet, today), { ok: true, value: { bet: '9', n: 3, on: today, note: null } });
+  assert.deepEqual(pfNormTally({ n: 3, on: '2026-09-27' }, tallyBet, today), { ok: false, error: 'The bet ran from 28 Sep to 11 Oct; only those days count.' });
+  assert.deepEqual(pfNormTally({ n: 3, on: '2026-10-05' }, tallyBet, today), { ok: false, error: 'That day has not happened yet.' });
+  assert.deepEqual(pfNormTally({ n: 0 }, tallyBet, today), { ok: false, error: 'Log a count from 1 to 1000.' });
+  assert.deepEqual(pfNormTally({ n: 3 }, { ...tallyBet, metric: 'sent' }, today), { ok: false, error: 'That bet counts something the app keeps itself.' });
+  const led = pfLabFromEvents([
+    ev(40, PF_LAB_BET, '2026-09-28T01:00:00Z', { part: 'reach', belief: 'Enquiries come in', metric: 'logged', unit: 'enquiries', target: 5, days: 14, start: '2026-09-28' }),
+    ev(41, PF_LAB_COUNT, '2026-09-29T01:00:00Z', { bet: '40', n: 2, on: '2026-09-29' }),
+    ev(42, PF_LAB_COUNT, '2026-09-30T01:00:00Z', { bet: '40', n: 'many', on: '2026-09-30' }),
+    ev(43, PF_LAB_LINK, '2026-09-30T02:00:00Z', { bet: '40', commission: 'c1' }),
+    ev(44, PF_LAB_LINK, '2026-09-30T03:00:00Z', { bet: '40', commission: 'c1' }),
+    ev(45, PF_LAB_IDEAS, '2026-09-30T04:00:00Z', { part: 'reach', ideas: [{ label: 'A', how: 'a', metric: 'talks', target: 2, days: 7 }], model: 'm' }),
+    ev(46, PF_LAB_IDEAS, '2026-10-01T04:00:00Z', { part: 'reach', ideas: [{ label: 'B', how: 'b', metric: 'talks', target: 2, days: 7 }] }),
+    ev(47, PF_LAB_IDEAS, '2026-10-02T04:00:00Z', { part: 'reach', ideas: [{ label: 'broken' }] }),
+  ]);
+  assert.deepEqual(led.tallies.map((t) => [t.id, t.n]), [['41', 2]], 'a count that is not a number is not counted');
+  assert.deepEqual(led.links.get('40'), ['c1'], 'a project is tied once');
+  assert.deepEqual(led.ideas.reach?.ideas.map((i) => i.label), ['B'], 'the newest set that holds together');
+  const withCounts = pfBetView(led.bets[0], null, { ...none, tallies: led.tallies }, today);
+  assert.deepEqual([withCounts.result, withCounts.state], [2, 'running']);
+  const inboundPlays = pfPlaysFor('reach', 'inbound');
+  assert.ok(inboundPlays.length > 0 && inboundPlays.every((p) => !['sent', 'replied'].includes(p.metric) && !(p.tries && ['sent', 'replied'].includes(p.tries.metric))), 'nothing it could never count');
+  assert.ok(!inboundPlays.some((p) => p.key === 'one-line'), 'a play about the first line of a message is not offered to a shop that sends none');
+  assert.ok(pfPlaysFor('reach', 'outreach').some((p) => p.key === 'one-line'));
+  assert.equal(pfPlaysFor('pay', 'local').find((p) => p.key === 'guarantee')?.tries, undefined, 'a plan counted in sends the app cannot count goes; the line stays');
+  assert.equal(pfMetricsFor('marketplace').includes('sent'), false);
+  assert.equal(pfSuggest('reach', offer, '$150', 'referrals'), 'My clients will introduce me to pest control');
+  assert.equal(pfFoundByOf({ ...offer, found_by: 'local' }, 9, 9).value, 'local', 'said beats read');
+  assert.deepEqual(pfFoundByOf(offer, 0, 0), { value: null, said: false }, 'nothing found, sent or said: nobody knows yet');
+  assert.deepEqual(pfFoundByOf(offer, 0, 12), { value: 'outreach', said: false }, 'the app finding businesses to write to is outreach starting');
+
+  /* 14. The routes: an asset's every write is a version or a put-away, and nothing a model writes becomes the offer by itself. */
+  const assetRoute = readProofFile(new URL('../../src/app/api/copilot/assets/route.ts', import.meta.url), 'utf8');
+  assert.deepEqual([...assetRoute.matchAll(/case '([a-z_]+)'/g)].map((m) => m[1]).sort(), ['add', 'adopt', 'draft', 'proof', 'restore', 'retire', 'version']);
+  const proofAi = readProofFile(new URL('../../src/lib/copilot/proofai.ts', import.meta.url), 'utf8');
+  assert.ok(!/setOffer\(/.test(proofAi), 'a model drafts a version; only the person makes it the offer');
+  assert.ok(/offerIsEmpty/.test(proofAi), 'nothing is drafted from a blank offer (invariant 1)');
+
+  console.log('copilot-core: proof checks passed');
+}
+
+proofSuite().catch((e) => { console.error(e); process.exit(1); });

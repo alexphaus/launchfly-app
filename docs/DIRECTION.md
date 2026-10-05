@@ -304,7 +304,7 @@ usual reason — a harness can write a business model canvas; "six meetings, two
 paid, none at your $150, so the weak link is the price" needs the ledger. What it
 deliberately does not do: build the asset in the app (the worker or a chat does —
 see **What is deliberately not built**), or let an agent act past `read`
-unapproved. See COPILOT.md → **Work is the business as a chain of bets**.
+unapproved. See COPILOT.md → **Proof**, which it became part of.
 
 **Then** — the Lab, one bet at a time. Its owner asked whether this could be the
 toolkit for someone who has just read The Lean Startup, then which other books
@@ -320,7 +320,30 @@ brief ruled out stays out: book summaries, canvases, daily quotas. It passes the
 survival test for the usual reason — a chat can explain The Mom Test; it cannot
 read two weeks of your sends and payments and say a guarantee moved nothing at
 your price. Nobody marks a bet passed, for the reason a worker cannot mark its
-own homework. See COPILOT.md → **The Lab is one bet at a time**.
+own homework. See COPILOT.md → **Proof**, which it became part of.
+
+**Then** — Proof, the two as one. Work said which part of the business was weak
+and the Lab ran the bet on it; its owner found two tabs asking one question in two
+places, and asked for one in their place — for a business that does not sell by
+outreach as much as one that does, powered by a model so it is not the same tab
+every time, with clean panels, the assets as things with versions, who made each
+and the bet that produced it, and the history in one place. The rule that held it
+together is the app's oldest one at a new layer: a model proposes, the rows judge.
+A model writes three ideas for a bet from this business's own record, and drafts
+an asset; each is held to what the person gave it before it is kept — a count the
+business can keep, no number they never said, no link they did not give — and
+neither decides anything. The verdict is the chain's rule, a bet passes on its
+count, and a drafted offer is not the offer until the person makes it theirs. How
+buyers find you is now a setting, because "two replies in twenty sends" is a rule
+about outreach: a shop whose buyers walk in is read through the conversations,
+sales and counts it logs, and the app says when it read the channel rather than
+being told it. The history is not a new record but a join of the ones there were:
+bets and how each ended, decisions, commitments, versions, projects, sales. It
+passes the survival test on the joins again — a chat can write a landing page,
+and it cannot say which version was in use when the enquiries came, under which
+bet, and that the one before it did not pass. Drafting stays text from the
+person's own words, kept and judged here; building is still exported (see **What
+is deliberately not built**). See COPILOT.md → **Proof**.
 
 ---
 

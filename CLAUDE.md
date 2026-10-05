@@ -103,8 +103,8 @@ the file that adds it. No rows and a `PGRST204` still showing means the cache is
 stale, not the schema — `notify pgrst, 'reload schema';`.
 
 The app's own web searches (`copilot_hunts`, 20260925) need `EXA_API_KEY` and
-that migration. Without either, Maps and feeds run as before and the Scout on
-Work says what is missing — there is no screen of searches to check instead.
+that migration. Without either, Maps and feeds run as before and the Scout (under
+Agents on Proof) says what is missing — there is no screen of searches to check instead.
 
 Bank statements (`copilot_money_*`, `copilot_transactions`,
 `copilot_counterparties`, 20260929) need that migration and nothing else for CSV

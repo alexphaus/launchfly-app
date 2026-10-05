@@ -7,12 +7,13 @@ import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, 
 import { addDays, copilotDb, describeDbError, todayIso } from './db';
 import { horizonFor } from './due';
 import { FOCUS_EVENT, focusFromEvents, type FocusInput } from './focus';
-import { LAB_EVENTS, LAB_TALK, labHome, type LabEventRow } from './lab';
+import { LAB_COUNT, LAB_EVENTS, LAB_TALK, experimentVerdicts, labHome, type LabEventRow } from './lab';
+import { ASSET_EVENTS, ASSET_VERSION, OFFER_ASSET, assetsHome, offerBody, offerFields, sameOffer, type AssetEventRow, type Maker } from './assets';
 import { RECENT_DAYS, type AnsweredMove, type RecentLedger, type RecentOutcome } from './review';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
 import { cancelOpenDrafts, channelsConfigured, countOpenDrafts, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
-import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
+import { SELLS_MAX, isFoundBy, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
 import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
 import { stageOf } from './pipeline';
@@ -61,7 +62,7 @@ export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
   SOURCE_KEYS,
   type Action, type Capacity, type ContextItem, type ContextSource, type EventRow, type Finance, type Goal,
-  type HomeData, type Insight, type Offer, type Opportunity, type OpportunityType, type PipelineRow, type Profile, type SendMode, type SourceKey,
+  type FoundBy, type HomeData, type Insight, type Offer, type Opportunity, type OpportunityType, type PipelineRow, type Profile, type SendMode, type SourceKey,
 } from './types';
 
 export async function addContextItem(profileId: string, item: { source: string; kind?: string; content: string; data?: Record<string, unknown>; weight?: number }) {
@@ -117,7 +118,7 @@ export async function loadDiagnosisRows(profileId: string): Promise<Pick<Diagnos
     db.from('copilot_opportunities').select('id, status, source, source_kind, data, reason, title, created_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['opportunities']),
     db.from('copilot_executions').select('approval_state, channel, opportunity_id, sent_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['executions']),
     // `amount` so Work can tell a sale at the person's price from a one-dollar test (business.ts).
-    db.from('copilot_outcomes').select('kind, opportunity_id, occurred_at, amount').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
+    db.from('copilot_outcomes').select('kind, opportunity_id, occurred_at, amount, note').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
   ]);
   return { opportunities, executions, outcomes };
 }
@@ -755,7 +756,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs, labEvents] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs, labEvents, assetEvents] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -803,6 +804,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadBuiltOutputs(profileId),
     // The Lab's bets, conversations and checkpoints. Never throws; a failed read is said on the tab.
     loadLabEvents(profileId),
+    // The assets and their versions. Never throws either; Proof says a failed read.
+    loadAssetEvents(profileId),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -1003,6 +1006,15 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     outcomes: diagRows.outcomes,
     finished: commissionRows.filter((c) => c.status === 'done').map((c) => c.closed_at),
   });
+  const assets = assetsHome({ events: assetEvents.rows, unreadable: assetEvents.unreadable, offer: profile.offer });
+  // Every sale, all time, for Proof's history — from the diagnosis's own rows,
+  // with the business named where the sale was logged against one.
+  const oppTitle = new Map(diagRows.opportunities.map((o) => [o.id, o.title]));
+  const wins = diagRows.outcomes
+    .filter((o) => o.kind === 'won' && !!o.occurred_at)
+    .map((o) => ({ at: o.occurred_at as string, amount: typeof o.amount === 'number' && Number.isFinite(o.amount) ? o.amount : null, who: (o.opportunity_id ? oppTitle.get(o.opportunity_id) : null) ?? o.note?.trim().slice(0, 80) ?? null }))
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, 100);
 
   // The record is what makes "you keep doing this and it does not work"
   // possible; nothing else in the app can see it.
@@ -1066,6 +1078,10 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     commissions: commissionThreads,
     built: builtOutputs,
     lab,
+    assets,
+    wins,
+    /** A model to write with: Proof offers its ideas and drafts only where one can (invariant 7). */
+    ai: !!resolveLlmConfig(),
     /**
      * Whether anything is actually on the other end of a commission.
      *
@@ -1264,20 +1280,31 @@ export async function setTargeting(profileId: string, t: { target_segments?: str
  * offer is retired and rewritten from the new one right away, so the queue is
  * full of the user's own words the moment they save — not three days later.
  */
-export async function setOffer(profileId: string, offer: Offer): Promise<{ offer: Offer; rewritten: number }> {
+/**
+ * Who changed the offer, and why, for its history (assets.ts): the person by
+ * default; the AI when they made a version it wrote theirs; the bet it was for.
+ */
+export interface OfferMeta { by?: Maker; note?: string | null; bet?: string | null; model?: string | null }
+
+export async function setOffer(profileId: string, offer: Offer, meta: OfferMeta = {}): Promise<{ offer: Offer; rewritten: number }> {
+  const before = await getProfile(profileId);
   const clean: Offer = {
     sells: offer.sells?.trim().slice(0, SELLS_MAX) || undefined,
     for_who: offer.for_who?.trim().slice(0, 120) || undefined,
     problem: offer.problem?.trim().slice(0, 240) || undefined,
     price_band: offer.price_band?.trim().slice(0, 60) || undefined,
     proof_url: offer.proof_url?.trim().slice(0, 300) || undefined,
+    // How buyers find you survives a save of the other fields: a sheet that
+    // does not show it must not erase it.
+    found_by: isFoundBy(offer.found_by) ? offer.found_by : isFoundBy(before?.offer?.found_by) ? before!.offer!.found_by : undefined,
   };
-  const before = await getProfile(profileId);
-  await copilotDb().from('copilot_profiles').update({ offer: clean }).eq('id', profileId);
+  const { error } = await copilotDb().from('copilot_profiles').update({ offer: clean }).eq('id', profileId);
+  if (error) throw new Error(describeDbError(error, 'Could not save your offer.'));
   // The offer is the single biggest lever on message quality, so it is context too.
   const line = [clean.sells && `I sell ${clean.sells}`, clean.for_who && `to ${clean.for_who}`, clean.problem && `— the problem it solves: ${clean.problem}`, clean.price_band && `(${clean.price_band})`].filter(Boolean).join(' ');
   if (line) await addContextItem(profileId, { source: 'offer', kind: 'fact', content: line, weight: 1.6 });
   await logEvent(profileId, 'offer_updated', { has_proof: !!clean.proof_url });
+  if (!sameOffer(before?.offer, clean) && clean.sells) await recordOfferVersion(profileId, before?.offer ?? null, clean, meta);
 
   let rewritten = 0;
   if (before && offerChangedMaterially(before.offer, clean) && !offerIsEmpty(clean)) {
@@ -1289,6 +1316,60 @@ export async function setOffer(profileId: string, offer: Offer): Promise<{ offer
     await retireAutoHunts(profileId, 'Retired: the offer changed');
   }
   return { offer: clean, rewritten };
+}
+
+/**
+ * The offer's next version in its history. The first time one is recorded, the
+ * offer it replaces goes in first, undated — it was written before the history
+ * began, and a date it does not have would be invented. A failure here leaves
+ * the save standing and the history short; the asset list then shows the offer
+ * in use as changed where the history does not reach, so the gap is on screen
+ * rather than hidden (invariant 13).
+ */
+async function recordOfferVersion(profileId: string, prior: Offer | null, next: Offer, meta: OfferMeta): Promise<void> {
+  try {
+    await ensureOfferHistory(profileId, prior);
+    await insertAssetEvent(profileId, ASSET_VERSION, offerVersionPayload(next, {
+      by: meta.by ?? 'you', note: meta.note ?? null, bet: meta.bet ?? null, model: meta.by === 'ai' ? meta.model ?? null : null,
+    }));
+  } catch (e) {
+    console.error('[copilot] offer version not recorded', profileId, e instanceof Error ? e.message : e);
+  }
+}
+
+/** An offer version's payload: the fields, and the text the screen shows for them. */
+function offerVersionPayload(o: Offer, extra: Record<string, unknown>): Record<string, unknown> {
+  const f = offerFields(o);
+  return { asset: OFFER_ASSET, kind: 'offer', title: (f.sells ?? '').slice(0, 80), offer: f, body: offerBody(f), ...extra };
+}
+
+/**
+ * The offer's history, started: when none is recorded yet, the offer in use
+ * goes in as the first version, undated. Called before anything is recorded
+ * after it — a save, or a version the AI writes — so the offer the person had
+ * is never pushed out of its own history by the first change to it. Throws.
+ */
+export async function ensureOfferHistory(profileId: string, offer: Offer | null | undefined): Promise<void> {
+  if (!offer?.sells?.trim()) return;
+  const { data, error } = await copilotDb().from('copilot_events').select('id').eq('profile_id', profileId)
+    .eq('event_type', ASSET_VERSION).filter('payload->>asset', 'eq', OFFER_ASSET).limit(1);
+  if (error) throw new Error(describeDbError(error, 'Could not read the offer\'s history.'));
+  if (!data?.length) await insertAssetEvent(profileId, ASSET_VERSION, offerVersionPayload(offer, { by: 'you', undated: true, note: 'Written before the history began' }));
+}
+
+/**
+ * How buyers find the business, on its own: no draft is rewritten and no brief
+ * rebuilt for it, because no message says it — it only changes how Proof reads
+ * the parts the app cannot count.
+ */
+export async function setFoundBy(profileId: string, value: FoundBy | null): Promise<void> {
+  const p = await getProfile(profileId);
+  if (!p) throw new Error('Not found');
+  const offer: Offer = { ...(p.offer ?? {}) };
+  if (value) offer.found_by = value; else delete offer.found_by;
+  const { error } = await copilotDb().from('copilot_profiles').update({ offer }).eq('id', profileId);
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
+  await logEvent(profileId, 'found_by_set', { found_by: value });
 }
 
 export async function setSendMode(profileId: string, mode: SendMode, emailFrom?: string | null) {
@@ -2124,8 +2205,8 @@ export async function loadBuiltOutputs(profileId: string): Promise<{ rows: Array
   }
 }
 
-/** Lab events read per load: years of bets and a few hundred conversations. */
-export const LAB_EVENT_LIMIT = 500;
+/** Lab events read per load: years of bets, a few hundred conversations and the counts logged for them. */
+export const LAB_EVENT_LIMIT = 800;
 
 /**
  * The Lab's events — bets, call-offs, conversations, checkpoints — newest
@@ -2163,6 +2244,70 @@ export async function deleteLabTalk(profileId: string, id: string): Promise<void
     .eq('profile_id', profileId).eq('event_type', LAB_TALK).eq('id', n).select('id');
   if (error) throw new Error(describeDbError(error, 'Could not remove that.'));
   if (!data?.length) throw new Error('That conversation was not found. It may already be gone.');
+}
+
+/**
+ * The plan's experiments a bet has settled, written as their verdicts before
+ * the plan is drawn again, so the planner hears what the rows said rather than
+ * a tap (lab.ts experimentVerdicts). The rows are the ones the bets are read
+ * against on every load. Throws; the draw calls it and goes on without it.
+ */
+export async function settleBetExperiments(profileId: string, timezone: string): Promise<number> {
+  const [events, diag, commissions, marks] = await Promise.all([
+    loadLabEvents(profileId),
+    loadDiagnosisRows(profileId),
+    loadCommissions(profileId),
+    loadRoadmapMarks(profileId),
+  ]);
+  if (events.unreadable) throw new Error(`bets unreadable: ${events.unreadable}`);
+  if (marks.unreadable) throw new Error(`experiment marks unreadable: ${marks.unreadable}`);
+  const lab = labHome({
+    events: events.rows, unreadable: null, timezone, today: todayIso(timezone),
+    sends: diag.executions.filter((e) => e.approval_state === 'sent').map((e) => e.sent_at),
+    outcomes: diag.outcomes,
+    finished: commissions.filter((c) => c.status === 'done').map((c) => c.closed_at),
+  });
+  const verdicts = experimentVerdicts(lab.bets, marks.experiments);
+  for (const v of verdicts) await insertExperimentMark(profileId, { id: v.id, title: v.title, angle: null, state: v.state });
+  return verdicts.length;
+}
+
+/** Remove one logged count. Only a count, only this profile's; a delete that matched nothing says so. */
+export async function deleteLabTally(profileId: string, id: string): Promise<void> {
+  const n = Number(id);
+  if (!Number.isSafeInteger(n) || n <= 0) throw new Error('Not a logged count.');
+  const { data, error } = await copilotDb().from('copilot_events').delete()
+    .eq('profile_id', profileId).eq('event_type', LAB_COUNT).eq('id', n).select('id');
+  if (error) throw new Error(describeDbError(error, 'Could not remove that.'));
+  if (!data?.length) throw new Error('That count was not found. It may already be gone.');
+}
+
+/** Asset events read per load: every version of every asset, for years. */
+export const ASSET_EVENT_LIMIT = 600;
+
+/**
+ * The assets' events — versions, put-aways and returns. Never throws: a failed
+ * read is `unreadable`, said on Proof rather than shown as a business with
+ * nothing built (invariant 13).
+ */
+export async function loadAssetEvents(profileId: string): Promise<{ rows: AssetEventRow[]; unreadable: string | null }> {
+  try {
+    const { data, error } = await copilotDb().from('copilot_events')
+      .select('id, event_type, payload, created_at')
+      .eq('profile_id', profileId).in('event_type', [...ASSET_EVENTS])
+      .order('created_at', { ascending: false }).limit(ASSET_EVENT_LIMIT);
+    if (error) return { rows: [], unreadable: error.message };
+    return { rows: (data ?? []) as AssetEventRow[], unreadable: null };
+  } catch (e) {
+    return { rows: [], unreadable: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** One asset event, as validated (assets.ts). Throws with a reason the route can say. Returns the new row's id. */
+export async function insertAssetEvent(profileId: string, type: (typeof ASSET_EVENTS)[number], payload: Record<string, unknown>): Promise<string> {
+  const { data, error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: type, payload }).select('id').single();
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
+  return String((data as { id: number | string }).id);
 }
 
 export async function createCommission(profileId: string, input: {

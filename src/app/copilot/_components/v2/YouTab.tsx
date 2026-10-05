@@ -5,7 +5,7 @@
 // What left, and why. The Working? tab rendered the funnel, the openings, a
 // per-segment read, the log of calls and the findings: five sections of true
 // record that its owner opened and found "a log, static, without much value".
-// The funnel is still one tap away — it is the path to money on Work, where each
+// The funnel is still one tap away — it is the chain on Proof, where each
 // stage opens the businesses in it — and "Ask your own record" still answers by
 // counting. What this tab does instead is ask the three questions a person
 // actually has about a week, and answer each with the rows behind it. See
@@ -129,7 +129,7 @@ function Week({ home, d, actions, openMatches }: { home: HomeData; d: Derived; a
   const go = (t: ReviewTarget) => {
     if (t === 'queue') actions.openSheet({ kind: 'queue' });
     else if (t === 'sources') actions.openSheet({ kind: 'watchlist' });
-    else if (t === 'projects') actions.setTab('work');
+    else if (t === 'projects') actions.openSheet({ kind: 'projects' });
     else if (t === 'focus') actions.openSheet({ kind: 'focus' });
     else if (t === 'matches') actions.setTab('swipe');
     else if (t === 'record') actions.openSheet({ kind: 'ask' });

@@ -128,8 +128,12 @@ export interface DiagnoseInput {
   opportunities: Array<Pick<Opportunity, 'status' | 'source' | 'source_kind' | 'data' | 'reason' | 'title'> & Partial<Pick<Opportunity, 'created_at'>> & { id: string }>;
   /** `sent_at` and `occurred_at` date the firsts; rows without them are still counted. */
   executions: Array<Pick<Execution, 'approval_state' | 'channel' | 'opportunity_id'> & Partial<Pick<Execution, 'sent_at'>>>;
-  /** `amount` is a win's, when one was logged; rows read without it count as wins of no known amount. */
-  outcomes: Array<Pick<Outcome, 'kind' | 'opportunity_id'> & Partial<Pick<Outcome, 'occurred_at' | 'amount'>>>;
+  /**
+   * `amount` is a win's, when one was logged; rows read without it count as
+   * wins of no known amount. `note` names a sale logged with no business in
+   * the app attached (Proof's sale sheet), for the history.
+   */
+  outcomes: Array<Pick<Outcome, 'kind' | 'opportunity_id'> & Partial<Pick<Outcome, 'occurred_at' | 'amount' | 'note'>>>;
   offer: Offer;
   /** The user's own segments: a grouping key, never counted as openings. */
   targetSegments?: string[];

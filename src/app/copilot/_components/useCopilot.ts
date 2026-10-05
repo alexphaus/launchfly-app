@@ -30,18 +30,34 @@ const EXPERIMENT_SAID: Record<ExperimentState, string> = {
   ignored: 'Noted.',
 };
 
-/** What each Lab write did, said back. A bet's verdict is never one of them: the rows give it on the next load. */
+/** What each bet write did, said back. A bet's verdict is never one of them: the rows give it on the next load. */
 const LAB_SAID: Record<LabInput['action'], string> = {
   open: 'Bet started. Only what happens from today counts.',
-  stop: 'Called off. It stays in what you learned.',
+  stop: 'Called off. It stays in your history.',
   talk: 'Logged.',
   forget: 'Removed.',
+  count: 'Counted.',
+  uncount: 'Removed.',
+  link: 'Tied to the bet.',
+  ideas: 'New ideas, written from your record.',
+  found_by: 'Saved. Proof reads your business that way now.',
   checkpoint: 'Decided. The next checkpoint reads it back.',
+};
+
+/** What each asset write did, said back. */
+const ASSET_SAID: Record<AssetInput['action'], string> = {
+  add: 'Added to your assets.',
+  version: 'Saved as the next version.',
+  draft: 'Drafted. Read it, then keep it, rewrite it or put it away.',
+  retire: 'Put away. It stays in your history.',
+  restore: 'Back in your assets.',
+  adopt: 'That is your offer now.',
+  proof: 'Your messages carry that link now.',
 };
 import { api, del, get, post, upload } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
-import type { Actions, LabInput, OutcomeInput, SheetState, Tab, Tab2 } from './shared';
+import type { Actions, AssetInput, LabInput, OutcomeInput, SheetState, Tab, Tab2 } from './shared';
 
 export interface CopilotConfig<T extends Tab | Tab2> {
   /** Where the app opens. */
@@ -72,7 +88,14 @@ export interface Arrival { shared: string | null; why: string | null; add: boole
  * identity or one goal's form state would be saved onto the next goal opened. */
 export function sheetKey(s: SheetState): string {
   const id = 'id' in s && s.id ? s.id : 'oppId' in s ? s.oppId : 'term' in s ? s.term : 'new';
-  return `${s.kind}:${id}`;
+  // Two sheets of one kind opened on different things are two sheets: a bet
+  // sheet opened from one play and then from another must not keep the first
+  // one's line, nor a new asset the first one's kind.
+  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome'] as const)
+    .map((k) => (k in s ? String((s as Record<string, unknown>)[k] ?? '') : ''))
+    .join(':');
+  const exp = 'experiment' in s && s.experiment ? s.experiment.id : '';
+  return `${s.kind}:${id}:${on}:${exp}`;
 }
 
 /** The paid finders by name, for a toast that says which one failed; the rest are feeds. */
@@ -404,7 +427,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         setHome(r.home);
         // Said as what happened: started now, or written and waiting on an approval
         // that could not be given (three already running) — never "done".
-        say(r.started ? 'Handed over. It is starting now.' : 'Written. Approve it on Work to start it.');
+        say(r.started ? 'Handed over. It is starting now.' : 'Written. Approve it under Projects on Proof to start it.');
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
@@ -726,9 +749,9 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         return true;
       } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
     },
-    async saveOffer(offer: Offer) {
+    async saveOffer(offer: Offer, opts) {
       try {
-        const r = await post<{ home: HomeData; rewritten?: number }>('/offer', offer);
+        const r = await post<{ home: HomeData; rewritten?: number }>('/offer', { ...offer, bet: opts?.bet ?? undefined });
         setHome(r.home); closeSheet();
         say(r.rewritten ? `Saved. ${r.rewritten} waiting draft${r.rewritten === 1 ? '' : 's'} rewritten in your words.` : 'Saved. Drafts will use your words now.');
         return true;
@@ -885,6 +908,17 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         setHome(r.home);
         say(LAB_SAID[input.action]);
         return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };
+      }
+    },
+    async assets(input) {
+      try {
+        const r = await post<{ home: HomeData; id?: string; rewritten?: number }>('/assets', input);
+        setHome(r.home);
+        // An offer made theirs rewrites the drafts waiting to be sent; said, so the queue changing is not a surprise.
+        say(r.rewritten ? `${ASSET_SAID[input.action]} ${r.rewritten} waiting draft${r.rewritten === 1 ? '' : 's'} rewritten from it.` : ASSET_SAID[input.action]);
+        return { ok: true, id: r.id, rewritten: r.rewritten };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };
       }

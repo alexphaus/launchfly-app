@@ -1126,12 +1126,12 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-mthumb.t5 { background: rgba(96, 110, 140, 0.14); color: #465069; }
 
 
-/* ── Work: the business as a chain of bets ─────────────────────────────
-   Class names are cp2-bz-* ("business") on purpose: .cp2-link already means
-   the small blue text button, and a part of the chain named after it would
-   inherit its colour and size inside .cp-root, where scoping cannot help. */
+/* ── The chain, projects and agents (v2/ProofSheets.tsx, ProjectCard.tsx) ─
+   Work's, kept for Proof, which replaced it. Class names are cp2-bz-*
+   ("business") on purpose: .cp2-link already means the small blue text button,
+   and a part of the chain named after it would inherit its colour and size
+   inside .cp-root, where scoping cannot help. */
 .cp-root[data-theme="soft"] .cp2-product-name { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; margin: 2px 0 8px; }
-.cp-root[data-theme="soft"] .cp2-product-problem { font-size: 13.5px; line-height: 1.55; color: var(--muted); font-style: italic; margin-bottom: 12px; }
 
 /* The verdict: proven, or the bar and the count against it. Green only when
    it is proven; a tint is not a verdict until the rows say so. */
@@ -1142,18 +1142,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-bz-verdict-s { font-size: 13px; line-height: 1.45; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-bz-moved { margin-top: 10px; font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--blue); }
 
-/* Experiments: one folded line under the verdict, the ledger behind it. */
-.cp-root[data-theme="soft"] .cp2-bz-tests { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
-.cp-root[data-theme="soft"] .cp2-bz-tests-btn { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
-.cp-root[data-theme="soft"] .cp2-bz-tests-btn[aria-expanded="true"] .cp2-chev { transform: rotate(90deg); }
-.cp-root[data-theme="soft"] .cp2-bz-tests-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-.cp-root[data-theme="soft"] .cp2-bz-test { display: grid; grid-template-columns: auto 1fr; column-gap: 9px; row-gap: 2px; align-items: baseline; width: 100%; text-align: left; }
-.cp-root[data-theme="soft"] .cp2-bz-test-t { font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-bz-test-s { grid-column: 2; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-bz-test-chip { font-style: normal; font-size: 10px; font-weight: 700; white-space: nowrap; border-radius: 999px; padding: 2px 8px; background: var(--line); color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-bz-test-chip.live { background: var(--tint); color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-bz-test-chip.worked { background: var(--ai-tint); color: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-bz-test-chip.failed { background: var(--bad-tint); color: var(--bad); }
 
 /* The chain. One rail down the left, drawn on the part rather than inside its
    button, so it runs on through a part that is open. Each node is coloured by
@@ -1205,13 +1193,12 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-bz-open-claude { color: var(--blue); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .cp-root[data-theme="soft"] .cp2-bz-open-claude svg { width: 12px; height: 12px; vertical-align: -1px; }
 
-/* In the works: the box first, then the projects, each small enough that three fit. */
+/* Projects: the box first, then each project, small enough that three fit. */
 .cp-root[data-theme="soft"] .cp2-bz-compose { padding-top: 16px; padding-bottom: 16px; }
 .cp-root[data-theme="soft"] .cp2-bz-compose textarea.cp-input { width: 100%; resize: none; font-family: inherit; font-size: 14px; line-height: 1.45; box-shadow: none; background: var(--line); border-color: transparent; }
 .cp-root[data-theme="soft"] .cp2-bz-compose .cp-chips { margin: 12px 0 2px; }
 .cp-root[data-theme="soft"] .cp2-bz-compose .cp-btn-row { margin-top: 12px; }
 .cp-root[data-theme="soft"] .cp2-bz-quiet { margin: 2px 26px 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-projects { padding: 0 22px; }
 .cp-root[data-theme="soft"] .cp2-offer-label { margin: 4px 26px 8px; font-size: 11.5px; font-weight: 600; color: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-bz-job { background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-sm); padding: 14px 16px; margin-bottom: 12px; }
 .cp-root[data-theme="soft"] .cp2-bz-job.draft { box-shadow: none; border: 1px dashed var(--fill-quiet); }
@@ -1236,14 +1223,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-bz-fault p { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cp-root[data-theme="soft"] .cp2-bz-fault .cp-btn { flex: none; }
 
-/* Built: a gap is said where the things the business has are, with its way to fill it. */
-.cp-root[data-theme="soft"] .cp2-bz-built .cp2-owner { flex: none; align-self: center; white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-bz-gap { gap: 10px; }
-.cp-root[data-theme="soft"] .cp2-bz-gap-main { flex: 1; min-width: 0; display: flex; text-align: left; }
-.cp-root[data-theme="soft"] .cp2-bz-gap .t { color: var(--bad); }
-.cp-root[data-theme="soft"] .cp2-bz-gap .cp-connect { flex: none; align-self: center; }
-.cp-root[data-theme="soft"] .cp2-bz-new { margin-left: 7px; font-style: normal; font-size: 10px; font-weight: 700; color: var(--blue); background: var(--tint); border-radius: 999px; padding: 1px 7px; vertical-align: 1px; }
-.cp-root[data-theme="soft"] .cp2-bz-built-note { margin: 8px 26px 0; }
 
 /* Agents: one line, every agent that is not well named on it; the roster folds under it. */
 .cp-root[data-theme="soft"] .cp2-bz-team .s { font-size: 13px; font-weight: 500; color: var(--ink); }
@@ -1273,15 +1252,14 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-state.failed i { background: var(--bad); }
 .cp-root[data-theme="soft"] .cp2-team .cp-connect { flex: none; align-self: center; }
 
-/* ── Lab (v2/LabTab.tsx): one bet at a time, judged by the rows ─────────
-   cp2-lab-* throughout. The verdict chip is the one colour code here, and its
+/* ── Bets (v2/ProofTab.tsx, LabSheets.tsx): one at a time, judged by the rows
+   cp2-lab-*, from when they had a tab of their own. The verdict chip is the one colour code here, and its
    word always travels with it: Passed is the AI's green, Did not pass is
    --bad, Called off is quiet. */
 .cp-root[data-theme="soft"] .cp2-lab-q { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; margin: 2px 0 8px; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-verdict { flex: none; align-self: flex-start; font-style: normal; font-size: 10px; font-weight: 700; white-space: nowrap; border-radius: 999px; padding: 2px 8px; background: var(--line); color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-lab-verdict.passed { background: var(--ai-tint); color: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-lab-verdict.failed { background: var(--bad-tint); color: var(--bad); }
-.cp-root[data-theme="soft"] .cp2-lab-learned .cp2-lab-verdict { align-self: center; }
 
 /* The bet: the belief in quotes, then the one number that decides it. */
 .cp-root[data-theme="soft"] .cp2-lab-partname { flex: none; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--line); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
@@ -1292,7 +1270,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-unit { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-bar { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; margin: 10px 0 10px; }
 .cp-root[data-theme="soft"] .cp2-lab-bar i { display: block; height: 100%; min-width: 0; border-radius: 999px; background: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-lab-tries { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
 .cp-root[data-theme="soft"] .cp2-lab-pass { font-size: 13px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-src { font-size: 12px; line-height: 1.45; color: var(--muted); margin-top: 3px; }
 .cp-root[data-theme="soft"] .cp2-lab-over { font-size: 12px; line-height: 1.45; font-weight: 600; color: var(--warn); margin-top: 4px; }
@@ -1323,10 +1300,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-opt.on { background: var(--tint); box-shadow: inset 0 0 0 1.5px var(--blue); }
 .cp-root[data-theme="soft"] .cp2-lab-opt.on b { color: var(--blue); }
 
-/* Plays: the chain as a row of parts, each with its verdict's dot, then the plays for the one picked. */
-/* Wrapped, not scrolled: the part picked is the weak link more often than
-   not, and a row that scrolls put it off the edge of the screen. */
-.cp-root[data-theme="soft"] .cp2-lab-parts { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 20px 6px; }
+/* A part of the business as a chip, its verdict's dot beside its name. */
 .cp-root[data-theme="soft"] .cp2-lab-partchip { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; white-space: nowrap; padding: 8px 13px; border-radius: 999px; background: var(--surface); color: var(--muted); box-shadow: var(--shadow-sm); }
 .cp-root[data-theme="soft"] .cp2-lab-partchip i { width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--dim); }
 .cp-root[data-theme="soft"] .cp2-lab-partchip.works i { background: var(--ai); box-shadow: none; }
@@ -1334,24 +1308,14 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-partchip.stuck i { background: var(--bad); box-shadow: none; }
 .cp-root[data-theme="soft"] .cp2-lab-partchip.missing i { box-shadow: none; border: 1.5px dashed var(--dim); }
 .cp-root[data-theme="soft"] .cp2-lab-partchip.on { background: var(--ink); color: #fff; }
-.cp-root[data-theme="soft"] .cp2-lab-partwhy { margin: 8px 24px 4px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-lab-partwhy b { font-weight: 600; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-lab-onebet { margin: 8px 24px 0; font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-lab-plays { display: flex; flex-direction: column; gap: 10px; padding: 10px 20px 4px; }
-.cp-root[data-theme="soft"] .cp2-lab-playcard { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 14px 16px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .cp-root[data-theme="soft"] .cp2-lab-play-t { font-size: 15px; font-weight: 700; line-height: 1.35; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-play-how { font-size: 13px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-play-pass { font-size: 12px; line-height: 1.45; color: var(--muted); margin-bottom: 4px; }
 .cp-root[data-theme="soft"] .cp2-lab-own { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 13px 16px; border-radius: 20px; border: 1px dashed var(--fill-quiet); font-size: 13.5px; font-weight: 600; color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-lab-own span { flex: 1; }
 
-/* Conversations: three counts, the last three, and the log button. */
-.cp-root[data-theme="soft"] .cp2-lab-tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 4px; }
-.cp-root[data-theme="soft"] .cp2-lab-tally span { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; line-height: 1.3; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-lab-tally b { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-lab-talks > .cp-btn { margin-top: 14px; }
+/* Conversations, one row each. */
 .cp-root[data-theme="soft"] .cp2-lab-talk { display: flex; flex-direction: column; gap: 3px; padding: 11px 0; border-bottom: 1px solid var(--line); }
-.cp-root[data-theme="soft"] .cp2-lab-talks .cp2-lab-talk:first-of-type { margin-top: 8px; border-top: 1px solid var(--line); }
 .cp-root[data-theme="soft"] .cp2-lab-talk-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .cp-root[data-theme="soft"] .cp2-lab-talk-top b { flex: 0 1 auto; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-talk-when { flex: none; font-size: 11.5px; color: var(--dim); }
@@ -1360,15 +1324,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-talk-s { font-size: 12px; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-lab-said { font-size: 13px; line-height: 1.45; font-style: italic; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-talklist { margin-top: 14px; border-top: 1px solid var(--line); }
-.cp-root[data-theme="soft"] .cp2-lab-note { font-style: italic; }
-.cp-root[data-theme="soft"] .cp2-lab-nowrap { white-space: nowrap; }
 
-/* The clock: runway in bets. */
-.cp-root[data-theme="soft"] .cp2-lab-clock-n { font-size: 15px; font-weight: 600; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-lab-clock-n b { font-family: var(--display); font-size: 30px; font-weight: 700; color: var(--ink); margin-right: 2px; }
-.cp-root[data-theme="soft"] .cp2-lab-clock-n b.cp2-err { font-size: 18px; color: var(--bad); }
-.cp-root[data-theme="soft"] .cp2-lab-clock-s { margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-lab-clock-do { margin-top: 12px; }
 
 /* The bet sheet: counts with a minus and a plus, and the line said back before the button. */
 .cp-root[data-theme="soft"] .cp2-lab-sheet-book { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); margin-bottom: 4px; }
@@ -1386,6 +1342,165 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-warn { margin: 0 0 12px; padding: 11px 13px; border-radius: 14px; background: var(--warn-tint); color: var(--ink); font-size: 12.5px; line-height: 1.5; }
 .cp-root[data-theme="soft"] .cp2-lab-warn .cp2-link { font-size: 12.5px; }
 .cp-root[data-theme="soft"] .cp2-lab-date { margin-top: 10px; max-width: 220px; }
+
+/* ── Proof (v2/ProofTab.tsx, ProofSheets.tsx) ─────────────────────────────
+   cp2-pf-* throughout. The verdict and the chain, the bet, the assets and the
+   history. Colour follows the chain's code wherever a part's state is shown:
+   the AI's green works, blue is being tested, --bad is not working, a dashed
+   ring is missing — and the word always travels with the colour. */
+
+/* The verdict card: how buyers find you, the chain as five dots, the clock. */
+.cp-root[data-theme="soft"] .cp2-pf-found { display: block; margin: -2px 0 12px; text-align: left; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-found b { font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-found.ask b { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-chain { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 16px; text-align: left; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-dots { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); text-align: center; }
+.cp-root[data-theme="soft"] .cp2-pf-dots::before { content: ''; position: absolute; left: 10%; right: 10%; top: 8px; height: 2px; background: var(--line); }
+.cp-root[data-theme="soft"] .cp2-pf-dot { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-pf-dot i { box-sizing: border-box; width: 14px; height: 14px; margin-top: 1px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--dim); }
+.cp-root[data-theme="soft"] .cp2-pf-dot.works i { background: var(--ai); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-pf-dot.testing i { background: var(--blue); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-pf-dot.stuck i { background: var(--bad); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-pf-dot.missing i { box-shadow: none; border: 1.5px dashed var(--dim); }
+.cp-root[data-theme="soft"] .cp2-pf-dot.weak i { width: 16px; height: 16px; margin-top: 0; outline: 4px solid var(--tint); }
+.cp-root[data-theme="soft"] .cp2-pf-dot.weak.stuck i { outline-color: var(--bad-tint); }
+.cp-root[data-theme="soft"] .cp2-pf-dot b { font-size: 11px; font-weight: 600; line-height: 1.2; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-dot.weak b { font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-pf-dot em { font-style: normal; font-size: 10px; font-weight: 600; line-height: 1.2; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-dot.works em { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-pf-dot.testing em { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-dot.stuck em { color: var(--bad); font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-pf-weak { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--line); font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-weak > span { flex: 1; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-pf-weak b { font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-clock { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-clock-i { flex: none; display: inline-flex; margin-top: 2px; }
+.cp-root[data-theme="soft"] .cp2-pf-clock-i svg { width: 15px; height: 15px; }
+.cp-root[data-theme="soft"] .cp2-pf-clock-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cp-root[data-theme="soft"] .cp2-pf-clock-t b { font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-clock-t .cp2-link { text-align: left; }
+.cp-root[data-theme="soft"] .cp2-pf-clock-s { font-size: 12px; }
+
+/* The bet: what it took so far, quieter than the count that decides it. */
+.cp-root[data-theme="soft"] .cp2-pf-tries { display: flex; align-items: center; gap: 10px; margin: -2px 0 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-tries > span:first-child { flex: none; }
+.cp-root[data-theme="soft"] .cp2-pf-tries-bar { flex: 1; height: 4px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-pf-tries-bar i { display: block; height: 100%; border-radius: 999px; background: var(--fill-quiet); }
+.cp-root[data-theme="soft"] .cp2-pf-k { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+
+/* The work done for the bet, and what gets it ready: one row each, a glyph for what it is. */
+.cp-root[data-theme="soft"] .cp2-pf-work { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.cp-root[data-theme="soft"] .cp2-pf-wrow { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-wrow.static { background: var(--line); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-pf-wmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-root[data-theme="soft"] .cp2-pf-wmain b { font-size: 13.5px; font-weight: 600; line-height: 1.35; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-wmain > span { font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-glyph { flex: none; align-self: flex-start; width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-glyph svg { width: 16px; height: 16px; }
+.cp-root[data-theme="soft"] .cp2-pf-glyph.ai { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-pf-glyph.you { background: var(--tint); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-glyph.gap { background: var(--bad-tint); color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-pf-glyph.add { background: var(--tint); color: var(--blue); font-size: 19px; font-weight: 600; line-height: 1; }
+.cp-root[data-theme="soft"] .cp2-pf-chip { font-style: normal; font-weight: 700; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-chip.needs { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-chip.fault { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-pf-chip:is(.running, .done) { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-pf-prep-do { display: flex; flex-wrap: wrap; gap: 8px; }
+.cp-root[data-theme="soft"] .cp2-pf-hand { margin-top: 12px; }
+.cp-root[data-theme="soft"] .cp2-pf-hand-row { display: flex; align-items: center; gap: 8px; }
+.cp-root[data-theme="soft"] .cp2-pf-hand-row .cp-input { flex: 1; min-width: 0; padding: 10px 13px; font-size: 14px; }
+.cp-root[data-theme="soft"] .cp2-pf-hand-row .cp-btn { flex: none; }
+
+/* No bet running: the parts, the ideas written for this business, the books, your own. */
+.cp-root[data-theme="soft"] .cp2-pf-parts { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 2px; }
+.cp-root[data-theme="soft"] .cp2-pf-partwhy { margin: 8px 0 2px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-partwhy b { font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-ideas { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.cp-root[data-theme="soft"] .cp2-pf-ideas-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-pf-ideas-top .cp2-link:disabled { color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-pf-wait { font-size: 12.5px; font-weight: 600; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-ideas-s { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-books { display: block; margin-top: 18px; }
+.cp-root[data-theme="soft"] .cp2-pf-plays { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.cp-root[data-theme="soft"] .cp2-pf-play { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 14px 16px; border-radius: 20px; background: var(--surface); box-shadow: 0 4px 14px rgba(31, 41, 68, 0.09); }
+.cp-root[data-theme="soft"] .cp2-pf-play .cp-btn { margin-top: 4px; }
+.cp-root[data-theme="soft"] .cp2-pf-src { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-src .cp2-owner { font-style: normal; }
+.cp-root[data-theme="soft"] .cp2-pf-why { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-more { display: block; margin-top: 10px; padding: 6px 0; font-size: 12.5px; font-weight: 600; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-pick .cp2-lab-own { margin-top: 10px; }
+
+/* Assets and the history: rows, a glyph for what each is, who made it on the right. */
+.cp-root[data-theme="soft"] :is(.cp2-pf-asset, .cp2-pf-gap, .cp2-pf-addrow, .cp2-pf-hrow) { align-items: center; }
+.cp-root[data-theme="soft"] :is(.cp2-pf-asset, .cp2-pf-hrow) .cp2-owner { flex: none; align-self: flex-start; margin-top: 2px; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-pf-asset.retired { opacity: 0.6; }
+.cp-root[data-theme="soft"] .cp2-pf-gap .t { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-pf-gap .cp-connect { flex: none; }
+.cp-root[data-theme="soft"] .cp2-pf-addrow .t { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-betlink { font-size: 11.5px; font-weight: 600; line-height: 1.4; color: var(--blue); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-pf-betlink.passed { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-pf-betlink.failed { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-pf-betlink.stopped { color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-waiting { font-size: 11.5px; font-weight: 600; line-height: 1.4; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-note { margin: 8px 26px 0; }
+.cp-root[data-theme="soft"] .cp2-pf-hmark { flex: none; align-self: flex-start; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-hmark svg { width: 15px; height: 15px; }
+.cp-root[data-theme="soft"] .cp2-pf-hmark.good { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-pf-hmark.bad { background: var(--bad-tint); color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-pf-behind .s.cp2-pf-needs { color: var(--blue); font-weight: 600; }
+
+/* The sheets. */
+.cp-root[data-theme="soft"] .cp2-pf-sheet-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); margin-bottom: 4px; }
+.cp-root[data-theme="soft"] .cp2-pf-sheetlist { margin-top: 6px; }
+.cp-root[data-theme="soft"] .cp2-pf-foundrow { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; margin-bottom: 14px; padding: 13px 16px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-onpart { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--tint); font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-onpart span { flex: 1; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-pf-onpart b { font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-pf-onpart .cp-btn { flex: none; }
+.cp-root[data-theme="soft"] .cp2-pf-options { display: flex; flex-direction: column; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-pf-option { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 13px 15px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-pf-option b { font-size: 14px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-option span { font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-option em { font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-option.on { background: var(--tint); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-option.on b { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-unsay { display: block; margin-top: 14px; padding: 6px 0; }
+.cp-root[data-theme="soft"] .cp2-pf-when { align-self: center; font-size: 12px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-pill { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1px var(--frame); }
+.cp-root[data-theme="soft"] .cp2-pf-pill.live { background: var(--ai-tint); color: var(--ai); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-pf-tally .cp2-x { margin-left: auto; }
+.cp-root[data-theme="soft"] p.cp2-pf-betlink { margin: -4px 0 12px; font-size: 12.5px; }
+.cp-root[data-theme="soft"] .cp2-pf-betlink .cp2-lab-verdict { vertical-align: 1px; }
+.cp-root[data-theme="soft"] .cp2-pf-adopt { margin: 0 0 14px; padding: 12px 14px; border-radius: 16px; background: var(--ai-tint); font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-adopt b { font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-pf-adopt .cp-btn-row { margin-top: 10px; }
+.cp-root[data-theme="soft"] .cp2-pf-body { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 14px; }
+.cp-root[data-theme="soft"] .cp2-pf-url { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; max-width: 100%; font-size: 13px; font-weight: 600; color: var(--blue); text-decoration: none; overflow-wrap: anywhere; }
+.cp-root[data-theme="soft"] .cp2-pf-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 340px; overflow-y: auto; padding: 14px 16px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); font-size: 13.5px; line-height: 1.55; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-ver-note { font-size: 12px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cp-root[data-theme="soft"] .cp2-pf-acts .cp2-link { margin-left: auto; padding: 8px 2px; }
+.cp-root[data-theme="soft"] .cp2-pf-vers { display: flex; flex-direction: column; margin-top: 18px; }
+.cp-root[data-theme="soft"] .cp2-pf-vers > .cp2-pf-k { margin-bottom: 6px; }
+.cp-root[data-theme="soft"] .cp2-pf-ver { border-top: 1px solid var(--frame); }
+.cp-root[data-theme="soft"] .cp2-pf-ver-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 11px 0; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-pf-ver-n { flex: none; width: 32px; font-family: var(--display); font-size: 13px; font-weight: 700; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-pf-ver.open .cp2-chev { transform: rotate(90deg); }
+.cp-root[data-theme="soft"] .cp2-pf-ver-body { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px 42px; }
+.cp-root[data-theme="soft"] .cp2-pf-ver-body .cp-btn { align-self: flex-start; }
+.cp-root[data-theme="soft"] .cp2-pf-orai { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--frame); }
+.cp-root[data-theme="soft"] .cp2-pf-projects { display: flex; flex-direction: column; }
+.cp-root[data-theme="soft"] .cp2-pf-offer .cp2-offer-label { margin: 14px 0 8px; }
+
+/* The bet, said under "you are here" on the Path, and the plan's experiment offered as one. */
+.cp-root[data-theme="soft"] .cp2-way-bet { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 10px; padding: 11px 14px; border-radius: 16px; background: var(--tint); text-align: left; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-way-bet-i { flex: none; display: inline-flex; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-way-bet-i svg { width: 18px; height: 18px; }
+.cp-root[data-theme="soft"] .cp2-way-bet-m { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cp-root[data-theme="soft"] .cp2-way-bet-m b { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.cp-root[data-theme="soft"] .cp2-way-bet-m span { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-way-bet .cp2-chev { stroke: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-exp-bet { align-self: flex-start; margin-top: 6px; padding: 4px 0; text-align: left; font-size: 12.5px; font-weight: 600; color: var(--blue); }
 
 /* ── You: tiles, the week, goals ───────────────────────────────────────── */
 .cp-root[data-theme="soft"] .cp2-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 22px 0; }

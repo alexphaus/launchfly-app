@@ -1,29 +1,32 @@
 'use client';
-// The four-tab shell at /copilot2 — six tabs since Money and the Lab, the name
-// kept. One question per tab:
+// The tab shell at /copilot2 — called the four-tab shell from its first
+// release, five tabs now. One question per tab:
 //
 //   Path      where am I, and what moves it: what was done above, "you are
 //             here" with the one thing to do now, what comes next below
 //   Swipe     who is worth contacting — one at a time, the message written,
 //             right sends it
-//   Work      is the business proven, and what moves it: the offer and its
-//             verdict, the chain of parts each with a state from the rows, the
-//             weak link open, what is in the works and what was built
-//   Lab       did the bet work: one bet at a time with its pass line, read off
-//             the rows; the plays from books for the weak part; the
-//             conversations logged; runway in bets; pivot or persevere
+//   Proof     is the business proven, and what is being bet to find out: the
+//             offer and its verdict, the chain of parts each with a state from
+//             the rows, one bet at a time judged by them, the assets the
+//             business sells with, and its history
 //   Money     where did it go: log a move, the list under the balance, the
 //             calendar (MoneyTab.tsx says why this is a tab and not a sheet)
 //   You       how am I doing: money, runway, deep work, the week read back,
 //             goals, settings
 //
 // The Path replaced Today: the call, what moved and what comes next are one
-// stream on a time axis (lib/copilot/pathway.ts). For one release it replaced
-// Work as well, with the machine and the team moved under the numbers on You.
-// Work came back on its owner's word — "better for separation, and has
-// important features": the Path is what to do, Work is the business being
-// built, and the offer, the machine, the team and the projects in full had no
-// place on either of the others.
+// stream on a time axis (lib/copilot/pathway.ts).
+//
+// Proof (ProofTab.tsx) replaced Work and the Lab. Work said which part of the
+// business was weak; the Lab was where a bet on that part was written down and
+// judged. Two tabs asked one question in two places — the verdict on one, the
+// bet that moves it on the other — and a checkpoint on the Lab read its
+// decision back against a chain drawn on Work. Its owner asked for one tab, for
+// a business that does not sell by outreach as much as one that does, with
+// ideas a model writes so it is not the same tab every week, the assets as
+// things with versions, and the history in one place. Every name either tab had
+// still lands on it.
 //
 // Why a second layout rather than a rework of the first. The two-tab app was
 // built by removing things, one argued step at a time, and every step was right
@@ -40,12 +43,6 @@
 // Every way into Matches still lands: its tab names open Swipe, its New opens
 // Swipe, and its other pills open the sheet on the same stage.
 //
-// The Lab (LabTab.tsx) is Work's question asked as a test. Work says which part
-// of the business is weak; the Lab is where a bet on that part is written down
-// before it starts and judged by the rows after. It is its own tab rather than
-// a fold on Work because it is a loop someone runs every day for two weeks, and
-// a fold is where a loop goes to be forgotten.
-//
 // The header's corner is the mic (VoiceLog.tsx): say a move from any tab and
 // the add sheet opens with it filled in. It held the capacity pill, a setting
 // shown on every screen and changed about never; that is in You → Settings.
@@ -59,18 +56,17 @@ import SheetContent from '../SheetContent';
 import type { Tab2 } from '../shared';
 import { sheetKey, useCopilot } from '../useCopilot';
 import { useDerived } from './derive';
-import { IconFlask, IconMoney, IconPath, IconSwipe, IconWork, IconYou } from './icons2';
+import { IconMoney, IconPath, IconProof, IconSwipe, IconYou } from './icons2';
 import PathTab from './PathTab';
-import WorkTab from './WorkTab';
-import LabTab from './LabTab';
+import ProofTab from './ProofTab';
 import MoneyTab, { BookFab, BookSheet, MoneyTabGuard, useBook } from './MoneyTab';
 import YouTab from './YouTab';
 import SwipeTab from './SwipeTab';
 import { useVoice, VoiceButton, VoiceLive } from './VoiceLog';
 
-const TABS: Tab2[] = ['path', 'swipe', 'work', 'lab', 'money', 'you'];
-const LABEL: Record<Tab2, string> = { path: 'Path', swipe: 'Swipe', work: 'Work', lab: 'Lab', money: 'Money', you: 'You' };
-const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, swipe: IconSwipe, work: IconWork, lab: IconFlask, money: IconMoney, you: IconYou };
+const TABS: Tab2[] = ['path', 'swipe', 'proof', 'money', 'you'];
+const LABEL: Record<Tab2, string> = { path: 'Path', swipe: 'Swipe', proof: 'Proof', money: 'Money', you: 'You' };
+const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, swipe: IconSwipe, proof: IconProof, money: IconMoney, you: IconYou };
 /** After the last move logged in a burst, the rest of the app re-reads runway once, not once per coffee. */
 const HOME_AFTER_BOOK_MS = 4_000;
 /**
@@ -83,8 +79,9 @@ const ALIAS: Record<string, Tab2> = {
   // Matches was a tab until Swipe replaced it; a shortcut or a push naming it opens the deck.
   matches: 'swipe', pipeline: 'swipe', opportunities: 'swipe', signals: 'swipe',
   swipe: 'swipe', deck: 'swipe', triage: 'swipe',
-  work: 'work',
-  lab: 'lab', bets: 'lab', bet: 'lab', experiments: 'lab', tests: 'lab',
+  // Work and the Lab were tabs until Proof replaced both; a shortcut or a push naming either opens it.
+  proof: 'proof', work: 'proof', business: 'proof', assets: 'proof', history: 'proof',
+  lab: 'proof', bets: 'proof', bet: 'proof', experiments: 'proof', tests: 'proof',
   money: 'money', book: 'money', cash: 'money',
   you: 'you', working: 'you',
 };
@@ -146,8 +143,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
           : (briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
         {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
         {tab === 'swipe' && <SwipeTab home={home} d={d} actions={actions} finding={finding} say={say} refresh={refresh} />}
-        {tab === 'work' && <WorkTab home={home} d={d} actions={actions} briefing={briefing} />}
-        {tab === 'lab' && <LabTab home={home} d={d} actions={actions} />}
+        {tab === 'proof' && <ProofTab home={home} d={d} actions={actions} briefing={briefing} />}
         {tab === 'money' && <MoneyTabGuard><MoneyTab book={book} actions={actions} say={say} arrival={arrival} clearArrival={clearArrival} /></MoneyTabGuard>}
         {tab === 'you' && <YouTab home={home} d={d} actions={actions} openMatches={openMatches} />}
       </main>

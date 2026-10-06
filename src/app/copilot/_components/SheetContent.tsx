@@ -13,7 +13,6 @@ import type { Discovered } from '@/lib/copilot/watch/discover';
 import { BODY_MAX, SECTION, SECTIONS, type WorkingSection } from '@/lib/copilot/working';
 import { AUTHORITIES, AUTHORITY, blockedOn, type Authority } from '@/lib/copilot/commission';
 import { WORTH, WORTH_KINDS, WORTH_NOTE_MAX, type WorthKind } from '@/lib/copilot/worth';
-import type { AskAnswer } from '@/lib/copilot/ask';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
 import { CaptureCard, MoveCard } from './views/NowView';
@@ -21,6 +20,7 @@ import { FOCUS_NOTE_MAX, FOCUS_PRESETS, dayLetter, focusWeek, hoursLabel } from 
 import { whenLabel } from '@/lib/copilot/review';
 import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
+import AskSheet from './AskSheet';
 import BankSheet from './BankSheet';
 import OutreachSheet from './v2/Outreach';
 import { ClaudeSheet } from './v2/ClaudeSheet';
@@ -60,7 +60,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'commission': return <CommissionSheet home={home} id={sheet.id} actions={actions} />;
     case 'handover': return <HandoverSheet home={home} actions={actions} />;
     case 'working': return <WorkingSheet home={home} actions={actions} />;
-    case 'ask': return <AskSheet heard={sheet.heard} actions={actions} />;
+    case 'ask': return <AskSheet home={home} heard={sheet.heard} actions={actions} />;
     case 'claude': return <ClaudeSheet actions={actions} />;
     case 'move': return <MoveSheet home={home} id={sheet.id} actions={actions} />;
     case 'capture': return <CaptureSheet home={home} actions={actions} />;
@@ -1677,121 +1677,6 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
         </>
       )}
       {c.outcome && <div className="cp-note">{c.outcome}</div>}
-    </>
-  );
-}
-
-/* ─── Questions ───────────────────────────────────────────────────────────── */
-
-/**
- * Five questions about your own rows, and one escape hatch.
- *
- * The app writes constantly and could be asked nothing. Everything on every other
- * screen is a decision it made or a record it rendered; the thing somebody
- * actually says out loud after a fortnight — "which of these segments ever
- * replies?" — had nowhere to go, while the answer sat in the database.
- *
- * A fixed list rather than a text box, and lib/copilot/ask.ts argues it at length.
- * The short version: a typed question has to be answered by a model, a model
- * counting rows will produce a plausible figure, and nobody can tell which time it
- * is wrong. Every answer here is arithmetic.
- *
- * The handoff at the bottom is the other half of the same honesty. These five are
- * what the app can answer by counting; for everything else it hands you the whole
- * record and gets out of the way.
- */
-function AskSheet({ heard, actions }: { heard?: string; actions: Actions }) {
-  const [answers, setAnswers] = useState<AskAnswer[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
-  const [copying, setCopying] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    void (async () => {
-      const r = await actions.askRows();
-      if (!live) return;
-      if (!r.ok) return setError(r.error ?? 'Could not count that');
-      setAnswers(r.answers ?? []);
-      // The first question opens itself. A screen of five collapsed rows makes
-      // somebody tap before they know whether any of it is worth reading.
-      setOpen(r.answers?.[0]?.id ?? null);
-    })();
-    return () => { live = false; };
-    // actions is rebuilt every render and this is a one-shot load.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const copy = async () => {
-    setCopying(true); setCopied(null); setError(null);
-    const r = await actions.handoff();
-    if (!r.ok || !r.text) { setCopying(false); return setError(r.error ?? 'Could not gather your context'); }
-    // A question asked into the mic goes with the record, so one paste asks it.
-    const text = heard ? `${r.text}\n\nMy question: ${heard}` : r.text;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(`${text.length.toLocaleString()} characters copied${heard ? ', your question at the end' : ''}. Paste it into anything.`);
-    } catch {
-      // Clipboard access is refused outright in some embedded browsers, and a
-      // button that silently does nothing is the worst outcome — the user pastes
-      // stale clipboard content into a model and blames the answer.
-      setError('This browser would not let the page write to the clipboard. Open the app in Safari or Chrome directly and try again.');
-    }
-    setCopying(false);
-  };
-
-  return (
-    <>
-      <h3>Ask your own record</h3>
-      {/* Asked into the mic. Not answered by a model: these five are counted, and
-          anything else goes with the whole record to one that reasons, below. */}
-      {heard && <p className="cp2-tl-heard">&ldquo;{heard}&rdquo;</p>}
-      <p className="desc">
-        Every answer here is counted from rows you made. Nothing is estimated, so nothing can be
-        confidently wrong.{heard ? ' If yours is not one of these, copy everything it knows at the end — your question goes with it — and ask Claude.' : ''}
-      </p>
-
-      {error && <div className="cp-note">{error}</div>}
-      {!answers && !error && <p className="desc">Counting…</p>}
-
-      {answers?.map((a) => (
-        <div key={a.id}>
-          <button className={`cp-option ${open === a.id ? 'active' : ''}`} onClick={() => setOpen(open === a.id ? null : a.id)}>
-            <div><div className="ct">{a.q}</div><div className="cs">{a.headline}</div></div>
-          </button>
-          {open === a.id && (
-            <div className="cp-list" style={{ marginTop: 8 }}>
-              {a.rows.map((r, n) => (
-                <div key={`${a.id}-${n}`} className="cp-ctx">
-                  <div><div className="l">{r.label}</div>{r.note && <div className="s">{r.note}</div>}</div>
-                  <span className="cp-connect ghost">{r.value}</span>
-                </div>
-              ))}
-              {/* Never an empty card. Three bugs in this codebase shared the shape
-                  of a component failing, the failure being swallowed, and the
-                  screen reporting calm — a blank answer here would be that
-                  shape in the one feature whose job is to tell the truth. */}
-              {a.thin && <div className="cp-note">{a.thin}</div>}
-            </div>
-          )}
-        </div>
-      ))}
-
-      <div className="cp-section" style={{ marginTop: 16 }}><span className="lead">Anything else</span></div>
-      <p className="desc">
-        Those five are what this app can answer by counting. For everything else, take the whole
-        record and ask something that can actually reason — your working file, your funnel, every
-        call it made and what you did about it, what you have stood down, what is running.
-      </p>
-      <button className="cp-btn primary block" disabled={copying} onClick={() => void copy()}>
-        {copying ? 'Gathering…' : 'Copy everything it knows'}
-      </button>
-      {copied && <div className="cp-note">{copied}</div>}
-      <p className="cp-help">
-        Your rows are yours. If a general model does better with all of this than this app does
-        without it, that is worth knowing — and it is the reason this button exists.
-      </p>
     </>
   );
 }

@@ -17,6 +17,9 @@
 // before, and says so when that fails.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+/** The currency the Money tab shows amounts in: an answer about money is said in the one the tab shows (AskSheet). */
+export const BOOK_VIEW_KEY = 'cp2.book.view';
+
 export const local = {
   get(k: string): string | null { try { return window.localStorage.getItem(k); } catch { return null; } },
   /** False when it could not be written: the caller decides whether that matters. */

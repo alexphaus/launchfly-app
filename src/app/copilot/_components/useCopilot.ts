@@ -99,7 +99,7 @@ export function sheetKey(s: SheetState): string {
     .join(':');
   const exp = 'experiment' in s && s.experiment ? s.experiment.id : '';
   // Two things said into the mic are two sheets, even of one kind: the second
-  // must not open on the first one's words.
+  // must not open on the first one's words, nor a second question on the first one's answer.
   const told = 'told' in s && s.told ? s.told.meta.heard : 'meta' in s ? s.meta.heard : 'heard' in s ? s.heard ?? '' : '';
   return `${s.kind}:${id}:${on}:${exp}:${told}`;
 }

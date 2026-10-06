@@ -33,6 +33,7 @@
 import { COMMITMENTS, PROBLEMS, SAID_MAX, TALK_BACK_DAYS, TALK_ROLES, WHO_MAX, asksProblem, type Commitment, type Problem, type TalkRole } from './lab';
 import { shiftDay } from './focus';
 import { parseSpoken } from './money/spoken';
+import { matchAsked } from './asked';
 
 export const TOLD_KINDS = ['money', 'talk', 'sale', 'meeting', 'offer', 'note', 'question'] as const;
 export type ToldKind = (typeof TOLD_KINDS)[number];
@@ -131,9 +132,13 @@ export function inWords(v: unknown, heard: string, max: number): string | null {
 // Only the words that open a question and almost never a statement: "was at
 // the market", "have a call with Joel" and "will call Mara" are things told.
 const QUESTION = /^(how|what|whats|what's|who|whom|whose|when|why|which|where|should|do|does|did|is|are|am)\b/i;
+// The same words opening something told: "when I met Joel he said…", "what she
+// wants is a quote". A question puts its verb before the person: "when did I".
+const TOLD_CLAUSE = /^(how|what|when|where|why)\s+(i|we|he|she|they)\b/i;
 /** Asked, not told. Recognition rarely writes a question mark, so the first word decides as often as the last mark. */
 export function isQuestion(heard: string): boolean {
-  return /\?\s*$/.test(heard) || QUESTION.test(heard.trim());
+  const h = heard.trim();
+  return /\?\s*$/.test(h) || (QUESTION.test(h) && !TOLD_CLAUSE.test(h));
 }
 
 /** A conversation, said as one: who it was with comes after "to" or "with". */
@@ -155,6 +160,28 @@ const OFFER = /\b(my price|price to|new price|raised? (?:my |the )?price|lowered
 function someonePaid(heard: string): string | null {
   const m = heard.match(SOMEONE_PAID);
   return m && !NOT_A_PAYER.has(m[1].toLowerCase()) ? m[1] : null;
+}
+
+/**
+ * A verb, which a few words asked as a question do without: "sold two", "sent
+ * ten" and "followed up" are done, and "runway is tight" is said of something.
+ */
+const VERB = /\b(sold|sent|spent|made|got|paid|met|won|lost|closed|booked|called|visited|\w+ed|is|are|was|were|am|be|been|has|have|had|will|would|can|could|should|must)\b/i;
+
+/**
+ * A question the Ask sheet can count (asked.ts), asked as one: the mic opens Ask
+ * on it at once, with no sort to wait for, and "can I spend 500 today" is not
+ * filed as spending. The list alone does not decide, because a record names
+ * what a question does: "talked to Mara yesterday" is "who did I talk to" on the
+ * list and is a conversation to log. So it takes a question's own form, or a
+ * few words with no figure and no verb: "safe to spend", "my runway". Anything
+ * else is sorted, and a question the sort finds still goes to Ask.
+ */
+export function askedOutright(heard: string): boolean {
+  const h = heard.trim();
+  if (!h || !matchAsked(h)) return false;
+  if (isQuestion(h) || /^(can|any|tell me|show me)\b/i.test(h)) return true;
+  return h.split(/\s+/).length <= 3 && !/\d/.test(h) && !VERB.test(h) && !TALK.test(h);
 }
 
 /** Words that only money moves are said with. A figure alone is not one: "sent 20 messages" has a number in it and no money. */

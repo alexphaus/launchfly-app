@@ -169,8 +169,9 @@ new.
   what Claude and ChatGPT do, better than this app would and given away — the
   survival test's "a week of memory covers it". What was built is the half only
   this app has: what is said is sorted into the rows it belongs in, held to the
-  words, kept by a tap. Talking it over goes to Claude with the record attached:
-  the connector under You → Claude, or Ask's copy.
+  words, kept by a tap, and a question about those rows is counted and said
+  back. Talking it over goes to Claude with the record attached: the connector
+  under You → Claude, or Ask's copy.
 - **Competing with Claude Code on building.** The app should *export* what it
   knows to a model, not try to be one. A context pack the user pastes into a
   chat is the honest version of "help me build this".
@@ -398,19 +399,34 @@ It passes the survival test the way the export did: the agent that talks better
 than this app is the reason to hand it the rows it never collected. See
 COPILOT.md → **Claude, connected**.
 
-**Then** — the mic, sorting. It understood money only: "coffee 130" opened the
-book filled in, and anything else said into it was read as a move. The ask that
-connected Claude, an assistant to talk to about ideas, moves and what changed,
-had a part only this app can do: the record. So that is what the mic became: say
-what happened, and the sheet for it opens filled in — a conversation and who it
-was with, a sale, a meeting, a change to the offer, a note for the plan, money
-as before. A model sorts and copies; it never answers. Every detail it copies is
-held to the words, the day is the app's own reading, a note stays in the
-person's words, and nothing is kept until their tap. Money said like money waits
-on no model, and without one the app's rules sort what they can and ask about
-the rest. It passes the survival test on the rows: a chat can hear "Pia paid me
-150 yesterday"; it cannot put it on yesterday, against the bet, the goal and the
-price. See COPILOT.md → **Said, and sorted**.
+**Then** — asked out loud. Its owner wanted the mic to be something to talk to.
+The half that is a conversation is Claude's; the half that is a question about
+the record — how much went out this week, how the bet is going, what to do
+next — is a count, and this app is the one place it can be counted. So the mic
+answers those, out loud, and nothing else: a spoken question is matched to a
+fixed list (by the app's rules, or by a model that may only say which question
+it was), counted from the same rows the screens count, and read back with the
+phone's own voice. The days are said in the answer, and when the rows do not
+reach them the answer says what it counted instead. A question that needs
+judgement is said to be one, and goes to Claude with the record. It passes the
+survival test on the rows: a chat with memory can hear "how much did I spend on
+coffee this week"; it cannot open the book. See COPILOT.md → **Ask your own
+record**, asked out loud.
+
+**Then** — the mic, sorting. It understood money and questions: "coffee 130"
+opened the book filled in, a question was answered, and anything else said into
+it was read as a move. The ask that connected Claude, an assistant to talk to
+about ideas, moves and what changed, had a part only this app can do: the
+record. So that is what the mic became: say what happened, and the sheet for it
+opens filled in — a conversation and who it was with, a sale, a meeting, a
+change to the offer, a note for the plan, money as before. A model sorts and
+copies; it never answers. Every detail it copies is held to the words, the day
+is the app's own reading, a note stays in the person's words, and nothing is
+kept until their tap. Money said like money and a question the app can count
+wait on no model, and without one the app's rules sort what they can and ask
+about the rest. It passes the survival test on the rows: a chat can hear "Pia
+paid me 150 yesterday"; it cannot put it on yesterday, against the bet, the goal
+and the price. See COPILOT.md → **Said, and sorted**.
 
 ---
 

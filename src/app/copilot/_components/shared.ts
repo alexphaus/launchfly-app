@@ -69,10 +69,10 @@ export type SheetState =
   /** Hand work over without starting from a goal. */
   | { kind: 'handover' }
   /**
-   * Questions about your own rows, each answered by counting — plus the one
-   * escape hatch for everything the list cannot answer. See lib/copilot/ask.ts.
+   * Questions about your own rows, each answered by counting (lib/copilot/asked.ts,
+   * ask.ts), plus the one escape hatch for everything the list cannot answer.
+   * `heard`: the question as it was said, when it came from the mic.
    */
-  /** The five counted questions — with, when it came from the mic, the question that was asked. */
   | { kind: 'ask'; heard?: string }
   /**
    * Claude, connected: the address to paste into Claude, what is connected and

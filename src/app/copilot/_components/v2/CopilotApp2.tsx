@@ -47,13 +47,14 @@
 // tab and the sheet for it opens filled in — a move in the book, as it always
 // did, or a conversation, a sale, a meeting, a change to the offer, a note for
 // the plan (lib/copilot/tell.ts sorts; TellSheets.tsx says what it heard and
-// who sorted it). Keeping it is still a tap. It held the capacity pill, a
-// setting shown on every screen and changed about never; that is in You →
-// Settings.
+// who sorted it). Keeping it is still a tap. Ask a question — "how much did I
+// spend this week?" — and the Ask sheet answers it, counted from the rows and
+// read aloud (lib/copilot/asked.ts). It held the capacity pill, a setting
+// shown on every screen and changed about never; that is in You → Settings.
 import { useCallback, useRef, useState } from 'react';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView } from '@/lib/copilot/nightly';
-import { clearlyMoney, readByRules } from '@/lib/copilot/tell';
+import { askedOutright, clearlyMoney, readByRules } from '@/lib/copilot/tell';
 import type { HomeData } from '@/lib/copilot/types';
 import { greeting } from '../format';
 import Sheet from '../Sheet';
@@ -123,6 +124,10 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     setSorting(null);
     const today = home.recent.today;
     const categories = book.book?.categories;
+    // A question the Ask sheet can count is answered there at once, counted and
+    // read aloud: it waits on no sort, and "can I spend 500 today?" carries an
+    // amount and is still not logged.
+    if (askedOutright(heard)) return actions.openSheet({ kind: 'ask', heard });
     // Said like a money move, the book opens at once, as the corner always
     // did: the commonest thing said into it waits on no model.
     if (clearlyMoney(heard, today, categories)) return logMove(heard);
@@ -165,12 +170,12 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
           {/* Tab-aware, and nothing when there is nothing true to say. While the mic is open, what it hears. */}
           {voice.listening
-            ? <VoiceLive voice={voice} hint="Listening… say what happened: “coffee 130”, “talked to Mara…”" />
+            ? <VoiceLive voice={voice} hint="Listening… say what happened, or ask" />
             : sorting ? <p className="cp2-voice-live" aria-live="polite">&ldquo;{sorting}&rdquo; · Sorting…</p>
             : status && <p>{status}</p>}
         </div>
         <div className="cp-header-right">
-          <VoiceButton voice={voice} onType={() => logMove()} label="Say what happened" />
+          <VoiceButton voice={voice} onType={() => logMove()} label="Say what happened, or ask" />
         </div>
       </header>}
 

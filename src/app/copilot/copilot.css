@@ -2295,3 +2295,47 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-swp-wall b { font-size: 15px; }
 .cp-root[data-theme="soft"] .cp2-swp-wall p { margin: 0; font-size: 13px; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-swp-wall .cp-btn { text-decoration: none; text-align: center; }
+
+/* Claude, connected: the consent screen Claude opens (copilot2/connect). What it
+   can read and what it cannot are said before the button, and who is asking by
+   where the answer goes. */
+.cp-root[data-theme="soft"] .cp2-cn { justify-content: flex-start; padding-top: 32px; }
+.cp-root[data-theme="soft"] .cp2-cn h2 { font-size: 24px; line-height: 1.15; }
+.cp-root[data-theme="soft"] .cp2-cn .sub { margin-bottom: 14px; }
+.cp-root[data-theme="soft"] .cp2-cn-list { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
+.cp-root[data-theme="soft"] .cp2-cn-list li { padding: 11px 14px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); font-size: 13.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-cn-list b { font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-cn-back { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-cn-back b { color: var(--ink); font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-cn-warn { margin: 0 0 16px; padding: 11px 14px; border-radius: 14px; background: rgba(194, 112, 61, 0.1); font-size: 13px; line-height: 1.45; color: #A85F2E; }
+.cp-root[data-theme="soft"] .cp2-cn-form { display: flex; flex-direction: column; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-cn-who { margin: 0 0 4px; font-size: 13px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+.cp-root[data-theme="soft"] .cp2-cn-who b { color: var(--ink); font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-cn-link { color: var(--blue); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.cp-root[data-theme="soft"] .cp2-cn-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-cn-pair { font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: 0.12em; text-align: center; text-transform: uppercase; }
+.cp-root[data-theme="soft"] .cp2-cn-hint { margin: -2px 0 4px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-cn-no { background: transparent; box-shadow: none; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-cn-foot { margin-top: 16px; font-size: 12px; color: var(--dim); text-align: center; }
+
+/* You → Claude: the address, the steps, the code, and what is connected. */
+.cp-root[data-theme="soft"] .cp-label.cp2-cl-label { margin: 18px 0 8px; }
+.cp-root[data-theme="soft"] .cp2-cl-steps { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0 0 0 20px; list-style: decimal outside; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-cl-a { color: var(--blue); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.cp-root[data-theme="soft"] .cp2-cl-steps li::marker { color: var(--dim); font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-cl-url { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 8px 8px 12px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-cl-url code { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
+.cp-root[data-theme="soft"] .cp2-cl-url .cp-btn { flex: none; }
+.cp-root[data-theme="soft"] .cp2-cl-codebtn { display: flex; margin-top: 6px; }
+.cp-root[data-theme="soft"] .cp2-cl-code { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 6px; padding: 10px 14px; border-radius: 14px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-cl-code b { font-family: var(--display); font-size: 22px; font-weight: 700; letter-spacing: 0.12em; color: var(--ink); user-select: all; -webkit-user-select: all; }
+.cp-root[data-theme="soft"] .cp2-cl-code span { font-size: 12px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-cl-none { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-cl-list { display: flex; flex-direction: column; gap: 8px; }
+.cp-root[data-theme="soft"] .cp2-cl-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-cl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-root[data-theme="soft"] .cp2-cl-main b { font-size: 14px; font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-cl-main b span { font-weight: 400; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-cl-main > span { font-size: 12px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-cl-main > span.cp2-cl-err { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-cl-row .cp-btn { flex: none; }

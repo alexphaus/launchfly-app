@@ -9493,3 +9493,203 @@ async function connectorSuite() {
 }
 
 connectorSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Ask it: a question about the record, matched, counted, said back ──────── */
+//
+// The checks are the ways a spoken answer could mislead: a question matched to
+// the wrong count ("messages went out" as money), a week that means two things,
+// a total over days the rows do not reach passed off as the days asked about, a
+// failed read answered as "nothing", amounts in two currencies added up, a
+// model allowed to supply the answer or a day nobody said — and a move said
+// into the mic answered as a question, or a question logged as a move.
+
+import {
+  ASKED as AK_ASKED, ASKED_CHIPS as AK_CHIPS, ASKED_IDS as AK_IDS, PERIODS as AK_PERIODS,
+  aboutOf as akAbout, answerAsked as akAnswer, askedLine as akLine, askedPrompt as akPrompt, categoryOf as akCategory, looksAsked as akLooks,
+  matchAsked as akMatch, monthsOf as akMonths, normalizeAsked as akNormalize, periodOf as akPeriod, screenMoney as akScreen, spanOf as akSpan,
+  spokenMoney as akSpoken, type Asked as AkAsked, type AskedInput as AkInput, type BookMonthIn as AkBook,
+} from '../../src/lib/copilot/asked';
+import type { Talk as AkTalk } from '../../src/lib/copilot/lab';
+import { readFileSync as readAskFile } from 'node:fs';
+
+async function askItSuite() {
+  const today = '2026-10-04';
+  const ask = (id: AkAsked['id'], period: AkAsked['period'] = null, about: string | null = null): AkAsked => ({ id, period, about, by: 'rules' });
+
+  /* 1. What was asked, matched — the most particular reading first. */
+  const cases: Array<[string, string | null]> = [
+    ['What should I do next?', 'next'], ['what should I focus on today', 'next'], ['where do I start', 'next'],
+    ['How is my bet going?', 'bet'], ["how's the experiment going", 'bet'], ['is my test working', 'bet'],
+    ['Am I on track for my goal?', 'goal'], ['how close am I to my exit fund', 'goal'],
+    ['How much can I spend today?', 'safe'], ['can I afford a coffee', 'safe'], ['what is safe to spend', 'safe'],
+    ['How much did I spend this week?', 'spent'], ['how much did coffee cost me this week', 'spent'], ['my expenses last month', 'spent'],
+    ['What came in this month?', 'received'], ['how much did I make this week', 'received'], ['did I get paid', 'received'],
+    ['What is my balance?', 'balance'], ['how much money do I have', 'balance'],
+    ["what's my runway", 'runway'], ['when will I run out of money', 'runway'],
+    ['Who did I talk to this week?', 'talks'], ['how many conversations this month', 'talks'],
+    ['Who do I need to follow up?', 'intros'], ['any introductions waiting', 'intros'],
+    ['How many sales this month?', 'sales'], ['did I close any deals', 'sales'], ['how much did I sell this month', 'sales'],
+    ['how many sales did I make this month', 'sales'], ['how many customers did I talk to this week', 'talks'], ['how much money did I make this week', 'received'],
+    ['How many messages went out this week?', 'sent'], ['did anyone reply', 'sent'],
+    ['How much deep work this week?', 'focus'], ['how many hours did I work this week', 'focus'], ['how much time did I spend focused', 'focus'],
+    ['which segment replies the most', 'segments'], ['where do my drafts die', 'drafts'], ['which of its calls worked', 'calls'],
+    ['what did I tell it to stop suggesting', 'stood_down'], ['has any of this been worth it', 'worth'],
+    ['should I raise my price', null], ['how do I get more clients', null], ['tell me a joke', null],
+  ];
+  for (const [said, id] of cases) assert.equal(akMatch(said)?.id ?? null, id, `"${said}" → ${id}`);
+  assert.equal(akMatch('How many messages went out this week?')?.id, 'sent', '"went out" alone is a message as often as money');
+  for (const id of AK_CHIPS) assert.equal(akMatch(AK_ASKED[id].q)?.id, id, `the chip for ${id} matches itself`);
+
+  /* 2. A question for the sheet, or a move for the book: a move is never answered, and a question never logged. */
+  for (const said of ['coffee 130', 'grab 240 yesterday', 'paid rent 12000', 'salary came in 50000', 'Pia paid me 150']) assert.equal(akLooks(said), false, `"${said}" is a move`);
+  for (const said of ['how much did I spend this week', 'did I spend 500 on food?', 'safe to spend', 'Any replies today', 'what should I do next']) assert.equal(akLooks(said), true, `"${said}" is a question`);
+
+  /* 3. Days, said the way the screens count them: a week is the last seven days, a month is the calendar's. */
+  assert.equal(akPeriod('how much did I spend this week'), 'week');
+  assert.equal(akPeriod('my expenses last month'), 'lastmonth');
+  assert.equal(akPeriod('in the past month'), '30d');
+  assert.equal(akPeriod('anything last week'), 'lastweek');
+  assert.equal(akPeriod('what did I spend'), null);
+  assert.deepEqual(akSpan('week', today), { from: '2026-09-28', to: today, label: 'in the last 7 days' });
+  assert.deepEqual(akSpan('lastweek', today), { from: '2026-09-21', to: '2026-09-27', label: 'in the 7 days before that' });
+  assert.deepEqual(akSpan('month', today), { from: '2026-10-01', to: today, label: 'this month' });
+  assert.deepEqual(akSpan('lastmonth', '2026-01-05'), { from: '2025-12-01', to: '2025-12-31', label: 'in December' }, 'across the new year');
+  assert.deepEqual(akSpan('30d', today), { from: '2026-09-05', to: today, label: 'in the last 30 days' });
+  assert.deepEqual(akMonths({ from: '2026-09-28', to: today }), ['2026-09', '2026-10'], 'a week that straddles two months reads both');
+  assert.deepEqual(akMonths({ from: '2025-12-30', to: '2026-01-02' }), ['2025-12', '2026-01']);
+  for (const p of AK_PERIODS) assert.ok(akSpan(p, today).from <= akSpan(p, today).to, `${p} runs forwards`);
+
+  /* 4. What a money question is about, matched to the person's own categories. */
+  assert.equal(akAbout('how much did I spend on food yesterday'), 'food');
+  assert.equal(akAbout('how much did I spend on dining out this month'), 'dining out');
+  assert.equal(akAbout('how much did coffee cost me this week'), 'coffee');
+  assert.equal(akAbout('how much did I spend this week'), null);
+  assert.equal(akCategory('dining out', ['Groceries', 'Dining Out']), 'Dining Out');
+  assert.equal(akCategory('grocery', ['Groceries', 'Dining Out']), 'Groceries', 'singular and plural are one category');
+  assert.equal(akCategory('grab', ['Groceries']), null);
+
+  /* 5. Money, said: a voice reads words, not marks. */
+  assert.equal(akSpoken(850, '₱'), '850 pesos');
+  assert.equal(akSpoken(71479.06, 'PHP'), '71,479 pesos', 'whole units past twenty');
+  assert.equal(akSpoken(1, 'USD'), '1 dollar');
+  assert.equal(akSpoken(12.5, 'EUR'), '12.5 euros');
+  assert.equal(akSpoken(150, '$'), '150 dollars');
+  assert.equal(akSpoken(100, 'XYZ'), '100 XYZ');
+  assert.equal(akScreen(71479.06, 'PHP'), '₱71,479.06');
+
+  /* 6. Money answers, counted from the book. */
+  const line = (shown: number, category: string | null, label = category ?? 'Thing') => ({ shown, category, label });
+  const month = (m: string, days: AkBook['days'], extra: Partial<AkBook> = {}): AkBook => ({
+    month: m, view: 'PHP', ready: true, notReady: null, started: true, days, unlabelled: 0, missing: null,
+    balance: { shown: 12000 }, safe: { left: 850, perDay: 1000, days: 30, committed: 3000, spentToday: 150, broke: false }, safeShown: 850,
+    categories: { out: ['Groceries', 'Coffee', 'Transportation'], in: ['Client'] }, ...extra,
+  });
+  const book = [
+    month('2026-09', [{ on: '2026-09-29', lines: [line(-210, 'Coffee')] }, { on: '2026-09-20', lines: [line(-2000, 'Groceries')] }]),
+    month('2026-10', [{ on: '2026-10-04', lines: [line(-130, 'Coffee'), line(-20, 'Transportation', 'Jeep')] }, { on: '2026-10-02', lines: [line(-1280, 'Groceries'), line(4500, 'Client', 'Bright Smiles')] }]),
+  ];
+  const base: AkInput = { today, timezone: 'Asia/Manila', book };
+  const week = akAnswer(ask('spent', 'week'), base);
+  assert.equal(week.title, '₱1,640 spent in the last 7 days', 'the 20 Sep groceries are outside the week and not in it');
+  assert.equal(week.say, 'You spent 1,640 pesos in the last 7 days, across 4 moves. Most on Groceries.');
+  assert.match(week.counted ?? '', /4 moves, 28 Sep to 4 Oct/);
+  assert.match(week.lines[0], /^Groceries ₱1,280 · Coffee ₱340 · Transportation ₱20$/);
+  assert.equal(akAnswer(ask('spent', 'month', 'coffee'), base).title, '₱130 spent on Coffee this month', 'a category, by its own name');
+  assert.equal(akAnswer(ask('spent', 'week', 'jeep'), base).title, '₱20 spent on “jeep” in the last 7 days', 'a word in the label, when it is no category');
+  const none = akAnswer(ask('spent', 'month', 'shoes'), base);
+  assert.match(none.say, /^Nothing spent on “shoes” this month\. Your categories: Groceries, Coffee, Transportation\.$/, 'the spending ones: money in is not where shoes went');
+  assert.equal(akAnswer(ask('received', 'month'), base).title, '₱4,500 came in this month');
+  assert.equal(akAnswer(ask('spent', 'month'), base).title, '₱1,430 spent this month', 'the default for spending is the calendar month');
+  // A book that could not be read is said, never answered as nothing.
+  const unread = akAnswer(ask('spent', 'week'), { ...base, book: 'timeout' });
+  assert.ok(unread.thin && /could not be opened: timeout/.test(unread.title));
+  assert.ok(akAnswer(ask('spent', 'week'), { today, timezone: 'Asia/Manila' }).thin, 'a book never opened is not an empty one');
+  assert.match(akAnswer(ask('spent', 'week'), { ...base, book: [month('2026-10', [], { ready: false, notReady: 'Run 20261001_copilot_book.sql.' })] }).title, /20261001/);
+  const mixed = akAnswer(ask('spent', 'week'), { ...base, book: [book[0], { ...book[1], view: 'EUR', missing: 'No rate for these days.' }] });
+  assert.ok(mixed.thin && /different currencies/.test(mixed.title), 'pesos and euros are not added up');
+
+  /* 7. Balance and safe to spend, from the book's own figures. */
+  assert.equal(akAnswer(ask('safe'), base).say, 'You can spend 850 pesos today.');
+  assert.equal(akAnswer(ask('balance'), base).title, '₱12,000');
+  const broke = akAnswer(ask('safe'), { ...base, book: [month('2026-10', [], { safe: { left: 0, perDay: 0, days: 30, committed: 15000, spentToday: 0, broke: true } })] });
+  assert.match(broke.say, /Nothing is safe to spend today/);
+  const over = akAnswer(ask('safe'), { ...base, book: [month('2026-10', [], { safeShown: -200 })] });
+  assert.match(over.say, /over today's share by 200 pesos/);
+  const unstarted = akAnswer(ask('balance'), { ...base, book: [month('2026-10', [], { started: false, balance: null, safe: null, safeShown: null })] });
+  assert.ok(unstarted.thin && /no starting balance/i.test(unstarted.say));
+
+  /* 8. The record's own answers: the bet, the goal, runway, the move. */
+  assert.equal(akAnswer(ask('bet'), { today, timezone: 'UTC', bet: null }).title, 'No bet running.');
+  assert.match(akAnswer(ask('bet'), { today, timezone: 'UTC', bet: null, checkpointDue: true }).say, /checkpoint is due/);
+  const bet = akAnswer(ask('bet'), { today, timezone: 'UTC', bet: { belief: 'Clinics pay $150 for this', part: 'What they pay', day: 6, days: 14, result: '1 of 3 commitments', pass: '3 commitments by 12 Oct' } });
+  assert.equal(bet.title, 'Day 6 of 14: 1 of 3 commitments');
+  assert.equal(bet.say, 'Your bet, Clinics pay $150 for this: day 6 of 14, 1 of 3 commitments. It passes at 3 commitments by 12 Oct.');
+  assert.ok(akAnswer(ask('goal'), { today, timezone: 'UTC', goals: [] }).thin);
+  const goal = akAnswer(ask('goal'), { today, timezone: 'UTC', goals: [{ title: 'Exit fund', status: '$0 of $1,500', horizon: 'By 9 Nov · 36 days left', verdict: 'Off track' }], outlook: { title: 'Exit fund', line: '10 sales at your $150 in 36 days.' } });
+  assert.equal(goal.say, 'Exit fund: $0 of $1,500, By 9 Nov, 36 days left. Off track. 10 sales at your $150 in 36 days.');
+  assert.ok(akAnswer(ask('runway'), { today, timezone: 'UTC', runway: { months: null, cash: null, outPerMonth: null, currency: null } }).thin, 'no runway is said, not shown as zero');
+  const runway = akAnswer(ask('runway'), { today, timezone: 'UTC', runway: { months: 3.4, cash: 34000, outPerMonth: 10000, currency: '₱', cashFrom: 'book', outFrom: 'statement' } });
+  assert.deepEqual([runway.title, ...runway.lines], ['3.4 months of runway', 'Cash: ₱34,000, from your book.', 'Going out: ₱10,000 a month, from your statements.']);
+  const next = akAnswer(ask('next'), { today, timezone: 'UTC', now: { title: 'Record a demo', why: 'Nothing to show is the gap.', size: 'about 60 min of your 150' }, asks: [{ kind: 'Introduction', title: 'Follow up Juan' }] });
+  assert.equal(next.say, 'Next: Record a demo. Nothing to show is the gap.');
+  assert.ok(next.lines.includes('About 60 min of your 150.') && next.lines.includes('Introduction: Follow up Juan'));
+
+  /* 9. Conversations, sales, sends and deep work: over the days asked, or said why not. */
+  const talk = (id: string, on: string, role: AkTalk['role'], commitment: AkTalk['commitment']): AkTalk => ({ id, on, who: id, role, problem: 'unasked', commitment, said: null, via: null, at: `${on}T10:00:00Z` });
+  const talks = [talk('Mara', '2026-09-28', 'connector', 'intro'), talk('Dr Lim', '2026-10-02', 'buyer', 'money'), talk('Juan', '2026-10-03', 'operator', 'none')];
+  const t30 = akAnswer(ask('talks'), { today, timezone: 'UTC', talks });
+  assert.equal(t30.title, '3 conversations in the last 30 days', 'conversations default to the thirty days the app counts them over');
+  assert.match(t30.say, /1 could buy, 1 runs the work, 1 knows people\. 2 ended in a commitment\./);
+  assert.equal(akAnswer(ask('talks', 'month'), { today, timezone: 'UTC', talks }).title, '2 conversations this month');
+  const tFailed = akAnswer(ask('talks'), { today, timezone: 'UTC', talks: [], unreadable: ['bets and conversations (timeout)'] });
+  assert.ok(tFailed.thin && !/No conversations/.test(tFailed.title), 'a failed read is not "no conversations"');
+  const wins = [{ at: '2026-10-01T16:30:00Z', amount: 150, who: 'Bright Smiles' }, { at: '2026-09-30T16:30:00Z', amount: null, who: 'Pia' }, { at: '2026-09-12T03:00:00Z', amount: 300, who: 'Lakeview' }];
+  // 30 Sep 16:30 UTC is 1 Oct 00:30 in Manila: the sale is the person's October.
+  const sales = akAnswer(ask('sales', 'month'), { today, timezone: 'Asia/Manila', wins, salesCurrency: '$' });
+  assert.equal(sales.title, '2 sales this month for $150', 'a day is the person\'s, where they live');
+  assert.match(sales.say, /^2 sales this month, 150 dollars\. 1 without an amount logged\.$/);
+  const sentAt = ['2026-10-03T02:00:00Z', '2026-10-01T02:00:00Z', '2026-09-24T02:00:00Z'];
+  const sent = akAnswer(ask('sent', 'week'), { today, timezone: 'UTC', sentAt, replies: ['2026-10-03T08:00:00Z'], metrics: { windowDays: 30, sent: 25, replies: 2 } });
+  assert.equal(sent.title, '2 messages out in the last 7 days, 1 reply');
+  const longer = akAnswer(ask('sent', 'lastmonth'), { today, timezone: 'UTC', sentAt, replies: [], metrics: { windowDays: 30, sent: 25, replies: 2 } });
+  assert.match(longer.say, /reads back 14 days of sends here, so this is the last 30 days instead: 25 messages out, 2 replies/, 'days the rows do not reach are not passed off as the days asked about');
+  assert.ok(longer.lines.includes('Not in September: the last 30 days.'));
+  assert.ok(akAnswer(ask('sent', 'week'), { today, timezone: 'UTC', sentAt: [], unreadable: ['sent messages'] }).thin);
+  const focus = akAnswer(ask('focus'), { today, timezone: 'UTC', focus: [{ id: 'f1', minutes: 90, on: '2026-10-03', note: null, at: '' }, { id: 'f2', minutes: 45, on: '2026-10-04', note: null, at: '' }, { id: 'f3', minutes: 60, on: '2026-09-20', note: null, at: '' }] });
+  assert.equal(focus.say, '2.3 hours of deep work in the last 7 days, on 2 days.');
+  assert.ok(akAnswer(ask('focus', 'lastmonth'), { today, timezone: 'UTC', focus: [] }).thin, 'deep work past the two weeks read back is said, not counted as none');
+
+  /* 10. ask.ts's five, said from their own counts. */
+  const answers = [{ id: 'replies' as const, q: 'Which segment actually replies?', headline: 'Pest control replies most: 2 of 9.', rows: [{ label: 'Pest control', value: '2 of 9', note: 'replied' }], thin: null }];
+  assert.equal(akAnswer(ask('segments'), { today, timezone: 'UTC', answers }).say, 'Pest control replies most: 2 of 9.');
+  assert.ok(akAnswer(ask('segments'), { today, timezone: 'UTC', answers: 'Server error 500' }).thin);
+
+  /* 11. A model may say which question it was — never the answer, and never days nobody said. */
+  assert.deepEqual(akNormalize({ id: 'spent', period: '30d', about: null }, { heard: 'am I doing ok on money in the past month' }), { id: 'spent', period: '30d', about: null, by: 'model' });
+  assert.equal(akNormalize({ id: 'spent', period: 'week' }, { heard: 'am I doing ok on money lately' })?.period, null, 'a week the words never said is not taken');
+  assert.equal(akNormalize({ id: 'none' }, { heard: 'should I raise my price' }), null);
+  assert.equal(akNormalize({ id: 'advice', answer: 42 }, { heard: 'x' }), null, 'only a question on the list');
+  assert.equal(akNormalize({ id: 'spent', about: 'shoes' }, { heard: 'what went on food lately' })?.about, null, 'about what was not said is dropped');
+  assert.equal(akNormalize({ id: 'spent', about: 'groceries' }, { heard: 'what went on food lately', categories: { out: ['Groceries'], in: [] } })?.about, 'Groceries', 'or is one of their categories');
+  const prompt = akPrompt('how am I doing', { today });
+  for (const id of AK_IDS) assert.ok(prompt.includes(`"${id}"`), `the model is offered ${id}`);
+  assert.ok(!/categories:/.test(prompt), 'no categories line without categories');
+  assert.match(akLine(ask('goal'), today), /^Are you on track for your goal\?$/);
+  assert.equal(akLine(ask('spent', 'week', 'coffee'), today), 'How much did you spend on coffee in the last 7 days?', 'the question as understood, written back');
+
+  /* 12. The route only matches, and the mic only routes. */
+  const src = (p: string) => readAskFile(new URL(`../../src/${p}`, import.meta.url), 'utf8');
+  const route = src('app/api/copilot/asked/route.ts');
+  assert.ok(!/\.insert\(|\.update\(|\.delete\(|\.upsert\(|logEvent|recordOutcome/.test(route), 'the model route writes nothing');
+  assert.match(route, /normalizeAsked\(/);
+  assert.match(route, /rateLimit\(`copilot:asked:/);
+  const sheet = src('app/copilot/_components/AskSheet.tsx');
+  assert.ok(!/post<[^>]*>\('\/(?!asked)/.test(sheet) && !/actions\.(log|record|addOutcome|lab|money)/.test(sheet), 'asking writes nothing');
+  assert.match(sheet, /if \(aloud && canSpeak\(\)\) speech\.speak\(out\.say\)/, 'asked aloud, answered aloud — checked when speaking, not from first-render state');
+  const shell = src('app/copilot/_components/v2/CopilotApp2.tsx');
+  assert.match(shell, /looksAsked\(text\) \? actions\.openSheet\(\{ kind: 'ask', heard: text \}\) : logMove\(text\)/);
+
+  console.log('copilot-core: ask-it checks passed');
+}
+
+askItSuite().catch((e) => { console.error(e); process.exit(1); });

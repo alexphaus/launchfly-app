@@ -71,7 +71,8 @@ export type SheetState =
    * Questions about your own rows, each answered by counting — plus the one
    * escape hatch for everything the list cannot answer. See lib/copilot/ask.ts.
    */
-  | { kind: 'ask' }
+  /** The five counted questions — with, when it came from the mic, the question that was asked. */
+  | { kind: 'ask'; heard?: string }
   /**
    * Claude, connected: the address to paste into Claude, what is connected and
    * what it last read, and a code for signing in from a computer the app is not

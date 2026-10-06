@@ -59,7 +59,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'focus': return <FocusSheet home={home} actions={actions} />;
     case 'bank': return <BankSheet home={home} actions={actions} />;
     case 'outreach': return <OutreachSheet home={home} stage={sheet.stage} actions={actions} />;
-    case 'bet': return <BetSheet home={home} playKey={sheet.play} part={sheet.part} ideaKey={sheet.idea} experiment={sheet.experiment} actions={actions} />;
+    case 'bet': return <BetSheet home={home} playKey={sheet.play} part={sheet.part} ideaKey={sheet.idea} experiment={sheet.experiment} seed={sheet.seed} actions={actions} />;
     case 'talk': return <TalkSheet home={home} via={sheet.via} actions={actions} />;
     case 'intro': return <IntroSheet home={home} talkId={sheet.talk} actions={actions} />;
     case 'talks': return <TalksSheet home={home} actions={actions} />;

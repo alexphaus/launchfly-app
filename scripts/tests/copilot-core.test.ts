@@ -9693,3 +9693,101 @@ async function askItSuite() {
 }
 
 askItSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Words shared in: the end of a chat as the start of a test ────────────── */
+//
+// The checks are the ways a share goes wrong: a reply read as a bank statement
+// by the Money tab, a chat's first line put in the person's mouth as their
+// belief, a link cut in half, a "</script>" in a shared reply ending the page
+// that keeps it, a share that fails and says nothing, and a reply kept as
+// context about the business.
+
+import {
+  SEED_CACHE, SEED_FROM, SEED_KEY, SEED_MAX, beliefOfSeed, hostOf as seedHost, ideaOfSeed, plainLines, seedOf, seedPage,
+} from '../../src/lib/copilot/seed';
+import { BELIEF_MAX as SD_BELIEF_MAX, IDEA_HOW_MAX as SD_HOW_MAX, IDEA_LABEL_MAX as SD_LABEL_MAX, normalizeBet as sdNormBet } from '../../src/lib/copilot/lab';
+import { readFileSync as readShareFile } from 'node:fs';
+
+async function shareSeedSuite() {
+  const src = (p: string) => readShareFile(new URL(`../../${p}`, import.meta.url), 'utf8');
+
+  /* 1. What a share is: words, a link or both. The link at the end is the share's own; one in the middle was said. */
+  assert.deepEqual(seedOf({ text: 'Offer a free pilot to ten guesthouses', url: '' }), { text: 'Offer a free pilot to ten guesthouses', url: null, cut: false });
+  assert.deepEqual(seedOf({ text: 'Try this: https://claude.ai/share/abc' }), { text: 'Try this', url: 'https://claude.ai/share/abc', cut: false }, 'apps put the link after the words');
+  assert.deepEqual(seedOf({ text: 'https://claude.ai/share/abc' }), { text: '', url: 'https://claude.ai/share/abc', cut: false }, 'a link and no words is still a share');
+  assert.deepEqual(seedOf({ text: 'Words\nhttps://x.com/a', url: 'https://x.com/a' }), { text: 'Words', url: 'https://x.com/a', cut: false }, 'the same link twice is one');
+  assert.deepEqual(seedOf({ text: 'See https://x.com/a for the price, then offer it' }), { text: 'See https://x.com/a for the price, then offer it', url: null, cut: false }, 'a link in the middle is part of what was said');
+  assert.equal(seedOf({ title: 'A title' })?.text, 'A title', 'a title is all there is without words');
+  assert.equal(seedOf({ title: 'Claude', text: 'Words' })?.text, 'Words', 'and noise beside them');
+  assert.equal(seedOf({}), null);
+  assert.equal(seedOf(null), null);
+  assert.equal(seedOf({ text: '   ', url: 'javascript:alert(1)' }), null, 'a javascript: link is never a link');
+  assert.equal(seedOf({ text: 'Words', url: `https://x.com/${'a'.repeat(600)}` })?.url, null, 'half an address opens the wrong page, so it is none');
+  const long = seedOf({ text: 'word '.repeat(2000) })!;
+  assert.ok(long.cut && long.text.length <= SEED_MAX && long.text.endsWith('word'), 'cut at a word, and said');
+  assert.deepEqual(plainLines('## Ideas\n- **Free** pilot\n1. `Ask` five\n\n[a chat](https://x.com/a) said so'), ['Ideas', 'Free pilot', 'Ask five', 'a chat said so'], 'formatting is not what was said');
+
+  /* 2. The belief is theirs: the share only when the whole of it is one sentence that fits. */
+  const one = (text: string) => seedOf({ text })!;
+  assert.equal(beliefOfSeed(one('Guesthouses will pay $150 for a booking bot.')), 'Guesthouses will pay $150 for a booking bot.');
+  assert.equal(beliefOfSeed(one('**Guesthouses** will pay $150')), 'Guesthouses will pay $150');
+  assert.equal(beliefOfSeed(one('Here are three ideas:\n- one\n- two')), '', 'a list is not a belief, and its first line is "Here are three ideas:"');
+  assert.equal(beliefOfSeed(one('Here are three ideas:')), '', 'a lead-in is not one either');
+  assert.equal(beliefOfSeed(one('x '.repeat(SD_BELIEF_MAX))), '', 'longer than the field is theirs to write, never cut and passed off as finished');
+  assert.equal(beliefOfSeed(seedOf({ text: 'https://claude.ai/share/abc' })!), '');
+  assert.equal(beliefOfSeed({ ...one('Short and fine'), cut: true }), '', 'a share that was cut is not the whole of one');
+
+  /* 3. The words ride along as the play, held to what a play holds and said to be from elsewhere. */
+  const idea = ideaOfSeed(one('Offer a free demo to ten guesthouses.\nThen ask who would pay.'))!;
+  assert.deepEqual(idea, { label: 'Offer a free demo to ten guesthouses.', how: 'Offer a free demo to ten guesthouses. Then ask who would pay.', from: SEED_FROM });
+  const wordy = ideaOfSeed(one('abc '.repeat(200)))!;
+  assert.ok(wordy.how.length <= SD_HOW_MAX && /abc…$/.test(wordy.how) && wordy.label.length <= SD_LABEL_MAX, 'cut at a word and marked, never mid-word');
+  assert.deepEqual(ideaOfSeed(seedOf({ text: 'https://www.claude.ai/share/abc' })!), { label: 'Idea from claude.ai', how: 'https://www.claude.ai/share/abc', from: SEED_FROM }, 'a link alone is the way back to the chat');
+  assert.equal(ideaOfSeed({ text: '', url: null, cut: false }), null);
+  assert.equal(seedHost('not a url'), 'a link');
+  // A bet from a share is an ordinary bet: the server keeps the play as it came, and the belief is what the person typed.
+  const ctx = { today: '2026-10-06', price: 150, priceLabel: '$150' };
+  const asBet = sdNormBet({ part: 'reach', belief: 'Guesthouses answer a free demo', metric: 'replied', target: 3, days: 7, idea }, ctx);
+  assert.ok(asBet.ok && asBet.value.play === null && asBet.value.idea?.from === SEED_FROM && asBet.value.idea.how === idea.how && asBet.value.belief === 'Guesthouses answer a free demo');
+
+  /* 4. The page that keeps a first share: the same cache the worker uses, and nothing in the words can end its script. */
+  const hostile = { title: '', text: 'x</script><script>alert(1)</script>\u2028y\u2029z', url: '' };
+  const page = seedPage(hostile);
+  assert.equal(page.split('</script>').length - 1, 1, 'only the page’s own script end');
+  assert.ok(page.includes('\\u003c/script>') && !page.includes('\u2028') && !page.includes('\u2029'), 'escaped, including the line separators');
+  const kept = page.slice(page.indexOf('var p=') + 6, page.indexOf(';function go(why)'));
+  assert.deepEqual(JSON.parse(kept), hostile, 'the words come out as they went in');
+  assert.ok(page.includes(JSON.stringify(SEED_CACHE)) && page.includes(JSON.stringify(SEED_KEY)), 'the cache and key the page reads');
+  assert.ok(page.includes('could not be kept') && page.includes('/copilot2?tab=proof&shared=text'), 'a failure to keep it is said on arrival');
+
+  /* 5. The worker, the route and the screen agree, and none of them fails quietly. */
+  const sw = src('public/sw.js');
+  assert.notEqual(SEED_CACHE, 'copilot-share');
+  assert.ok(sw.includes(`const SHARE_CACHE = 'copilot-share';`) && sw.includes(`const SHARE_TEXT_CACHE = '${SEED_CACHE}';`), 'words wait in a cache of their own: the Money tab reads every entry of the other as a statement');
+  assert.ok(sw.includes(`const SHARE_PATH = '/copilot2/share';`) && sw.includes(`const SHARE_TEXT_KEY = SHARE_PATH + '/text';`) && SEED_KEY === '/copilot2/share/text', 'the worker keeps them where the page looks');
+  assert.match(sw, /if \(!files\.length\) \{[\s\S]*?return to\('shared=text', 'proof'\)/, 'a file wins: words are for shares with none');
+  assert.match(sw, /if \(words\) return to\('shared=text&why='/, 'a share that could not be kept says why where the person lands');
+  const route = src('src/app/copilot2/share/route.ts');
+  assert.match(route, /if \(!file && seedOf\(said\)\) \{\s*if \(!signedIn\) return back\(req, \{ shared: 'text', why: 'Sign in, then share it again\.' \}, 'proof'\);/, 'signed out is said, in words about words');
+  assert.match(route, /seedPage\(said\)/);
+  const hook = src('src/app/copilot/_components/useCopilot.ts');
+  assert.match(hook, /if \(shared === 'text'\) void takeText\(params\.get\('why'\)\);\s*else if \(shared \|\| params\.get\('add'\)\)/, 'a text share never becomes the Money tab’s arrival');
+  assert.match(hook, /if \(tookText\.current\) return;/, 'read once, though development runs an effect twice');
+  const reader = src('src/app/copilot/_components/sharedSeed.ts');
+  assert.match(reader, /await cache\.delete\(SEED_KEY\)/, 'spent on the first read');
+  assert.ok(!/catch \{\s*\}/.test(reader) && (reader.match(/error: /g) ?? []).length >= 4, 'every way it fails is a sentence');
+  const sheet = src('src/app/copilot/_components/v2/LabSheets.tsx');
+  assert.match(sheet, /seed \? beliefOfSeed\(seed\) : suggestBelief\(/, 'a share is never given a belief written from the offer');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /seed=\{sheet\.seed\}/);
+  const manifest = src('src/app/copilot2/manifest.webmanifest/route.ts');
+  assert.ok(/title: 'title'/.test(manifest) && /text: 'text'/.test(manifest) && /url: 'url'/.test(manifest), 'Copilot is in the share sheet for words, not only for files');
+
+  /* 6. A shared reply is never context about the business (invariant 12): nothing a model reads imports it. */
+  for (const f of ['src/lib/copilot/store.ts', 'src/lib/copilot/working.ts', 'src/lib/copilot/proofai.ts', 'src/lib/copilot/ideas.ts', 'src/lib/copilot/mcpread.ts']) {
+    assert.ok(!/from '\.\/seed'/.test(src(f)), `${f} does not read a share`);
+  }
+
+  console.log('copilot-core: shared words checks passed');
+}
+
+shareSeedSuite().catch((e) => { console.error(e); process.exit(1); });

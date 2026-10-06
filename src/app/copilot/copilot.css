@@ -1358,6 +1358,12 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-preview-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-lab-preview b { font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-preview-s { font-size: 12px; line-height: 1.45; color: var(--muted); }
+/* Words shared in from another app, on the bet sheet: the source, set apart from the belief the person writes. */
+.cp-root[data-theme="soft"] .cp2-seed { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 4px 0 14px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.cp-root[data-theme="soft"] .cp2-seed-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-seed-text { align-self: stretch; margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; max-height: 9.5em; overflow-y: auto; }
+.cp-root[data-theme="soft"] .cp2-seed-link { font-size: 12.5px; font-weight: 600; color: var(--blue); text-decoration: none; overflow-wrap: anywhere; }
+.cp-root[data-theme="soft"] .cp2-seed .cp-help { margin: 0; }
 .cp-root[data-theme="soft"] .cp2-lab-warn { margin: 0 0 12px; padding: 11px 13px; border-radius: 14px; background: var(--warn-tint); color: var(--ink); font-size: 12.5px; line-height: 1.5; }
 .cp-root[data-theme="soft"] .cp2-lab-warn .cp2-link { font-size: 12.5px; }
 .cp-root[data-theme="soft"] .cp2-lab-date { margin-top: 10px; max-width: 220px; }

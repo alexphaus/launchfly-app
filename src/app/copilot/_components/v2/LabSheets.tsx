@@ -21,6 +21,7 @@ import { salesCurrency } from '@/lib/copilot/metrics';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
+import { beliefOfSeed, hostOf, ideaOfSeed, plainLines, type Seed } from '@/lib/copilot/seed';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions, BetFromExperiment } from '../shared';
 
@@ -105,11 +106,16 @@ const UNIT_FOR: Record<FoundBy, string> = { outreach: 'bookings', inbound: 'enqu
 /**
  * A bet, written before it starts: from a play in the catalogue, an idea a
  * model wrote (looked up by its key among the ideas on hand), the plan's
- * experiment, or from scratch on a part. A play or an idea fixes what it
- * counts; the line, the plan and the length are still the person's to set.
+ * experiment, words shared from another app, or from scratch on a part. A play
+ * or an idea fixes what it counts; the line, the plan and the length are still
+ * the person's to set.
+ *
+ * Words shared in (seed.ts) are the play, never the belief: they ride along as
+ * what to do, and the belief is the person's — prefilled only when the whole
+ * share is one sentence that fits, so a chat's reply is never what they said.
  */
-export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, actions }: {
-  home: HomeData; playKey?: string; part?: LinkKey; ideaKey?: string; experiment?: BetFromExperiment; actions: Actions;
+export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed, actions }: {
+  home: HomeData; playKey?: string; part?: LinkKey; ideaKey?: string; experiment?: BetFromExperiment; seed?: Seed; actions: Actions;
 }) {
   const found = foundOf(home).value;
   const catalogue = playKey ? PLAY_BY_KEY.get(playKey) ?? null : null;
@@ -129,9 +135,11 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
   const first: LinkKey = fixed?.part ?? experiment?.part ?? asked ?? 'who';
   const [part, setPart] = useState<LinkKey>(first);
   // A first draft from the offer, for the person to make theirs. Rewritten
-  // with the part until they type in it; never after.
-  const [belief, setBelief] = useState(() => suggestBelief(first, offer, priceLabel, found));
-  const [typed, setTyped] = useState(false);
+  // with the part until they type in it; never after. Words they shared are
+  // theirs already: a draft written from the offer would put other words in
+  // their mouth, so the field holds the share or nothing.
+  const [belief, setBelief] = useState(() => (seed ? beliefOfSeed(seed) : suggestBelief(first, offer, priceLabel, found)));
+  const [typed, setTyped] = useState(!!seed);
   const [metric, setMetric] = useState<LabMetric>(fixed?.metric ?? firstMetric(first));
   const [unit, setUnit] = useState(fixed?.unit ?? (found ? UNIT_FOR[found] : 'sign-ups'));
   const [target, setTarget] = useState(fixed?.target ?? 2);
@@ -163,7 +171,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
     // hold is said by its own words, so the bet can say what it ran.
     const from = idea
       ? { label: idea.label, how: idea.how, from: idea.book ? `AI, after ${idea.book}` : 'AI, from your record', prep: idea.prep }
-      : experiment ? { label: experiment.title, how: experiment.test, from: 'Your plan' } : null;
+      : experiment ? { label: experiment.title, how: experiment.test, from: 'Your plan' } : seed ? ideaOfSeed(seed) : null;
     const r = await actions.lab({
       action: 'open',
       bet: { part, belief: belief.trim(), play: play?.key ?? null, idea: from, metric, unit: shownUnit, target, tries, days, experiment: experiment?.id ?? null },
@@ -178,12 +186,16 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
       {play && <div className="cp2-lab-sheet-book">{play.book}</div>}
       {idea && <div className="cp2-lab-sheet-book">By AI{idea.book ? ` · after ${idea.book}` : ', from your record'}</div>}
       {experiment && <div className="cp2-lab-sheet-book">From your plan</div>}
-      <h3>{play?.label ?? idea?.label ?? experiment?.title ?? 'Your own bet'}</h3>
+      {seed && <div className="cp2-lab-sheet-book">From another app</div>}
+      <h3>{play?.label ?? idea?.label ?? experiment?.title ?? (seed ? 'An idea you shared' : 'Your own bet')}</h3>
       <p className="desc">
         {play?.how ?? idea?.how ?? (experiment
           ? `${experiment.test} It worked if: ${experiment.watch.replace(/[.!?\s]+$/, '')}. As a bet, the rows judge it instead of a tap, and the plan hears the verdict.`
+          : seed
+          ? 'Say what you believe, pick the count that would show it, and set the line. Nothing starts until you tap, and a chat’s opinion is not a result.'
           : 'A belief, a count that could prove it wrong, and a day. Written before it starts, so the result cannot move the line.')}
       </p>
+      {seed && <SharedWords seed={seed} />}
 
       {!fixed && (
         <div className="cp-field">
@@ -200,6 +212,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
         <label className="cp-label" htmlFor="cp2-lab-belief">What you believe</label>
         <textarea
           id="cp2-lab-belief" className="cp-input sm cp2-lab-belief-in" rows={2} maxLength={BELIEF_MAX} value={belief}
+          placeholder={seed ? 'What would have to be true for this to work?' : undefined}
           onChange={(e) => { setBelief(e.target.value); setTyped(true); }}
         />
         <p className="cp-help">In your words, one sentence the count below could prove wrong.</p>
@@ -291,6 +304,26 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
       </button>
       <p className="cp-help">Only what happens from today counts. Nobody marks it passed: it passes when the count reaches the line.</p>
     </>
+  );
+}
+
+/**
+ * What was shared, above the belief it is meant to inform: read-only and said to
+ * be the source, so the words in the field below are the person's and these are
+ * what a bet will carry as its play. A reply long enough to be cut says it was.
+ */
+function SharedWords({ seed }: { seed: Seed }) {
+  const lines = plainLines(seed.text);
+  return (
+    <div className="cp2-seed">
+      <span className="cp2-seed-k">What you shared</span>
+      {lines.length > 0 && <p className="cp2-seed-text">{lines.join('\n')}</p>}
+      {seed.url && <a className="cp2-seed-link" href={seed.url} target="_blank" rel="noopener noreferrer">{hostOf(seed.url)}</a>}
+      <p className="cp-help">
+        It stays with the bet as the play. Your belief is the box below, in your words.
+        {seed.cut ? ' It was long, so only the first part was read.' : ''}
+      </p>
+    </div>
   );
 }
 

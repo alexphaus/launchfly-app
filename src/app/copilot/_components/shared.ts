@@ -12,6 +12,7 @@ import type { OutreachStage } from '@/lib/copilot/matches';
 import type { AssetKind } from '@/lib/copilot/assets';
 import type { LinkKey, LinkState } from '@/lib/copilot/business';
 import type { BetIdea, Commitment, IntroOutcome, LabDecision, LabMetric, Problem, TalkRole } from '@/lib/copilot/lab';
+import type { Seed } from '@/lib/copilot/seed';
 import type { FoundBy } from '@/lib/copilot/types';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
@@ -102,10 +103,10 @@ export type SheetState =
   | { kind: 'currency' }
   /**
    * Proof: start a bet — from a play in the catalogue, an idea a model wrote
-   * (by its key, read from the ideas on hand), the plan's experiment, or
-   * written from scratch on a part.
+   * (by its key, read from the ideas on hand), the plan's experiment, words
+   * shared from another app (seed.ts), or written from scratch on a part.
    */
-  | { kind: 'bet'; play?: string; part?: LinkKey; idea?: string; experiment?: BetFromExperiment }
+  | { kind: 'bet'; play?: string; part?: LinkKey; idea?: string; experiment?: BetFromExperiment; seed?: Seed }
   /** Proof: log one conversation — The Mom Test's record of what was committed — optionally as the one an introduction led to. */
   | { kind: 'talk'; via?: string }
   /** The Path and Proof: an introduction somebody offered, by the conversation it was offered in, and what to do about it. */

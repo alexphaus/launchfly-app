@@ -11,7 +11,7 @@
 // Two things that app could not do. Amounts can be shown in another currency
 // while the book is still kept in its own — a peso book read in euros, each
 // row at its own day's ECB rate (money/book.ts bookView) — and a file shared
-// to Copilot from the phone's share sheet lands here, imported.
+// to Copilot from the phone's share sheet lands here and waits for a tap.
 //
 // Every figure comes off the server's BookView. Nothing here computes one.
 //
@@ -138,25 +138,59 @@ export function useBook(pid: string, say: (m: string) => void, onMoved: () => vo
 }
 export type Book = ReturnType<typeof useBook>;
 
-/** What the service worker kept of a share (public/sw.js), as files, and the cache emptied. */
-async function sharedFiles(): Promise<{ files: File[]; error: string | null }> {
+/**
+ * What the service worker kept of a share (public/sw.js), as files — left in the
+ * cache until the person decides (spendShared), so a reload before the tap does
+ * not lose them without a word (invariant 13).
+ */
+async function peekShared(): Promise<{ files: File[]; error: string | null }> {
   try {
     if (!('caches' in window)) return { files: [], error: 'This browser kept no shared file. Upload it on Bank statements instead.' };
     const cache = await caches.open('copilot-share');
     const files: File[] = [];
     for (const k of await cache.keys()) {
       const r = await cache.match(k);
-      if (r) {
-        const blob = await r.blob();
-        const name = decodeURIComponent(r.headers.get('x-file-name') || 'shared.csv');
-        files.push(new File([blob], name, { type: blob.type || r.headers.get('content-type') || '' }));
-      }
-      await cache.delete(k);
+      if (!r) continue;
+      const blob = await r.blob();
+      const name = decodeURIComponent(r.headers.get('x-file-name') || 'shared.csv');
+      files.push(new File([blob], name, { type: blob.type || r.headers.get('content-type') || '' }));
     }
     return { files, error: files.length ? null : 'The shared file was not kept. Share it again, or upload it on Bank statements.' };
   } catch (e) {
     return { files: [], error: `The shared file could not be read: ${e instanceof Error ? e.message : String(e)}` };
   }
+}
+
+/** Empties what a share kept, once the person has read it in or turned it away. */
+async function spendShared(): Promise<void> {
+  try {
+    const cache = await caches.open('copilot-share');
+    for (const k of await cache.keys()) await cache.delete(k);
+  } catch { /* a stale entry is replaced by the next share (public/sw.js empties the cache first) */ }
+}
+
+const sizeWords = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+
+/**
+ * A shared file waits for a tap. While the worker is active any page can post a
+ * form to the share target, and a file imported on arrival was a way for a web
+ * page to write rows into the book. Now nothing is read until the person has seen
+ * what is waiting and said so.
+ */
+function SharedFiles({ files, busy, onRead, onDiscard }: { files: File[]; busy: boolean; onRead: () => void; onDiscard: () => void }) {
+  return (
+    <div className="cp-card cp2-sharedfile" role="group" aria-label="Shared file">
+      <h2 className="cp2-bk-h">{files.length === 1 ? 'A file was shared to Copilot' : `${files.length} files were shared to Copilot`}</h2>
+      <ul className="cp2-sharedfile-list">
+        {files.map((f, i) => <li key={i}>{f.name || 'shared'} <span>{sizeWords(f.size)}</span></li>)}
+      </ul>
+      <p className="cp-help">Nothing is read into your book until you say so. If you did not share this, discard it.</p>
+      <div className="cp2-sharedfile-do">
+        <button className="cp-btn primary" disabled={busy} onClick={onRead}>{busy ? 'Reading…' : files.length === 1 ? 'Read it into my book' : 'Read them into my book'}</button>
+        <button className="cp-btn" disabled={busy} onClick={onDiscard}>Discard</button>
+      </div>
+    </div>
+  );
 }
 
 /* ─── The tab ─────────────────────────────────────────────────────────────── */
@@ -170,6 +204,18 @@ export default function MoneyTab({ book, actions, say, arrival, clearArrival }: 
   // Opened from the share sheet or the Log money shortcut. Handled once, here,
   // since the shell cleaned the URL before this tab mounted.
   const took = useRef(false);
+  const [held, setHeld] = useState<File[] | null>(null);
+  const [reading, setReading] = useState(false);
+  const readHeld = useCallback(async () => {
+    if (!held) return;
+    setReading(true);
+    // One at a time: each says how it went, and the last word is the last file's.
+    for (const f of held) await actions.uploadStatement(f);
+    await spendShared();
+    setHeld(null); setReading(false);
+    await load();
+  }, [held, actions, load]);
+  const discardHeld = useCallback(async () => { await spendShared(); setHeld(null); say('Discarded. Nothing was read into your book.'); }, [say]);
   useEffect(() => {
     if (!arrival || took.current) return;
     took.current = true;
@@ -182,32 +228,37 @@ export default function MoneyTab({ book, actions, say, arrival, clearArrival }: 
       else if (shared === 'done') say(arrival.why || 'Read the shared file.');
       else if (shared === '0') say('That share had no file in it. Export the CSV and share the file itself.');
       else {
-        const got = await sharedFiles();
+        const got = await peekShared();
         if (got.error) say(got.error);
-        // One at a time: each says how it went, and the last word is the last file's.
-        for (const f of got.files) await actions.uploadStatement(f);
+        else setHeld(got.files);
+        return;
       }
       await load();
     })();
   }, [arrival, clearArrival, book, actions, say, load]);
 
   const b = book.book;
-  if (!b) {
-    return book.error
+  const body = !b
+    ? book.error
       ? <div className="cp-card cp2-bk-msg"><div className="cp-error">{book.error}</div><button className="cp-btn" onClick={() => void load()}>Try again</button></div>
-      : <div className="cp-note cp2-bk-wait">Opening your book…</div>;
-  }
-  if (!b.ready) return <div className="cp-card cp2-bk-msg"><p>{b.notReady}</p></div>;
-  if (!b.started) {
-    return (
+      : <div className="cp-note cp2-bk-wait">Opening your book…</div>
+    : !b.ready
+    ? <div className="cp-card cp2-bk-msg"><p>{b.notReady}</p></div>
+    : !b.started
+    ? (
       <div className="cp-card cp2-bk-msg">
         <h2 className="cp2-bk-h">Start your money book</h2>
         <p>Type what you have now, in the currency you spend in. Every move you log from here moves it, and runway reads it.</p>
         <BalanceForm b={b} book={book} first />
       </div>
-    );
-  }
-  return <Started b={b} book={book} actions={actions} say={say} />;
+    )
+    : <Started b={b} book={book} actions={actions} say={say} />;
+  return (
+    <>
+      {held && <SharedFiles files={held} busy={reading} onRead={() => void readHeld()} onDiscard={() => void discardHeld()} />}
+      {body}
+    </>
+  );
 }
 
 /**

@@ -3178,6 +3178,12 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
   balance and say it again.
 - The share target is Android's: iOS has no share target for installed web apps. There, Bank statements
   still takes the file.
+- A shared file waits for a tap. While the worker is active any page the person visits can post a form
+  to the share target, so a file read on arrival was a way for a web page to write rows into the book. The
+  Money tab now says what is waiting (name, size) and reads nothing until **Read it into my book**;
+  **Discard** empties it. The file stays in Cache Storage until one of the two, so a reload before the tap
+  leaves it there. Without a worker the route imports directly, but the post then carries no session
+  (SameSite=lax) from a page, and is refused.
 - Uploads that name neither a bank nor an account number (most budgeting-app exports) share one
   account, so two different such apps would dedupe against each other on identical day/amount/payee rows.
 - A PDF that prints debits and credits as unsigned figures in two columns loses the column in its text

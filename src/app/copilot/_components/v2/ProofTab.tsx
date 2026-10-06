@@ -412,7 +412,7 @@ function Reading({ view, rungs, found }: { view: BetView; rungs: Rung[]; found: 
       {rungs.map((r) => (
         <li key={r.metric} className={`cp2-rd-step ${r.state}${r.line ? ' line' : ''}`}>
           <b>{r.n}{r.target != null ? <i>/{r.target}</i> : r.planned != null ? <i>/{r.planned}</i> : null}</b>
-          <span>{r.words}</span>
+          <span>{r.label}</span>
         </li>
       ))}
     </ol>

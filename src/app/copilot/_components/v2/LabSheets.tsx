@@ -22,6 +22,7 @@ import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
 import { beliefOfSeed, hostOf, ideaOfSeed, plainLines, type Seed } from '@/lib/copilot/seed';
+import { derive } from './derive';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions, BetFromExperiment } from '../shared';
 
@@ -141,7 +142,9 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
     const m = PART_METRIC[k] === 'paid_at_price' && price == null ? 'paid' : PART_METRIC[k];
     return allowed.includes(m) ? m : 'logged';
   };
-  const first: LinkKey = basis?.part ?? experiment?.part ?? asked ?? 'who';
+  // Words shared in start on the weak link, as the picker on Proof does: the sheet is not told which part they are about.
+  const sharedPart = seed && !asked && !shelved && !experiment ? derive(home).proof.chain.weak : null;
+  const first: LinkKey = basis?.part ?? experiment?.part ?? asked ?? sharedPart ?? 'who';
   const [part, setPart] = useState<LinkKey>(first);
   // A first draft from the offer, for the person to make theirs. Rewritten
   // with the part until they type in it; never after. Words they shared are
@@ -214,7 +217,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
         {play?.how ?? idea?.how ?? keptIdea?.how ?? (experiment
           ? `${experiment.test} It worked if: ${experiment.watch.replace(/[.!?\s]+$/, '')}. As a bet, the rows judge it instead of a tap, and the plan hears the verdict.`
           : seed
-          ? 'Say what you believe, pick the count that would show it, and set the line. Nothing starts until you tap, and a chat’s opinion is not a result.'
+          ? 'Say what you believe, pick the count that would show it, and set the line. Nothing starts until you tap.'
           : 'A belief, a count that could prove it wrong, and a day. Written before it starts, so the result cannot move the line.')}
       </p>
       {seed && <SharedWords seed={seed} />}

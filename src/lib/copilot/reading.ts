@@ -21,7 +21,7 @@
 //
 // Pure: no DB import.
 
-import { dayWords, metricWords, metricsFor, type BetView, type LabMetric } from './lab';
+import { dayWords, metricWords, metricsFor, type Bet, type BetView, type LabMetric } from './lab';
 import type { FoundBy } from './types';
 
 export type RungState = 'done' | 'next' | 'later';
@@ -29,8 +29,10 @@ export type RungState = 'done' | 'next' | 'later';
 export interface Rung {
   metric: LabMetric;
   n: number;
-  /** "messages sent", "reply", "sales at your $150": the noun for n, with the bet's own price or word. */
+  /** "messages sent", "reply", "sales at your $150": the noun for n, with the bet's own price or word. For a sentence. */
   words: string;
+  /** "sent", "reply", "at $150": the same, short enough to sit beside its number in a row of five on a phone. */
+  label: string;
   /** The count the bet is decided on. */
   line: boolean;
   /** The line to reach, on the rung that is the line. */
@@ -55,6 +57,23 @@ const LADDER: Record<LabMetric, LabMetric[]> = {
 };
 
 /**
+ * Short enough to wrap in a row rather than break in a word: the card has a phone's
+ * width for up to five of them, and "messages sent" is not one word. Still grammar
+ * for its number — "1 reply", "3 replies" — because a chip is read as a phrase.
+ */
+const LABEL: Record<LabMetric, (n: number, bet: Pick<Bet, 'priceLabel' | 'unit'>) => string> = {
+  sent: () => 'sent',
+  replied: (n) => (n === 1 ? 'reply' : 'replies'),
+  meetings: (n) => (n === 1 ? 'meeting' : 'meetings'),
+  paid: () => 'paid',
+  paid_at_price: (_, b) => `at ${b.priceLabel ?? 'your price'}`,
+  talks: (n) => (n === 1 ? 'talk' : 'talks'),
+  committed: () => 'committed',
+  handed: () => 'finished',
+  logged: (n, b) => metricWords('logged', n, null, b.unit),
+};
+
+/**
  * The rungs a bet's card shows, from the counts since it began. Sends and replies
  * are left out of a business whose buyers do not come through them, as the bet
  * sheet leaves them out of what it offers. One rung is no ladder — a bet decided
@@ -76,6 +95,7 @@ export function rungsOf(view: Pick<BetView, 'bet' | 'reading'>, found: FoundBy |
     return {
       metric, n, state,
       words: metricWords(metric, n, bet.priceLabel, bet.unit),
+      label: LABEL[metric](n, bet),
       line: metric === bet.metric,
       target: metric === bet.metric ? bet.target : null,
       planned: bet.tries && bet.tries.metric === metric ? bet.tries.planned : null,

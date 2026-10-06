@@ -9877,6 +9877,11 @@ async function betReadingSuite() {
   assert.deepEqual(rungs.map((r) => [r.metric, r.n, r.words, r.state]), [
     ['sent', 3, 'messages sent', 'done'], ['replied', 1, 'reply', 'done'], ['meetings', 1, 'meeting', 'done'], ['paid', 2, 'payments', 'done'], ['paid_at_price', 0, 'sales at your $150', 'next'],
   ], '2 payments and no sale at $150: the price finding, said by the card');
+  // The card wraps short labels in a row rather than breaking a long one: grammar for its number, and the full words kept for a sentence.
+  assert.deepEqual(rungs.map((r) => r.label), ['sent', 'reply', 'meeting', 'paid', 'at $150']);
+  assert.deepEqual(rdRungs(view(day2, { ...reading, replied: 3, meetings: 0 }), 'outreach').map((r) => r.label), ['sent', 'replies', 'meetings', 'paid', 'at $150']);
+  assert.equal(rdRungs(view({ ...day2, priceLabel: null }, reading), 'outreach')[4].label, 'at your price', 'no price, no figure invented for one');
+  for (const r of rungs) assert.ok(r.label.length <= 9 + 'at your price'.length && !/\n/.test(r.label), `${r.metric}: a label is a word or two`);
   assert.deepEqual(rungs.map((r) => [r.line, r.target]), [[false, null], [false, null], [false, null], [false, null], [true, 2]], 'the line is marked, with what it has to reach');
   assert.equal(rdLine(view(day2, reading), 'outreach'), 'Counted since 5 Oct: 3 messages sent, 1 reply, 1 meeting, 2 payments, 0 sales at your $150.');
   assert.deepEqual(rdRungs(view(day2, reading), 'local').map((r) => r.metric), ['meetings', 'paid', 'paid_at_price'], 'no sends for a shop whose buyers walk in');

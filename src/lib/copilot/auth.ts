@@ -18,10 +18,15 @@ export function loginConfigured(): boolean {
 }
 
 export function appBaseUrl(req: Request): string {
+  return appBaseUrlFrom(req.headers, req.url);
+}
+
+/** The same, from a page's headers (next/headers), where there is no Request to hand. */
+export function appBaseUrlFrom(headers: Headers, url?: string): string {
   const env = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL;
   if (env) return env.replace(/\/$/, '');
-  const proto = req.headers.get('x-forwarded-proto') || 'https';
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || new URL(req.url).host;
+  const proto = headers.get('x-forwarded-proto') || 'https';
+  const host = headers.get('x-forwarded-host') || headers.get('host') || (url ? new URL(url).host : 'localhost');
   return `${proto}://${host}`;
 }
 

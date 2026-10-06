@@ -366,6 +366,8 @@ function Settings({ home, d, actions }: { home: HomeData; d: Derived; actions: A
     // The currency every figure is counted in; statements in others are converted into it.
     { key: 'currency', l: 'Currency', s: 'Everything is counted in it · other currencies converted', onClick: () => actions.openSheet({ kind: 'currency' }), right: mainCurrency(p.finance, home.goals) },
     { key: 'capacity', l: 'Capacity', s: CAPACITY_META[p.capacity].sub, onClick: () => actions.openSheet({ kind: 'capacity' }), right: CAPACITY_META[p.capacity].label },
+    // Talking it over is Claude's to do; reading the record is this app's to give it (lib/copilot/mcp.ts).
+    { key: 'claude', l: 'Claude', s: 'Talk things over in Claude, with your record in front of it', onClick: () => actions.openSheet({ kind: 'claude' }) },
     { key: 'account', l: 'Account & notifications', s: home.account.email ? `${home.account.email}${home.account.verified ? ' · verified' : ' · not verified'}${home.push.enabled ? ' · push on' : ''}` : 'This device only — add an email to sign in elsewhere', onClick: () => actions.openSheet({ kind: 'account' }) },
     b.effective === 'free'
       ? { key: 'plan', l: `Plan · ${PLANS[b.effective].name}`, s: `${b.matches.used} of ${b.matches.limit} matches used this month`, href: `${shell}/pricing` }

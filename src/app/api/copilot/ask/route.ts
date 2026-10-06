@@ -15,62 +15,18 @@
 // One GET returns all five, because they read the same three tables and five
 // routes would be five round trips for one sheet.
 
-import { answerAll } from '@/lib/copilot/ask';
-import { CURRENCY } from '@/lib/copilot/plans';
-import { RANKING_WINDOW, phraseFor } from '@/lib/copilot/call';
-import { decisionReview } from '@/lib/copilot/decision';
-import { loadAskRows, loadWorthLedger } from '@/lib/copilot/outcomes';
-import { getProfile } from '@/lib/copilot/base';
-import { copilotDb } from '@/lib/copilot/db';
-import { salesCurrency } from '@/lib/copilot/metrics';
-import { loadDecisions, loadStandingRefusals } from '@/lib/copilot/store';
+import { answersFor } from '@/lib/copilot/readouts';
 import { fail, json, profileIdOr401 } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
-
-/** Whole months since the account was made, at least one. */
-function monthsSince(iso: string | null | undefined): number {
-  if (!iso) return 1;
-  const then = new Date(iso).getTime();
-  if (!Number.isFinite(then)) return 1;
-  return Math.max(1, Math.floor((Date.now() - then) / (30 * 86_400_000)) || 1);
-}
 
 export async function GET() {
   const auth = await profileIdOr401();
   if ('res' in auth) return auth.res;
 
   try {
-    const [profile, decisions, rows, standing, worth, goals] = await Promise.all([
-      getProfile(auth.pid),
-      loadDecisions(auth.pid, RANKING_WINDOW),
-      loadAskRows(auth.pid),
-      loadStandingRefusals(auth.pid),
-      loadWorthLedger(auth.pid),
-      // Only for the currency: wins are sales money, counted in the goal's (metrics.ts salesCurrency).
-      copilotDb().from('copilot_goals').select('metric, unit, priority').eq('profile_id', auth.pid).eq('status', 'active')
-        .then((r) => (r.data ?? []) as Array<{ metric: string; unit: string | null; priority: number }>),
-    ]);
-    const { deadTopic } = decisionReview(decisions);
-
-    return json({
-      ok: true,
-      answers: answerAll({
-        decisions,
-        segments: rows.segments,
-        drafts: rows.drafts,
-        standing: [...standing].map(phraseFor),
-        dead: deadTopic ? [deadTopic] : [],
-        worth,
-        phraseFor,
-        currency: profile?.finance?.currency || goals.some((g) => g.metric === 'currency' && g.unit) ? salesCurrency(profile?.finance, goals) : '',
-        // The deployment's pricing currency, which is usually not the user's. See
-        // AskInput.planCurrency for why the two are never silently added up.
-        planCurrency: CURRENCY,
-        plan: profile?.plan ?? 'free',
-        monthsActive: monthsSince(profile?.created_at),
-      }),
-    });
+    // Counted in readouts.ts, which the Claude connector asks too.
+    return json({ ok: true, answers: await answersFor(auth.pid) });
   } catch (e) {
     // Surfaced. A questions screen that renders five empty cards on an error is
     // the exact shape of bug invariant 13 exists to end: the answer to "which

@@ -169,8 +169,8 @@ new.
   what Claude and ChatGPT do, better than this app would and given away — the
   survival test's "a week of memory covers it". What was built is the half only
   this app has: what is said is sorted into the rows it belongs in, held to the
-  words, kept by a tap. Talking it over goes to Claude with the record attached
-  (Ask's copy today; a connector next).
+  words, kept by a tap. Talking it over goes to Claude with the record attached:
+  the connector under You → Claude, or Ask's copy.
 - **Competing with Claude Code on building.** The app should *export* what it
   knows to a model, not try to be one. A context pack the user pastes into a
   chat is the honest version of "help me build this".
@@ -380,19 +380,37 @@ chat can say talk to suppliers; it cannot see that every conversation this month
 was with a buyer, or that the introduction Mara offered six days ago still waits.
 See COPILOT.md → **Proof**, conversations.
 
+**Then** — Claude, connected. Its owner asked for a voice assistant to talk
+ideas and moves over with, "like talking to a person". That half is Claude's,
+given away and better than this app would build it, so it was not built here;
+what Claude could not do was know the business, and the copy-for-Claude export
+answered that with a paste that went stale the moment it was made. So the record
+became a connector: the address under You → Claude, added in Claude once, and
+Claude reads the offer, the goals, the plan, the chain part by part, the bets
+and the conversations in their words whenever a conversation needs them —
+counted by the screens' own code, so it reads the numbers the Path shows. It
+only reads. There is no write tool, and Claude is told it cannot save anything
+and must not say it did; writing will come with its own scope and its own
+consent, not by widening this one. Signing in is Claude's OAuth as Anthropic
+writes it, with no table: a code from the app where the laptop is not signed in,
+every read listed on the connection, and a disconnect that stops the next call.
+It passes the survival test the way the export did: the agent that talks better
+than this app is the reason to hand it the rows it never collected. See
+COPILOT.md → **Claude, connected**.
+
 **Then** — the mic, sorting. It understood money only: "coffee 130" opened the
-book filled in, and anything else said into it was read as a move. Its owner
-asked for an assistant to talk to instead, about ideas, moves and what changed.
-The part of that only this app can do is the record, so that is what the mic
-became: say what happened, and the sheet for it opens filled in — a
-conversation and who it was with, a sale, a meeting, a change to the offer, a
-note for the plan, money as before. A model sorts and copies; it never answers. Every detail it
-copies is held to the words, the day is the app's own reading, a note stays in
-the person's words, and nothing is kept until their tap. Money said like money
-waits on no model, and without one the app's rules sort what they can and ask
-about the rest. It passes the survival test on the rows: a chat can hear "Pia
-paid me 150 yesterday"; it cannot put it on yesterday, against the bet, the goal
-and the price. See COPILOT.md → **Said, and sorted**.
+book filled in, and anything else said into it was read as a move. The ask that
+connected Claude, an assistant to talk to about ideas, moves and what changed,
+had a part only this app can do: the record. So that is what the mic became: say
+what happened, and the sheet for it opens filled in — a conversation and who it
+was with, a sale, a meeting, a change to the offer, a note for the plan, money
+as before. A model sorts and copies; it never answers. Every detail it copies is
+held to the words, the day is the app's own reading, a note stays in the
+person's words, and nothing is kept until their tap. Money said like money waits
+on no model, and without one the app's rules sort what they can and ask about
+the rest. It passes the survival test on the rows: a chat can hear "Pia paid me
+150 yesterday"; it cannot put it on yesterday, against the bet, the goal and the
+price. See COPILOT.md → **Said, and sorted**.
 
 ---
 

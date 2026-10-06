@@ -23,6 +23,7 @@ import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
 import BankSheet from './BankSheet';
 import OutreachSheet from './v2/Outreach';
+import { ClaudeSheet } from './v2/ClaudeSheet';
 import { BetSheet, IntroSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
 import { NoteSheet, ToldChooser, ToldLine } from './v2/TellSheets';
 import type { ToldMeta, ToldOffer } from '@/lib/copilot/tell';
@@ -60,6 +61,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'handover': return <HandoverSheet home={home} actions={actions} />;
     case 'working': return <WorkingSheet home={home} actions={actions} />;
     case 'ask': return <AskSheet heard={sheet.heard} actions={actions} />;
+    case 'claude': return <ClaudeSheet actions={actions} />;
     case 'move': return <MoveSheet home={home} id={sheet.id} actions={actions} />;
     case 'capture': return <CaptureSheet home={home} actions={actions} />;
     case 'focus': return <FocusSheet home={home} actions={actions} />;

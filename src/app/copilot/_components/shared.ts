@@ -4,6 +4,7 @@ import type { WorkingSection } from '@/lib/copilot/working';
 import type { Authority } from '@/lib/copilot/commission';
 import type { WorthKind } from '@/lib/copilot/worth';
 import type { AskAnswer } from '@/lib/copilot/ask';
+import type { Connection } from '@/lib/copilot/oauth';
 import type { MarkState } from '@/lib/copilot/roadmap';
 import type { ExperimentState } from '@/lib/copilot/experiment';
 import type { PayeeRole } from '@/lib/copilot/money/ledger';
@@ -72,6 +73,12 @@ export type SheetState =
    */
   /** The five counted questions — with, when it came from the mic, the question that was asked. */
   | { kind: 'ask'; heard?: string }
+  /**
+   * Claude, connected: the address to paste into Claude, what is connected and
+   * what it last read, and a code for signing in from a computer the app is not
+   * open on. lib/copilot/mcp.ts says why it reads and does not write.
+   */
+  | { kind: 'claude' }
   /**
    * One Move, whole: the reasons, the artifact and the two answers. v2 lists
    * Moves as rows, and a row is not enough to act on — the artifact is the
@@ -319,6 +326,12 @@ export interface Actions {
    * tap handler to count as a user gesture in Safari.
    */
   handoff(): Promise<{ ok: boolean; text?: string; chars?: number; error?: string }>;
+  /** The connector's address and the connections made with it. `unreadable` is a list that could not be read, said on the sheet. */
+  connections(): Promise<{ ok: boolean; url?: string; connections?: Connection[]; unreadable?: string | null; error?: string }>;
+  /** Ends one connection: its tokens stop on their next call. */
+  disconnect(grant: string): Promise<{ ok: boolean; connections?: Connection[]; error?: string }>;
+  /** A code to type on Claude's sign-in screen, good once for ten minutes. */
+  pairCode(): Promise<{ ok: boolean; code?: string; expiresAt?: string; error?: string }>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
   /**

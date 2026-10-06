@@ -372,6 +372,24 @@ chat can say talk to suppliers; it cannot see that every conversation this month
 was with a buyer, or that the introduction Mara offered six days ago still waits.
 See COPILOT.md → **Proof**, conversations.
 
+**Then** — Claude, connected. Its owner asked for a voice assistant to talk
+ideas and moves over with, "like talking to a person". That half is Claude's,
+given away and better than this app would build it, so it was not built here;
+what Claude could not do was know the business, and the copy-for-Claude export
+answered that with a paste that went stale the moment it was made. So the record
+became a connector: the address under You → Claude, added in Claude once, and
+Claude reads the offer, the goals, the plan, the chain part by part, the bets
+and the conversations in their words whenever a conversation needs them —
+counted by the screens' own code, so it reads the numbers the Path shows. It
+only reads. There is no write tool, and Claude is told it cannot save anything
+and must not say it did; writing will come with its own scope and its own
+consent, not by widening this one. Signing in is Claude's OAuth as Anthropic
+writes it, with no table: a code from the app where the laptop is not signed in,
+every read listed on the connection, and a disconnect that stops the next call.
+It passes the survival test the way the export did: the agent that talks better
+than this app is the reason to hand it the rows it never collected. See
+COPILOT.md → **Claude, connected**.
+
 **Then** — asked out loud. Its owner wanted the mic to be something to talk to.
 The half that is a conversation is Claude's; the half that is a question about
 the record — how much went out this week, how the bet is going, what to do

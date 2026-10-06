@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActionStatus, Capacity, Channel, Goal, HomeData, Offer, OpportunityStatus, SourceKey } from '@/lib/copilot/types';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { AskAnswer } from '@/lib/copilot/ask';
+import type { Connection } from '@/lib/copilot/oauth';
 import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/lib/copilot/nightly';
 import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
 import type { ExperimentState } from '@/lib/copilot/experiment';
@@ -855,6 +856,30 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         return { ok: true, text: r.text, chars: r.chars };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not gather your context' };
+      }
+    },
+    async connections() {
+      try {
+        const r = await get<{ url: string; connections: Connection[]; unreadable?: string | null }>('/connections');
+        return { ok: true, url: r.url, connections: r.connections, unreadable: r.unreadable ?? null };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not read your connections' };
+      }
+    },
+    async disconnect(grant) {
+      try {
+        const r = await post<{ connections: Connection[] }>('/connections', { action: 'revoke', grant });
+        return { ok: true, connections: r.connections };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not disconnect that' };
+      }
+    },
+    async pairCode() {
+      try {
+        const r = await post<{ code: string; expiresAt: string }>('/connections', { action: 'code' });
+        return { ok: true, code: r.code, expiresAt: r.expiresAt };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not make a code' };
       }
     },
     async requestLoginLink(email) {

@@ -9132,6 +9132,368 @@ async function conversationsSuite() {
 
 conversationsSuite().catch((e) => { console.error(e); process.exit(1); });
 
+/* ─── Claude, connected: the connector's OAuth, its protocol, what it says ── */
+//
+// The checks are the ways a connector could let the wrong one in or say what
+// the rows do not: a code sent somewhere nobody vetted, a client passing for
+// Claude by the name it gave itself, a code redeemed without its verifier, a
+// refresh race that ends a working connection or a replay that does not, a
+// connection that outlives its disconnect, a write tool before it has its own
+// consent, and a failed read that comes back looking like an empty record.
+
+import {
+  AS_SCOPES as OC_AS_SCOPES, CODE_TTL_S as OC_CODE_TTL, MCP_GRANT as OC_GRANT, MCP_REVOKE as OC_REVOKE, MCP_SEEN as OC_SEEN,
+  REFRESH_GRACE_S as OC_GRACE, SCOPE_READ as OC_READ,
+  askerOf as ocAsker, authServerMetadata as ocASM, authenticateClient as ocAuthClient, basicAuth as ocBasic, checkAuthorize as ocCheck,
+  checkCodeGrant as ocCheckCode, checkRefreshGrant as ocCheckRefresh, clientOf as ocClientOf, clientRef as ocClientRef, clientSecret as ocSecret,
+  connectionsOf as ocConnections, consentToken as ocConsent, consentTokenMatches as ocConsentOk, grantLive as ocLive, issueCode as ocIssue,
+  newPairCode as ocNewPair, nextRefreshJti as ocNext, normalizePair as ocNormPair, pairHash as ocPairHash, pkceMatches as ocPkce,
+  protectedResourceMetadata as ocPRM, redirectAllowed as ocAllowed, redirectMatches as ocMatches, refreshExp as ocRefreshExp,
+  refreshStep as ocStep, registerClient as ocRegister, sameResource as ocSame, seal as ocSeal, tokenSet as ocTokens, unseal as ocUnseal,
+  wwwAuthenticate as ocWww, type LedgerRow as OcRow,
+} from '../../src/lib/copilot/oauth';
+import {
+  INSTRUCTIONS as MCP_INSTRUCTIONS, MCP_LATEST, TOOLS as MCP_TOOLS, TOOL_NAMES as MCP_TOOL_NAMES,
+  handleBody as mcpBody, handleRpc as mcpRpc, headerVersionOk as mcpVersionOk, type RpcContext,
+} from '../../src/lib/copilot/mcp';
+import { answersText as mrAnswers, conversationsText as mrTalks, overviewText as mrOverview, planText as mrPlan, proofText as mrProof, type OverviewIn } from '../../src/lib/copilot/mcpread';
+import { openIntros as cnOpenIntros, talkCounts as cnTalkCounts, type Talk as CnTalk } from '../../src/lib/copilot/lab';
+import { talkTotals as cnTalkTotals } from '../../src/lib/copilot/ideas';
+import { readFileSync as readConnFile } from 'node:fs';
+
+async function connectorSuite() {
+  const master = Buffer.from('a'.repeat(32));
+  const other = Buffer.from('b'.repeat(32));
+  const now = 1_800_000_000;
+  const base = 'https://app.example.com';
+  const resource = `${base}/api/copilot/mcp`;
+  const CLAUDE = 'https://claude.ai/api/mcp/auth_callback';
+  // RFC 7636 appendix B.
+  const VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+  const CHALLENGE = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
+  const iso = (s: number) => new Date(s * 1000).toISOString();
+
+  /* 1. A signed token is this server's, for this use, and unexpired — or it is nothing. */
+  const t = ocSeal('cpa', { a: 1, exp: now + 10 }, master);
+  assert.deepEqual(ocUnseal('cpa', t, master, now), { a: 1, exp: now + 10 });
+  assert.equal(ocSeal('cpa', { a: 1, exp: now + 10 }, master), t, 'the same payload signs the same: a replayed refresh can return the same token');
+  assert.equal(ocUnseal('cpa', t, other, now), null, 'another key');
+  assert.equal(ocUnseal('cpt', `cpt${t.slice(3)}`, master, now), null, 'a code passed off as an access token');
+  assert.equal(ocUnseal('cpa', t, master, now + 10), null, 'gone at its exp');
+  const [kind, , sig] = t.split('.');
+  const edited = Buffer.from(JSON.stringify({ a: 2, exp: now + 10 })).toString('base64url');
+  assert.equal(ocUnseal('cpa', `${kind}.${edited}.${sig}`, master, now), null, 'an edited payload');
+  for (const junk of ['', 'cpa', 'cpa..', 'cpa.e30.', 7, null, {}]) assert.equal(ocUnseal('cpa', junk, master, now), null, `junk: ${JSON.stringify(junk)}`);
+
+  /* 2. A code goes to Claude's callback or this computer, and nowhere else. */
+  for (const ok of [CLAUDE, 'https://claude.com/api/mcp/auth_callback', 'http://localhost:3118/callback', 'http://127.0.0.1/callback', 'http://[::1]:9/callback']) {
+    assert.ok(ocAllowed(ok), ok);
+  }
+  for (const no of ['https://evil.example/cb', `${CLAUDE}#x`, 'https://claude.ai/other', 'http://claude.ai/api/mcp/auth_callback', 'https://claude.ai.evil.example/api/mcp/auth_callback', 'https://localhost/callback', 'https://user@claude.ai/api/mcp/auth_callback', 'javascript:alert(1)', '', null]) {
+    assert.equal(ocAllowed(no), false, `refused: ${no}`);
+  }
+  assert.ok(ocAllowed('https://other.example/oauth/cb', ['https://other.example/oauth/cb']), 'one the operator added, exactly');
+  assert.ok(ocMatches(['http://localhost/callback'], 'http://localhost:3118/callback'), 'loopback: any port (RFC 8252 7.3)');
+  assert.ok(ocMatches(['http://127.0.0.1/callback'], 'http://127.0.0.1:55001/callback'));
+  assert.equal(ocMatches(['http://localhost/callback'], 'http://localhost:3118/elsewhere'), false, 'but the path exactly');
+  assert.equal(ocMatches(['http://localhost/callback'], 'http://127.0.0.1:3118/callback'), false, 'localhost is not 127.0.0.1');
+  assert.equal(ocMatches([CLAUDE], `${CLAUDE}?x=1`), false, 'anything else exactly');
+
+  /* 3. Registration keeps nothing, and a page cannot register itself to collect codes, whatever it calls itself. */
+  const reg = ocRegister({ client_name: 'Claude', redirect_uris: [CLAUDE], token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'] }, { master, nowS: now });
+  assert.ok(reg.ok);
+  const clientId = (reg as { body: { client_id: string } }).body.client_id;
+  assert.equal((reg as { body: Record<string, unknown> }).body.token_endpoint_auth_method, 'none');
+  assert.equal((reg as { body: Record<string, unknown> }).body.client_secret, undefined, 'a public client gets no secret');
+  assert.deepEqual(ocClientOf(clientId, master)?.r, [CLAUDE], 'the id is the registration');
+  assert.equal(ocClientOf(clientId, other), null, 'signed, so it cannot be made up');
+  const evil = ocRegister({ client_name: 'Claude', redirect_uris: ['https://evil.example/cb'] }, { master, nowS: now });
+  assert.ok(!evil.ok && evil.error === 'invalid_redirect_uri');
+  assert.ok(!ocRegister({ redirect_uris: [CLAUDE], grant_types: ['client_credentials'] }, { master, nowS: now }).ok, 'no grant without a person in it');
+  assert.ok(!ocRegister({ redirect_uris: [] }, { master, nowS: now }).ok);
+  const named = ocRegister({ redirect_uris: [CLAUDE], client_name: `<b>Claude</b>\u0000${'x'.repeat(200)}` }, { master, nowS: now });
+  assert.ok(named.ok && !/[<>\u0000]/.test(String(named.body.client_name)) && String(named.body.client_name).length <= 80, 'a name is text, and short');
+  const conf = ocRegister({ redirect_uris: ['http://localhost/callback'], token_endpoint_auth_method: 'client_secret_post' }, { master, nowS: now });
+  assert.ok(conf.ok && conf.body.client_secret === ocSecret(String(conf.body.client_id), master), 'a confidential client gets a secret derived from its id');
+
+  /* 4. The request: client and address first — until both check out there is nowhere safe to send an error. */
+  const ask = { response_type: 'code', client_id: clientId, redirect_uri: CLAUDE, code_challenge: CHALLENGE, code_challenge_method: 'S256', state: 'st-1', scope: 'copilot.read offline_access', resource };
+  const okReq = ocCheck(ask, { master, resource });
+  assert.ok(okReq.ok && okReq.req.redirect === CLAUDE && okReq.req.state === 'st-1' && okReq.req.scope === OC_READ);
+  const show = (r: ReturnType<typeof ocCheck>) => !r.ok && 'show' in r;
+  const back = (r: ReturnType<typeof ocCheck>) => (!r.ok && 'redirect' in r ? new URL(r.redirect) : null);
+  assert.ok(show(ocCheck({ ...ask, client_id: 'cpc.x.y' }, { master, resource })), 'an unknown client is told on the page');
+  assert.ok(show(ocCheck({ ...ask, redirect_uri: 'https://evil.example/cb' }, { master, resource })), 'never sent to an address it did not register');
+  const noPkce = back(ocCheck({ ...ask, code_challenge: undefined }, { master, resource }));
+  assert.equal(noPkce?.origin + (noPkce?.pathname ?? ''), CLAUDE);
+  assert.equal(noPkce?.searchParams.get('error'), 'invalid_request');
+  assert.equal(noPkce?.searchParams.get('state'), 'st-1', 'the state goes back with the error');
+  assert.equal(back(ocCheck({ ...ask, code_challenge_method: 'plain' }, { master, resource }))?.searchParams.get('error'), 'invalid_request', 'S256 only');
+  assert.equal(back(ocCheck({ ...ask, response_type: 'token' }, { master, resource }))?.searchParams.get('error'), 'unsupported_response_type');
+  assert.equal(back(ocCheck({ ...ask, resource: 'https://other.example/mcp' }, { master, resource }))?.searchParams.get('error'), 'invalid_target');
+  assert.ok(ocCheck({ ...ask, resource: `${resource}/` }, { master, resource }).ok, 'a trailing slash is the same resource');
+  assert.ok(ocCheck({ ...ask, redirect_uri: undefined }, { master, resource }).ok, 'the only registered address, when none is named');
+  const cli = ocRegister({ client_name: 'Claude Code', redirect_uris: ['http://localhost/callback'] }, { master, nowS: now });
+  const cliId = String((cli as { body: Record<string, unknown> }).body.client_id);
+  assert.ok(show(ocCheck({ ...ask, client_id: cliId, redirect_uri: undefined }, { master, resource })), 'never a loopback address with no port named');
+  const cliReq = ocCheck({ ...ask, client_id: cliId, redirect_uri: 'http://localhost:3118/callback' }, { master, resource });
+  assert.ok(cliReq.ok);
+  assert.deepEqual(ocAsker(CLAUDE), { name: 'Claude', host: 'claude.ai', local: false }, 'named by where the answer goes');
+  assert.equal(ocAsker('http://localhost:3118/callback').local, true, 'this computer: any program, said as such');
+
+  /* 5. A code is bound to its client, its address, its verifier and its resource. */
+  assert.ok(ocPkce(VERIFIER, CHALLENGE), 'RFC 7636 B');
+  assert.equal(ocPkce(`${VERIFIER.slice(0, -1)}A`, CHALLENGE), false);
+  assert.equal(ocPkce('short', CHALLENGE), false);
+  const req = (okReq as { req: Parameters<typeof ocIssue>[0] }).req;
+  const code = ocIssue(req, 'pid-1', { master, nowS: now, jti: 'g-1' });
+  const client = ocClientOf(clientId, master)!;
+  const swap = { grant_type: 'authorization_code', code, redirect_uri: CLAUDE, client_id: clientId, code_verifier: VERIFIER, resource };
+  const swapped = ocCheckCode(swap, client, { master, nowS: now + 5 });
+  assert.ok(swapped.ok && swapped.code.sub === 'pid-1' && swapped.code.jti === 'g-1' && swapped.code.res === resource);
+  const err = (r: { ok: boolean; err?: { error: string } }) => (r.ok ? null : r.err!.error);
+  assert.equal(err(ocCheckCode({ ...swap, code_verifier: `${VERIFIER.slice(0, -1)}A` }, client, { master, nowS: now + 5 })), 'invalid_grant', 'without its verifier a stolen code is nothing');
+  assert.equal(err(ocCheckCode({ ...swap, redirect_uri: 'https://claude.com/api/mcp/auth_callback' }, client, { master, nowS: now + 5 })), 'invalid_grant');
+  assert.equal(err(ocCheckCode(swap, client, { master, nowS: now + OC_CODE_TTL })), 'invalid_grant', 'five minutes');
+  assert.equal(err(ocCheckCode({ ...swap, resource: 'https://other.example/mcp' }, client, { master, nowS: now + 5 })), 'invalid_target');
+  assert.equal(err(ocCheckCode(swap, ocClientOf(cliId, master)!, { master, nowS: now + 5 })), 'invalid_grant', 'issued to another client');
+  // Client authentication, the way each registered.
+  assert.ok(ocAuthClient({ client_id: clientId }, null, master).ok, 'a public client is who its id says, PKCE does the rest');
+  const confId = String(conf.ok && conf.body.client_id);
+  assert.equal(err(ocAuthClient({ client_id: confId }, null, master)), 'invalid_client', 'a confidential client without its secret');
+  assert.ok(ocAuthClient({ client_id: confId, client_secret: ocSecret(confId, master) }, null, master).ok);
+  assert.equal(err(ocAuthClient({ client_id: 'nobody' }, null, master)), 'invalid_client');
+  const basic = ocBasic(`Basic ${Buffer.from(`${encodeURIComponent(confId)}:${encodeURIComponent('s3cr+t')}`).toString('base64')}`);
+  assert.deepEqual(basic, { id: confId, secret: 's3cr+t' }, 'Basic, form-encoded halves (RFC 6749 2.3.1)');
+
+  /* 6. A refresh rotates; a racing or lost reply gets the same successor; a replay later ends the grant. */
+  const grant = { sub: 'pid-1', grant: 'g-1', scope: OC_READ, aud: resource, cid: ocClientRef(clientId) };
+  const next = ocNext('r-1', master);
+  assert.equal(next, ocNext('r-1', master), 'the successor is decided by the token, so two racing refreshes agree on it');
+  const rows = [{ id: 1, jti: 'r-1', exp: now + 999, at: iso(now - 100) }];
+  const rotate = ocStep(rows, 'r-1', next, { nowS: now });
+  assert.deepEqual(rotate, { kind: 'rotate', next: { jti: next, exp: ocRefreshExp(now) }, insert: true, remove: [1] });
+  const racing = ocStep([...rows, { id: 2, jti: next, exp: 123_456, at: iso(now) }], 'r-1', next, { nowS: now });
+  assert.deepEqual(racing, { kind: 'rotate', next: { jti: next, exp: 123_456 }, insert: false, remove: [1] }, 'the second of two racing refreshes writes nothing and returns the first one\'s');
+  const after = [{ id: 2, jti: next, exp: 123_456, at: iso(now) }];
+  assert.deepEqual(ocStep(after, 'r-1', next, { nowS: now + 30 }), { kind: 'replay', next: { jti: next, exp: 123_456 } }, 'a reply lost on the way: the same successor again');
+  assert.deepEqual(ocStep(after, 'r-1', next, { nowS: now + OC_GRACE + 1 }), { kind: 'reuse' }, 'replayed after the grace: somebody else holds it');
+  assert.deepEqual(ocStep(after, 'r-0', ocNext('r-0', master), { nowS: now }), { kind: 'reuse' }, 'never current');
+  const a1 = ocTokens(grant, { jti: next, exp: 123_456 + now }, { master, nowS: now });
+  const a2 = ocTokens(grant, { jti: next, exp: 123_456 + now }, { master, nowS: now + 20 });
+  assert.equal(a1.refresh_token, a2.refresh_token, 'a replay hands back the very token the lost reply carried');
+  assert.equal(a1.token_type, 'Bearer');
+  const rt = ocCheckRefresh({ grant_type: 'refresh_token', refresh_token: a1.refresh_token, client_id: clientId }, client, { master, nowS: now + 60 });
+  assert.ok(rt.ok && rt.rt.jti === next && rt.rt.g === 'g-1');
+  assert.equal(err(ocCheckRefresh({ refresh_token: a1.refresh_token, scope: 'copilot.read copilot.write' }, client, { master, nowS: now + 60 })), 'invalid_scope', 'a refresh cannot add scope');
+  assert.ok(ocCheckRefresh({ refresh_token: a1.refresh_token, scope: 'copilot.read offline_access' }, client, { master, nowS: now + 60 }).ok);
+  assert.equal(err(ocCheckRefresh({ refresh_token: a1.refresh_token }, ocClientOf(cliId, master)!, { master, nowS: now + 60 })), 'invalid_grant', 'another client');
+  assert.equal(err(ocCheckRefresh({ refresh_token: a1.access_token }, client, { master, nowS: now + 60 })), 'invalid_grant', 'an access token is not a refresh token');
+
+  /* 7. The ledger: live until ended, and the list shows only live ones, with their last read. */
+  const row = (id: number, event_type: string, payload: Record<string, unknown>, at: number): OcRow => ({ id, event_type, payload, created_at: iso(at) });
+  const ledger = [
+    row(1, OC_GRANT, { grant: 'g-1', name: 'Claude', host: 'claude.ai', client: 'Claude', scope: OC_READ }, now - 900),
+    row(2, OC_GRANT, { grant: 'g-2', name: 'An app on this computer', host: 'localhost', client: 'Claude Code', scope: OC_READ }, now - 500),
+    row(3, OC_REVOKE, { grant: 'g-2', why: 'you' }, now - 100),
+    row(4, OC_SEEN, { grant: 'g-1', at: iso(now - 60), tool: 'get_plan', n: 3, error: null }, now - 800),
+    row(5, OC_SEEN, { grant: 'g-1', at: iso(now - 600), tool: 'get_overview', n: 1, error: null }, now - 850),
+  ];
+  assert.equal(ocLive(ledger, 'g-1'), true);
+  assert.equal(ocLive(ledger, 'g-2'), false, 'ended in the app: its tokens stop at the next call');
+  assert.equal(ocLive(ledger, 'g-9'), false, 'never made');
+  const listed = ocConnections(ledger);
+  assert.deepEqual(listed.map((c) => c.grant), ['g-1']);
+  assert.deepEqual(listed[0].seen, { at: iso(now - 60), tool: 'get_plan', n: 3, error: null }, 'the later read, when two rows raced');
+
+  /* 8. A code typed in from the app: unambiguous characters, read the way it was meant, kept keyed. */
+  for (let i = 0; i < 300; i++) assert.match(ocNewPair(), /^[2-9A-HJKMNP-TV-Z]{4}-[2-9A-HJKMNP-TV-Z]{4}$/);
+  let call = 0;
+  // Bytes past the alphabet's last whole run are drawn again rather than folded in, which would favour the first few letters.
+  assert.equal(ocNewPair((n) => Buffer.alloc(n, call++ === 0 ? 255 : 0)), '2222-2222');
+  assert.equal(ocNormPair(' k7qm-3txd '), 'K7QM3TXD');
+  assert.equal(ocNormPair('K7QM 3TXD'), 'K7QM3TXD');
+  for (const bad of ['K7QM-3TX', 'K7QM-3TXO', 'K7QM-3TX1', 'K7QM-3TXDD', '', null]) assert.equal(ocNormPair(bad), null, `not a code: ${bad}`);
+  assert.equal(ocPairHash('K7QM3TXD', master), ocPairHash(ocNormPair('k7qm 3txd')!, master));
+  assert.notEqual(ocPairHash('K7QM3TXD', master), ocPairHash('K7QM3TXD', other), 'keyed: a copy of the table is not a list of codes');
+
+  /* 9. The consent form is tied to the account it was shown to and the request it was shown for. */
+  const ct = ocConsent('pid-1', req, master);
+  assert.ok(ocConsentOk(ct, 'pid-1', req, master));
+  assert.equal(ocConsentOk(ct, 'pid-2', req, master), false, 'another account');
+  assert.equal(ocConsentOk(ct, 'pid-1', { ...req, state: 'other' }, master), false, 'another request');
+  assert.equal(ocConsentOk(undefined, 'pid-1', req, master), false);
+
+  /* 10. What the server says: the documents Claude reads, and the 401 that starts sign-in. */
+  const prm = ocPRM(`${base}/`);
+  assert.equal(prm.resource, resource, 'the resource is exactly the URL pasted into Claude');
+  assert.equal(prm.authorization_servers[0], base, 'Claude reads only the first');
+  assert.deepEqual(prm.scopes_supported, [OC_READ]);
+  const asm = ocASM(base) as Record<string, unknown>;
+  assert.equal(asm.issuer, base);
+  assert.equal(asm.authorization_endpoint, `${base}/copilot2/connect`);
+  assert.equal(asm.registration_endpoint, `${base}/api/copilot/oauth/register`);
+  assert.deepEqual(asm.code_challenge_methods_supported, ['S256']);
+  assert.ok((asm.token_endpoint_auth_methods_supported as string[]).includes('none'));
+  assert.deepEqual(asm.scopes_supported, [...OC_AS_SCOPES], 'offline_access listed, so Claude asks for the refresh token');
+  assert.equal(asm.client_id_metadata_document_supported, undefined, 'no metadata documents: they mean fetching any URL a client names');
+  const www = ocWww(base);
+  assert.ok(www.startsWith('Bearer ') && www.includes(`resource_metadata="${base}/.well-known/oauth-protected-resource/api/copilot/mcp"`) && www.includes(`scope="${OC_READ}"`));
+  assert.ok(ocWww(base, { error: 'invalid_token', description: 'It "expired"' }).startsWith('Bearer error="invalid_token", error_description="It expired"'), 'quotes cannot break the header');
+  assert.ok(ocSame('https://APP.example.com/api/copilot/mcp/', resource));
+  assert.equal(ocSame('https://app.example.com/api/copilot/other', resource), false);
+
+  /* 11. The protocol: what Claude is told, and a failure always comes back as one, with its reason. */
+  const calls: Array<[string, Record<string, unknown>]> = [];
+  const ctx: RpcContext = {
+    call: async (name, args) => {
+      calls.push([name, args]);
+      if (name === 'get_plan') throw new Error('the plan could not be read');
+      return { text: `read ${name}` };
+    },
+  };
+  const init = await mcpRpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude-ai' } } }, ctx) as { result: Record<string, unknown> };
+  assert.equal(init.result.protocolVersion, '2025-06-18', 'a version this server speaks is echoed');
+  assert.deepEqual(init.result.capabilities, { tools: { listChanged: false } });
+  const told = String(init.result.instructions);
+  assert.ok(/read-only/.test(told) && /never say it was saved/.test(told), 'Claude is told it cannot save, so it does not say it did');
+  assert.ok(/estimate/.test(told), 'and to say which numbers are its own');
+  assert.equal((await mcpRpc({ jsonrpc: '2.0', id: 2, method: 'initialize', params: { protocolVersion: '1999-01-01' } }, ctx) as { result: { protocolVersion: string } }).result.protocolVersion, MCP_LATEST);
+  assert.equal(await mcpRpc({ jsonrpc: '2.0', method: 'notifications/initialized' }, ctx), null, 'a notification gets no reply');
+  assert.equal(await mcpRpc({ jsonrpc: '2.0', id: 9, result: {} }, ctx), null);
+  assert.deepEqual(await mcpRpc({ jsonrpc: '2.0', id: 3, method: 'ping' }, ctx), { jsonrpc: '2.0', id: 3, result: {} });
+  const listedTools = (await mcpRpc({ jsonrpc: '2.0', id: 4, method: 'tools/list' }, ctx) as { result: { tools: typeof MCP_TOOLS } }).result.tools;
+  assert.deepEqual(listedTools.map((x) => x.name), [...MCP_TOOL_NAMES]);
+  for (const tool of listedTools) {
+    assert.equal(tool.annotations.readOnlyHint, true, `${tool.name} reads`);
+    assert.equal(tool.annotations.destructiveHint, false);
+    assert.equal(tool.inputSchema.type, 'object');
+    assert.ok(tool.description.length > 40, `${tool.name} says what it returns`);
+    // Writing waits for its own scope and its own consent screen (invariant 7).
+    assert.ok(!/^(log|send|add|create|update|delete|set|write|save|record|book)/.test(tool.name), `no write tool yet: ${tool.name}`);
+  }
+  const called = await mcpRpc({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'get_overview', arguments: {} } }, ctx) as { result: { content: Array<{ text: string }>; isError?: boolean } };
+  assert.equal(called.result.content[0].text, 'read get_overview');
+  assert.equal(called.result.isError, undefined);
+  const failed = await mcpRpc({ jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'get_plan' } }, ctx) as { result: { content: Array<{ text: string }>; isError?: boolean } };
+  assert.equal(failed.result.isError, true);
+  assert.match(failed.result.content[0].text, /the plan could not be read/, 'the reason, said to Claude (invariant 13)');
+  assert.equal((await mcpRpc({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'log_sale' } }, ctx) as { error: { code: number } }).error.code, -32602);
+  const tooMany = await mcpRpc({ jsonrpc: '2.0', id: 8, method: 'tools/call', params: { name: 'get_conversations', arguments: { limit: 500 } } }, ctx) as { result: { content: Array<{ text: string }>; isError?: boolean } };
+  assert.ok(tooMany.result.isError && /1 to 100/.test(tooMany.result.content[0].text), 'a bad argument is a tool error the model can correct');
+  await mcpRpc({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'get_conversations' } }, ctx);
+  assert.deepEqual(calls.filter(([n]) => n === 'get_conversations'), [['get_conversations', { limit: 20 }]], 'the bad call ran nothing; the bare one got the default');
+  assert.equal((await mcpRpc({ jsonrpc: '2.0', id: 11, method: 'resources/list' }, ctx) as { error: { code: number } }).error.code, -32601);
+  assert.equal((await mcpRpc({ id: 12, method: 'ping' }, ctx) as { error: { code: number } }).error.code, -32600);
+  const batch = await mcpBody([{ jsonrpc: '2.0', id: 13, method: 'ping' }, { jsonrpc: '2.0', method: 'notifications/initialized' }], ctx);
+  assert.ok(batch.status === 200 && Array.isArray(batch.json) && batch.json.length === 1);
+  assert.deepEqual(await mcpBody({ jsonrpc: '2.0', method: 'notifications/initialized' }, ctx), { status: 202 });
+  assert.ok(mcpVersionOk(null) && mcpVersionOk('2025-11-25') && !mcpVersionOk('1999-01-01'));
+
+  /* 12. What the tools say: the person's words as theirs, every kind of person counted, a failed read said. */
+  const blankOverview: OverviewIn = {
+    today: '2026-10-06', offer: {}, foundBy: null, here: { title: 'Nothing to send yet', line: 'No offer written, so nothing is drafted', counts: null },
+    goals: [], outlook: null, runwayMonths: null, verdict: { title: 'Not proven', line: 'No sale yet.' }, links: [], weak: null,
+    bet: null, checkpointDue: false, now: { title: 'Write your offer', why: null, size: null }, asks: [],
+  };
+  const ov = mrOverview(blankOverview);
+  assert.match(ov, /You have not written down what you sell yet/);
+  assert.match(ov, /No bet running\./);
+  assert.ok(!/Not in this read/.test(ov));
+  const ovGoal = mrOverview({
+    ...blankOverview,
+    goals: [{ title: 'Exit fund', status: '$0 of $1,500', horizon: 'By 30 Nov · 55 days left', verdict: 'Off track' }],
+    outlook: { title: 'Exit fund', verdict: 'Off track', line: '$1,500 in 55 days is 5 sales at your $150 a month.' },
+  });
+  assert.match(ovGoal, /- Exit fund · \$0 of \$1,500 · By 30 Nov · 55 days left · Off track\n {2}\$1,500 in 55 days/, 'the verdict once, with its sentence under the goal it is about');
+  const ovFailed = mrOverview({ ...blankOverview, missing: ['bets and conversations (timeout)'] });
+  assert.match(ovFailed, /Not in this read, because the app could not load it just now: bets and conversations \(timeout\)/, '"No bet running" is never what a failed read looks like');
+  const ovBet = mrOverview({
+    ...blankOverview, offer: { sells: 'Booking automation', price_band: '$150' },
+    bet: { belief: 'Dentists pay $150 for this', part: 'What they pay', state: 'running', result: '1 of 3 sales at your $150', pass: '3 sales at your $150 by 20 Oct', start: '2026-10-04', ended: null, day: 3, days: 14, note: null, play: null },
+  });
+  assert.match(ovBet, /- Sells: Booking automation/);
+  assert.match(ovBet, /"Dentists pay \$150 for this" — on what they pay\. Day 3 of 14: 1 of 3 sales at your \$150\. It passes at 3 sales at your \$150 by 20 Oct\./);
+
+  const talk = (id: string, on: string, who: string, role: CnTalk['role'], commitment: CnTalk['commitment'], extra: Partial<CnTalk> = {}): CnTalk => ({ id, on, who, role, problem: 'unasked', commitment, said: null, via: null, at: `${on}T10:00:00Z`, ...extra });
+  const today = '2026-10-06';
+  const talks = [
+    talk('t0', '2026-09-28', 'Mara', 'connector', 'intro', { said: 'My cousin runs Bright Smiles' }),
+    talk('t1', '2026-10-02', 'Dr Lim', 'buyer', 'money', { problem: 'yes', said: 'We lose two bookings a week', via: 't0' }),
+    talk('t2', '2026-10-03', 'Joel', 'seller', 'none', { problem: 'yes' }),
+    talk('t3', '2026-09-30', 'Juan', 'operator', 'intro'),
+  ];
+  const tx = mrTalks({ today, talks, intros: cnOpenIntros(talks, {}, today), counts: cnTalkCounts(talks, today), totals: cnTalkTotals(talks), limit: 20 });
+  assert.match(tx, /Last 30 days: 4 conversations — 1 could buy, 1 sells to them, 1 runs the work, 0 already earns in it, 1 knows people\./, 'every kind of person, the empty ones too');
+  assert.match(tx, /2026-10-02 · Dr Lim · could buy · they have it · ended in: money · came through Mara's introduction · said: “We lose two bookings a week”/);
+  assert.ok(!/Joel · sells to them · they have it/.test(tx), 'a supplier is not counted as having the buyer\'s problem');
+  assert.match(tx, /- Juan offered one 6 days ago \(30 Sep\)/, 'an introduction still waiting');
+  assert.ok(!/- Mara offered one/.test(tx), 'one that led somewhere is not waiting');
+  assert.match(tx, /the app cannot hear calls/, 'what the count is: only what was logged');
+  assert.match(mrTalks({ today, talks, intros: [], counts: cnTalkCounts(talks, today), totals: cnTalkTotals(talks), limit: 1 }), /Newest first \(the 1 newest of 4\)/);
+
+  const plan = mrPlan({
+    today, now: null, asks: [{ kind: 'Introduction', title: 'Follow up Juan', detail: '' }], here: { title: 'At the start', line: '', counts: null }, plan: null,
+    ahead: [{ title: 'First reply', status: '0 of 1', takes: 'About 20 sends.', when: '4 days at your pace.', early: true }],
+  });
+  assert.match(plan, /No plan drawn/);
+  assert.match(plan, /- First reply \(0 of 1\)\. About 20 sends\. 4 days at your pace\. \(An estimate from too few sends to trust yet\.\)/, 'an estimate keeps its caveat');
+  assert.match(plan, /Introduction: Follow up Juan/);
+  const drawn = mrPlan({
+    today, now: { title: 'Record a demo', why: 'Nothing to show is the gap.', size: 'One sitting' }, asks: [], here: { title: 'At the start', line: 'Toward Exit fund', counts: null },
+    plan: {
+      here: { title: 'Six conversations, no sale', line: null }, direction: 'Proof first', done: 1, total: 3, drawnAt: '2026-10-05T21:00:00Z', failed: null,
+      phases: [{ label: 'This week', milestones: [{ title: 'A demo a prospect can see', why: null, doneWhen: 'A link exists', goal: 'Exit fund', state: 'open', steps: [{ title: 'Record it', size: 'One sitting', tag: 'High leverage', who: 'you', state: 'done' }] }] }],
+    },
+    ahead: [],
+  });
+  assert.match(drawn, /Your plan \(drawn by a model from your record on 2026-10-05; what is done is what you ticked\)/, 'a model\'s plan is marked as one (invariant 12)');
+  assert.match(drawn, /- \[to do\] A demo a prospect can see \(toward Exit fund\) Done when: A link exists/);
+  assert.match(drawn, / {2}- \[done\] Record it \(one sitting, high leverage\)/);
+  assert.match(drawn, /The move now: Record a demo \(One sitting\)\nNothing to show is the gap\./);
+
+  const proof = mrProof({
+    today, verdict: { title: 'Not proven yet', line: '0 of 3 sales at your price.' }, weak: 'What they pay',
+    links: [
+      { label: 'Who buys', state: 'Works', what: 'Dental clinics', facts: '3 replied of 12', why: 'Replies came back.' },
+      { label: 'What they pay', state: 'Untested', what: null, facts: 'Nothing paid yet', why: 'Nothing paid yet.' },
+    ],
+    bets: [{ belief: 'Clinics pay $150', part: 'What they pay', state: 'failed', result: '0 of 3 sales', pass: '3 sales by 1 Oct', start: '2026-09-17', ended: '2026-10-01', day: 14, days: 14, note: 'Too early in the month', play: null }],
+    checkpoint: { due: true, last: null }, history: [{ day: '2026-10-01', title: 'Bet ended', line: 'Did not pass' }],
+  });
+  assert.match(proof, /Who buys: Works\. What it is, in your words: Dental clinics\. Counted: 3 replied of 12\. Replies came back\./);
+  assert.match(proof, /- What they pay: Untested\. Nothing paid yet\.\n/, 'a count that only repeats its reason is said once');
+  assert.match(proof, /2026-09-17 · "Clinics pay \$150" — on what they pay: did not pass on 2026-10-01, 0 of 3 sales against 3 sales by 1 Oct\. You wrote: "Too early in the month"/);
+  assert.match(proof, /A checkpoint is due now\.\nNo checkpoint decided yet\./);
+
+  const answers = mrAnswers([{ id: 'replies', q: 'Which segments reply?', headline: 'Too few sends to say yet', rows: [], thin: 'Six sends per segment before a rate means anything.' }], today);
+  assert.match(answers, /## Which segments reply\?\nToo few sends to say yet\nSix sends per segment/);
+
+  /* 13. The routes: what reads cookies, what a GET can do, what is checked first. */
+  const src = (p: string) => readConnFile(new URL(`../../src/${p}`, import.meta.url), 'utf8');
+  const mcpRoute = src('app/api/copilot/mcp/route.ts');
+  const mcpRead = src('app/api/copilot/mcp/read.ts');
+  for (const [name, s] of [['mcp route', mcpRoute], ['mcp read', mcpRead]] as const) {
+    assert.ok(!/currentProfileId|profileIdOr401|cookies\(/.test(s), `${name} never reads the session: the token is the only credential, which is why any origin may call it`);
+  }
+  assert.match(mcpRoute, /status: 401[\s\S]*www-authenticate/, 'a 401 with the header is the only thing that starts Claude\'s sign-in');
+  assert.ok(mcpRead.indexOf('markSeen(who.pid, who.grant, name, null)') < mcpRead.indexOf('readTool(name, args, who.pid)'), 'a read is recorded before it is made');
+  const authorizeRoute = src('app/api/copilot/oauth/authorize/route.ts');
+  assert.ok(!/export (async )?function GET/.test(authorizeRoute), 'a code is issued by the tap\'s POST, never by a GET a preview could make');
+  assert.match(authorizeRoute, /consentTokenMatches\(/);
+  assert.match(authorizeRoute, /rateLimit\(`copilot:mcp-pair-try:/, 'a typed code is rate-limited per network');
+  const page = src('app/copilot2/connect/page.tsx');
+  assert.match(page, /method="post" action="\/api\/copilot\/oauth\/authorize"/);
+  assert.match(page, /askerOf\(/, 'the screen names who is asking by where the answer goes');
+  const connector = src('lib/copilot/connector.ts');
+  assert.match(connector, /insertRows\(\[\s*\{ profile_id: code\.sub, event_type: MCP_GRANT[\s\S]*?event_type: MCP_REFRESH/, 'a grant and its refresh token are written in one insert');
+  assert.match(connector, /if \(!grantLive\(rows, t\.g\)\)/, 'every call checks the grant, so a disconnect does not wait out the hour');
+
+  console.log('copilot-core: connector checks passed');
+}
+
+connectorSuite().catch((e) => { console.error(e); process.exit(1); });
+
 /* ─── Ask it: a question about the record, matched, counted, said back ──────── */
 //
 // The checks are the ways a spoken answer could mislead: a question matched to

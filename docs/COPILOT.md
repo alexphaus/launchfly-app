@@ -2457,6 +2457,94 @@ not is worse than a short one, because the reader cannot tell which they have. N
 contact details leave — the destination is a third-party model, and the export is
 context about the user's own business, not a list of other people's numbers.
 
+### Claude, connected (`oauth.ts`, `mcp.ts`, `mcpread.ts`, `connector.ts`)
+
+The handoff, live. You → Claude shows an address — `NEXT_PUBLIC_APP_URL` +
+`/api/copilot/mcp` — to add in Claude as a custom connector (Customize →
+Connectors → Add custom connector). Claude signs in once, and from then on reads
+the record when a conversation needs it, instead of from a paste that went stale
+the moment it was made and had to be made again for every chat. Talking an idea
+through stays Claude's to do (DIRECTION.md declines building it here); knowing
+the business is what this gives it.
+
+**What it reads.** Six tools, all read-only (`annotations.readOnlyHint`):
+`get_overview` (start here: the offer, goals with their verdicts, the chain part
+by part, the running bet, the move now), `get_plan` (the move, what waits, and
+the drawn plan or the funnel's stops), `get_proof` (each part with its counts,
+every bet with its line and result, the last checkpoint, the history),
+`get_conversations` (the month by who they were, the introductions waiting, the
+log in their words), `get_record` (the handoff text) and `get_counted_answers`
+(the five Ask answers). The route runs `derive()` over `loadHome` — the four
+tabs' own wiring — so Claude reads the numbers the Path and Proof show, not a
+second count of them. The text speaks to the person as the screens do; a plan a
+model drew is marked as one (invariant 12), and a part of the home that failed to
+load is named at the top rather than read as nothing (invariant 13).
+
+**What it does not do: write.** Not "not yet" in the copy and a tool in the list:
+there is no write tool, a test fails if one appears, and what Claude is told at
+`initialize` says it cannot save anything and must never say it did. What belongs
+in the record is logged in the app. Writing comes with its own scope and its own
+consent screen, not by widening this one.
+
+**Signing in, without a table.** Claude's OAuth requirements
+(claude.com/docs/connectors/building/authentication) are met as written: a 401
+with `WWW-Authenticate: Bearer resource_metadata=…` on any call without a token,
+`initialize` included (there is nothing to read without the account); RFC 9728
+and RFC 8414 documents under `/.well-known/`; Dynamic Client Registration; an
+authorization code with S256 PKCE; form-encoded token requests; refresh tokens
+rotated, and `invalid_grant` for a dead one. Every credential is a signed token
+(`seal`, with a key per use derived from the session secret — `oauthKey()`), so
+registering stores nothing. The database holds only what has to be single-use or
+revocable, as `copilot_events` rows and no migration: `mcp_grant` per
+connection, `mcp_refresh` for the refresh token it is on (replaced at each
+refresh, never added to), `mcp_revoke`, `mcp_seen` (its last read, rewritten in
+place) and `mcp_pair` (a typed code, deleted when used — the delete is the claim,
+so a code tapped twice works once). Rows that grew with every call would crowd
+what other features read by recency (`recentEvents`).
+
+- **Who may ask is decided by where the answer goes.** Registration and the
+  consent screen accept only Claude's callback (claude.ai's, and claude.com's)
+  and loopback addresses on any port (Claude Code); `COPILOT_OAUTH_REDIRECTS`
+  adds others, exactly. The screen names the app from that address, never from
+  the `client_name` a client gave itself: anyone can register as "Claude", and
+  nobody else receives what is sent to claude.ai. A loopback request is named "an
+  app on this computer", with a warning, because any program there can ask.
+- **The consent screen is the authorization endpoint** (`/copilot2/connect`),
+  rendered on the server so it works in whatever browser Claude opened. Its
+  buttons post to `/api/copilot/oauth/authorize`, which checks everything again: a
+  code is issued by a tap, never by a GET a link preview could make (invariant
+  8's reason). Signed in, the form carries a token bound to the account and the
+  request (`consentToken`) as a second lock beside the cookie's SameSite=Lax. Not
+  signed in — the usual case, the app being on a phone and Claude on a laptop —
+  the person types a code from You → Claude → Show a code: eight characters with
+  no 0/O, 1/I/L or U, good once for ten minutes, kept as a keyed hash, ten tries
+  per network per ten minutes. No email is needed, and it does not sign the
+  laptop in to the app.
+- **A refresh race does not end a connection.** A refresh token's successor is
+  computed from it (`nextRefreshJti`) rather than drawn, and expires at a day's
+  midnight, so two refreshes racing write and return the same token; one
+  replayed within `REFRESH_GRACE_S` (60s; Claude gives a refresh 30) gets the
+  same successor again, so a reply lost on the way does not read as theft. One
+  replayed after that, or two rotations old, ends the grant — OAuth 2.1's reuse
+  detection for a public client.
+- **A disconnect is immediate.** Access tokens last an hour, and every call
+  checks the grant anyway: ended under You → Claude, by Claude's revocation call
+  (RFC 7009), or by a code swapped twice, the next call is a 401 and the next
+  refresh `invalid_grant`. A ledger that cannot be read is a 503, not a 401: the
+  read is refused, but Claude is not sent to sign in again for a database's sake.
+- **Every read is listed.** The read is recorded on the connection before it is
+  made, and not made if it cannot be (`markSeen`): the list under You → Claude —
+  when, which tool, how many, the last failure and why — is the person's only
+  view of what Claude has read.
+
+`NEXT_PUBLIC_APP_URL` must be the public origin. The address the sheet shows,
+the `resource` in the discovery document and every token's audience are built
+from it, and Claude requires the first two to match exactly. Rotating the
+session secret ends every connection. The protocol endpoints answer any origin
+(`OPEN_CORS`): none of them reads the session cookie, so a browser-based MCP
+client — the MCP Inspector — reaches them without opening anything a cookie
+guards.
+
 ### The queue you have decided against
 
 `cancelOpenDrafts` existed since the offer-change path and had **no user-facing
@@ -2772,6 +2860,15 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | POST | `/api/copilot/asked` | `{ heard }` → which question on the Ask list was asked (`{ asked: { id, period, about } \| null, why }`), by a model, when the sheet's own rules could not tell. Never the answer, never a write; 300 a day |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
+| GET | `/.well-known/oauth-protected-resource[/api/copilot/mcp]` | RFC 9728: the MCP server's resource, and its authorization server — the app's own origin |
+| GET | `/.well-known/oauth-authorization-server` | RFC 8414: the registration, consent, token and revocation endpoints; S256 only; no client ID metadata documents |
+| POST | `/api/copilot/oauth/register` | Dynamic Client Registration (JSON). Stores nothing: the client id is the registration, signed. Claude's callback, loopback, or `COPILOT_OAUTH_REDIRECTS` only |
+| GET | `/copilot2/connect` | the consent screen, which is the authorization endpoint |
+| POST | `/api/copilot/oauth/authorize` | the consent screen's buttons: `decision: allow \| deny`, with `via: session` and its `consent` token, or `via: code` and the `pair` typed in. A 303 to the client with a code or `access_denied`, or back to the screen with why |
+| POST | `/api/copilot/oauth/token` | form-encoded: `authorization_code` (PKCE S256) and `refresh_token` (rotated). RFC 6749 errors |
+| POST | `/api/copilot/oauth/revoke` | RFC 7009: a client ending its own connection |
+| POST | `/api/copilot/mcp` | the MCP server: Streamable HTTP, answered as JSON, stateless, read-only. A bearer token on every call, else a 401 with `WWW-Authenticate`. `GET` is a 405: no event stream |
+| GET/POST | `/api/copilot/connections` | You → Claude: `GET` the address and the connections, each with its last read · `POST { action: 'revoke', grant }` · `{ action: 'code' }` a sign-in code (12 an hour) |
 | POST | `/api/copilot/money/import` | multipart `file`: a bank statement. CSV/TSV/OFX, and a PDF whose running balance holds by rules, are read in the request and answer with the import and the screen; any other PDF or a screenshot answers 202 and is read by a model in `after()` (30 a day, 10 MB) |
 | GET/POST | `/api/copilot/money/book` | the Money tab. `GET ?month=YYYY-MM&view=EUR` the month's list, calendar and balance · `POST { action: 'add', id (the phone's uuid: a retry is one row), kind: in \| out, amount, currency? (typed in; converted at its day's rate), on, category?, note?, repeat?: week \| month }` · `{ action: 'edit', id, …same }` · `{ action: 'delete', id }` (an upcoming repeat stops its series) · `{ action: 'balance', balance, currency? }` (the currency only the first time) · `{ action: 'entry', currency }` (the default to type in). Every POST answers with the book for the month and view sent, or `{ balance }` with `reply: 'balance'` |
 | GET | `/api/copilot/money/book/export` | every row the book reads, as a CSV download |

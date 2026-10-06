@@ -130,6 +130,24 @@ Export → Share → Copilot) and the Log money shortcut's move to `/copilot2/lo
 need the app reinstalled, or Chrome's next refresh of it; the old shortcut URL
 redirects meanwhile.
 
+**The Claude connector** (You → Claude, `/api/copilot/mcp`) needs no migration
+and no new secret: its client ids, codes and tokens are signed with a key derived
+from `COPILOT_SESSION_SECRET`, and its few rows are `copilot_events`. It does need
+`NEXT_PUBLIC_APP_URL` set to the public origin — the address the sheet shows, the
+discovery document's `resource` and every token's audience are built from it, and
+Claude refuses a mismatch — and `/.well-known/*` and `/api/copilot/*` reachable
+from Anthropic's `160.79.104.0/21`. Rotating the session secret ends every
+connection; each has to be added again.
+
+**Testing the connector:** Allow on the consent screen answers with a 303 to
+claude.ai, and a Playwright route handler does not see a redirect's target — read
+the `Location` of the `/api/copilot/oauth/authorize` response instead. The whole
+flow (register → consent → token → MCP → refresh → revoke) runs against a dev
+server whose `NEXT_PUBLIC_SUPABASE_URL` points at an in-memory stand-in for
+Supabase's REST API; sign the session cookie as
+`pid.hmac_sha256(COPILOT_SESSION_SECRET, pid)`. Claude cannot reach a sandbox:
+to try a real connection, deploy, then add the address from You → Claude.
+
 **Testing offline:** Playwright's `setOffline` does not cover a service
 worker's own requests, and `public/sw.js` passes the page's API calls through
 itself — so an "offline" test with it quietly sends everything. Stop the server

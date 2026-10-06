@@ -16,6 +16,15 @@ function secret(): string {
   return s;
 }
 
+/**
+ * The key the Claude connector signs its client ids, codes and tokens with
+ * (oauth.ts): the session secret's, derived rather than reused, so nothing the
+ * connector hands out can ever pass for a session cookie or the reverse.
+ */
+export function oauthKey(): Buffer {
+  return createHmac('sha256', secret()).update('copilot-oauth-v1').digest();
+}
+
 function sign(profileId: string): string {
   return createHmac('sha256', secret()).update(profileId).digest('hex');
 }

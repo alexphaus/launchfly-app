@@ -2116,6 +2116,16 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pad-heard div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .cp-root[data-theme="soft"] .cp2-pad-heard q { font-size: 13.5px; font-weight: 600; line-height: 1.35; color: var(--ink); overflow-wrap: anywhere; }
 .cp-root[data-theme="soft"] .cp2-pad-heard span { font-size: 12px; line-height: 1.4; color: var(--muted); }
+/* The same box over every other sheet the mic fills in (v2/TellSheets.tsx), with the way out when the sort is wrong. */
+.cp-root[data-theme="soft"] .cp2-tl { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 14px; padding: 10px 12px; border-radius: 14px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-tl svg { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-tl div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-tl q { font-size: 13.5px; font-weight: 600; line-height: 1.35; color: var(--ink); overflow-wrap: anywhere; }
+.cp-root[data-theme="soft"] .cp2-tl span { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-tl .cp2-tl-else { font-size: 12px; font-weight: 700; }
+.cp-root[data-theme="soft"] p.cp2-tl-heard { margin: 0 0 10px; font-size: 14px; font-weight: 600; line-height: 1.4; font-style: italic; color: var(--ink); overflow-wrap: anywhere; }
+.cp-root[data-theme="soft"] .cp2-tl-choices { display: flex; flex-direction: column; margin-top: 12px; }
+.cp-root[data-theme="soft"] .cp2-tl-note { width: 100%; margin: 4px 0 12px; }
 
 /* ── The Swipe tab (v2/SwipeTab.tsx) ──────────────────────────────────────
    One match at a time, the whole screen, the message already on it. The deck

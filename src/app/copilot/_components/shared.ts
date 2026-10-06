@@ -12,6 +12,7 @@ import type { AssetKind } from '@/lib/copilot/assets';
 import type { LinkKey, LinkState } from '@/lib/copilot/business';
 import type { BetIdea, Commitment, LabDecision, LabMetric, Problem } from '@/lib/copilot/lab';
 import type { FoundBy } from '@/lib/copilot/types';
+import type { Reading, ToldMeta, ToldOffer, ToldSale, ToldTalk } from '@/lib/copilot/tell';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -49,7 +50,7 @@ export type SheetState =
   | { kind: 'account' }
   | { kind: 'won'; oppId: string }
   /** The offer. `bet` ties the version saved here to the bet it was rewritten for. */
-  | { kind: 'offer'; bet?: string }
+  | { kind: 'offer'; bet?: string; told?: { meta: ToldMeta; offer: ToldOffer } }
   | { kind: 'you' }
   | { kind: 'opening'; term: string }
   /** The send queue, one draft at a time. See QueueSheet for why it is not a list. */
@@ -70,7 +71,8 @@ export type SheetState =
    * Questions about your own rows, each answered by counting — plus the one
    * escape hatch for everything the list cannot answer. See lib/copilot/ask.ts.
    */
-  | { kind: 'ask' }
+  /** The five counted questions — with, when it came from the mic, the question that was asked. */
+  | { kind: 'ask'; heard?: string }
   /**
    * One Move, whole: the reasons, the artifact and the two answers. v2 lists
    * Moves as rows, and a row is not enough to act on — the artifact is the
@@ -99,13 +101,17 @@ export type SheetState =
    */
   | { kind: 'bet'; play?: string; part?: LinkKey; idea?: string; experiment?: BetFromExperiment }
   /** Proof: log one conversation — The Mom Test's record of what was committed. */
-  | { kind: 'talk' }
+  | { kind: 'talk'; told?: { meta: ToldMeta; talk: ToldTalk } }
   /** Proof: every conversation logged, with the way to log another. */
   | { kind: 'talks' }
   /** Proof: log the person's own count for a bet ("3 sign-ups"). */
   | { kind: 'count'; bet: string }
   /** Proof: a sale or a meeting logged where no business in the app is attached to it. */
-  | { kind: 'sale'; outcome: 'won' | 'meeting' }
+  | { kind: 'sale'; outcome: 'won' | 'meeting'; told?: { meta: ToldMeta; sale: ToldSale } }
+  /** The mic: a note for the plan, in the words that were said (lib/copilot/tell.ts). */
+  | { kind: 'note'; told: { meta: ToldMeta; content: string } }
+  /** The mic: what was said, when it could not be told what it was — or was told wrong. The person picks. */
+  | { kind: 'told'; meta: ToldMeta }
   /** Proof: the chain, whole — each part's rule, its evidence and what would move it. */
   | { kind: 'chain' }
   /** Proof: how buyers find the business. */
@@ -171,6 +177,8 @@ export interface OutcomeInput {
   amount?: number;
   currency?: string;
   note?: string;
+  /** The person's day it happened, when it was not today (lib/copilot/tell.ts occurredOn). */
+  on?: string;
 }
 
 export interface Actions {
@@ -178,6 +186,10 @@ export interface Actions {
   openSheet(s: SheetState): void;
   /** Pop the top sheet. */
   closeSheet(): void;
+  /** Replace the top sheet: a sort corrected is the same step, not one more to go back through. */
+  swapSheet(s: SheetState): void;
+  /** What was said into the mic, sorted (api/copilot/tell). Reads only: the sheet it opens keeps. */
+  tell(heard: string, categories?: { out: string[]; in: string[] }): Promise<{ ok: boolean; reading?: Reading; error?: string }>;
   /** Each shell maps the names it knows onto its own tabs and ignores the rest. */
   setTab(t: Tab | Tab2): void;
   runBrief(reason?: string): Promise<void>;

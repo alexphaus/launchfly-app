@@ -151,7 +151,10 @@ phone the card moved a few pixels and sprang back (COPILOT.md → **Swipe**).
 `webkitSpeechRecognition` fails. Put a stand-in `SpeechRecognition` on the page
 with `addInitScript` that fires `onresult`/`onend` for a set phrase (or
 `onerror` with `not-allowed`, `no-speech`); delete both constructors to see the
-+ the header shows where a browser has none.
++ the header shows where a browser has none. Anything said that is not plainly
+money goes to `/api/copilot/tell` when the home says a model is configured
+(`home.ai`); answer that route with `page.route` to see each sheet, or leave
+`ai` off and the rules sort it in the browser.
 
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —

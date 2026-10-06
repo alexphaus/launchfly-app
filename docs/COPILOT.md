@@ -1437,6 +1437,41 @@ the categories to read against; before the book arrives it says "Opening your
 book…". Playwright has no mic: tests put a stand-in `SpeechRecognition` on the
 page with `addInitScript` that "says" a set phrase.
 
+**Said, and sorted** (`tell.ts`, `api/copilot/tell`, `v2/TellSheets.tsx`). The
+header's mic takes more than money now: say what happened and the sheet for it
+opens filled in — a conversation ("talked to Mara yesterday, she'll intro me
+to her cousin"), a sale ("Pia paid me 150"), a meeting ("booked a demo with
+Lakeview"), a change to the offer ("raised my price to 200"), a note for the
+plan ("resorts go quiet in the rainy season"), or money as before. A question
+opens Ask with it quoted, and its copy for Claude carries the question. Its
+owner asked for an assistant to talk to; what was built is the part only this
+app can do — putting what was said into rows — and talking ideas over stays
+with Claude and ChatGPT (DIRECTION.md).
+- **Money waits on nothing.** Said like a move — an amount with a money word, a
+  currency or one of the person's categories, and none of the words that make it
+  a sale, a conversation, a price or a question (`clearlyMoney`) — the book opens
+  at once, as it always did. Everything else is sorted.
+- **A model sorts and copies; it never answers.** It says which kind of record
+  the words are and copies details out of them, each held to the words
+  (`normalizeTold`, invariant 2): a name or a quote that is not in what was said
+  is dropped, an amount must be one that was said (the largest of several: "sold
+  3 stickers to Joel for 450" is 450), and the day is the app's own reading of
+  the words (`spokenFacts`, the money reader's), never the model's — a meeting
+  booked "for Thursday" counts today. A note is kept in the words said, never a
+  model's rewrite (invariant 12). Whether they have the problem and how a
+  conversation ended are the model's proposal, shown as chips to change.
+- **Without a model, the rules sort** (`readByRules`) what they can, and ask
+  about the rest: "Juan 500" opens the chooser rather than being filed as
+  spending. A model that times out, a cap of 300 sorts a day, or a reply that
+  does not hold to the words falls back to the rules, and the sheet says why
+  (invariant 13). The words are never lost.
+- **Every sheet it fills in says so**: the words as heard, who sorted them, and
+  "Not a conversation?" — the chooser, which opens the right sheet in the same
+  place. Nothing is kept until the sheet's own button; the route reads and never
+  writes, and a test pins that. A sale or a meeting said for another day offers
+  that day beside today, and `/api/copilot/outcomes` keeps it at that day's noon
+  (`occurredOn`, inside the month a conversation can be logged for).
+
 **Logged in another currency.** Tap the ₱ on the keypad: a select laid over the
 mark. The choice is the default for the next move, kept on the account
 (`finance.book.entry`, `setEntryCurrency`) so the shortcut's first HTML already
@@ -2677,7 +2712,8 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/actions/:id` | `{ status: done \| dismissed \| open }` |
 | POST/DELETE | `/api/copilot/actions/:id/send` | approve & send via API (only when the profile owns the channel) / cancel |
 | POST | `/api/copilot/actions/:id/sent` | manual dispatch: "I sent it from my own app" |
-| POST | `/api/copilot/outcomes` | `{ kind, opportunity_id?, action_id?, amount?, currency?, note? }` — `kind` is any `OUTCOME_KINDS` value, including the three worth answers |
+| POST | `/api/copilot/outcomes` | `{ kind, opportunity_id?, action_id?, amount?, currency?, note?, on? }` — `kind` is any `OUTCOME_KINDS` value, including the three worth answers; `on` is the person's day it happened, within the last 30 |
+| POST | `/api/copilot/tell` | `{ heard, categories? }` — what was said into the mic, sorted: `{ reading: { meta: { heard, by: model \| rules, why }, told } }`. Reads only; the sheet it opens keeps |
 | POST | `/api/copilot/decision` | `{ response: did \| rejected \| wrong }` — what you did about today's call |
 | POST | `/api/copilot/growth/:id` | `{ status: active \| done \| dismissed }` |
 | POST | `/api/copilot/sources/:key` | mark a connector as requested (foundation) |

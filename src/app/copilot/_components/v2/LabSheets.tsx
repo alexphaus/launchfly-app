@@ -20,8 +20,10 @@ import { salesCurrency } from '@/lib/copilot/metrics';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
+import type { ToldMeta, ToldTalk } from '@/lib/copilot/tell';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions, BetFromExperiment } from '../shared';
+import { ToldLine } from './TellSheets';
 
 /** A custom bet's first count, by the part it is about: the number that part lives or dies by. */
 const PART_METRIC: Record<LinkKey, LabMetric> = { who: 'committed', reach: 'replied', close: 'meetings', pay: 'paid_at_price', deliver: 'handed' };
@@ -272,15 +274,21 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
 
 /* ─── Log a conversation ──────────────────────────────────────────────────── */
 
-export function TalkSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+/**
+ * One conversation. `told` is one said into the mic: who, their words, the day
+ * and — the model's proposal, there to be changed — whether they have the
+ * problem and how it ended, all as first values for the person to keep.
+ */
+export function TalkSheet({ home, told, actions }: { home: HomeData; told?: { meta: ToldMeta; talk: ToldTalk }; actions: Actions }) {
   const today = home.recent.today;
   const yesterday = shiftDay(today, -1);
-  const [who, setWho] = useState('');
-  const [problem, setProblem] = useState<Problem | null>(null);
-  const [commitment, setCommitment] = useState<Commitment | null>(null);
-  const [said, setSaid] = useState('');
-  const [on, setOn] = useState(today);
-  const [other, setOther] = useState(false);
+  const t = told?.talk;
+  const [who, setWho] = useState(t?.who ?? '');
+  const [problem, setProblem] = useState<Problem | null>(t?.problem ?? null);
+  const [commitment, setCommitment] = useState<Commitment | null>(t?.commitment ?? null);
+  const [said, setSaid] = useState(t?.said ?? '');
+  const [on, setOn] = useState(t?.on ?? today);
+  const [other, setOther] = useState(!!t?.on && t.on < yesterday);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logged, setLogged] = useState(0);
@@ -300,6 +308,8 @@ export function TalkSheet({ home, actions }: { home: HomeData; actions: Actions 
 
   return (
     <>
+      {/* What was said, until it is logged: the next one in the sitting is typed. */}
+      {told && logged === 0 && <ToldLine meta={told.meta} kind="talk" actions={actions} />}
       <h3>Log a conversation</h3>
       <p className="desc">
         One conversation with someone who could buy. The app cannot hear your calls, so this is your count, kept apart from the ones it takes itself.

@@ -1,5 +1,7 @@
+import { todayIso } from '@/lib/copilot/db';
 import { recordOutcome } from '@/lib/copilot/outcomes';
-import { loadHome } from '@/lib/copilot/store';
+import { getProfile, loadHome } from '@/lib/copilot/store';
+import { occurredOn } from '@/lib/copilot/tell';
 import { OUTCOME_KINDS, type OutcomeKind } from '@/lib/copilot/types';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
@@ -19,6 +21,16 @@ export async function POST(req: Request) {
   if (!KINDS.includes(b.kind as OutcomeKind)) return fail('Unknown outcome');
   const amount = num(b.amount);
   if (b.kind === 'won' && amount != null && amount < 0) return fail('Amount must be positive');
+  // A day, when one was said ("Pia paid me yesterday"): the person's own,
+  // inside the month a conversation can be logged for. Read only when sent, so
+  // every other caller is unchanged.
+  let occurred_at: string | undefined;
+  if (b.on != null && b.on !== '') {
+    const profile = await getProfile(auth.pid);
+    const day = occurredOn(b.on, todayIso(profile?.timezone ?? 'UTC'));
+    if (!day.ok) return fail(day.error);
+    occurred_at = day.at ?? undefined;
+  }
   try {
     const outcome = await recordOutcome(auth.pid, {
       kind: b.kind as OutcomeKind,
@@ -28,6 +40,7 @@ export async function POST(req: Request) {
       currency: typeof b.currency === 'string' ? b.currency.slice(0, 8) : null,
       note: typeof b.note === 'string' ? b.note.slice(0, 400) : null,
       source: 'manual',
+      occurred_at,
     });
     return json({ ok: true, outcome, home: await loadHome(auth.pid) });
   } catch (e) {

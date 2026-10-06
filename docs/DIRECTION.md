@@ -166,6 +166,13 @@ new.
 - **Competing with Claude Code on building.** The app should *export* what it
   knows to a model, not try to be one. A context pack the user pastes into a
   chat is the honest version of "help me build this".
+- **A score, a market size, or a validation report on an idea.** Considered in
+  October 2026, when its owner asked whether the app could be where they go for
+  ideas and validation, and declined. Every idea validator sells exactly that, a
+  model gives one for nothing, and it is a number nobody counted (invariant 2).
+  The app's answer to "will people want it" is a count — from the rows, or the
+  person's own log — against a line written before it started; an idea waits on
+  the shelf with its test, never with a verdict on its worth.
 - **Competing on the morning message.** A self-hosted harness already delivers a
   daily brief over WhatsApp with better memory and a better model. A nicer
   version of that is the one thing the competition gives away. The **send queue**
@@ -406,6 +413,36 @@ record**, asked out loud.
 
 ---
 
+**Then** — the chat ends in a test. Its owner asked whether Proof could be where
+they go for ideas and validation, since asking Claude or Grok whether an idea looks
+right is already the habit — and whether that was too risky, because anyone can ask
+Claude for ideas. The read of the market, from a handful of searches in October
+2026, was that the opinion half is a free product several times over: validators
+that return a report or a score, Claude skills that do it in a chat, and the one
+study of AI advice on decisions that turned up (arXiv 2607.28133, abstract only,
+not about startups) found it moved people off their starting position despite
+being measurably sycophantic. So there is no ground there to take and none to
+defend. What no chat can do is count: *will people want it* is a question about a
+market, and the only honest answer is contact with it, which this app owns the
+channel for — the pool, the sends, the replies, the bank. Three small changes, none
+of them a better opinion. A reply shared from either app opens the bet sheet (the
+share target already declared text, and refused anything without a file), with the
+chat's words as the play and the belief left to the person. The card of a running
+bet shows the funnel since it began, because the one bet in its owner's record was
+called off the next day with every step on the way to the sale already counted. And
+an idea waits on a shelf with its test written, and with no test it does not get
+on. It passes the survival test on the joins, as the rest do: a chat with memory
+can keep a list of ideas; it cannot say which of them has a line, which one the
+sends are being counted against, or that the last two did not pass. What it does
+not do is score the idea (above) or let the chat's words become the person's
+belief. See COPILOT.md → **Proof**.
+
+Sources, as of this revision: [validators compared](https://preuve.ai/blog/best-startup-validation-tools-2026)
+(a competitor's own ranking, used for names and prices only) ·
+[AI Sycophancy and Decisions](https://arxiv.org/pdf/2607.28133)
+
+---
+
 ## Where it actually stands
 
 Honest scoring against the "control loop" this is aiming at:
@@ -483,6 +520,13 @@ direction better than "copilot" does.
   file never kept, a typed DELETE removes every row); a bank link would be the
   high-trust one and does not exist yet. Five uploads from people who are not
   the owner would answer it.
+- **Whether the chat ends in the app.** The shelf, the share and the reading rest
+  on one guess: that a habit of asking a chat for ideas can be made to end in a
+  started test instead of an opinion. The counts to watch are bets started from the
+  shelf or from a shared reply against ideas asked for and never written down, and
+  whether a bet is still running on day three now that day one has a reading. If
+  the shelf fills and nothing leaves it, it is a better-drawn backlog, and the cap
+  of ten was the right instinct. Nobody but its owner has tried it.
 - **Unknown: whether the surface is worth keeping at all.** If the harness
   argument above is right, Today's brief, insight, lesson and nudges are dead
   weight, and the send queue is the only screen worth defending. Nobody has

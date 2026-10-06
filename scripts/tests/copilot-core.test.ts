@@ -10125,3 +10125,21 @@ async function shelfSuite() {
 }
 
 shelfSuite().catch((e) => { console.error(e); process.exit(1); });
+
+// A shared file waits for a tap: while the worker is active any page can post to the share target, and a file
+// imported on arrival was a way for a web page to write rows into the book.
+async function sharedFileConfirmSuite() {
+  const { readFileSync } = await import('node:fs');
+  const money = readFileSync('src/app/copilot/_components/v2/MoneyTab.tsx', 'utf8');
+  assert.equal((money.match(/uploadStatement\(/g) ?? []).length, 1, 'the one upload is the one behind the button');
+  assert.match(money, /for \(const f of held\) await actions\.uploadStatement\(f\);/);
+  assert.match(money, /else setHeld\(got\.files\);\s*return;/, 'arrival holds the files and reads none of them');
+  assert.match(money, /onRead=\{\(\) => void readHeld\(\)\} onDiscard=\{\(\) => void discardHeld\(\)\}/);
+  // Left in the cache until the person decides, so a reload before the tap says something rather than losing it.
+  const peek = money.slice(money.indexOf('async function peekShared'), money.indexOf('async function spendShared'));
+  assert.ok(!/cache\.delete/.test(peek), 'looking at a shared file does not spend it');
+  assert.match(money, /await spendShared\(\);\s*setHeld\(null\); setReading\(false\);/);
+  console.log('copilot-core: shared file confirm checks passed');
+}
+
+sharedFileConfirmSuite().catch((e) => { console.error(e); process.exit(1); });

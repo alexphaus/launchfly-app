@@ -128,7 +128,7 @@ export function ClaudeSheet({ actions }: { actions: Actions }) {
           ))}
         </div>
       )}
-      <p className="cp-note">Your email and payment details are not in what it reads. Claude cannot save anything here: what belongs in the record, you log in the app.</p>
+      <p className="cp-note">Your email and payment details are not in what it reads. Claude cannot save anything here: what belongs in the record, you log in the app. Said into the mic, it opens filled in.</p>
     </>
   );
 }

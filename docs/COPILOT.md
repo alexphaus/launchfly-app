@@ -2485,8 +2485,10 @@ load is named at the top rather than read as nothing (invariant 13).
 **What it does not do: write.** Not "not yet" in the copy and a tool in the list:
 there is no write tool, a test fails if one appears, and what Claude is told at
 `initialize` says it cannot save anything and must never say it did. What belongs
-in the record is logged in the app. Writing comes with its own scope and its own
-consent screen, not by widening this one.
+in the record is logged in the app, and Claude is told the mic is the short way
+(**Said, and sorted**): the words go in, the sheet opens filled in, the tap keeps
+it. Writing comes with its own scope and its own consent screen, not by widening
+this one.
 
 **Signing in, without a table.** Claude's OAuth requirements
 (claude.com/docs/connectors/building/authentication) are met as written: a 401

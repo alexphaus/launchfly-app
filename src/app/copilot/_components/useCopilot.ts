@@ -35,6 +35,8 @@ const EXPERIMENT_SAID: Record<ExperimentState, string> = {
 /** What each bet write did, said back. A bet's verdict is never one of them: the rows give it on the next load. */
 const LAB_SAID: Record<LabInput['action'], string> = {
   open: 'Bet started. Only what happens from today counts.',
+  shelve: 'Kept on your shelf. Nothing counts until you start it.',
+  unshelve: 'Taken off your shelf.',
   stop: 'Called off. It stays in your history.',
   talk: 'Logged.',
   intro: 'Noted. It is off your Path.',
@@ -95,11 +97,13 @@ export function sheetKey(s: SheetState): string {
   // sheet opened from one play and then from another must not keep the first
   // one's line, nor a new asset the first one's kind.
   // A second question asked into the mic is a second answer, not the first one's sheet.
-  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk', 'heard'] as const)
+  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk', 'heard', 'shelf'] as const)
     .map((k) => (k in s ? String((s as Record<string, unknown>)[k] ?? '') : ''))
     .join(':');
   const exp = 'experiment' in s && s.experiment ? s.experiment.id : '';
-  return `${s.kind}:${id}:${on}:${exp}`;
+  // Words shared in are a sheet of their own: another share is not this one's belief.
+  const seed = 'seed' in s && s.seed ? `${s.seed.text.length}${s.seed.text.slice(0, 24)}${s.seed.url ?? ''}` : '';
+  return `${s.kind}:${id}:${on}:${exp}:${seed}`;
 }
 
 /** The paid finders by name, for a toast that says which one failed; the rest are feeds. */

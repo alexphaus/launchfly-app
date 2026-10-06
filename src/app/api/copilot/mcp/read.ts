@@ -9,7 +9,7 @@ import { derive } from '@/app/copilot/_components/v2/derive';
 import { LINK_LABEL, LINK_STATE_LABEL } from '@/lib/copilot/business';
 import { markSeen } from '@/lib/copilot/connector';
 import { talkTotals } from '@/lib/copilot/ideas';
-import { decisionWords, gradeWords, passLine, playOf, resultLine, talkCounts, type BetView } from '@/lib/copilot/lab';
+import { betPrice, decisionWords, gradeWords, passLine, playLine, playOf, resultLine, talkCounts, type BetView } from '@/lib/copilot/lab';
 import { readingLine } from '@/lib/copilot/reading';
 import { answersText, conversationsText, overviewText, planText, proofText, type AskIn, type BetIn, type NowIn } from '@/lib/copilot/mcpread';
 import type { ToolName, ToolOutcome } from '@/lib/copilot/mcp';
@@ -155,6 +155,7 @@ function planOf(home: HomeData, d: Derived): string {
 function proofOf(home: HomeData, d: Derived): string {
   const chain = d.proof.chain;
   const cp = d.proof.lab.checkpoint;
+  const { priceLabel } = betPrice(home.profile.offer?.price_band, d.currency);
   return proofText({
     today: home.recent.today,
     verdict: chain.verdict,
@@ -163,6 +164,10 @@ function proofOf(home: HomeData, d: Derived): string {
     bets: d.proof.bets.map((b) => betOf(b, d.proof.found.value)),
     checkpoint: { due: cp.due, last: cp.last ? { on: cp.last.on, decision: decisionWords(cp.last), grade: gradeWords(cp.last, cp.grade) } : null },
     history: d.proof.history.map((h) => ({ day: h.day, title: h.title, line: h.line })),
+    shelf: d.proof.lab.shelf.map((e) => {
+      const play = playOf(e);
+      return { belief: e.belief, part: LINK_LABEL[e.part], line: playLine(e, priceLabel), from: play ? `${play.label}${play.from ? ` (${play.from})` : ''}` : null };
+    }),
     missing: missingOf(home, ['lab', 'assets']),
   });
 }

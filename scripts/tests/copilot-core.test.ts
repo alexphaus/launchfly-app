@@ -8666,7 +8666,8 @@ async function labSuite() {
   const route = readLabFile(new URL('../../src/app/api/copilot/lab/route.ts', import.meta.url), 'utf8');
   const actions = [...route.matchAll(/case '([a-z_]+)'/g)].map((m) => m[1]).sort();
   // "intro" says how an introduction went — asked for, or fell through — and never whether a bet passed.
-  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'intro', 'link', 'open', 'stop', 'talk', 'uncount'], 'a verdict is the rows’, not a request’s');
+  // "shelve" and "unshelve" keep a test for later and take it off: a test with a line and no result, never a verdict on one.
+  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'intro', 'link', 'open', 'shelve', 'stop', 'talk', 'uncount', 'unshelve'], 'a verdict is the rows’, not a request’s');
 
   console.log('copilot-core: lab checks passed');
 }
@@ -9910,3 +9911,117 @@ async function betReadingSuite() {
 }
 
 betReadingSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The shelf: tests kept for later ──────────────────────────────────────── */
+//
+// The checks are the ways a shelf becomes a graveyard or a liar: an idea kept
+// with no line, a score or a market size riding in on an entry, a test that
+// cannot become the bet it was kept as, one that stays on the shelf after it
+// started, a shelf that grows without end, a write to a shelf nobody could read,
+// and a model told to suggest what is already written down.
+
+import {
+  LAB_BET as SH_BET, LAB_EVENTS as SH_EVENTS, LAB_SHELF as SH_SHELF, LAB_SHELF_GONE as SH_GONE, SHELF_MAX,
+  labFromEvents as shLedger, labHome as shHome, labView as shView, normalizeBet as shNormBet, normalizeShelf, shelfRefusal,
+  type LabEventRow as ShRow,
+} from '../../src/lib/copilot/lab';
+import { ideaSources as shSources, ideasPrompt as shIdeasPrompt } from '../../src/lib/copilot/ideas';
+import { readFileSync as readShelfFile } from 'node:fs';
+
+async function shelfSuite() {
+  const src = (p: string) => readShelfFile(new URL(`../../${p}`, import.meta.url), 'utf8');
+  const ctx = { today: '2026-10-06', price: 150, priceLabel: '$150' };
+  const test = { part: 'pay', belief: 'Staycation & resorts pay $150 for booking automation', metric: 'paid_at_price', target: 2, days: 14, tries: { metric: 'sent', planned: 20 } };
+
+  /* 1. No test, no entry: the shelf is held to what starting a bet is held to — the same function, less the day and price that belong to the day it starts. */
+  const kept = normalizeShelf({ ...test, score: 9, marketSize: '$2B', start: '2020-01-01', price: 1, experiment: 'plan-x' }, ctx);
+  assert.ok(kept.ok);
+  assert.deepEqual(Object.keys(kept.ok ? kept.value : {}).sort(), ['belief', 'days', 'idea', 'metric', 'part', 'play', 'target', 'tries', 'unit'], 'no score, no market size, no start, no price: a field it does not know is dropped');
+  const refusals: Array<Record<string, unknown>> = [
+    { ...test, belief: '   ' }, { ...test, part: 'everything' }, { ...test, metric: 'vibes' }, { ...test, target: 0 }, { ...test, days: 0 },
+    { ...test, tries: { metric: 'paid', planned: 10 } }, { ...test, metric: 'logged', unit: '' }, { part: 'pay' },
+  ];
+  for (const raw of refusals) {
+    const a = normalizeShelf(raw, ctx);
+    const b = shNormBet(raw, ctx);
+    assert.ok(!a.ok && !b.ok && a.error === b.error, `a test with no line is refused with what a bet says: ${a.ok ? 'kept' : a.error}`);
+  }
+  const noPrice = normalizeShelf(test, { today: ctx.today, price: null, priceLabel: null });
+  assert.ok(!noPrice.ok && noPrice.error === 'Say what it costs first: a sale at your price needs a price.', 'a sale at a price nobody named is refused here too');
+
+  /* 2. Not a backlog: ten, and not the same belief about the same part twice. */
+  const held = (n: number) => Array.from({ length: n }, (_, i) => ({ part: 'pay' as const, belief: `Belief ${i}` }));
+  assert.equal(shelfRefusal(held(SHELF_MAX - 1), { part: 'pay', belief: 'A new one' }), null);
+  assert.equal(shelfRefusal(held(SHELF_MAX), { part: 'pay', belief: 'A new one' }), `The shelf holds ${SHELF_MAX}. Start one, or take one off, to keep another.`);
+  assert.equal(shelfRefusal([{ part: 'pay', belief: 'They  pay $150' }], { part: 'pay', belief: ' they pay $150 ' }), 'That is already on your shelf.', 'case and spacing are not a second idea');
+  assert.equal(shelfRefusal([{ part: 'pay', belief: 'They pay' }], { part: 'reach', belief: 'They pay' }), null, 'the same words about another part are another test');
+
+  /* 3. What was stored, read back: newest first, and an entry leaves by being started or taken off — neither is undone. */
+  const ev = (id: number, event_type: string, created_at: string, payload: Record<string, unknown>): ShRow => ({ id, event_type, created_at, payload });
+  const entry = (id: number, belief: string, extra: Record<string, unknown> = {}) => ev(id, SH_SHELF, `2026-10-0${id}T09:00:00Z`, { ...test, belief, ...extra });
+  const rows = [
+    entry(1, 'First'), entry(2, 'Second'), entry(3, 'Third', { play: 'not-a-play' }),
+    ev(4, SH_SHELF, '2026-10-04T09:00:00Z', { ...test, belief: '' }),
+    ev(5, SH_SHELF, '2026-10-05T09:00:00Z', { ...test, belief: 'No line', target: 0 }),
+    ev(6, SH_GONE, '2026-10-06T09:00:00Z', { entry: '2' }),
+    ev(7, SH_BET, '2026-10-06T10:00:00Z', { ...test, start: '2026-10-06', belief: 'Third', price: 150, priceLabel: '$150', shelf: '3' }),
+  ];
+  const ledger = shLedger(rows);
+  assert.deepEqual(ledger.shelf.map((e) => e.belief), ['First'], 'one taken off, one started, two that did not hold together: only the first is left');
+  assert.equal(ledger.bets[0].shelf, '3', 'the bet names the entry it came from');
+  assert.equal(shLedger([...rows, entry(8, 'Fourth')].map((r) => ({ ...r, created_at: r.id === 8 ? '2026-10-08T09:00:00Z' : r.created_at }))).shelf.map((e) => e.belief).join(','), 'Fourth,First', 'newest first');
+  assert.ok(!('start' in ledger.shelf[0]) && !('price' in ledger.shelf[0]), 'what only starting decides is not on an entry');
+  const many = shLedger(Array.from({ length: SHELF_MAX + 5 }, (_, i) => ev(100 + i, SH_SHELF, `2026-09-${String(10 + i).padStart(2, '0')}T09:00:00Z`, { ...test, belief: `Belief ${i}` })));
+  assert.equal(many.shelf.length, SHELF_MAX, 'what the screen and the payload carry has an end');
+  assert.equal(many.shelf[0].belief, `Belief ${SHELF_MAX + 4}`);
+  assert.ok(SH_EVENTS.includes(SH_SHELF) && SH_EVENTS.includes(SH_GONE), 'the store reads both, or a shelf would vanish on reload');
+  const home = shHome({ events: rows, unreadable: null, timezone: 'UTC', today: '2026-10-06', sends: [], outcomes: [], finished: [] });
+  assert.deepEqual(home.shelf?.map((e) => e.belief), ['First']);
+  assert.deepEqual(shView(home, { runwayMonths: null, links: [], today: '2026-10-06' }).shelf.map((e) => e.belief), ['First']);
+  assert.deepEqual(shView(undefined, { runwayMonths: null, links: [], today: '2026-10-06' }).shelf, [], 'a server without the shelf has an empty one');
+
+  /* 4. A kept test can become the bet it was kept as, as it stands — the point of keeping it whole. */
+  const draft = normalizeShelf({ ...test, metric: 'logged', unit: 'Enquiries', tries: null, idea: { label: 'Free demo', how: 'Offer a free demo to ten guesthouses.', from: 'AI, from your record' } }, ctx);
+  assert.ok(draft.ok);
+  const back = shLedger([ev(1, SH_SHELF, '2026-10-01T09:00:00Z', draft.ok ? { ...draft.value } : {})]).shelf[0];
+  const asBet = shNormBet({ ...back }, ctx);
+  assert.ok(asBet.ok && asBet.value.belief === test.belief && asBet.value.metric === 'logged' && asBet.value.unit === 'enquiries' && asBet.value.idea?.from === 'AI, from your record' && asBet.value.target === 2 && asBet.value.days === 14);
+
+  /* 5. A model is told what is already written down, in the person's own words, and a number in them is theirs. */
+  const bare = { offer: { sells: 'Booking automation' }, working: null, links: [], bets: [], talks: { n: 0, problem: 0, committed: 0 }, assets: [] };
+  const withShelf = shIdeasPrompt({ ...bare, part: 'pay', foundBy: 'outreach', shelf: ['Guesthouses answer a free demo'] });
+  assert.ok(/do not suggest these again:\n- Guesthouses answer a free demo/.test(withShelf));
+  assert.ok(!/shelf/.test(shIdeasPrompt({ ...bare, part: 'pay', foundBy: 'outreach' })), 'no shelf, no line about one');
+  assert.ok(shSources({ ...bare, part: 'pay', foundBy: 'outreach', shelf: ['I charge $150'] }).includes('I charge $150'));
+  assert.match(src('src/lib/copilot/proofai.ts'), /shelf: \(home\.lab\?\.shelf \?\? \[\]\)\.map\(\(e\) => e\.belief\)/, 'only the belief goes to the model, never a shared reply kept as a play');
+
+  /* 6. Claude reads the shelf, marked as tests not started, with where each play came from. */
+  const proof = (shelf?: Array<{ belief: string; part: string; line: string; from: string | null }>) => mrProof({
+    today: '2026-10-06', verdict: { title: 'Not proven yet', line: '0 of 3.' }, links: [], weak: null, bets: [], checkpoint: { due: false, last: null }, history: [], shelf,
+  } as Parameters<typeof mrProof>[0]);
+  const doc = proof([{ belief: 'Guesthouses answer a free demo', part: 'They hear', line: '3 replies within 1 week', from: 'Free demo (AI, from your record)' }]);
+  assert.match(doc, /## On the shelf: tests kept for later, not started\n- "Guesthouses answer a free demo" — on they hear\. The test: 3 replies within 1 week\. The play: Free demo \(AI, from your record\)\./);
+  assert.ok(doc.indexOf('On the shelf') < doc.indexOf('Pivot or persevere'));
+  assert.ok(!/On the shelf/.test(proof()) && !/On the shelf/.test(proof([])), 'a record with no shelf reads as it always did');
+
+  /* 7. The route and the screen: guarded where a write could lie, and said when it did. */
+  const route = src('src/app/api/copilot/lab/route.ts');
+  assert.match(route, /case 'shelve': \{[\s\S]*?if \(home\.lab\?\.unreadable\) return fail\([\s\S]*?normalizeShelf\(obj\(b\.bet\)[\s\S]*?shelfRefusal\(home\.lab\?\.shelf \?\? \[\], v\.value\)/, 'refused when the shelf cannot be read, held to a bet’s rules, capped');
+  assert.match(route, /case 'unshelve': \{[\s\S]*?if \(!home\?\.lab\?\.shelf\?\.some\(\(e\) => e\.id === id\)\) return fail\([\s\S]*?LAB_SHELF_GONE/, 'only what is on the shelf can be taken off');
+  assert.match(route, /if \(shelf && !home\.lab\?\.shelf\?\.some\(\(e\) => e\.id === shelf\)\) return fail\('That test is no longer on your shelf\.'\);/, 'a bet cannot name a test nobody kept');
+  assert.match(route, /LAB_BET, \{ \.\.\.v\.value, shelf \}/, 'and the bet names the one it came from, which is how the entry leaves');
+  const iface = src('src/lib/copilot/lab.ts').match(/export interface ShelfEntry \{[\s\S]*?\n\}/)![0];
+  assert.ok(!/score|market|viab|rank/i.test(iface), 'a kept idea is a test with a line: nothing in it estimates its worth');
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /<Shelf home=\{home\} d=\{d\} actions=\{actions\} \/>\s*<PickABet/, 'with no bet running, the person’s own tests come before the generic ones');
+  assert.match(tab, /\{!running && <button className="cp-btn sm primary" onClick=\{\(\) => actions\.openSheet\(\{ kind: 'bet', shelf: e\.id \}\)\}>Start it<\/button>\}/, 'Start is offered only when the slot is free');
+  const sheet = src('src/app/copilot/_components/v2/LabSheets.tsx');
+  assert.match(sheet, /\{!experiment && !shelved && \(/, 'the plan’s experiment and a kept test are already waiting somewhere');
+  assert.match(sheet, /shelf: shelved\?\.id \?\? null/);
+  assert.match(src('src/app/copilot/_components/useCopilot.ts'), /shelve: 'Kept on your shelf\. Nothing counts until you start it\.'/);
+  assert.match(src('src/app/copilot/_components/useCopilot.ts'), /'talk', 'heard', 'shelf'\]/, 'two kept tests are two sheets, not the first one’s state');
+
+  console.log('copilot-core: shelf checks passed');
+}
+
+shelfSuite().catch((e) => { console.error(e); process.exit(1); });

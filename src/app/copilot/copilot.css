@@ -1374,6 +1374,15 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-seed-text { align-self: stretch; margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; max-height: 9.5em; overflow-y: auto; }
 .cp-root[data-theme="soft"] .cp2-seed-link { font-size: 12.5px; font-weight: 600; color: var(--blue); text-decoration: none; overflow-wrap: anywhere; }
 .cp-root[data-theme="soft"] .cp2-seed .cp-help { margin: 0; }
+/* The shelf on Proof: tests kept for later, each with its line (lab.ts ShelfEntry). */
+.cp-root[data-theme="soft"] .cp2-shelf-s { font-size: 12.5px; line-height: 1.45; color: var(--muted); margin: 2px 0 4px; }
+.cp-root[data-theme="soft"] .cp2-shelf-row { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-shelf-part { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-shelf-row b { font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-shelf-line { font-size: 12.5px; line-height: 1.4; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-shelf-from { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-shelf-do { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
+.cp-root[data-theme="soft"] .cp2-lab-keep { margin-top: 8px; }
 .cp-root[data-theme="soft"] .cp2-lab-warn { margin: 0 0 12px; padding: 11px 13px; border-radius: 14px; background: var(--warn-tint); color: var(--ink); font-size: 12.5px; line-height: 1.5; }
 .cp-root[data-theme="soft"] .cp2-lab-warn .cp2-link { font-size: 12.5px; }
 .cp-root[data-theme="soft"] .cp2-lab-date { margin-top: 10px; max-width: 220px; }

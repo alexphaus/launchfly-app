@@ -74,7 +74,11 @@ export const LAB_LINK = 'lab_link';
 export const LAB_IDEAS = 'lab_ideas';
 /** How an introduction someone offered went, said by the person: asked for, or fell through. */
 export const LAB_INTRO = 'lab_intro';
-export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS, LAB_INTRO] as const;
+/** A test the person wrote and did not start: kept on the shelf, with its line, until it is their one bet. */
+export const LAB_SHELF = 'lab_shelf';
+/** A shelf entry taken off without being started: the last word on it. */
+export const LAB_SHELF_GONE = 'lab_shelf_gone';
+export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS, LAB_INTRO, LAB_SHELF, LAB_SHELF_GONE] as const;
 
 /* ─── What a bet can count ────────────────────────────────────────────────── */
 
@@ -215,9 +219,36 @@ export interface Bet {
   priceLabel: string | null;
   /** The plan's experiment this bet tests (experiment.ts), which then takes the bet's verdict. */
   experiment: string | null;
+  /** The shelf entry it was started from, which leaves the shelf with it. Optional: bets before the shelf have none. */
+  shelf?: string | null;
   openedAt: string;
 }
-export type BetDraft = Omit<Bet, 'id' | 'openedAt'>;
+export type BetDraft = Omit<Bet, 'id' | 'openedAt' | 'shelf'>;
+
+/**
+ * A test kept for later: everything a bet is but the day it starts and the price
+ * it is held to, both of which are decided the day it does. Written by the person
+ * in the bet sheet, so it has their belief and their line; a model's idea or a
+ * play from a book reaches the shelf only through that sheet, never straight.
+ */
+export interface ShelfEntry {
+  /** The event id of its keeping. */
+  id: string;
+  at: string;
+  part: LinkKey;
+  belief: string;
+  play: string | null;
+  idea: BetIdea | null;
+  metric: LabMetric;
+  unit: string | null;
+  target: number;
+  tries: { metric: LabMetric; planned: number } | null;
+  days: number;
+}
+export type ShelfDraft = Omit<ShelfEntry, 'id' | 'at'>;
+
+/** What the shelf holds. Past it a shelf is a backlog, and a backlog is where tests go to be forgotten. */
+export const SHELF_MAX = 10;
 
 export const COMMITMENTS = ['none', 'time', 'intro', 'money'] as const;
 export type Commitment = (typeof COMMITMENTS)[number];
@@ -483,6 +514,29 @@ export function normalizeBet(raw: Record<string, unknown>, ctx: { today: string;
   };
 }
 
+/**
+ * A test to keep, held to exactly what starting a bet holds it to — a part, a
+ * belief in a sentence, something countable, a line and a length — because the
+ * shelf is where tests wait to be bets and any entry has to be able to become one
+ * as it stands. "No test, no entry" is this function, not a promise: it is
+ * `normalizeBet`, less the day and price that belong to the day it starts. There
+ * is no score and no market size to give it; a field it does not know is dropped.
+ */
+export function normalizeShelf(raw: Record<string, unknown>, ctx: { today: string; price: number | null; priceLabel: string | null }): Result<ShelfDraft> {
+  const v = normalizeBet({ ...raw, experiment: null }, ctx);
+  if (!v.ok) return v;
+  const { part, belief, play, idea, metric, unit, target, tries, days } = v.value;
+  return { ok: true, value: { part, belief, play, idea, metric, unit, target, tries, days } };
+}
+
+/** Why a test cannot be kept, or null: a full shelf, or the same belief about the same part twice. */
+export function shelfRefusal(shelf: Array<Pick<ShelfEntry, 'part' | 'belief'>>, draft: Pick<ShelfDraft, 'part' | 'belief'>): string | null {
+  if (shelf.length >= SHELF_MAX) return `The shelf holds ${SHELF_MAX}. Start one, or take one off, to keep another.`;
+  const same = (b: string) => b.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (shelf.some((e) => e.part === draft.part && same(e.belief) === same(draft.belief))) return 'That is already on your shelf.';
+  return null;
+}
+
 const isRole = (v: unknown): v is TalkRole => typeof v === 'string' && (TALK_ROLES as readonly string[]).includes(v);
 /** A stored event's id, as a conversation names the one it came through: digits from the table, or a test's slug. */
 const talkRef = (v: unknown) => (typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : null);
@@ -596,6 +650,25 @@ export interface LabLedger {
   ideas: Partial<Record<LinkKey, IdeaSet>>;
   /** Talk id → how the introduction offered in it went, as the person last said. */
   intros: Map<string, IntroClose>;
+  /** Tests kept for later, newest first: not taken off, and not started. */
+  shelf: ShelfEntry[];
+}
+
+/** A shelf entry as stored, reshaped rather than trusted: the lengths, counts and lines a bet is held to. */
+function storedShelf(p: Record<string, unknown>, id: string, at: string): ShelfEntry | null {
+  const belief = text(p.belief, BELIEF_MAX);
+  const target = int(p.target);
+  const days = int(p.days);
+  if (!isPart(p.part) || !belief || !isMetric(p.metric) || !(target >= 1 && target <= TARGET_MAX) || !(days >= 1 && days <= BET_DAYS_MAX)) return null;
+  const unit = p.metric === 'logged' ? unitOf(p.unit) : null;
+  if (p.metric === 'logged' && !unit) return null;
+  const t = obj(p.tries);
+  const planned = int(t.planned);
+  const play = typeof p.play === 'string' && PLAY_BY_KEY.has(p.play) ? p.play : null;
+  return {
+    id, at, part: p.part, belief, play, idea: play ? null : ideaOf(p.idea), metric: p.metric, unit, target, days,
+    tries: isMetric(t.metric) && TRIES_FOR[p.metric].includes(t.metric) && planned >= 1 && planned <= PLANNED_MAX ? { metric: t.metric, planned } : null,
+  };
 }
 
 /** A stored bet, reshaped rather than trusted. Null when it does not hold together. */
@@ -615,11 +688,14 @@ function storedBet(p: Record<string, unknown>, id: string, at: string): Bet | nu
     tries: isMetric(t.metric) && planned >= 1 ? { metric: t.metric, planned } : null,
     price, priceLabel: price != null ? text(p.priceLabel, 24) : null,
     experiment: experimentId(p.experiment),
+    shelf: experimentId(p.shelf),
   };
 }
 
 export function labFromEvents(rows: LabEventRow[]): LabLedger {
-  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {}, intros: new Map() };
+  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {}, intros: new Map(), shelf: [] };
+  const kept: ShelfEntry[] = [];
+  const gone = new Set<string>();
   for (const r of [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     const p = obj(r.payload);
     const id = String(r.id);
@@ -661,6 +737,11 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
       const ideas = (Array.isArray(p.ideas) ? p.ideas : []).map((x) => ideaFromStored(x, part)).filter((x): x is Idea => !!x).slice(0, 3);
       // Newest wins: the rows arrive oldest first.
       if (ideas.length) out.ideas[part] = { part, ideas, model: text(p.model, 80), at: r.created_at };
+    } else if (r.event_type === LAB_SHELF) {
+      const entry = storedShelf(p, id, r.created_at);
+      if (entry) kept.push(entry);
+    } else if (r.event_type === LAB_SHELF_GONE) {
+      if (typeof p.entry === 'string') gone.add(p.entry);
     } else if (r.event_type === LAB_INTRO) {
       const talk = talkRef(p.talk);
       // The last word wins: asked for on Monday, fallen through by Friday.
@@ -668,6 +749,9 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
     }
   }
   out.bets.reverse();
+  // A test leaves the shelf by being started or by being taken off, whichever came: neither is undone.
+  const started = new Set(out.bets.map((b) => b.shelf).filter((x): x is string => !!x));
+  out.shelf = kept.filter((e) => !gone.has(e.id) && !started.has(e.id)).reverse().slice(0, SHELF_MAX);
   out.talks.sort((a, b) => b.on.localeCompare(a.on) || b.at.localeCompare(a.at));
   out.checkpoints.reverse();
   out.tallies.sort((a, b) => b.on.localeCompare(a.on) || b.at.localeCompare(a.at));
@@ -829,6 +913,8 @@ export interface LabHome {
   ideas?: Partial<Record<LinkKey, IdeaSet>>;
   /** Talk id → how the introduction offered in it went, where the person has said. */
   intros?: Record<string, IntroClose>;
+  /** Tests kept for later, newest first. Optional: a payload from before the shelf has none. */
+  shelf?: ShelfEntry[];
   /** The read's failure, said on the tab — never shown as an empty Lab (invariant 13). */
   unreadable: string | null;
 }
@@ -882,6 +968,7 @@ export function labHome(i: LabInput): LabHome {
     links: Object.fromEntries(ledger.links),
     ideas: ledger.ideas,
     intros: Object.fromEntries(ledger.intros),
+    shelf: ledger.shelf,
     unreadable: i.unreadable,
   };
 }
@@ -1382,6 +1469,8 @@ export interface LabView {
   links: Record<string, string[]>;
   /** Talk id → how the introduction offered in it went, where the person has said. */
   intros: Record<string, IntroClose>;
+  /** Tests kept for later, newest first. */
+  shelf: ShelfEntry[];
   line: string;
   unreadable: string | null;
 }
@@ -1400,6 +1489,7 @@ export function labView(lab: LabHome | undefined, ctx: { runwayMonths: number | 
     tallies: current ? (lab?.tallies ?? []).filter((t) => t.bet === current.bet.id) : [],
     links: lab?.links ?? {},
     intros: lab?.intros ?? {},
+    shelf: lab?.shelf ?? [],
     line: labLine(current, checkpoint.due),
     unreadable: lab?.unreadable ?? null,
   };

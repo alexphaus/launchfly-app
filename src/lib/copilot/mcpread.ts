@@ -220,6 +220,8 @@ export interface ProofIn extends Missing {
   checkpoint: { due: boolean; last: { on: string; decision: string; grade: string | null } | null };
   /** Newest first, as the history shows it. */
   history: Array<{ day: string; title: string; line: string | null }>;
+  /** Tests kept for later, newest first: not started, so nothing about them has been counted. */
+  shelf?: Array<{ belief: string; part: string; line: string; from: string | null }>;
 }
 
 /** History entries returned: the newest, which are the ones a decision is made from. */
@@ -240,6 +242,8 @@ export function proofText(i: ProofIn): string {
       [running ? `Running: ${runningLine(running)}` : 'No bet running.'],
       past.length ? ['Earlier, newest first:', ...past.map((b) => bullet(`${b.start} · "${b.belief}" — on ${b.part.toLowerCase()}: ${BET_STATE[b.state]}${b.ended ? ` on ${b.ended}` : ''}, ${b.result} against ${b.pass}.${b.note ? ` You wrote: "${b.note}"` : ''}`))] : [],
     )],
+    // Only when there is something on it, so a record with no shelf reads as it always did.
+    ...(i.shelf?.length ? [['On the shelf: tests kept for later, not started', i.shelf.map((e) => bullet(`"${e.belief}" — on ${e.part.toLowerCase()}. The test: ${e.line}.${e.from ? ` The play: ${e.from}.` : ''}`))] as [string, string[]]] : []),
     ['Pivot or persevere', lines(
       i.checkpoint.due && 'A checkpoint is due now.',
       i.checkpoint.last ? `Last decided on ${i.checkpoint.last.on}: ${i.checkpoint.last.decision}.${i.checkpoint.last.grade ? ` ${i.checkpoint.last.grade}` : ''}` : 'No checkpoint decided yet.',

@@ -69,8 +69,19 @@ export default function ProofTab({ home, d, actions, briefing }: { home: HomeDat
         <>
           {lab.checkpoint.due && <Checkpoint d={d} actions={actions} />}
           {lab.current
-            ? <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={full} />
-            : <PickABet home={home} d={d} actions={actions} />}
+            ? (
+              <>
+                <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={full} />
+                <Shelf home={home} d={d} actions={actions} />
+              </>
+            )
+            : (
+              // The person's own kept tests before the generic ones: what they wrote down to run next is what they came back for.
+              <>
+                <Shelf home={home} d={d} actions={actions} />
+                <PickABet home={home} d={d} actions={actions} />
+              </>
+            )}
         </>
       )}
       <Assets home={home} d={d} actions={actions} />
@@ -564,6 +575,55 @@ function HandOver({ view, actions, full }: { view: BetView; actions: Actions; fu
         <button className="cp-btn sm primary" disabled={!text.trim() || busy || full} onClick={() => void go()}>{busy ? 'Writing…' : 'Hand over'}</button>
       </div>
       {full && <p className="cp-help">{MAX_ACTIVE_COMMISSIONS} projects are on the go. Finish or stop one to hand over another.</p>}
+      {error && <p className="cp-help cp2-err">{error}</p>}
+    </div>
+  );
+}
+
+/* ─── The shelf ───────────────────────────────────────────────────────────── */
+
+/**
+ * Tests kept for later, each with its belief, its line and where its play came
+ * from. They wait here, not in a chat: a test somebody wrote down is the cheapest
+ * kind to start, and one bet runs at a time because two share every count — so
+ * Start is only offered when the slot is free, and the card says why when it is
+ * not. Nothing here is scored or ranked: an idea on the shelf is a test with a
+ * line, and the rows are what judge it once it is started.
+ */
+function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+  const shelf = d.proof.lab.shelf;
+  const running = !!d.proof.lab.current;
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  if (!shelf.length) return null;
+  const { priceLabel } = betPrice(home.profile.offer?.price_band, d.currency);
+  const off = async (id: string) => {
+    setBusy(id); setError(null);
+    const r = await actions.lab({ action: 'unshelve', id });
+    setBusy(null);
+    if (!r.ok) setError(r.error ?? 'Could not take it off');
+  };
+  return (
+    <div className="cp-card cp2-shelf">
+      <div className="cp-eyebrow">On your shelf · {shelf.length}</div>
+      <p className="cp2-shelf-s">
+        {running ? 'Each waits with its test written. One bet runs at a time, so the next starts when this one ends.' : 'Each waits with its test written. Start one, or write another below.'}
+      </p>
+      {shelf.map((e) => {
+        const play = playOf(e);
+        return (
+          <div key={e.id} className="cp2-shelf-row">
+            <span className="cp2-shelf-part">{LINK_LABEL[e.part]}</span>
+            <b className="cp2-clamp2">{e.belief}</b>
+            <span className="cp2-shelf-line">{playLine(e, priceLabel)}</span>
+            {play && <span className="cp2-shelf-from">{play.from} · {play.label}</span>}
+            <div className="cp2-shelf-do">
+              {!running && <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', shelf: e.id })}>Start it</button>}
+              <button className="cp2-link muted" disabled={busy === e.id} onClick={() => void off(e.id)}>{busy === e.id ? 'Taking off…' : 'Take off'}</button>
+            </div>
+          </div>
+        );
+      })}
       {error && <p className="cp-help cp2-err">{error}</p>}
     </div>
   );

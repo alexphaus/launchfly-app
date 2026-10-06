@@ -93,6 +93,8 @@ export async function writeIdeas(pid: string, part: LinkKey): Promise<{ count: n
     coverage: talkCounts(home.lab?.talks ?? [], home.recent.today).by,
     // Named: an idea can say whom to go back to ("ask Maria for the intro she offered").
     heard: heardFrom(home.lab?.talks ?? []).map(heardLine),
+    // Their own words, as kept: the model is told what is already written down, not what to write.
+    shelf: (home.lab?.shelf ?? []).map((e) => e.belief),
     assets: assetKindsOf(home.assets?.assets ?? []),
   };
   let text: string;

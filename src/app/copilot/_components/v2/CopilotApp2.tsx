@@ -166,12 +166,12 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     <div className={`cp-frame cp2-frame${tab === 'swipe' ? ' cp2-swiping' : ''}`}>
       {/* No header on Swipe: the card is the screen, as a deck of cards has to be to be read at a glance. */}
       {tab !== 'swipe' && <header className="cp-header">
-        <div>
+        <div className="cp2-header-text">
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
           {/* Tab-aware, and nothing when there is nothing true to say. While the mic is open, what it hears. */}
           {voice.listening
             ? <VoiceLive voice={voice} hint="Listening… say what happened, or ask" />
-            : sorting ? <p className="cp2-voice-live" aria-live="polite">&ldquo;{sorting}&rdquo; · Sorting…</p>
+            : sorting ? <p className="cp2-voice-live" aria-live="polite">Sorting… &ldquo;{sorting}&rdquo;</p>
             : status && <p>{status}</p>}
         </div>
         <div className="cp-header-right">

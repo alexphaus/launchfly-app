@@ -2147,6 +2147,11 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
   animation: cp2-voice-ring 1.2s ease-out infinite; pointer-events: none;
 }
 .cp-root[data-theme="soft"] .cp-header .cp2-voice-live { color: var(--blue); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A flex item is never narrower than its longest line unless told it may be, so
+   one long line said into the mic (one line, by the rule above) widened the
+   greeting and pushed the mic off the screen while it listened: nothing left to
+   tap to stop it. With room to shrink, the line ends in "…" instead. */
+.cp-root[data-theme="soft"] .cp-header .cp2-header-text { min-width: 0; }
 /* What the mic heard, over the pad it filled in: the words to check before "Log it" */
 .cp-root[data-theme="soft"] .cp2-pad-heard { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--tint); }
 .cp-root[data-theme="soft"] .cp2-pad-heard svg { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--blue); }

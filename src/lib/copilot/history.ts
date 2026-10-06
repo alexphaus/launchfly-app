@@ -23,7 +23,7 @@ import { ASSET_LABEL, OFFER_ASSET, type Asset, type AssetKind, type Maker } from
 import { LINK_LABEL } from './business';
 import { STATE_WORDS, type ExperimentMark } from './experiment';
 import {
-  BET_STATE_LABEL, dayIn, dayWords, decisionWords, passLine, playOf, resultLine,
+  BET_STATE_LABEL, TALK_ROLE_LABEL, dayIn, dayWords, decisionWords, passLine, playOf, resultLine, roleOf,
   type BetView, type Checkpoint, type Commitment, type Talk,
 } from './lab';
 import { moneyLabel } from './review';
@@ -62,7 +62,9 @@ export interface HistoryInput {
 /** Entries the history keeps; older ones are the long tail nobody scrolls to. */
 export const MAX_HISTORY = 300;
 
-const COMMITTED: Record<Exclude<Commitment, 'none'>, string> = { time: 'agreed to another call', intro: 'made an introduction', money: 'committed money' };
+// "Offered", not "made": whether the introduction happened is its own entry —
+// the conversation logged through it.
+const COMMITTED: Record<Exclude<Commitment, 'none'>, string> = { time: 'agreed to another call', intro: 'offered an introduction', money: 'committed money' };
 const EXPERIMENT_TONE: Record<string, HistoryEntry['tone']> = { worked: 'good', failed: 'bad', unclear: 'quiet', dropped: 'quiet' };
 
 /** An undated day sorts by its noon, so it lands inside its day whatever the zone. */
@@ -95,11 +97,20 @@ export function historyOf(i: HistoryInput): HistoryEntry[] {
   }
 
   // Only the conversations that ended in something: a compliment is not history.
+  // Who they were is said where they were not a buyer, and who opened the door
+  // where somebody did — the record of which people led anywhere.
+  const talkById = new Map(i.talks.map((t) => [t.id, t]));
   for (const t of i.talks) {
     if (t.commitment === 'none') continue;
+    const intro = t.via ? talkById.get(t.via) ?? null : null;
+    const line = [
+      roleOf(t) !== 'buyer' ? TALK_ROLE_LABEL[roleOf(t)] : null,
+      intro ? (intro.who ? `Introduced by ${intro.who}` : 'Through an introduction') : null,
+      t.said ? `“${t.said}”` : null,
+    ].filter(Boolean).join(' · ');
     out.push({
       key: `talk-${t.id}`, kind: 'talk', day: t.on, at: t.at, by: 'you', tone: t.commitment === 'money' ? 'good' : null, open: null,
-      title: `${t.who ?? 'Someone'} ${COMMITTED[t.commitment]}`, line: t.said ? `“${t.said}”` : null,
+      title: `${t.who ?? 'Someone'} ${COMMITTED[t.commitment]}`, line: line || null,
     });
   }
 

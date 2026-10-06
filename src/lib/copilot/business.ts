@@ -186,7 +186,11 @@ export interface ChainInput {
   foundBy?: FoundBy | null;
   /** The Lab's bets, as evidence: a bet's verdict is computed from rows, so it is rows too. Newest first or not: sorted here. */
   bets?: ChainBet[];
-  /** The conversations the person logged, all time (The Mom Test's log): how many, how many had the problem, how many committed. */
+  /**
+   * The conversations the person logged with possible buyers, all time (The
+   * Mom Test's log): how many, how many had the problem, how many committed.
+   * The people around the money are not in it (ideas.ts talkTotals).
+   */
   talks?: { n: number; problem: number; committed: number };
   /** The assets that stand for a part, by title: a demo (pay), a script (close), a landing page (reach), a workflow (deliver). */
   assets?: { demo: string | null; script: string | null; landing: string | null; workflow: string | null };
@@ -421,7 +425,7 @@ function whoByOwnCount(i: ChainInput, c: Ctx, what: string | null, bets: ChainBe
   const w = c.wins;
   const runner = { by: 'you' as const, name: 'You', problem: null };
   const facts = [
-    t.n ? `${plural(t.n, 'conversation')} logged` : null,
+    t.n ? `${plural(t.n, 'conversation')} with buyers` : null,
     t.n ? `${t.problem} have the problem` : null,
     w.atPrice ? `${w.atPrice} paid your price` : null,
   ].filter(Boolean).join(' · ') || 'Nothing logged yet';
@@ -438,10 +442,10 @@ function whoByOwnCount(i: ChainInput, c: Ctx, what: string | null, bets: ChainBe
   }
   if (t.n || bets.length) {
     return { ...base, state: 'testing',
-      why: t.n ? `${t.problem} of the ${plural(t.n, 'person', 'people')} you talked to have the problem${t.committed ? `, and ${t.committed} committed to something` : ''}.` : `A bet on it is ${bets[0].state === 'running' ? 'running' : 'done, and did not pass'}.`,
+      why: t.n ? `${t.problem} of the ${plural(t.n, 'possible buyer')} you talked to have the problem${t.committed ? `, and ${t.committed} committed to something` : ''}.` : `A bet on it is ${bets[0].state === 'running' ? 'running' : 'done, and did not pass'}.`,
       moves: ask ? [ask] : [] };
   }
-  return { ...base, state: 'untested', why: 'Nobody has been asked yet. Ten conversations about the problem is the quickest way to know.', moves: ask ? [ask] : [] };
+  return { ...base, state: 'untested', why: 'No possible buyer has been asked yet. Ten conversations about the problem is the quickest way to know.', moves: ask ? [ask] : [] };
 }
 
 function reachLink(i: ChainInput, c: Ctx): BusinessLink {

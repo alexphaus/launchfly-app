@@ -1,7 +1,7 @@
 'use client';
-// The bets' sheets: start a bet, log a conversation, and the conversations in
-// full. They were the Lab's; Proof (ProofTab.tsx) is the screen now, and
-// lib/copilot/lab.ts has the rules.
+// The bets' sheets: start a bet, log a conversation, follow up an
+// introduction, and the conversations in full. They were the Lab's; Proof
+// (ProofTab.tsx) is the screen now, and lib/copilot/lab.ts has the rules.
 //
 // A bet is written here and nowhere else, and only before it starts. The line
 // it has to reach, what it counts and its last day are said back in one
@@ -11,10 +11,11 @@ import { useState } from 'react';
 import { LINK_KEYS, LINK_LABEL, type LinkKey } from '@/lib/copilot/business';
 import { shiftDay } from '@/lib/copilot/focus';
 import {
-  BELIEF_MAX, COMMITMENTS, COMMITMENT_LABEL, DEFAULT_BET_DAYS, METRIC, PLANNED_MAX, PLAY_BY_KEY, PROBLEMS, PROBLEM_LABEL,
-  SAID_MAX, TALK_BACK_DAYS, TARGET_MAX, TRIES_FOR, UNIT_MAX, WHO_MAX,
-  betPrice, countedFrom, dayWords, metricWords, metricsFor, passLine, playFor, spanWords, suggestBelief, talkCounts,
-  type Commitment, type LabMetric, type Problem, type Talk,
+  BELIEF_MAX, COMMITMENTS, COMMITMENT_LABEL, DEFAULT_BET_DAYS, INTRO_DAYS, INTRO_LINK_DAYS, INTRO_STATE_LABEL, METRIC, PLANNED_MAX, PLAY_BY_KEY, PROBLEMS, PROBLEM_LABEL,
+  SAID_MAX, TALK_BACK_DAYS, TALK_ROLES, TALK_ROLE_LABEL, TARGET_MAX, TRIES_FOR, UNIT_MAX, WHO_MAX,
+  asksProblem, betPrice, countedFrom, dayWords, daysBetween, introSources, introState, metricWords, metricsFor, passLine, playFor, roleOf, spanWords,
+  suggestBelief, talkCounts,
+  type Commitment, type IntroClose, type IntroOutcome, type LabMetric, type Problem, type Talk, type TalkRole,
 } from '@/lib/copilot/lab';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
@@ -42,7 +43,25 @@ const ENDED: Record<Commitment, string> = { none: 'No commitment', time: 'Anothe
 /** The chips answer a question the row does not repeat, so the row says what it is about. */
 const HAS: Record<Problem, string> = { yes: 'Has the problem', no: 'Does not have the problem', unasked: 'The problem did not come up' };
 
-export function TalkRow({ talk: t, today, onForget }: { talk: Talk; today: string; onForget?: () => void }) {
+/** The record a conversation is read against: the others (who introduced whom) and how each introduction went. */
+interface TalkRecord { talks: Talk[]; intros: Record<string, IntroClose> | undefined }
+
+/**
+ * One conversation: who, when, how it ended, who they were to the business,
+ * and — where somebody opened the door — who did. An introduction offered in it
+ * says where it stands, and is the way into it.
+ */
+export function TalkRow({ talk: t, today, record, onForget, onIntro }: {
+  talk: Talk; today: string; record: TalkRecord; onForget?: () => void; onIntro?: () => void;
+}) {
+  const role = roleOf(t);
+  const from = t.via ? record.talks.find((x) => x.id === t.via) ?? null : null;
+  const intro = introState(t, record.talks, record.intros, today);
+  const line = [
+    TALK_ROLE_LABEL[role],
+    asksProblem(role) ? HAS[t.problem] : null,
+    from ? (from.who ? `Introduced by ${from.who}` : 'Through an introduction') : null,
+  ].filter(Boolean).join(' · ');
   return (
     <div className="cp2-lab-talk">
       <div className="cp2-lab-talk-top">
@@ -51,8 +70,13 @@ export function TalkRow({ talk: t, today, onForget }: { talk: Talk; today: strin
         <span className={`cp2-lab-ended-as ${t.commitment}`}>{ENDED[t.commitment]}</span>
         {onForget && <button className="cp2-x" onClick={onForget} aria-label={`Remove the conversation with ${t.who || 'someone'}, ${talkDay(t.on, today)}`}>×</button>}
       </div>
-      <span className="cp2-lab-talk-s">{HAS[t.problem]}</span>
+      <span className="cp2-lab-talk-s">{line}</span>
       {t.said && <p className="cp2-lab-said">&ldquo;{t.said}&rdquo;</p>}
+      {intro && (
+        onIntro
+          ? <button className={`cp2-pf-introst ${intro}`} onClick={onIntro}>{INTRO_STATE_LABEL[intro]} →</button>
+          : <span className={`cp2-pf-introst ${intro}`}>{INTRO_STATE_LABEL[intro]}</span>
+      )}
     </div>
   );
 }
@@ -272,37 +296,60 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
 
 /* ─── Log a conversation ──────────────────────────────────────────────────── */
 
-export function TalkSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+/**
+ * One conversation, logged the day it happens. Who they were is a tap, and
+ * defaults to a buyer, because that is what most are and what every one was
+ * before there was a choice. `via` opens it as the conversation an
+ * introduction led to; any introduction on record can be picked here too.
+ */
+export function TalkSheet({ home, via: viaAsked, actions }: { home: HomeData; via?: string; actions: Actions }) {
   const today = home.recent.today;
   const yesterday = shiftDay(today, -1);
+  const record: TalkRecord = { talks: home.lab?.talks ?? [], intros: home.lab?.intros };
   const [who, setWho] = useState('');
+  const [role, setRole] = useState<TalkRole>('buyer');
   const [problem, setProblem] = useState<Problem | null>(null);
   const [commitment, setCommitment] = useState<Commitment | null>(null);
   const [said, setSaid] = useState('');
   const [on, setOn] = useState(today);
   const [other, setOther] = useState(false);
+  const [via, setVia] = useState<string | null>(viaAsked ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logged, setLogged] = useState(0);
+
+  // The introductions this conversation could have come through, for its day:
+  // moved to a day before the one picked, the pick no longer applies, and the
+  // chips say so by showing none chosen. The one the sheet was opened for
+  // leads, so six newer ones cannot push it off.
+  const possible = introSources(record.talks, record.intros, on);
+  const sources = [...possible.filter((t) => t.id === viaAsked), ...possible.filter((t) => t.id !== viaAsked)].slice(0, 6);
+  const through = via && sources.some((t) => t.id === via) ? via : null;
+  const opened = viaAsked ? record.talks.find((t) => t.id === viaAsked) ?? null : null;
 
   const save = async () => {
     if (!commitment) return;
     setBusy(true); setError(null);
     const r = await actions.lab({
       action: 'talk',
-      talk: { on, who: who.trim() || undefined, problem: problem ?? 'unasked', commitment, said: said.trim() || undefined },
+      talk: {
+        on, who: who.trim() || undefined, role, problem: asksProblem(role) ? problem ?? 'unasked' : 'unasked', commitment,
+        said: said.trim() || undefined, via: through ?? undefined,
+      },
     });
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not log that');
     // Kept open, on the same day: a week of calls is usually logged in one sitting.
-    setWho(''); setProblem(null); setCommitment(null); setSaid(''); setLogged((n) => n + 1);
+    setWho(''); setRole('buyer'); setProblem(null); setCommitment(null); setSaid(''); setVia(null); setLogged((n) => n + 1);
   };
 
   return (
     <>
+      {/* Said while it is the pick: tapped "No", or logged and reset for the next, it is just a log. */}
+      {opened && through === opened.id && <div className="cp2-lab-sheet-book">Through {opened.who ? `${opened.who}’s` : 'an'} introduction</div>}
       <h3>Log a conversation</h3>
       <p className="desc">
-        One conversation with someone who could buy. The app cannot hear your calls, so this is your count, kept apart from the ones it takes itself.
+        One conversation, with someone who could buy or someone close to the money. The app cannot hear your calls, so this is your count, kept apart from the ones it takes itself.
       </p>
 
       <div className="cp-field">
@@ -311,13 +358,39 @@ export function TalkSheet({ home, actions }: { home: HomeData; actions: Actions 
       </div>
 
       <div className="cp-field">
-        <label className="cp-label">Do they have the problem?</label>
+        <label className="cp-label">Who they were</label>
         <div className="cp-chips">
-          {PROBLEMS.map((p) => (
-            <button key={p} className={`cp-fchip ${problem === p ? 'active' : ''}`} aria-pressed={problem === p} onClick={() => setProblem(problem === p ? null : p)}>{PROBLEM_LABEL[p]}</button>
+          {TALK_ROLES.map((r) => (
+            <button key={r} className={`cp-fchip ${role === r ? 'active' : ''}`} aria-pressed={role === r} onClick={() => setRole(r)}>{TALK_ROLE_LABEL[r]}</button>
           ))}
         </div>
+        <p className="cp-help">Only &ldquo;Could buy&rdquo; counts toward who buys. The rest know what a buyer will not tell a stranger.</p>
       </div>
+
+      {sources.length > 0 && (
+        <div className="cp-field">
+          <label className="cp-label">Came through an introduction?</label>
+          <div className="cp-chips">
+            <button className={`cp-fchip ${!through ? 'active' : ''}`} aria-pressed={!through} onClick={() => setVia(null)}>No</button>
+            {sources.map((t) => (
+              <button key={t.id} className={`cp-fchip ${through === t.id ? 'active' : ''}`} aria-pressed={through === t.id} onClick={() => setVia(t.id)}>
+                {t.who || 'Someone'} · {dayWords(t.on)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {asksProblem(role) && (
+        <div className="cp-field">
+          <label className="cp-label">Do they have the problem?</label>
+          <div className="cp-chips">
+            {PROBLEMS.map((p) => (
+              <button key={p} className={`cp-fchip ${problem === p ? 'active' : ''}`} aria-pressed={problem === p} onClick={() => setProblem(problem === p ? null : p)}>{PROBLEM_LABEL[p]}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="cp-field">
         <label className="cp-label">How did it end?</label>
@@ -326,13 +399,22 @@ export function TalkSheet({ home, actions }: { home: HomeData; actions: Actions 
             <button key={c} className={`cp-fchip ${commitment === c ? 'active' : ''}`} aria-pressed={commitment === c} onClick={() => setCommitment(c)}>{COMMITMENT_LABEL[c]}</button>
           ))}
         </div>
-        <p className="cp-help">A compliment is Nothing. Another call, an intro or money is a commitment, the only result The Mom Test counts.</p>
+        <p className="cp-help">
+          {commitment === 'intro'
+            ? `It waits on your Path${on === today ? ' from tomorrow' : ''} until you follow it up.`
+            : 'A compliment is Nothing. Another call, an intro or money is a commitment, the only result The Mom Test counts.'}
+        </p>
       </div>
 
       <div className="cp-field">
         <label className="cp-label" htmlFor="cp2-lab-said">Their words — optional</label>
         <textarea id="cp2-lab-said" className="cp-input sm cp2-lab-belief-in" rows={2} maxLength={SAID_MAX} value={said} onChange={(e) => setSaid(e.target.value)} placeholder="We lose two bookings a week to missed calls" />
-        <p className="cp-help">Worth keeping word for word: it is the best first line a message ever gets.</p>
+        {/* Said only where a model is on the server: a promise about AI with no model behind it is invariant 7's. */}
+        <p className="cp-help">
+          {home.ai
+            ? 'Word for word. The ideas and drafts AI writes for you start from them, and it is the best first line a message ever gets.'
+            : 'Worth keeping word for word: it is the best first line a message ever gets.'}
+        </p>
       </div>
 
       <div className="cp-field">
@@ -360,10 +442,82 @@ export function TalkSheet({ home, actions }: { home: HomeData; actions: Actions 
   );
 }
 
+/* ─── An introduction ─────────────────────────────────────────────────────── */
+
+/**
+ * An introduction somebody offered: what they said, and the three ways it can
+ * go. Logging the conversation it led to closes it by itself; "I asked for it"
+ * takes it off the Path while the other side does their part; "It fell
+ * through" closes it for good. Whether it happened is never asked after the
+ * fact — a conversation logged through it is the answer.
+ */
+export function IntroSheet({ home, talkId, actions }: { home: HomeData; talkId: string; actions: Actions }) {
+  const today = home.recent.today;
+  const record: TalkRecord = { talks: home.lab?.talks ?? [], intros: home.lab?.intros };
+  const [busy, setBusy] = useState<IntroOutcome | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const t = record.talks.find((x) => x.id === talkId) ?? null;
+  if (!t || t.commitment !== 'intro') {
+    return (
+      <>
+        <h3>That introduction is gone</h3>
+        <p className="desc">The conversation it was offered in is no longer in your log. It may have been removed.</p>
+      </>
+    );
+  }
+  const state = introState(t, record.talks, record.intros, today) ?? 'open';
+  const led = record.talks.filter((x) => x.via === t.id);
+  // Past INTRO_LINK_DAYS no conversation can say it came through it, so the
+  // sheet does not offer to log one.
+  const linkable = daysBetween(t.on, today) <= INTRO_LINK_DAYS && state !== 'dropped';
+  const close = async (outcome: IntroOutcome) => {
+    setBusy(outcome); setError(null);
+    const r = await actions.lab({ action: 'intro', intro: { talk: t.id, outcome } });
+    setBusy(null);
+    if (!r.ok) return setError(r.error ?? 'Could not save that');
+    actions.closeSheet();
+  };
+  const said: Record<typeof state, string> = {
+    open: 'Ask for it before they forget offering: one line on who you want to meet and why, written so they can forward it as it stands.',
+    asked: 'You asked for it. Log the conversation when it happens, or say it fell through.',
+    led: `It led to ${led.length === 1 ? 'a conversation' : `${led.length} conversations`}: ${led.map((x) => x.who || 'someone').join(', ')}.`,
+    dropped: 'It fell through.',
+    lapsed: `Offered more than ${INTRO_DAYS} days ago and never followed up, so it has left your Path.${linkable ? ' A conversation through it can still be logged.' : ''}`,
+  };
+  return (
+    <>
+      <div className="cp2-lab-sheet-book">Offered {offeredWhen(t.on, today)} · {TALK_ROLE_LABEL[roleOf(t)]}</div>
+      <h3>{t.who ? `The intro ${t.who} offered` : 'An intro you were offered'}</h3>
+      {t.said && <p className="cp2-lab-said cp2-pf-introsaid">&ldquo;{t.said}&rdquo;</p>}
+      <p className="desc">{said[state]}</p>
+      {error && <div className="cp-error">{error}</div>}
+      {linkable && (
+        <button className="cp-btn primary block" disabled={busy !== null} onClick={() => actions.openSheet({ kind: 'talk', via: t.id })}>
+          {state === 'led' ? 'Log another it led to' : 'Log the conversation it led to'}
+        </button>
+      )}
+      {(state === 'open' || state === 'asked' || state === 'lapsed') && (
+        <div className="cp-btn-row">
+          {state === 'open' && <button className="cp-btn" disabled={busy !== null} onClick={() => void close('asked')}>{busy === 'asked' ? 'Saving…' : 'I asked for it'}</button>}
+          <button className="cp-btn" disabled={busy !== null} onClick={() => void close('dropped')}>{busy === 'dropped' ? 'Saving…' : 'It fell through'}</button>
+        </div>
+      )}
+      {linkable && <p className="cp-help">A conversation logged through it closes it here, and keeps who opened the door.</p>}
+    </>
+  );
+}
+
+/** "today", "yesterday", "on Mon", "on 2 Oct": after "Offered". */
+function offeredWhen(on: string, today: string): string {
+  const d = talkDay(on, today);
+  return d === 'Today' || d === 'Yesterday' ? d.toLowerCase() : `on ${d}`;
+}
+
 /* ─── All of them ─────────────────────────────────────────────────────────── */
 
 export function TalksSheet({ home, actions }: { home: HomeData; actions: Actions }) {
   const talks = home.lab?.talks ?? [];
+  const record: TalkRecord = { talks, intros: home.lab?.intros };
   const today = home.recent.today;
   const c = talkCounts(talks, today);
   const [error, setError] = useState<string | null>(null);
@@ -372,20 +526,44 @@ export function TalksSheet({ home, actions }: { home: HomeData; actions: Actions
     const r = await actions.lab({ action: 'forget', id });
     if (!r.ok) setError(r.error ?? 'Could not remove that');
   };
+  // Every one of the month's could buy: the people around the money are the
+  // ones not yet heard, and the play that is a bet on hearing them is a tap away.
+  const onlyBuyers = c.n >= 2 && c.by.buyer === c.n;
+  const betRunning = !!home.lab?.bets.some((b) => b.state === 'running');
   return (
     <>
       <h3>Conversations</h3>
       <p className="desc">
         {c.n
-          ? `${c.n} in the last ${TALK_BACK_DAYS} days: ${c.committed} ended in a commitment, ${c.have} had the problem.`
+          ? `${c.n} in the last ${TALK_BACK_DAYS} days: ${c.committed} ended in a commitment, ${c.have} had the problem${c.introduced ? `, ${c.introduced} came through an introduction` : ''}.`
           : `None in the last ${TALK_BACK_DAYS} days.`}
         {' '}Yours, as you logged them — the app counts none of these itself.
       </p>
+      {c.n > 0 && (
+        <div className="cp2-pf-who" role="list" aria-label={`Who they were, the last ${TALK_BACK_DAYS} days`}>
+          {TALK_ROLES.map((r) => (
+            <span key={r} role="listitem" className={`cp2-pf-who-cell${c.by[r] ? '' : ' none'}`}>
+              <b>{c.by[r]}</b><span>{TALK_ROLE_LABEL[r]}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {onlyBuyers && (
+        <p className="cp-help cp2-pf-whohelp">
+          All with people who could buy. Who sells to them, runs the work or already earns in it knows what a buyer will not say.
+          {!betRunning && <>{' '}<button className="cp2-link" onClick={() => actions.openSheet({ kind: 'bet', play: 'money-five' })}>Bet on five of them</button></>}
+        </p>
+      )}
       <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'talk' })}>Log a conversation</button>
       {error && <div className="cp-error">{error}</div>}
       {talks.length > 0 && (
         <div className="cp2-lab-talklist">
-          {talks.map((t) => <TalkRow key={t.id} talk={t} today={today} onForget={() => void forget(t.id)} />)}
+          {talks.map((t) => (
+            <TalkRow
+              key={t.id} talk={t} today={today} record={record} onForget={() => void forget(t.id)}
+              onIntro={t.commitment === 'intro' ? () => actions.openSheet({ kind: 'intro', talk: t.id }) : undefined}
+            />
+          ))}
         </div>
       )}
     </>

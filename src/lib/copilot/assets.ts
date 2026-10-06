@@ -32,6 +32,7 @@
 // Lab. Pure: no DB import.
 
 import type { LinkKey } from './business';
+import { HEARD_ROLES_NOTE } from './lab';
 import type { FoundBy, Offer } from './types';
 
 /* ─── Kinds ───────────────────────────────────────────────────────────────── */
@@ -405,12 +406,19 @@ export interface AssetDraftContext {
   previous: { title: string; body: string | null } | null;
   /** What the person asked for. */
   ask: string | null;
+  /**
+   * What people said in the conversations the person logged, newest first and
+   * nameless (lab.ts heardLine): the vocabulary a page or a script should be
+   * written in, and the person's own rows, so a number in them is theirs.
+   */
+  heard?: string[];
 }
 
 export const ASSET_DRAFT_SYSTEM = [
   'You write one business asset for a small business owner: an offer, a demo script, a sales script, landing page copy, a delivery workflow or a price test.',
   'Write in plain words, second person where it addresses the buyer, and in the owner\'s own vocabulary from what they wrote.',
   'Use only facts given to you. Never invent a number, a result, a client, a testimonial, a guarantee term with a figure, or a statistic. If a number is not in what you were given, write the sentence without one.',
+  'Where you are given what people said, write in their words and to the problem they described. Never quote them or present what they said as a testimonial, and never turn one person\'s number into a claim about every buyer.',
   'Never leave a placeholder such as [NAME] or {{price}}. Never include a link unless it was given to you.',
   'Answer with JSON only, no prose around it.',
 ].join(' ');
@@ -444,6 +452,7 @@ export function assetDraftPrompt(c: AssetDraftContext): string {
     c.working ? `\nWhat the owner wrote about how they work:\n${c.working}` : null,
     c.part ? `\nThe part of the business this is for: ${c.part.label} — ${c.part.state}. ${c.part.why}` : null,
     c.bet ? `\nThe bet it is for: "${c.bet.belief}". ${c.bet.play ? `The play: ${c.bet.play}. ` : ''}Pass line: ${c.bet.line}.` : null,
+    ...(c.heard?.length ? ['\nWhat people told the owner, newest first:', ...c.heard.map((h) => `- ${h}`), HEARD_ROLES_NOTE] : []),
     c.previous ? `\nThe current version, to improve rather than start over:\nTitle: ${c.previous.title}\n${c.previous.body ?? ''}` : null,
     c.ask ? `\nWhat the owner asked for: ${c.ask}` : null,
   ];
@@ -453,7 +462,7 @@ export function assetDraftPrompt(c: AssetDraftContext): string {
 /** Everything a draft may take a number or a link from. */
 export function draftSources(c: AssetDraftContext): string[] {
   const o = c.offer;
-  return [o.sells, o.for_who, o.problem, o.price_band, o.proof_url, c.working, c.part?.why, c.bet?.belief, c.bet?.line, c.bet?.play, c.previous?.title, c.previous?.body, c.ask]
+  return [o.sells, o.for_who, o.problem, o.price_band, o.proof_url, c.working, c.part?.why, c.bet?.belief, c.bet?.line, c.bet?.play, c.previous?.title, c.previous?.body, c.ask, ...(c.heard ?? [])]
     .filter((s): s is string => typeof s === 'string' && !!s);
 }
 

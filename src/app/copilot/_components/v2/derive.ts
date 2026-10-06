@@ -16,7 +16,7 @@ import { agentRoster } from '@/lib/copilot/machine';
 import { LINK_LABEL, businessChain, teamLine, waitingOnYou } from '@/lib/copilot/business';
 import { assetGaps } from '@/lib/copilot/assets';
 import { historyOf } from '@/lib/copilot/history';
-import { labView } from '@/lib/copilot/lab';
+import { labView, openIntros } from '@/lib/copilot/lab';
 import { chainInputOf, foundOf, proofLine, saidOf } from '@/lib/copilot/proof';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
 import { offerIsEmpty } from '@/lib/copilot/offer';
@@ -74,12 +74,16 @@ export function derive(home: HomeData) {
     outcomes: home.recent.outcomes,
     moves: ownMoves,
   });
+  // Introductions somebody offered and nobody has followed up: on the Path,
+  // because they are lost by waiting, and on Proof beside the conversations.
+  const intros = openIntros(home.lab?.talks ?? [], home.lab?.intros, home.recent.today);
   const asks = needsYou({
     commissions: home.commissions,
     capture: home.capture,
     queue: { count: queueCount, oldestDays },
     queueIsCall: home.callMove?.job === 'send_queue',
     noOffer,
+    intros,
   });
   // A brand new account: nothing to call, nothing found, nothing handed over.
   // One card that says what is happening beats five empty sections.
@@ -311,6 +315,7 @@ export function derive(home: HomeData) {
     }),
     team: teamLine(team),
     waiting: waitingOnYou(home.commissions),
+    intros,
   };
 
   const review = weekReview({

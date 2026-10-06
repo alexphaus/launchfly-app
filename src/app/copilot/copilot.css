@@ -1383,6 +1383,9 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-shelf-from { font-size: 11px; line-height: 1.4; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-shelf-do { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-lab-keep { margin-top: 8px; }
+.cp-root[data-theme="soft"] .cp2-shelf .cp2-lab-own { margin-top: 12px; }
+/* Between cards, so it keeps their gutter: the calm theme's .cp-card is margin: 0 22px 16px. */
+.cp-root[data-theme="soft"] .cp2-shelf-solo { margin: 2px 22px 16px; }
 .cp-root[data-theme="soft"] .cp2-lab-warn { margin: 0 0 12px; padding: 11px 13px; border-radius: 14px; background: var(--warn-tint); color: var(--ink); font-size: 12.5px; line-height: 1.5; }
 .cp-root[data-theme="soft"] .cp2-lab-warn .cp2-link { font-size: 12.5px; }
 .cp-root[data-theme="soft"] .cp2-lab-date { margin-top: 10px; max-width: 220px; }

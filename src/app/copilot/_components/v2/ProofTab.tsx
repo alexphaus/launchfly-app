@@ -589,14 +589,26 @@ function HandOver({ view, actions, full }: { view: BetView; actions: Actions; fu
  * Start is only offered when the slot is free, and the card says why when it is
  * not. Nothing here is scored or ranked: an idea on the shelf is a test with a
  * line, and the rows are what judge it once it is started.
+ *
+ * While a bet runs this is the only way into the bet sheet — the picker is not
+ * shown — and that is when new ideas arrive, so it carries its own way to keep
+ * one: the sheet says one bet at a time, leaves Start off, and keeps Keep.
  */
 function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
   const shelf = d.proof.lab.shelf;
   const running = !!d.proof.lab.current;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  if (!shelf.length) return null;
+  if (!shelf.length && !running) return null;
   const { priceLabel } = betPrice(home.profile.offer?.price_band, d.currency);
+  const keep = (
+    <button className="cp2-lab-own" onClick={() => actions.openSheet({ kind: 'bet', part: d.proof.chain.weak ?? undefined })}>
+      <span>{shelf.length ? 'Keep another idea for later' : 'Keep an idea for later'}</span>
+      <IconChevron />
+    </button>
+  );
+  // Nothing on it and a bet running: no card for an empty shelf, only the way to put something on it.
+  if (!shelf.length) return <div className="cp2-shelf-solo">{keep}</div>;
   const off = async (id: string) => {
     setBusy(id); setError(null);
     const r = await actions.lab({ action: 'unshelve', id });
@@ -624,6 +636,7 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
           </div>
         );
       })}
+      {running && keep}
       {error && <p className="cp-help cp2-err">{error}</p>}
     </div>
   );

@@ -10020,6 +10020,11 @@ async function shelfSuite() {
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
   assert.match(tab, /<Shelf home=\{home\} d=\{d\} actions=\{actions\} \/>\s*<PickABet/, 'with no bet running, the person’s own tests come before the generic ones');
   assert.match(tab, /\{!running && <button className="cp-btn sm primary" onClick=\{\(\) => actions\.openSheet\(\{ kind: 'bet', shelf: e\.id \}\)\}>Start it<\/button>\}/, 'Start is offered only when the slot is free');
+  // While a bet runs the picker is not shown and Start is not offered, so the shelf is the only way into the sheet — and that is when ideas arrive.
+  assert.match(tab, /if \(!shelf\.length && !running\) return null;/, 'nothing to show, and nothing running: no card');
+  assert.match(tab, /if \(!shelf\.length\) return <div className="cp2-shelf-solo">\{keep\}<\/div>;/, 'an empty shelf under a running bet is only the way to fill it');
+  assert.match(tab, /\{running && keep\}/);
+  assert.match(tab, /'Keep another idea for later' : 'Keep an idea for later'/);
   const sheet = src('src/app/copilot/_components/v2/LabSheets.tsx');
   assert.match(sheet, /\{!experiment && !shelved && \(/, 'the plan’s experiment and a kept test are already waiting somewhere');
   assert.match(sheet, /shelf: shelved\?\.id \?\? null/);

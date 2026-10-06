@@ -630,7 +630,7 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
             <span className="cp2-shelf-line">{playLine(e, priceLabel)}</span>
             {play && <span className="cp2-shelf-from">{play.from} · {play.label}</span>}
             <div className="cp2-shelf-do">
-              {!running && <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', shelf: e.id })}>Start it</button>}
+              {!running && <button className="cp-btn sm primary" disabled={busy === e.id} onClick={() => actions.openSheet({ kind: 'bet', shelf: e.id })}>Start it</button>}
               <button className="cp2-link muted" disabled={busy === e.id} onClick={() => void off(e.id)}>{busy === e.id ? 'Taking off…' : 'Take off'}</button>
             </div>
           </div>

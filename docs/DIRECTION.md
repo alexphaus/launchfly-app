@@ -434,8 +434,9 @@ an idea waits on a shelf with its test written, and with no test it does not get
 on. It passes the survival test on the joins, as the rest do: a chat with memory
 can keep a list of ideas; it cannot say which of them has a line, which one the
 sends are being counted against, or that the last two did not pass. What it does
-not do is score the idea (above) or let the chat's words become the person's
-belief. See COPILOT.md → **Proof**.
+not do is score the idea (above), or let the chat's words become the person's
+belief — or reach a model, which would read them as the person's. See COPILOT.md →
+**Proof**.
 
 Sources, as of this revision: [validators compared](https://preuve.ai/blog/best-startup-validation-tools-2026)
 (a competitor's own ranking, used for names and prices only) ·

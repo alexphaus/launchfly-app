@@ -375,15 +375,21 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
   // is cleaned below before anything else could. A failure to keep them arrives
   // as `why` and is said instead of reading a cache it never reached.
   const tookText = useRef(false);
-  const takeText = useCallback(async (why: string | null) => {
+  const takeText = useCallback(async (why: string | null, fresh = false) => {
     // Once: the read spends what the share kept, and development runs an effect twice.
     if (tookText.current) return;
     tookText.current = true;
     if (why) return say(why);
-    const got = await takeSharedSeed();
-    if (got.seed) setStack((st) => [...st, { kind: 'bet', seed: got.seed ?? undefined }]);
-    else say(got.error ?? 'Nothing came through that share.');
-  }, [say]);
+    const got = await takeSharedSeed({ fresh });
+    if (got.seed) {
+      // Picked up after sign-in, the share's own tab=proof went to the sign-in
+      // screen: land where the bet will run, as a share made signed in does.
+      if (fresh) setTab('proof');
+      setStack((st) => [...st, { kind: 'bet', seed: got.seed ?? undefined }]);
+    }
+    else if (got.error) say(got.error);
+    else if (!fresh) say('Nothing came through that share.');
+  }, [say, setTab]);
 
   // Back from Stripe. The webhook that flips the plan and the redirect race each
   // other, so confirm the payment immediately and re-read once the webhook has
@@ -404,6 +410,9 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     else if (shared || params.get('add')) {
       setArrival({ shared, why: params.get('why'), add: params.get('add') === '1' });
     }
+    // Words shared while signed out: the worker kept them, the share landed on the
+    // sign-in screen, and this is the first open after. Taken only while fresh.
+    else void takeText(null, true);
     if (!upgraded && !wanted) return;
     window.history.replaceState({}, '', window.location.pathname);
     if (!upgraded) return;

@@ -7,7 +7,7 @@ import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, 
 import { addDays, copilotDb, describeDbError, todayIso } from './db';
 import { horizonFor } from './due';
 import { FOCUS_EVENT, focusFromEvents, type FocusInput } from './focus';
-import { LAB_COUNT, LAB_EVENTS, LAB_TALK, experimentVerdicts, labHome, type LabEventRow } from './lab';
+import { LAB_BET, LAB_COUNT, LAB_EVENTS, LAB_SHELF, LAB_SHELF_GONE, LAB_TALK, experimentVerdicts, labHome, type LabEventRow } from './lab';
 import { ASSET_EVENTS, ASSET_VERSION, OFFER_ASSET, assetsHome, offerBody, offerFields, sameOffer, type AssetEventRow, type Maker } from './assets';
 import { RECENT_DAYS, type AnsweredMove, type RecentLedger, type RecentOutcome } from './review';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
@@ -999,6 +999,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   // its own beyond the events, so a bet and the funnel count the same rows.
   const lab = labHome({
     events: labEvents.rows,
+    shelfEvents: labEvents.shelfRows,
     unreadable: labEvents.unreadable,
     timezone: profile.timezone,
     today,
@@ -2209,20 +2210,32 @@ export async function loadBuiltOutputs(profileId: string): Promise<{ rows: Array
 export const LAB_EVENT_LIMIT = 800;
 
 /**
- * The Lab's events — bets, call-offs, conversations, checkpoints — newest
- * first. Never throws: a failed read is `unreadable`, said on the Lab rather
- * than shown as a Lab with nothing in it (invariant 13).
+ * The shelf's own window: kept tests, the ones taken off, and the bets that name
+ * one. Kept tests wait for weeks, and inside LAB_EVENT_LIMIT of every lab event a
+ * daily count and a few conversations would push one out of view with nothing
+ * said. A window of these three kinds alone can only lose an entry, never bring a
+ * finished one back: its start or take-off is always newer than its keeping.
  */
-export async function loadLabEvents(profileId: string): Promise<{ rows: LabEventRow[]; unreadable: string | null }> {
+export const SHELF_EVENT_LIMIT = 300;
+
+/**
+ * The Lab's events — bets, call-offs, conversations, checkpoints — newest
+ * first, and the shelf's rows read on their own (`shelfRows`). Never throws: a
+ * failed read is `unreadable`, said on the Lab rather than shown as a Lab with
+ * nothing in it (invariant 13).
+ */
+export async function loadLabEvents(profileId: string): Promise<{ rows: LabEventRow[]; shelfRows: LabEventRow[]; unreadable: string | null }> {
   try {
-    const { data, error } = await copilotDb().from('copilot_events')
+    const read = (kinds: readonly string[], limit: number) => copilotDb().from('copilot_events')
       .select('id, event_type, payload, created_at')
-      .eq('profile_id', profileId).in('event_type', [...LAB_EVENTS])
-      .order('created_at', { ascending: false }).limit(LAB_EVENT_LIMIT);
-    if (error) return { rows: [], unreadable: error.message };
-    return { rows: (data ?? []) as LabEventRow[], unreadable: null };
+      .eq('profile_id', profileId).in('event_type', [...kinds])
+      .order('created_at', { ascending: false }).limit(limit);
+    const [all, shelf] = await Promise.all([read(LAB_EVENTS, LAB_EVENT_LIMIT), read([LAB_SHELF, LAB_SHELF_GONE, LAB_BET], SHELF_EVENT_LIMIT)]);
+    const failed = all.error ?? shelf.error;
+    if (failed) return { rows: [], shelfRows: [], unreadable: failed.message };
+    return { rows: (all.data ?? []) as LabEventRow[], shelfRows: (shelf.data ?? []) as LabEventRow[], unreadable: null };
   } catch (e) {
-    return { rows: [], unreadable: e instanceof Error ? e.message : String(e) };
+    return { rows: [], shelfRows: [], unreadable: e instanceof Error ? e.message : String(e) };
   }
 }
 

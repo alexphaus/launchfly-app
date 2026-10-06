@@ -242,8 +242,8 @@ export function proofText(i: ProofIn): string {
       [running ? `Running: ${runningLine(running)}` : 'No bet running.'],
       past.length ? ['Earlier, newest first:', ...past.map((b) => bullet(`${b.start} · "${b.belief}" — on ${b.part.toLowerCase()}: ${BET_STATE[b.state]}${b.ended ? ` on ${b.ended}` : ''}, ${b.result} against ${b.pass}.${b.note ? ` You wrote: "${b.note}"` : ''}`))] : [],
     )],
-    // Only when there is something on it, so a record with no shelf reads as it always did.
-    ...(i.shelf?.length ? [['On the shelf: tests kept for later, not started', i.shelf.map((e) => bullet(`"${e.belief}" — on ${e.part.toLowerCase()}. The test: ${e.line}.${e.from ? ` The play: ${e.from}.` : ''}`))] as [string, string[]]] : []),
+    // doc() leaves out a section with no lines, so a record with no shelf reads as it always did.
+    ['On the shelf: tests kept for later, not started', (i.shelf ?? []).map((e) => bullet(`"${e.belief}" — on ${e.part.toLowerCase()}. The test: ${e.line}.${e.from ? ` The play: ${e.from}.` : ''}`))],
     ['Pivot or persevere', lines(
       i.checkpoint.due && 'A checkpoint is due now.',
       i.checkpoint.last ? `Last decided on ${i.checkpoint.last.on}: ${i.checkpoint.last.decision}.${i.checkpoint.last.grade ? ` ${i.checkpoint.last.grade}` : ''}` : 'No checkpoint decided yet.',

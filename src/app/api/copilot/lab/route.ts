@@ -11,8 +11,9 @@ import { todayIso } from '@/lib/copilot/db';
 import { LINK_KEYS, type LinkKey } from '@/lib/copilot/business';
 import {
   LAB_BET, LAB_CHECKPOINT, LAB_COUNT, LAB_INTRO, LAB_LINK, LAB_SHELF, LAB_SHELF_GONE, LAB_STOP, LAB_TALK, NOTE_MAX,
-  betPrice, labFromEvents, normalizeBet, normalizeCheckpoint, normalizeIntroClose, normalizeShelf, normalizeTalk, normalizeTally, shelfRefusal,
+  betPrice, countRefusal, labFromEvents, normalizeBet, normalizeCheckpoint, normalizeIntroClose, normalizeShelf, normalizeTalk, normalizeTally, shelfRefusal,
 } from '@/lib/copilot/lab';
+import { foundOf } from '@/lib/copilot/proof';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { isFoundBy } from '@/lib/copilot/offer';
 import { ProofModelError, ProofRefusal, writeIdeas } from '@/lib/copilot/proofai';
@@ -60,6 +61,10 @@ export async function POST(req: Request) {
         // next week must not rewrite whether this one passed.
         const v = normalizeBet(obj(b.bet), { today, ...betPrice(home.profile.offer?.price_band, salesCurrency(home.profile.finance, home.goals)) });
         if (!v.ok) return fail(v.error);
+        // A count this business cannot keep is refused here, not only hidden in the
+        // sheet: a kept test can outlive the way its buyers were found.
+        const off = countRefusal(v.value.metric, v.value.tries, foundOf(home).value);
+        if (off) return fail(off);
         // Started from the shelf: the entry has to be one that is on it, so a tap
         // from a stale screen cannot tie a bet to a test nobody kept — and the entry
         // leaves the shelf with the bet, because the bet names it.
@@ -86,6 +91,8 @@ export async function POST(req: Request) {
         // day it starts: a test with no line is not kept (lab.ts normalizeShelf).
         const v = normalizeShelf(obj(b.bet), { today, ...betPrice(home.profile.offer?.price_band, salesCurrency(home.profile.finance, home.goals)) });
         if (!v.ok) return fail(v.error);
+        const off = countRefusal(v.value.metric, v.value.tries, foundOf(home).value);
+        if (off) return fail(off);
         const no = shelfRefusal(home.lab?.shelf ?? [], v.value);
         if (no) return fail(no);
         await insertLabEvent(auth.pid, LAB_SHELF, { ...v.value });
@@ -94,7 +101,10 @@ export async function POST(req: Request) {
       case 'unshelve': {
         const id = str(b.id);
         const home = await loadHome(auth.pid);
-        if (!home?.lab?.shelf?.some((e) => e.id === id)) return fail('That is not on your shelf.');
+        if (!home) return fail('Not found', 404);
+        // The read's failure, not "not on your shelf" about an entry the person can see on it (invariant 13).
+        if (home.lab?.unreadable) return fail(`Your shelf could not be read just now, so nothing can be taken off it: ${home.lab.unreadable}`);
+        if (!home.lab?.shelf?.some((e) => e.id === id)) return fail('That is not on your shelf.');
         await insertLabEvent(auth.pid, LAB_SHELF_GONE, { entry: id });
         return json({ ok: true, home: await loadHome(auth.pid) });
       }

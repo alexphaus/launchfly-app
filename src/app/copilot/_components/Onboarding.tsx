@@ -73,11 +73,18 @@ export default function Onboarding() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // A share made while signed out lands here: said, because this is the only
+  // screen the person sees. Words wait on the phone and open as a bet after
+  // sign-in (sharedSeed.ts); a file has to be shared again (share/route.ts).
+  const [arrived, setArrived] = useState<string | null>(null);
   // A sign-in link for an email we do not know yet lands here with ?email=.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const e = q.get('email'); if (e) { setEmail(e); setIntro(false); }
     if (q.get('start') === '1') setIntro(false);
+    const shared = q.get('shared');
+    if (shared === 'text') setArrived('Sign in first. What you shared waits on this phone for half an hour and opens as a bet once you are in.');
+    else if (shared === 'error' && q.get('why')) setArrived(q.get('why'));
   }, []);
   useEffect(() => { if (!area && location) setArea(location); }, [location, area]);
   useEffect(() => { if (!segments && forWho) setSegments(forWho); }, [forWho, segments]);
@@ -130,6 +137,7 @@ export default function Onboarding() {
           <div className="cp-wordmark">COPILOT</div>
           {!intro && <div className="cp-steps">{[0, 1, 2, 3].map((i) => <span key={i} className={i < step ? 'done' : i === step ? 'on' : ''} />)}</div>}
         </div>
+        {arrived && <p className="cp-note" role="status">{arrived}</p>}
 
         <div className="cp-ob-body">
           {error && <div className="cp-error">{error}</div>}

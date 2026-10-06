@@ -839,6 +839,25 @@ replies; who replied, for a sale or a meeting where buyers are written to; a
 sheet to log a sale, a meeting or a count where they are not — a sale logged
 there carries no business and lands on the goal like any other.
 
+**The first reading** (`reading.ts`, `Reading` in `ProofTab.tsx`). A bet whose line
+is a sale shows an empty bar until a sale lands, which for "2 sales at your $150
+by 18 Oct" is most of its life, and a chat answers in seconds. The first bet in
+its owner's record was called off the next day with every step on the way to the
+sale already counted and not shown. So the card draws the funnel up to the count
+the bet is decided on — sent, replied, meetings, paid, sales at the price — as
+chips counted since the bet began: each count, the next step ringed, the one the
+bet is decided on marked as the line, and the plan ("from 20 messages") on its own
+step rather than in a second bar. "1 paid, 0/2 at $150" is the finding two
+one-dollar sales were hiding. It is not a second verdict: `labHome` counts every
+step with `countIn`, the function the verdict uses, to the day the verdict reads
+to (`readingOf`), so the count a bet is decided on is the same number in both, in
+every state (the suite holds it). A business whose buyers do not come through the
+app's sends gets the ladder without sends and replies; a bet decided on one count
+has nothing before it and gets no ladder; a payload from before readings shows the
+old bar. Nothing here estimates a pace or says "on track" (invariant 2). Claude
+reads the same line on a running bet. Short labels that wrap, not columns: five
+equal columns broke "messag/es sent" at 390px, which no assertion could see.
+
 **With none running**, the card asks what you believe that you have not tested,
 on the weak part first, with the last bet's result. First come **ideas a model
 wrote for this business** (`ideas.ts`, `proofai.ts writeIdeas`): three, from the
@@ -857,6 +876,48 @@ StoryBrand, The Referral Engine, Never Split the Difference, $100M Offers,
 Million Dollar Weekend, Built to Sell, The E-Myth — each something to do with a
 count, never advice dressed as a test. Then your own. Without a model on the
 server there is no ideas button at all (invariant 7); the books are there.
+
+**The shelf** (`lab.ts` `ShelfEntry`, `Shelf` in `ProofTab.tsx`). Ideas were
+replaced the next time they were asked for, and a bet the person was not ready to
+start had nowhere to wait. A test is **kept for later** from the bet sheet — every
+play, idea, plan experiment and shared reply already goes through it, so every
+entry has the person's own belief and a line they set — and waits on Proof with its
+belief, its line and where its play came from: above the plays from books when no
+bet runs (what they wrote down to run next comes first), under the bet when one
+does. *No test, no entry* is the code path: `normalizeShelf` is `normalizeBet`
+less the day and price that belong to the day a bet starts, so an entry can always
+become the bet it was kept as and is refused with what a bet is refused with. A
+field it does not know — a score, a market size — is dropped; there is none to
+give, and DIRECTION.md says why. The shelf holds ten and refuses the same belief
+about the same part twice (`shelfRefusal`), and refuses a keep while the record
+cannot be read (invariant 13). **Start it** opens the sheet as it was kept, to be
+changed or started; the bet names the entry (`shelf`, checked to be on it), which
+is how an entry leaves, and **Take off** writes `lab_shelf_gone`. One bet still
+runs at a time, so Start is offered only when the slot is free. While a bet runs
+Proof shows no picker and nothing else opens the sheet, and that is when new ideas
+arrive, so the shelf carries its own "Keep an idea for later" under a running bet.
+The idea writer is told the beliefs already kept — the person's words, never a
+shared reply — so it does not suggest what is written down, and Claude reads the
+shelf under `get_proof` as tests not started, with where each play came from.
+
+**Shared in** (`seed.ts`, `sharedSeed.ts`). The habit is to ask Claude or Grok for
+ideas and whether they look right, and a chat's answer ends where the chat does:
+nothing in it is counted. The manifest's share target had declared `title`, `text`
+and `url` for the Money tab's CSV, and the route and the worker read only `file`,
+so a reply shared from either app reached Copilot and was refused. Words with no
+file now open the bet sheet on Proof. The worker keeps them in `copilot-share-text`
+— not `copilot-share`, which the Money tab reads entry by entry as a statement —
+and redirects with `shared=text`; before a worker is active the route answers with
+a page that keeps them in the same cache (the words go into a script, so `<` and
+the two line separators are escaped), and a failure to keep them arrives as `why`
+and is said. `useCopilot` reads them once and opens the sheet. What the chat said
+rides along as the bet's **play** ("Shared from another app", shown on the sheet as
+what was shared); the **belief** stays the person's — prefilled only when the whole
+share is one sentence that fits, because the first line of a list of ideas is "Here
+are five:" — and a share starts on the weak link, as the picker does. Nothing starts
+without the tap, and a shared reply is never kept as context about the business
+(invariant 12): nothing a model reads imports `seed.ts`, and the suite checks it.
+Android's: iOS has no share target for web apps.
 
 **The checkpoint** asks pivot or persevere every two weeks, once a bet has ended
 since the last answer, kept with the chain as it stood and read back next time —
@@ -951,8 +1012,9 @@ introduction that waits is in Needs you, as above.
 
 Stored without a migration, as `copilot_events` rows: the bets' `lab_bet`,
 `lab_bet_stopped`, `lab_talk`, `lab_checkpoint`, `lab_count`, `lab_link`,
-`lab_ideas`, `lab_intro`, and the assets' `asset_version`, `asset_retired`,
-`asset_restored`. A read that fails is said on the tab and never drawn as empty.
+`lab_ideas`, `lab_intro`, `lab_shelf`, `lab_shelf_gone`, and the assets'
+`asset_version`, `asset_retired`, `asset_restored`. A read that fails is said on
+the tab and never drawn as empty.
 
 **You asks three questions of the week** — what created value, what was wasted,
 what has to change — and answers each from rows (`weekReview`). Money is never
@@ -1361,7 +1423,8 @@ root layout's registration waits for `load`, which has usually fired by then,
 and it often never ran. Without an active worker the POST reaches the route,
 which imports the file through the upload route and redirects with what the
 upload said. An installed app picks the share target up when Chrome next
-refreshes it, or on reinstall. iOS has no share target for web apps.
+refreshes it, or on reinstall. iOS has no share target for web apps. Words with no
+file take the other branch and open a bet instead: see **Proof → Shared in**.
 
 **Logging fast.** Timed on the owner's phone, a coffee took seven to nine
 seconds from the Log money shortcut: the whole app loaded (fifty reads for the
@@ -2471,7 +2534,8 @@ the business is what this gives it.
 `get_overview` (start here: the offer, goals with their verdicts, the chain part
 by part, the running bet, the move now), `get_plan` (the move, what waits, and
 the drawn plan or the funnel's stops), `get_proof` (each part with its counts,
-every bet with its line and result, the last checkpoint, the history),
+every bet with its line and result — a running one with what the funnel counted
+since it began — the tests kept on the shelf, the last checkpoint, the history),
 `get_conversations` (the month by who they were, the introductions waiting, the
 log in their words), `get_record` (the handoff text) and `get_counted_answers`
 (the five Ask answers). The route runs `derive()` over `loadHome` — the four
@@ -2873,9 +2937,9 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET/POST | `/api/copilot/money/book` | the Money tab. `GET ?month=YYYY-MM&view=EUR` the month's list, calendar and balance · `POST { action: 'add', id (the phone's uuid: a retry is one row), kind: in \| out, amount, currency? (typed in; converted at its day's rate), on, category?, note?, repeat?: week \| month }` · `{ action: 'edit', id, …same }` · `{ action: 'delete', id }` (an upcoming repeat stops its series) · `{ action: 'balance', balance, currency? }` (the currency only the first time) · `{ action: 'entry', currency }` (the default to type in). Every POST answers with the book for the month and view sent, or `{ balance }` with `reply: 'balance'` |
 | GET | `/api/copilot/money/book/export` | every row the book reads, as a CSV download |
 | GET | `/copilot2/log` | the Log money shortcut's own page: the keypad, three reads, kept by the service worker for offline |
-| POST | `/copilot2/share` | the manifest's share target: multipart `file`. Normally taken by the service worker; this route is the fallback, importing through the upload route and redirecting to the Money tab |
+| POST | `/copilot2/share` | the manifest's share target: multipart `file`, or `title` / `text` / `url` with no file. Normally taken by the service worker; this route is the fallback — a file is imported through the upload route and the Money tab opens, words are kept by a page and Proof opens on a bet sheet (`shared=text`) |
 | GET/POST | `/api/copilot/money` | `GET` the statements, polled while one is read · `POST { action: 'confirm' \| 'discard', id }` · `{ action: 'currency', id, currency }` (three letters, for a file that named none) · `{ action: 'name', key, role: client \| employer \| self \| other \| null, opportunity_id? }` · `{ action: 'forget', confirm: 'DELETE' }` |
-| POST | `/api/copilot/lab` | the Lab: `{ action: 'open', bet: { part, belief, play?, metric, target, tries?, days } }` — refused while a bet runs, or while the Lab cannot be read · `{ action: 'stop', id, note? }` · `{ action: 'talk', talk: { on?, who?, role?, problem, commitment, said?, via? } }` — `via` must be an introduction on record, offered on or before it · `{ action: 'intro', intro: { talk, outcome: 'asked' | 'dropped' } }` · `{ action: 'forget', id }` · `{ action: 'checkpoint', checkpoint: { decision, part?, note?, chain } }`. No action posts a verdict. Each answers with the home (`copilot_events`) |
+| POST | `/api/copilot/lab` | the Lab: `{ action: 'open', bet: { part, belief, play?, metric, target, tries?, days, shelf? } }` — refused while a bet runs, or while the Lab cannot be read; `shelf` must be a test on the shelf · `{ action: 'shelve', bet: { …the same, less `shelf` } }` — keep it for later: held to what a bet is, refused at ten, as a duplicate, or while the Lab cannot be read · `{ action: 'unshelve', id }` · `{ action: 'stop', id, note? }` · `{ action: 'talk', talk: { on?, who?, role?, problem, commitment, said?, via? } }` — `via` must be an introduction on record, offered on or before it · `{ action: 'intro', intro: { talk, outcome: 'asked' | 'dropped' } }` · `{ action: 'forget', id }` · `{ action: 'checkpoint', checkpoint: { decision, part?, note?, chain } }`. No action posts a verdict. Each answers with the home (`copilot_events`) |
 | POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |
 | GET/POST | `/api/copilot/roadmap` | the Path's drawn plan: `POST { action: 'draw', reason? }` writes a `copilot_agent_runs` row of kind `roadmap`, draws in `after()` and returns 202 (or the draw in flight; 12 a day) · `POST { action: 'mark', item, state: done \| dropped \| open }` ticks a step or milestone of the current plan (`copilot_events`, `roadmap_marked`) · `GET` is the latest draw, polled while it runs |
 

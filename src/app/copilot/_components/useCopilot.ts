@@ -20,6 +20,7 @@ import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/l
 import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
 import type { ExperimentState } from '@/lib/copilot/experiment';
 import { importLine, type MoneyImport } from '@/lib/copilot/money/ledger';
+import { takeSharedSeed } from './sharedSeed';
 
 /** What answering the experiment did, said back: the next plan is what changes. */
 const EXPERIMENT_SAID: Record<ExperimentState, string> = {
@@ -34,6 +35,8 @@ const EXPERIMENT_SAID: Record<ExperimentState, string> = {
 /** What each bet write did, said back. A bet's verdict is never one of them: the rows give it on the next load. */
 const LAB_SAID: Record<LabInput['action'], string> = {
   open: 'Bet started. Only what happens from today counts.',
+  shelve: 'Kept on your shelf. Nothing counts until you start it.',
+  unshelve: 'Taken off your shelf.',
   stop: 'Called off. It stays in your history.',
   talk: 'Logged.',
   intro: 'Noted. It is off your Path.',
@@ -94,11 +97,13 @@ export function sheetKey(s: SheetState): string {
   // sheet opened from one play and then from another must not keep the first
   // one's line, nor a new asset the first one's kind.
   // A second question asked into the mic is a second answer, not the first one's sheet.
-  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk', 'heard'] as const)
+  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk', 'heard', 'shelf'] as const)
     .map((k) => (k in s ? String((s as Record<string, unknown>)[k] ?? '') : ''))
     .join(':');
   const exp = 'experiment' in s && s.experiment ? s.experiment.id : '';
-  return `${s.kind}:${id}:${on}:${exp}`;
+  // Words shared in are a sheet of their own: another share is not this one's belief.
+  const seed = 'seed' in s && s.seed ? `${s.seed.text.length}${s.seed.text.slice(0, 24)}${s.seed.url ?? ''}` : '';
+  return `${s.kind}:${id}:${on}:${exp}:${seed}`;
 }
 
 /** The paid finders by name, for a toast that says which one failed; the rest are feeds. */
@@ -365,6 +370,21 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     navigator.serviceWorker.register('/sw.js').catch((e: unknown) => { swError.current = e instanceof Error ? e.message : String(e); });
   }, []);
 
+  // Words shared from another app — a reply from Claude or Grok — open as the
+  // start of a bet, with what was shared on the sheet. Read here and now: the URL
+  // is cleaned below before anything else could. A failure to keep them arrives
+  // as `why` and is said instead of reading a cache it never reached.
+  const tookText = useRef(false);
+  const takeText = useCallback(async (why: string | null) => {
+    // Once: the read spends what the share kept, and development runs an effect twice.
+    if (tookText.current) return;
+    tookText.current = true;
+    if (why) return say(why);
+    const got = await takeSharedSeed();
+    if (got.seed) setStack((st) => [...st, { kind: 'bet', seed: got.seed ?? undefined }]);
+    else say(got.error ?? 'Nothing came through that share.');
+  }, [say]);
+
   // Back from Stripe. The webhook that flips the plan and the redirect race each
   // other, so confirm the payment immediately and re-read once the webhook has
   // had a moment — otherwise someone who just paid lands on a page still
@@ -378,8 +398,10 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     if (resolved) setTabState(resolved);
     // A file shared from another app, or the Log money shortcut: kept for the
     // tab that handles it, since the URL is cleaned below before it mounts.
+    // Words shared are not a file and open a sheet instead (takeText).
     const shared = params.get('shared');
-    if (shared || params.get('add')) {
+    if (shared === 'text') void takeText(params.get('why'));
+    else if (shared || params.get('add')) {
       setArrival({ shared, why: params.get('why'), add: params.get('add') === '1' });
     }
     if (!upgraded && !wanted) return;
@@ -388,7 +410,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     say('Payment received. Your new allowance is live.');
     const t = setTimeout(() => { void refresh(); }, 2500);
     return () => clearTimeout(t);
-  }, [say, refresh]);
+  }, [say, refresh, takeText]);
 
   const openSheet = (s: SheetState) => setStack((st) => [...st, s]);
   const closeSheet = () => setStack((st) => st.slice(0, -1));

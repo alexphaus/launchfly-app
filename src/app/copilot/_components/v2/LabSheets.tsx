@@ -21,6 +21,8 @@ import { salesCurrency } from '@/lib/copilot/metrics';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
+import { beliefOfSeed, hostOf, ideaOfSeed, plainLines, type Seed } from '@/lib/copilot/seed';
+import { derive } from './derive';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions, BetFromExperiment } from '../shared';
 
@@ -105,18 +107,32 @@ const UNIT_FOR: Record<FoundBy, string> = { outreach: 'bookings', inbound: 'enqu
 /**
  * A bet, written before it starts: from a play in the catalogue, an idea a
  * model wrote (looked up by its key among the ideas on hand), the plan's
- * experiment, or from scratch on a part. A play or an idea fixes what it
- * counts; the line, the plan and the length are still the person's to set.
+ * experiment, words shared from another app, or from scratch on a part. A play
+ * or an idea fixes what it counts; the line, the plan and the length are still
+ * the person's to set.
+ *
+ * Words shared in (seed.ts) are the play, never the belief: they ride along as
+ * what to do, and the belief is the person's — prefilled only when the whole
+ * share is one sentence that fits, so a chat's reply is never what they said.
+ *
+ * Any of them can be kept for later instead of started, and a kept test opens
+ * here again as it was kept — its belief, its count, its line — to be started
+ * or taken off the shelf. A test is kept only from this sheet, so every entry has
+ * the person's own belief and a line they set before it: no test, no entry.
  */
-export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, actions }: {
-  home: HomeData; playKey?: string; part?: LinkKey; ideaKey?: string; experiment?: BetFromExperiment; actions: Actions;
+export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed, shelfId, actions }: {
+  home: HomeData; playKey?: string; part?: LinkKey; ideaKey?: string; experiment?: BetFromExperiment; seed?: Seed; shelfId?: string; actions: Actions;
 }) {
   const found = foundOf(home).value;
-  const catalogue = playKey ? PLAY_BY_KEY.get(playKey) ?? null : null;
+  const shelved = shelfId ? home.lab?.shelf?.find((e) => e.id === shelfId) ?? null : null;
+  const catalogue = playKey ?? shelved?.play ? PLAY_BY_KEY.get((playKey ?? shelved?.play)!) ?? null : null;
   const play = catalogue ? playFor(catalogue, found) : null;
   const idea = !play && ideaKey && asked ? home.lab?.ideas?.[asked]?.ideas.find((x) => x.key === ideaKey) ?? null : null;
   // What the bet starts from, when it starts from something that fixes the count.
   const fixed = play ?? idea;
+  // A play a model or a share wrote, kept with its words, and what a kept test starts from: as it was kept.
+  const keptIdea = shelved && !play ? shelved.idea : null;
+  const basis = shelved ?? fixed;
   const today = home.recent.today;
   const offer = home.profile.offer ?? {};
   const { price, priceLabel } = betPrice(offer.price_band, salesCurrency(home.profile.finance, home.goals));
@@ -126,24 +142,29 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
     const m = PART_METRIC[k] === 'paid_at_price' && price == null ? 'paid' : PART_METRIC[k];
     return allowed.includes(m) ? m : 'logged';
   };
-  const first: LinkKey = fixed?.part ?? experiment?.part ?? asked ?? 'who';
+  // Words shared in start on the weak link, as the picker on Proof does: the sheet is not told which part they are about.
+  // Once, in the initialiser: derive() reads the whole home, and this component renders on every keystroke.
+  const [sharedPart] = useState<LinkKey | null>(() => (seed && !asked && !shelved && !experiment ? derive(home).proof.chain.weak : null));
+  const first: LinkKey = basis?.part ?? experiment?.part ?? asked ?? sharedPart ?? 'who';
   const [part, setPart] = useState<LinkKey>(first);
   // A first draft from the offer, for the person to make theirs. Rewritten
-  // with the part until they type in it; never after.
-  const [belief, setBelief] = useState(() => suggestBelief(first, offer, priceLabel, found));
-  const [typed, setTyped] = useState(false);
-  const [metric, setMetric] = useState<LabMetric>(fixed?.metric ?? firstMetric(first));
-  const [unit, setUnit] = useState(fixed?.unit ?? (found ? UNIT_FOR[found] : 'sign-ups'));
-  const [target, setTarget] = useState(fixed?.target ?? 2);
-  const [tries, setTries] = useState<{ metric: LabMetric; planned: number } | null>(fixed?.tries ?? null);
-  const [days, setDays] = useState(fixed?.days ?? experiment?.days ?? DEFAULT_BET_DAYS);
+  // with the part until they type in it; never after. Words they shared are
+  // theirs already: a draft written from the offer would put other words in
+  // their mouth, so the field holds the share or nothing.
+  const [belief, setBelief] = useState(() => (shelved ? shelved.belief : seed ? beliefOfSeed(seed) : suggestBelief(first, offer, priceLabel, found)));
+  const [typed, setTyped] = useState(!!seed || !!shelved);
+  const [metric, setMetric] = useState<LabMetric>(basis?.metric ?? firstMetric(first));
+  const [unit, setUnit] = useState(basis?.unit ?? (found ? UNIT_FOR[found] : 'sign-ups'));
+  const [target, setTarget] = useState(basis?.target ?? 2);
+  const [tries, setTries] = useState<{ metric: LabMetric; planned: number } | null>(basis?.tries ?? null);
+  const [days, setDays] = useState(basis?.days ?? experiment?.days ?? DEFAULT_BET_DAYS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const running = home.lab?.bets.find((b) => b.state === 'running') ?? null;
   const needsPrice = !!METRIC[metric].priced && price == null;
   const needsUnit = metric === 'logged' && !unit.trim();
-  const dayChoices = [...new Set([...DAY_CHOICES, fixed?.days ?? experiment?.days ?? DEFAULT_BET_DAYS])].sort((a, b) => a - b);
+  const dayChoices = [...new Set([...DAY_CHOICES, basis?.days ?? experiment?.days ?? DEFAULT_BET_DAYS])].sort((a, b) => a - b);
   const triesFor = TRIES_FOR[metric].filter((m) => allowed.includes(m));
   const shownUnit = metric === 'logged' ? unit.trim() || null : null;
 
@@ -157,19 +178,30 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
     // What it takes has to be the step before it; one that no longer is, goes.
     if (tries && !TRIES_FOR[m].includes(tries.metric)) setTries(null);
   };
+  // Where the play came from, kept on the bet: a play the catalogue does not
+  // hold is said by its own words, so the bet can say what it ran.
+  const playFrom = () => (idea
+    ? { label: idea.label, how: idea.how, from: idea.book ? `AI, after ${idea.book}` : 'AI, from your record', prep: idea.prep }
+    : experiment ? { label: experiment.title, how: experiment.test, from: 'Your plan' } : seed ? ideaOfSeed(seed) : keptIdea);
   const start = async () => {
     setBusy(true); setError(null);
-    // Where the play came from, kept on the bet: a play the catalogue does not
-    // hold is said by its own words, so the bet can say what it ran.
-    const from = idea
-      ? { label: idea.label, how: idea.how, from: idea.book ? `AI, after ${idea.book}` : 'AI, from your record', prep: idea.prep }
-      : experiment ? { label: experiment.title, how: experiment.test, from: 'Your plan' } : null;
     const r = await actions.lab({
       action: 'open',
-      bet: { part, belief: belief.trim(), play: play?.key ?? null, idea: from, metric, unit: shownUnit, target, tries, days, experiment: experiment?.id ?? null },
+      bet: { part, belief: belief.trim(), play: play?.key ?? null, idea: playFrom(), metric, unit: shownUnit, target, tries, days, experiment: experiment?.id ?? null, shelf: shelved?.id ?? null },
     });
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not start it');
+    actions.closeSheet();
+  };
+  // Kept, not started: the same test, held to the same rules, with nothing counting until it is started.
+  const keep = async () => {
+    setBusy(true); setError(null);
+    const r = await actions.lab({
+      action: 'shelve',
+      bet: { part, belief: belief.trim(), play: play?.key ?? null, idea: playFrom(), metric, unit: shownUnit, target, tries, days },
+    });
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? 'Could not keep it');
     actions.closeSheet();
   };
 
@@ -178,12 +210,18 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
       {play && <div className="cp2-lab-sheet-book">{play.book}</div>}
       {idea && <div className="cp2-lab-sheet-book">By AI{idea.book ? ` · after ${idea.book}` : ', from your record'}</div>}
       {experiment && <div className="cp2-lab-sheet-book">From your plan</div>}
-      <h3>{play?.label ?? idea?.label ?? experiment?.title ?? 'Your own bet'}</h3>
+      {seed && <div className="cp2-lab-sheet-book">From another app</div>}
+      {keptIdea && <div className="cp2-lab-sheet-book">{keptIdea.from}</div>}
+      {shelved && !play && !keptIdea && <div className="cp2-lab-sheet-book">From your shelf</div>}
+      <h3>{play?.label ?? idea?.label ?? keptIdea?.label ?? experiment?.title ?? (seed ? 'An idea you shared' : shelved ? 'A test you kept' : 'Your own bet')}</h3>
       <p className="desc">
-        {play?.how ?? idea?.how ?? (experiment
+        {play?.how ?? idea?.how ?? keptIdea?.how ?? (experiment
           ? `${experiment.test} It worked if: ${experiment.watch.replace(/[.!?\s]+$/, '')}. As a bet, the rows judge it instead of a tap, and the plan hears the verdict.`
+          : seed
+          ? 'Say what you believe, pick the count that would show it, and set the line. Nothing starts until you tap.'
           : 'A belief, a count that could prove it wrong, and a day. Written before it starts, so the result cannot move the line.')}
       </p>
+      {seed && <SharedWords seed={seed} />}
 
       {!fixed && (
         <div className="cp-field">
@@ -200,6 +238,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
         <label className="cp-label" htmlFor="cp2-lab-belief">What you believe</label>
         <textarea
           id="cp2-lab-belief" className="cp-input sm cp2-lab-belief-in" rows={2} maxLength={BELIEF_MAX} value={belief}
+          placeholder={seed ? 'What would have to be true for this to work?' : undefined}
           onChange={(e) => { setBelief(e.target.value); setTyped(true); }}
         />
         <p className="cp-help">In your words, one sentence the count below could prove wrong.</p>
@@ -289,8 +328,37 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, acti
       <button className="cp-btn primary block" disabled={busy || !belief.trim() || needsPrice || needsUnit || !!running} onClick={() => void start()}>
         {busy ? 'Starting…' : 'Start the bet'}
       </button>
+      {/* The plan's experiment already waits in the plan, and a kept test already waits on the shelf: neither needs keeping twice. */}
+      {!experiment && !shelved && (
+        <>
+          <button className="cp-btn block cp2-lab-keep" disabled={busy || !belief.trim() || needsPrice || needsUnit} onClick={() => void keep()}>
+            Keep for later
+          </button>
+          <p className="cp-help">Kept as written, on your shelf. Nothing counts until you start it, and one bet runs at a time.</p>
+        </>
+      )}
       <p className="cp-help">Only what happens from today counts. Nobody marks it passed: it passes when the count reaches the line.</p>
     </>
+  );
+}
+
+/**
+ * What was shared, above the belief it is meant to inform: read-only and said to
+ * be the source, so the words in the field below are the person's and these are
+ * what a bet will carry as its play. A reply long enough to be cut says it was.
+ */
+function SharedWords({ seed }: { seed: Seed }) {
+  const lines = plainLines(seed.text);
+  return (
+    <div className="cp2-seed">
+      <span className="cp2-seed-k">What you shared</span>
+      {lines.length > 0 && <p className="cp2-seed-text">{lines.join('\n')}</p>}
+      {seed.url && <a className="cp2-seed-link" href={seed.url} target="_blank" rel="noopener noreferrer">{hostOf(seed.url)}</a>}
+      <p className="cp-help">
+        It stays with the bet as the play. Your belief is the box below, in your words.
+        {seed.cut ? ' It was long, so only the first part was read.' : ''}
+      </p>
+    </div>
   );
 }
 

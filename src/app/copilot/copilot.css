@@ -1292,6 +1292,16 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-pass { font-size: 13px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-src { font-size: 12px; line-height: 1.45; color: var(--muted); margin-top: 3px; }
 .cp-root[data-theme="soft"] .cp2-lab-over { font-size: 12px; line-height: 1.45; font-weight: 600; color: var(--warn); margin-top: 4px; }
+/* The funnel since the bet began, step by step to the line (reading.ts): something to read while the bar is still empty. */
+.cp-root[data-theme="soft"] .cp2-rd { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-root[data-theme="soft"] .cp2-rd-step { display: inline-flex; align-items: baseline; gap: 4px; padding: 6px 11px; border-radius: 999px; background: var(--tint); white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-rd-step b { font-size: 15px; font-weight: 700; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cp-root[data-theme="soft"] .cp2-rd-step b i { font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-rd-step span { font-size: 12px; line-height: 1.2; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-rd-step.next { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.cp-root[data-theme="soft"] .cp2-rd-step.later { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.cp-root[data-theme="soft"] .cp2-rd-step.later b { color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-rd-step.line span { font-weight: 600; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-playing { margin-top: 14px; padding: 11px 13px; border-radius: 14px; background: var(--line); }
 .cp-root[data-theme="soft"] .cp2-lab-playing p { font-size: 13px; line-height: 1.5; color: var(--ink); margin-top: 3px; }
 .cp-root[data-theme="soft"] .cp2-lab-book { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }
@@ -1358,6 +1368,24 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-preview-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-lab-preview b { font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-preview-s { font-size: 12px; line-height: 1.45; color: var(--muted); }
+/* Words shared in from another app, on the bet sheet: the source, set apart from the belief the person writes. */
+.cp-root[data-theme="soft"] .cp2-seed { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 4px 0 14px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.cp-root[data-theme="soft"] .cp2-seed-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-seed-text { align-self: stretch; margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; max-height: 9.5em; overflow-y: auto; }
+.cp-root[data-theme="soft"] .cp2-seed-link { font-size: 12.5px; font-weight: 600; color: var(--blue); text-decoration: none; overflow-wrap: anywhere; }
+.cp-root[data-theme="soft"] .cp2-seed .cp-help { margin: 0; }
+/* The shelf on Proof: tests kept for later, each with its line (lab.ts ShelfEntry). */
+.cp-root[data-theme="soft"] .cp2-shelf-s { font-size: 12.5px; line-height: 1.45; color: var(--muted); margin: 2px 0 4px; }
+.cp-root[data-theme="soft"] .cp2-shelf-row { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-shelf-part { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-shelf-row b { font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-shelf-line { font-size: 12.5px; line-height: 1.4; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-shelf-from { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-shelf-do { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
+.cp-root[data-theme="soft"] .cp2-lab-keep { margin-top: 8px; }
+.cp-root[data-theme="soft"] .cp2-shelf .cp2-lab-own { margin-top: 12px; }
+/* Between cards, so it keeps their gutter: the calm theme's .cp-card is margin: 0 22px 16px. */
+.cp-root[data-theme="soft"] .cp2-shelf-solo { margin: 2px 22px 16px; }
 .cp-root[data-theme="soft"] .cp2-lab-warn { margin: 0 0 12px; padding: 11px 13px; border-radius: 14px; background: var(--warn-tint); color: var(--ink); font-size: 12.5px; line-height: 1.5; }
 .cp-root[data-theme="soft"] .cp2-lab-warn .cp2-link { font-size: 12.5px; }
 .cp-root[data-theme="soft"] .cp2-lab-date { margin-top: 10px; max-width: 220px; }

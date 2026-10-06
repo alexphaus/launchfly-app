@@ -57,6 +57,8 @@ export interface IdeasContext {
   coverage?: Record<TalkRole, number> | null;
   /** What people said, newest first, as lab.ts heardLine writes it. */
   heard?: string[];
+  /** The beliefs already kept on the shelf — the person's own words — so an idea is not written that they have already written down. */
+  shelf?: string[];
   /** Kinds of asset the business already has. */
   assets: AssetKind[];
 }
@@ -96,6 +98,8 @@ export function ideasPrompt(c: IdeasContext): string {
     ...(c.heard?.length ? ['\nWhat people said, in their words, newest first:', ...c.heard.map((h) => `- ${h}`), HEARD_ROLES_NOTE] : []),
     c.bets.length ? '\nExperiments already run, newest first:' : '\nNo experiments run yet.',
     ...c.bets.slice(0, 8).map((b) => `- On ${LINK_LABEL[b.part].toLowerCase()}: "${b.belief}" — ${b.state === 'running' ? 'running' : b.state === 'passed' ? 'passed' : b.state === 'failed' ? 'did not pass' : 'called off'} (${b.line})`),
+    c.shelf?.length ? '\nKept on the owner\'s shelf to run later, so do not suggest these again:' : null,
+    ...(c.shelf ?? []).slice(0, 10).map((b) => `- ${b}`),
     c.assets.length ? `\nAssets they already have: ${c.assets.join(', ')}.` : null,
     '',
     'Counts an idea can be judged on (use these keys exactly):',
@@ -210,6 +214,7 @@ export function ideaSources(c: IdeasContext): string[] {
     o.sells, o.for_who, o.problem, o.price_band, c.working,
     ...c.links.flatMap((l) => [l.why, l.facts]),
     ...c.bets.map((b) => `${b.belief} ${b.line}`),
+    ...(c.shelf ?? []),
     c.talks.n ? `${c.talks.n} ${c.talks.problem} ${c.talks.committed}` : null,
     coverageLine(c.coverage),
     ...(c.heard ?? []),

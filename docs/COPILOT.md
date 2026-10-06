@@ -940,13 +940,21 @@ about the business: no model is shown a shared play (`playForModel` leaves it ou
 of the ideas prompt and of an asset's draft), nothing a model reads imports
 `seed.ts`, and the suite checks both. **Signed out**, the worker keeps the words
 all the same (it cannot see an httpOnly cookie) with the time they came, and the
-sign-in screen says they wait. The first open after sign-in takes them, on Proof, if they
-are under half an hour old (`SEED_FRESH_MS`); older, they are let go rather than
-sprung on someone who no longer remembers sharing them. Before a worker is active
-the share reaches the route, which refuses a signed-out request before reading its
-body — words cannot be told from a file without reading it, and a file nobody is
-signed in to import is not held in memory to be refused after — so the sign-in
-screen asks for the share again. Android's: iOS has no share target for web apps.
+sign-in screen says they wait. The first open after sign-in takes them, on Proof,
+if they are under half an hour old (`SEED_FRESH_MS`); older, they are let go
+rather than sprung on someone who no longer remembers sharing them. Before a
+worker is active the share reaches the route, which refuses a signed-out request
+before reading its body — words cannot be told from a file without reading it, and
+a file nobody is signed in to import is not held in memory to be refused after —
+so the sign-in screen asks for the share again. **Accepted:** while the worker is
+active, any page the person visits can post a form to the share target, and the
+worker has nothing it can rely on to tell that from the phone's share sheet: a
+page decides what referrer, if any, its post carries. So a page can open this
+sheet with its own words and link. What it gets is what a shared reply gets: words
+on a sheet that says they were shared, an empty belief, and nothing started or
+kept without the person's tap. Without a worker the post carries no session (the
+cookie is SameSite=lax) and the route refuses it. Android's: iOS has no share
+target for web apps.
 
 **The checkpoint** asks pivot or persevere every two weeks, once a bet has ended
 since the last answer, kept with the chain as it stood and read back next time —

@@ -80,6 +80,14 @@ export const LAB_SHELF = 'lab_shelf';
 export const LAB_SHELF_GONE = 'lab_shelf_gone';
 export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS, LAB_INTRO, LAB_SHELF, LAB_SHELF_GONE] as const;
 
+/**
+ * Said beside a play that came in as words shared from another app (seed.ts):
+ * a chat's reply, kept on the bet it was shared for and never shown to a model as
+ * the person's words or numbers (invariants 2 and 12). Here rather than in seed.ts
+ * so the code that writes prompts can recognise one without importing the reader.
+ */
+export const SHARED_FROM = 'Shared from another app';
+
 /* ─── What a bet can count ────────────────────────────────────────────────── */
 
 export const LAB_METRICS = ['sent', 'replied', 'meetings', 'paid', 'paid_at_price', 'talks', 'committed', 'handed', 'logged'] as const;
@@ -150,6 +158,18 @@ export const TRIES_FOR: Record<LabMetric, readonly LabMetric[]> = {
 /** The counts a business can use, by how buyers find it: outreach's own counts only where the app sends. */
 export function metricsFor(foundBy: FoundBy | null): LabMetric[] {
   return LAB_METRICS.filter((m) => !METRIC[m].outreach || foundBy === 'outreach' || foundBy == null);
+}
+
+/**
+ * Why a count cannot decide a test for this business, or null. Sends and replies
+ * only where the app sends: a kept test can outlive the day buyers were found by
+ * outreach, and its sheet hides the count picker for a book's play, so the rule is
+ * held where the test is written, not only where the picker is.
+ */
+export function countRefusal(metric: LabMetric, tries: { metric: LabMetric } | null, foundBy: FoundBy | null): string | null {
+  const allowed = metricsFor(foundBy);
+  const off = !allowed.includes(metric) ? metric : tries && !allowed.includes(tries.metric) ? tries.metric : null;
+  return off ? `The app cannot count ${metricWords(off, 2)} for a business whose buyers do not come through its sends. Pick a count you log.` : null;
 }
 
 /**
@@ -529,11 +549,26 @@ export function normalizeShelf(raw: Record<string, unknown>, ctx: { today: strin
   return { ok: true, value: { part, belief, play, idea, metric, unit, target, tries, days } };
 }
 
-/** Why a test cannot be kept, or null: a full shelf, or the same belief about the same part twice. */
-export function shelfRefusal(shelf: Array<Pick<ShelfEntry, 'part' | 'belief'>>, draft: Pick<ShelfDraft, 'part' | 'belief'>): string | null {
+type TestKey = Pick<ShelfEntry, 'part' | 'belief' | 'metric' | 'play' | 'idea'>;
+/**
+ * The same test twice: the same part, belief, count and play. Not the belief
+ * alone — every play and idea on a part opens the sheet with the same suggested
+ * belief, so two different plays kept as they came would read as one.
+ */
+function sameTest(a: TestKey, b: TestKey): boolean {
+  const norm = (x: string) => x.toLowerCase().replace(/\s+/g, ' ').trim();
+  const play = (e: TestKey) => e.play ?? (e.idea ? `idea:${norm(e.idea.label)}` : '');
+  return a.part === b.part && a.metric === b.metric && norm(a.belief) === norm(b.belief) && play(a) === play(b);
+}
+
+/**
+ * Why a test cannot be kept, or null: the same test twice, or a full shelf. In
+ * that order: told the shelf is full, a person takes one off to make room and is
+ * then told the test was on it all along.
+ */
+export function shelfRefusal(shelf: TestKey[], draft: TestKey): string | null {
+  if (shelf.some((e) => sameTest(e, draft))) return 'That is already on your shelf.';
   if (shelf.length >= SHELF_MAX) return `The shelf holds ${SHELF_MAX}. Start one, or take one off, to keep another.`;
-  const same = (b: string) => b.toLowerCase().replace(/\s+/g, ' ').trim();
-  if (shelf.some((e) => e.part === draft.part && same(e.belief) === same(draft.belief))) return 'That is already on your shelf.';
   return null;
 }
 
@@ -607,15 +642,12 @@ export function normalizeCheckpoint(raw: Record<string, unknown>, today: string)
 }
 
 /**
- * An idea as stored, reshaped rather than trusted: the same lengths, metrics
- * and lines a bet is held to, so an idea on screen can always become a bet.
- * Null when it does not hold together.
+ * A stored test's line — what it counts, the person's word for it, the line, the
+ * days and what it takes — reshaped rather than trusted. Null when it does not
+ * hold together. One reader for ideas and kept tests, which are held to one line.
  */
-export function ideaFromStored(v: unknown, part: LinkKey): Idea | null {
-  const o = obj(v);
-  const label = text(o.label, IDEA_LABEL_MAX);
-  const how = text(o.how, IDEA_HOW_MAX);
-  if (!label || !how || !isMetric(o.metric)) return null;
+function storedLine(o: Record<string, unknown>): Pick<Idea, 'metric' | 'unit' | 'target' | 'tries' | 'days'> | null {
+  if (!isMetric(o.metric)) return null;
   const unit = o.metric === 'logged' ? unitOf(o.unit) : null;
   if (o.metric === 'logged' && !unit) return null;
   const target = int(o.target);
@@ -624,9 +656,23 @@ export function ideaFromStored(v: unknown, part: LinkKey): Idea | null {
   const t = obj(o.tries);
   const planned = int(t.planned);
   const tries = isMetric(t.metric) && TRIES_FOR[o.metric].includes(t.metric) && planned >= 1 && planned <= PLANNED_MAX ? { metric: t.metric, planned } : null;
+  return { metric: o.metric, unit, target, tries, days };
+}
+
+/**
+ * An idea as stored, reshaped rather than trusted: the same lengths, metrics
+ * and lines a bet is held to, so an idea on screen can always become a bet.
+ * Null when it does not hold together.
+ */
+export function ideaFromStored(v: unknown, part: LinkKey): Idea | null {
+  const o = obj(v);
+  const label = text(o.label, IDEA_LABEL_MAX);
+  const how = text(o.how, IDEA_HOW_MAX);
+  const line = storedLine(o);
+  if (!label || !how || !line) return null;
   return {
     key: text(o.key, 64) ?? `ai-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}`,
-    part, label, how, metric: o.metric, unit, target, tries, days,
+    part, label, how, ...line,
     book: text(o.book, IDEA_FROM_MAX), why: text(o.why, 240),
     prep: prepOf(o.prep),
   };
@@ -657,18 +703,35 @@ export interface LabLedger {
 /** A shelf entry as stored, reshaped rather than trusted: the lengths, counts and lines a bet is held to. */
 function storedShelf(p: Record<string, unknown>, id: string, at: string): ShelfEntry | null {
   const belief = text(p.belief, BELIEF_MAX);
-  const target = int(p.target);
-  const days = int(p.days);
-  if (!isPart(p.part) || !belief || !isMetric(p.metric) || !(target >= 1 && target <= TARGET_MAX) || !(days >= 1 && days <= BET_DAYS_MAX)) return null;
-  const unit = p.metric === 'logged' ? unitOf(p.unit) : null;
-  if (p.metric === 'logged' && !unit) return null;
-  const t = obj(p.tries);
-  const planned = int(t.planned);
+  const line = storedLine(p);
+  if (!isPart(p.part) || !belief || !line) return null;
   const play = typeof p.play === 'string' && PLAY_BY_KEY.has(p.play) ? p.play : null;
-  return {
-    id, at, part: p.part, belief, play, idea: play ? null : ideaOf(p.idea), metric: p.metric, unit, target, days,
-    tries: isMetric(t.metric) && TRIES_FOR[p.metric].includes(t.metric) && planned >= 1 && planned <= PLANNED_MAX ? { metric: t.metric, planned } : null,
-  };
+  return { id, at, part: p.part, belief, play, idea: play ? null : ideaOf(p.idea), ...line };
+}
+
+/**
+ * The shelf, from whichever rows are given: every test kept, less the ones taken
+ * off and the ones a bet started from, newest first. A window of the newest rows
+ * can only lose an entry, never bring a finished one back: a test's start or
+ * take-off is always newer than its keeping.
+ */
+export function shelfFromEvents(rows: LabEventRow[]): ShelfEntry[] {
+  const kept: ShelfEntry[] = [];
+  const gone = new Set<string>();
+  for (const r of [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    const p = obj(r.payload);
+    if (r.event_type === LAB_SHELF) {
+      const entry = storedShelf(p, String(r.id), r.created_at);
+      if (entry) kept.push(entry);
+    } else if (r.event_type === LAB_SHELF_GONE) {
+      if (typeof p.entry === 'string') gone.add(p.entry);
+    } else if (r.event_type === LAB_BET) {
+      // A test leaves the shelf by being started or by being taken off, whichever came: neither is undone.
+      const from = experimentId(p.shelf);
+      if (from) gone.add(from);
+    }
+  }
+  return kept.filter((e) => !gone.has(e.id)).reverse().slice(0, SHELF_MAX);
 }
 
 /** A stored bet, reshaped rather than trusted. Null when it does not hold together. */
@@ -693,9 +756,7 @@ function storedBet(p: Record<string, unknown>, id: string, at: string): Bet | nu
 }
 
 export function labFromEvents(rows: LabEventRow[]): LabLedger {
-  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {}, intros: new Map(), shelf: [] };
-  const kept: ShelfEntry[] = [];
-  const gone = new Set<string>();
+  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {}, intros: new Map(), shelf: shelfFromEvents(rows) };
   for (const r of [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     const p = obj(r.payload);
     const id = String(r.id);
@@ -737,11 +798,6 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
       const ideas = (Array.isArray(p.ideas) ? p.ideas : []).map((x) => ideaFromStored(x, part)).filter((x): x is Idea => !!x).slice(0, 3);
       // Newest wins: the rows arrive oldest first.
       if (ideas.length) out.ideas[part] = { part, ideas, model: text(p.model, 80), at: r.created_at };
-    } else if (r.event_type === LAB_SHELF) {
-      const entry = storedShelf(p, id, r.created_at);
-      if (entry) kept.push(entry);
-    } else if (r.event_type === LAB_SHELF_GONE) {
-      if (typeof p.entry === 'string') gone.add(p.entry);
     } else if (r.event_type === LAB_INTRO) {
       const talk = talkRef(p.talk);
       // The last word wins: asked for on Monday, fallen through by Friday.
@@ -749,9 +805,6 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
     }
   }
   out.bets.reverse();
-  // A test leaves the shelf by being started or by being taken off, whichever came: neither is undone.
-  const started = new Set(out.bets.map((b) => b.shelf).filter((x): x is string => !!x));
-  out.shelf = kept.filter((e) => !gone.has(e.id) && !started.has(e.id)).reverse().slice(0, SHELF_MAX);
   out.talks.sort((a, b) => b.on.localeCompare(a.on) || b.at.localeCompare(a.at));
   out.checkpoints.reverse();
   out.tallies.sort((a, b) => b.on.localeCompare(a.on) || b.at.localeCompare(a.at));
@@ -847,9 +900,9 @@ export interface BetView {
   /** What it took, when the bet says what it takes. */
   tries: number | null;
   /**
-   * Every count since it began, read to the day it ended or to today (readingOf).
-   * Optional: a payload from before it existed has none, and the card then shows
-   * what it always did. Never read for the verdict.
+   * Every count since it began, to today (readingOf) — on the running bet only.
+   * Optional: a finished bet has none, and neither has a payload from before
+   * readings, whose card shows what it always did. Never read for the verdict.
    */
   reading?: Reading;
   /** The bet's last day. */
@@ -929,6 +982,13 @@ export interface LabInput {
   outcomes: Array<{ kind: string; opportunity_id: string | null; occurred_at?: string | null; amount?: number | null }>;
   /** When each project handed over was finished. */
   finished: Array<string | null | undefined>;
+  /**
+   * The shelf's own rows (store.ts loadLabEvents): kept tests wait for weeks, and
+   * a window of the newest lab events in general would drop one silently once
+   * enough counts and conversations came after it. Absent, the shelf is read from
+   * `events`.
+   */
+  shelfEvents?: LabEventRow[];
 }
 
 /**
@@ -958,9 +1018,12 @@ export function labHome(i: LabInput): LabHome {
     bets: bets.map((b) => {
       const stop = ledger.stopped.get(b.id);
       const view = betView(b, stop ? dayIn(stop.at, i.timezone) : null, rows, i.today);
-      // Read to the day the bet ended, or to today while it runs: after the end
-      // the next bet's sends are not this one's.
-      return { ...view, note: stop?.note ?? null, reading: readingOf(b, view.ended ?? minDay(i.today, view.last), rows) };
+      // Only the running bet is read this way — the card and Claude show no other —
+      // so forty finished bets do not cost nine counts each on every load. Read to
+      // today, never past the last day: after it, the next bet's sends are not this one's.
+      return view.state === 'running'
+        ? { ...view, note: stop?.note ?? null, reading: readingOf(b, minDay(i.today, view.last), rows) }
+        : { ...view, note: stop?.note ?? null };
     }),
     talks: ledger.talks.slice(0, MAX_TALKS),
     checkpoints: ledger.checkpoints.slice(0, MAX_CHECKPOINTS),
@@ -968,7 +1031,7 @@ export function labHome(i: LabInput): LabHome {
     links: Object.fromEntries(ledger.links),
     ideas: ledger.ideas,
     intros: Object.fromEntries(ledger.intros),
-    shelf: ledger.shelf,
+    shelf: i.shelfEvents ? shelfFromEvents(i.shelfEvents) : ledger.shelf,
     unreadable: i.unreadable,
   };
 }
@@ -1246,6 +1309,17 @@ export function playOf(bet: Pick<Bet, 'play' | 'idea'>): { label: string; how: s
   const p = bet.play ? PLAY_BY_KEY.get(bet.play) : null;
   if (p) return { label: p.label, how: p.how, from: p.book };
   return bet.idea ? { label: bet.idea.label, how: bet.idea.how, from: bet.idea.from } : null;
+}
+
+/**
+ * A play's name for a prompt, or null for one that came in as a shared reply: a
+ * chat's words are never shown to a model as the person's, and a number in them
+ * would pass the check that refuses numbers the person never gave (invariants 2
+ * and 12). The play is still the bet's, on the screen and for Claude, marked.
+ */
+export function playForModel(bet: Pick<Bet, 'play' | 'idea'>): string | null {
+  const p = playOf(bet);
+  return p && p.from !== SHARED_FROM ? p.label : null;
 }
 
 const lowerFirst = (s: string) => (s.length > 1 && s[1] === s[1].toLowerCase() ? s[0].toLowerCase() + s.slice(1) : s);

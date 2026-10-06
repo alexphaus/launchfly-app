@@ -10,7 +10,8 @@
 //
 // The phone opens the share as a top-level navigation, so the session cookie
 // (SameSite=lax) comes with it and the import route runs as the person. Not
-// signed in, the screen says so rather than the share disappearing.
+// signed in, nothing is read — a body nobody is signed in to send is not held in
+// memory to be refused after it — and the sign-in screen says why.
 import { POST as importStatement } from '@/app/api/copilot/money/import/route';
 import { importLine, type MoneyImport } from '@/lib/copilot/money/ledger';
 import { seedOf, seedPage } from '@/lib/copilot/seed';
@@ -22,11 +23,11 @@ export const maxDuration = 300;
 // A relative Location, not one built on req.url: behind the proxy that is the
 // container's own address, and locally Next reports localhost for 127.0.0.1 —
 // either way the redirect lands on a host the session cookie is not for.
-const back = (_req: Request, q: Record<string, string>, tab = 'money') =>
-  new Response(null, { status: 303, headers: { location: `/copilot2?${new URLSearchParams({ tab, ...q })}` } });
+const back = (_req: Request, q: Record<string, string>) =>
+  new Response(null, { status: 303, headers: { location: `/copilot2?${new URLSearchParams({ tab: 'money', ...q })}` } });
 
 export async function POST(req: Request) {
-  const signedIn = !!(await currentProfileId());
+  if (!(await currentProfileId())) return back(req, { shared: 'error', why: 'Sign in, then share it again.' });
   let file: File | null = null;
   const said: Record<string, string> = {};
   try {
@@ -36,11 +37,7 @@ export async function POST(req: Request) {
   } catch {
     return back(req, { shared: 'error', why: 'The shared file could not be read. Share it again.' });
   }
-  if (!file && seedOf(said)) {
-    if (!signedIn) return back(req, { shared: 'text', why: 'Sign in, then share it again.' }, 'proof');
-    return new Response(seedPage(said), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
-  }
-  if (!signedIn) return back(req, { shared: 'error', why: 'Sign in, then share the file again.' });
+  if (!file && seedOf(said)) return new Response(seedPage(said), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
   if (!file) return back(req, { shared: 'error', why: 'That share had no file in it. Export the CSV and share the file itself.' });
 
   // The upload route itself, so a shared file is read exactly as an uploaded one.

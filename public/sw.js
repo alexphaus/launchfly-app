@@ -51,7 +51,9 @@ async function takeShare(request) {
     const form = await request.formData();
     const files = form.getAll('file').filter((f) => f && typeof f === 'object' && f.size > 0).slice(0, SHARE_MAX_FILES);
     if (!files.length) {
-      const said = {};
+      // Stamped: kept whatever the session (a worker cannot see an httpOnly cookie), and
+      // picked up after sign-in only while it is still the share somebody just made.
+      const said = { at: Date.now() };
       for (const k of ['title', 'text', 'url']) { const v = form.get(k); said[k] = typeof v === 'string' ? v : ''; }
       if (said.title.trim() || said.text.trim() || said.url.trim()) {
         words = true;

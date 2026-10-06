@@ -8,18 +8,19 @@
 // chat the start of a test — a belief, a count and a line, written before
 // anything is sent. What it must not do is let the chat's words become the
 // person's. So the text rides along as the play (what to do, "Shared from another
-// app", the way a model's idea does) and the belief stays theirs: prefilled only
-// when the whole share is one sentence that fits the field, and otherwise left
-// empty for them to write, because the first line of a list of ideas is "Here are
-// five:", not a belief. A shared reply is never kept as context about the
-// business (invariant 12): it lives on the bet it was shared for, and nowhere a
-// model reads.
+// app", the way a model's idea does, with the link back to the chat) and the
+// belief is never filled in from it: the person writes it. It was prefilled once,
+// when the whole share was one sentence, and a review found where that led — a
+// tap on Keep, and the chat's sentence and its numbers reached the ideas model as
+// the owner's own words (invariants 2 and 12). A shared reply is never context
+// about the business: it lives on the bet as its play, and no model is shown a
+// shared play (proofai.ts checks SHARED_FROM).
 //
 // Pure: no DB import, no browser API. The service worker and the share page only
 // carry the share; this decides what it is.
 
 import { URL_MAX, webLink } from './assets';
-import { BELIEF_MAX, IDEA_HOW_MAX, IDEA_LABEL_MAX, type BetIdea } from './lab';
+import { IDEA_HOW_MAX, IDEA_LABEL_MAX, SHARED_FROM, type BetIdea } from './lab';
 
 /**
  * Where a text share waits for the page. Its own cache: the Money tab reads every
@@ -30,8 +31,21 @@ import { BELIEF_MAX, IDEA_HOW_MAX, IDEA_LABEL_MAX, type BetIdea } from './lab';
 export const SEED_CACHE = 'copilot-share-text';
 export const SEED_KEY = '/copilot2/share/text';
 
-/** Said beside the play on the bet, so it is never mistaken for one the app wrote. */
-export const SEED_FROM = 'Shared from another app';
+/** Said beside the play on the bet, so it is never mistaken for one the app wrote (lab.ts SHARED_FROM). */
+export const SEED_FROM = SHARED_FROM;
+
+/**
+ * How long shared words wait to be picked up when they were not read on arrival —
+ * shared while signed out, the app opens on sign-in instead. Past it they are not
+ * the share the person remembers making, and are let go rather than popping up.
+ */
+export const SEED_FRESH_MS = 30 * 60_000;
+
+/** Whether what was kept is still the share someone just made, by the stamp it carries. No stamp is not fresh. */
+export function seedIsFresh(raw: unknown, now: number): boolean {
+  const at = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).at : null;
+  return typeof at === 'number' && Number.isFinite(at) && now - at >= 0 && now - at <= SEED_FRESH_MS;
+}
 
 /** What of a share is read. A whole conversation is not an idea: the rest is left, and the sheet says so. */
 export const SEED_MAX = 4000;
@@ -58,16 +72,21 @@ const link = (v: string) => (v.length <= URL_MAX ? webLink(v) : null);
  */
 export function seedOf(raw: unknown): Seed | null {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  // A title is an app's name for what it shared, noise beside words and all there is without them.
-  let text = clean(o.text) || clean(o.title);
-  let url = link(clean(o.url));
+  const given = link(clean(o.url));
+  // A title is an app's name for what it shared ("Claude"): noise beside words or a
+  // link, and all there is without either. Taken beside a link, it became the belief.
+  let text = clean(o.text) || (given ? '' : clean(o.title));
+  let url = given;
   // "…see https://x.com/a." ends in the link and a full stop: the stop is the sentence's, not the address's.
   const tail = text.replace(/[\s.,;:!?]+$/, '');
   const found = tail.match(LINK);
   const last = found ? found[found.length - 1] : null;
-  if (last && tail.endsWith(last)) {
+  const ending = last && tail.endsWith(last) ? link(last) : null;
+  // The link ending the words is the share's own — unless the share named another,
+  // and then it is part of what was said and stays in the words rather than being lost.
+  if (last && ending && (!given || ending === given)) {
     text = tail.slice(0, tail.length - last.length).replace(/[\s:–—-]+$/, '').trim();
-    url = url ?? link(last);
+    url = given ?? ending;
   }
   let cut = false;
   if (text.length > SEED_MAX) {
@@ -111,29 +130,38 @@ export function hostOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'a link'; }
 }
 
-/**
- * The share as the belief, only when the whole of it is one sentence that fits
- * the field. A list, a paragraph and a lead-in ("Here are three ideas:") are not
- * one, and the first line of any of them would be the wrong thing in the
- * person's mouth. Empty means theirs to write.
- */
-export function beliefOfSeed(seed: Seed): string {
-  const lines = plainLines(seed.text);
-  if (seed.cut || lines.length !== 1) return '';
-  const one = lines[0];
-  return one.length <= BELIEF_MAX && !/[:：]$/.test(one) ? one : '';
+/** The longest link a play keeps beside the words: past it there would be too little room left for them. */
+const LINK_KEPT_MAX = 200;
+
+/** What a bet keeps of a share, so the sheet can say it truthfully: the play, whether it holds all the words, and the link. */
+export interface SeedKept {
+  idea: BetIdea | null;
+  /** Every word that was read, not the first of them. */
+  whole: boolean;
+  /** The link back to where it came from. */
+  link: boolean;
 }
 
 /**
- * The share as the play the bet runs: its first line for a name, the words for
- * what to do — cut at a word and marked where they are longer than a play holds.
- * A link and no words is the play itself, a pointer back to the chat it came from.
+ * The share as the play the bet runs: its first line for a name; the words for
+ * what to do, cut at a word and marked where they are longer than a play holds;
+ * and the link back to the chat after them, so the bet keeps the way back. A link
+ * and no words is the play itself.
  */
-export function ideaOfSeed(seed: Seed): BetIdea | null {
+export function keptOfSeed(seed: Seed): SeedKept {
   const lines = plainLines(seed.text);
-  if (lines.length) return { label: fit(lines[0], IDEA_LABEL_MAX), how: fit(lines.join(' '), IDEA_HOW_MAX), from: SEED_FROM };
-  if (seed.url && seed.url.length <= IDEA_HOW_MAX) return { label: `Idea from ${hostOf(seed.url)}`, how: seed.url, from: SEED_FROM };
-  return null;
+  const words = lines.join(' ');
+  const url = seed.url && seed.url.length <= LINK_KEPT_MAX ? seed.url : null;
+  if (words) {
+    const how = fit(words, url ? IDEA_HOW_MAX - url.length - 1 : IDEA_HOW_MAX);
+    return { idea: { label: fit(lines[0], IDEA_LABEL_MAX), how: url ? `${how} ${url}` : how, from: SEED_FROM }, whole: !seed.cut && how === words, link: !!url };
+  }
+  if (url) return { idea: { label: `Idea from ${hostOf(url)}`, how: url, from: SEED_FROM }, whole: true, link: true };
+  return { idea: null, whole: false, link: false };
+}
+
+export function ideaOfSeed(seed: Seed): BetIdea | null {
+  return keptOfSeed(seed).idea;
 }
 
 /** The two characters JavaScript reads as a line end inside a string, built by code: written out, they end the line they are on. */
@@ -156,7 +184,8 @@ export function seedPage(raw: { title?: string; text?: string; url?: string }): 
     '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Copilot</title></head><body>',
     '<p style="font:16px system-ui,sans-serif;padding:24px">Opening Copilot…</p>',
     '<script>(function(){',
-    `var to=${JSON.stringify(to)};var p=${words};`,
+    // Stamped here, as the worker stamps its own: words kept while signed out are picked up after sign-in only while fresh.
+    `var to=${JSON.stringify(to)};var p=${words};p.at=Date.now();`,
     'function go(why){location.replace(why?to+"&why="+encodeURIComponent(why):to)}',
     'try{',
     'if(!("caches" in window))return go("This browser kept nothing from that share. Share it again once Copilot is installed.");',

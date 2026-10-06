@@ -13,7 +13,7 @@ import { shiftDay } from '@/lib/copilot/focus';
 import {
   BELIEF_MAX, COMMITMENTS, COMMITMENT_LABEL, DEFAULT_BET_DAYS, INTRO_DAYS, INTRO_LINK_DAYS, INTRO_STATE_LABEL, METRIC, PLANNED_MAX, PLAY_BY_KEY, PROBLEMS, PROBLEM_LABEL,
   SAID_MAX, TALK_BACK_DAYS, TALK_ROLES, TALK_ROLE_LABEL, TARGET_MAX, TRIES_FOR, UNIT_MAX, WHO_MAX,
-  asksProblem, betPrice, countedFrom, dayWords, daysBetween, introSources, introState, metricWords, metricsFor, passLine, playFor, roleOf, spanWords,
+  asksProblem, betPrice, countRefusal, countedFrom, dayWords, daysBetween, introSources, introState, metricWords, metricsFor, passLine, playFor, roleOf, spanWords,
   suggestBelief, talkCounts,
   type Commitment, type IntroClose, type IntroOutcome, type LabMetric, type Problem, type Talk, type TalkRole,
 } from '@/lib/copilot/lab';
@@ -21,7 +21,7 @@ import { salesCurrency } from '@/lib/copilot/metrics';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
-import { beliefOfSeed, hostOf, ideaOfSeed, plainLines, type Seed } from '@/lib/copilot/seed';
+import { hostOf, ideaOfSeed, keptOfSeed, plainLines, type Seed } from '@/lib/copilot/seed';
 import { derive } from './derive';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions, BetFromExperiment } from '../shared';
@@ -112,8 +112,9 @@ const UNIT_FOR: Record<FoundBy, string> = { outreach: 'bookings', inbound: 'enqu
  * the person's to set.
  *
  * Words shared in (seed.ts) are the play, never the belief: they ride along as
- * what to do, and the belief is the person's — prefilled only when the whole
- * share is one sentence that fits, so a chat's reply is never what they said.
+ * what to do, with the link back to the chat, and the belief is the person's to
+ * write — never filled in from the share, so a chat's sentence and its numbers
+ * are never what they said.
  *
  * Any of them can be kept for later instead of started, and a kept test opens
  * here again as it was kept — its belief, its count, its line — to be started
@@ -124,12 +125,20 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
   home: HomeData; playKey?: string; part?: LinkKey; ideaKey?: string; experiment?: BetFromExperiment; seed?: Seed; shelfId?: string; actions: Actions;
 }) {
   const found = foundOf(home).value;
-  const shelved = shelfId ? home.lab?.shelf?.find((e) => e.id === shelfId) ?? null : null;
+  // The kept test as it was when the sheet opened, looked up once. Looked up on
+  // every render, an entry taken off while the sheet was open (a Take off still in
+  // flight, another device) turned the sheet into "Your own bet" and Start sent no
+  // shelf and no play: a bet started without what it was kept with. Now Start
+  // always names the entry it opened on, and the server says when it is gone.
+  const [shelved] = useState(() => (shelfId ? home.lab?.shelf?.find((e) => e.id === shelfId) ?? null : null));
+  // Kept while buyers came through what the app sends, opened after they stopped:
+  // its count can no longer decide it, so the pickers open rather than a bet starting on one the app cannot see.
+  const keptCountOff = !!shelved && !!countRefusal(shelved.metric, shelved.tries, found);
   const catalogue = playKey ?? shelved?.play ? PLAY_BY_KEY.get((playKey ?? shelved?.play)!) ?? null : null;
   const play = catalogue ? playFor(catalogue, found) : null;
   const idea = !play && ideaKey && asked ? home.lab?.ideas?.[asked]?.ideas.find((x) => x.key === ideaKey) ?? null : null;
-  // What the bet starts from, when it starts from something that fixes the count.
-  const fixed = play ?? idea;
+  // What the bet starts from, when it starts from something that fixes the count — never a count the business cannot keep.
+  const fixed = keptCountOff ? null : play ?? idea;
   // A play a model or a share wrote, kept with its words, and what a kept test starts from: as it was kept.
   const keptIdea = shelved && !play ? shelved.idea : null;
   const basis = shelved ?? fixed;
@@ -148,15 +157,15 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
   const first: LinkKey = basis?.part ?? experiment?.part ?? asked ?? sharedPart ?? 'who';
   const [part, setPart] = useState<LinkKey>(first);
   // A first draft from the offer, for the person to make theirs. Rewritten
-  // with the part until they type in it; never after. Words they shared are
-  // theirs already: a draft written from the offer would put other words in
-  // their mouth, so the field holds the share or nothing.
-  const [belief, setBelief] = useState(() => (shelved ? shelved.belief : seed ? beliefOfSeed(seed) : suggestBelief(first, offer, priceLabel, found)));
+  // with the part until they type in it; never after. A share gets no draft at
+  // all: neither the chat's sentence nor one written from the offer is what the
+  // person believes, and the first would reach a model as their words.
+  const [belief, setBelief] = useState(() => (shelved ? shelved.belief : seed ? '' : suggestBelief(first, offer, priceLabel, found)));
   const [typed, setTyped] = useState(!!seed || !!shelved);
-  const [metric, setMetric] = useState<LabMetric>(basis?.metric ?? firstMetric(first));
+  const [metric, setMetric] = useState<LabMetric>(keptCountOff ? firstMetric(first) : basis?.metric ?? firstMetric(first));
   const [unit, setUnit] = useState(basis?.unit ?? (found ? UNIT_FOR[found] : 'sign-ups'));
   const [target, setTarget] = useState(basis?.target ?? 2);
-  const [tries, setTries] = useState<{ metric: LabMetric; planned: number } | null>(basis?.tries ?? null);
+  const [tries, setTries] = useState<{ metric: LabMetric; planned: number } | null>(keptCountOff ? null : basis?.tries ?? null);
   const [days, setDays] = useState(basis?.days ?? experiment?.days ?? DEFAULT_BET_DAYS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,7 +196,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
     setBusy(true); setError(null);
     const r = await actions.lab({
       action: 'open',
-      bet: { part, belief: belief.trim(), play: play?.key ?? null, idea: playFrom(), metric, unit: shownUnit, target, tries, days, experiment: experiment?.id ?? null, shelf: shelved?.id ?? null },
+      bet: { part, belief: belief.trim(), play: play?.key ?? null, idea: playFrom(), metric, unit: shownUnit, target, tries, days, experiment: experiment?.id ?? null, shelf: shelfId ?? null },
     });
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not start it');
@@ -222,6 +231,11 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
           : 'A belief, a count that could prove it wrong, and a day. Written before it starts, so the result cannot move the line.')}
       </p>
       {seed && <SharedWords seed={seed} />}
+      {keptCountOff && (
+        <div className="cp-note cp2-lab-warn">
+          Kept while buyers came through what the app sends. They do not now, so its count cannot decide it: pick another below.
+        </div>
+      )}
 
       {!fixed && (
         <div className="cp-field">
@@ -329,7 +343,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
         {busy ? 'Starting…' : 'Start the bet'}
       </button>
       {/* The plan's experiment already waits in the plan, and a kept test already waits on the shelf: neither needs keeping twice. */}
-      {!experiment && !shelved && (
+      {!experiment && !shelfId && (
         <>
           <button className="cp-btn block cp2-lab-keep" disabled={busy || !belief.trim() || needsPrice || needsUnit} onClick={() => void keep()}>
             Keep for later
@@ -349,15 +363,17 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
  */
 function SharedWords({ seed }: { seed: Seed }) {
   const lines = plainLines(seed.text);
+  // Said as it is kept (seed.ts keptOfSeed): all of it or the first lines, and the link or not.
+  const kept = keptOfSeed(seed);
+  const said = !lines.length
+    ? 'The link stays with the bet as its play.'
+    : `${kept.whole ? 'It stays' : 'Its first lines stay'} with the bet as its play${kept.link ? ', with the link' : ''}.${seed.url && !kept.link ? ' The link is too long to keep with it.' : ''}`;
   return (
     <div className="cp2-seed">
       <span className="cp2-seed-k">What you shared</span>
       {lines.length > 0 && <p className="cp2-seed-text">{lines.join('\n')}</p>}
       {seed.url && <a className="cp2-seed-link" href={seed.url} target="_blank" rel="noopener noreferrer">{hostOf(seed.url)}</a>}
-      <p className="cp-help">
-        It stays with the bet as the play. Your belief is the box below, in your words.
-        {seed.cut ? ' It was long, so only the first part was read.' : ''}
-      </p>
+      <p className="cp-help">{said} Your belief is the box below, in your words.</p>
     </div>
   );
 }

@@ -163,6 +163,15 @@ new.
   those are rows a bet and a model can read. A person's file is a CRM, and a
   harness keeps contacts better. A weekly quota of conversations went with it:
   advice dressed as a test.
+- **An assistant to talk things over with.** Considered in October 2026, when
+  its owner asked for the mic to open a voice assistant for ideas, leverage and
+  updates, "like talking to a person". Declined as a chat: open conversation is
+  what Claude and ChatGPT do, better than this app would and given away — the
+  survival test's "a week of memory covers it". What was built is the half only
+  this app has: what is said is sorted into the rows it belongs in, held to the
+  words, kept by a tap, and a question about those rows is counted and said
+  back. Talking it over goes to Claude with the record attached: the connector
+  under You → Claude, or Ask's copy.
 - **Competing with Claude Code on building.** The app should *export* what it
   knows to a model, not try to be one. A context pack the user pastes into a
   chat is the honest version of "help me build this".
@@ -410,6 +419,21 @@ judgement is said to be one, and goes to Claude with the record. It passes the
 survival test on the rows: a chat with memory can hear "how much did I spend on
 coffee this week"; it cannot open the book. See COPILOT.md → **Ask your own
 record**, asked out loud.
+
+**Then** — the mic, sorting. It understood money and questions: "coffee 130"
+opened the book filled in, a question was answered, and anything else said into
+it was read as a move. The ask that connected Claude, an assistant to talk to
+about ideas, moves and what changed, had a part only this app can do: the
+record. So that is what the mic became: say what happened, and the sheet for it
+opens filled in — a conversation and who it was with, a sale, a meeting, a
+change to the offer, a note for the plan, money as before. A model sorts and
+copies; it never answers. Every detail it copies is held to the words, the day
+is the app's own reading, a note stays in the person's words, and nothing is
+kept until their tap. Money said like money and a question the app can count
+wait on no model, and without one the app's rules sort what they can and ask
+about the rest. It passes the survival test on the rows: a chat can hear "Pia
+paid me 150 yesterday"; it cannot put it on yesterday, against the bet, the goal
+and the price. See COPILOT.md → **Said, and sorted**.
 
 ---
 

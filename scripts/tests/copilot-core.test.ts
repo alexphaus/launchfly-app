@@ -9506,11 +9506,12 @@ connectorSuite().catch((e) => { console.error(e); process.exit(1); });
 
 import {
   ASKED as AK_ASKED, ASKED_CHIPS as AK_CHIPS, ASKED_IDS as AK_IDS, PERIODS as AK_PERIODS,
-  aboutOf as akAbout, answerAsked as akAnswer, askedLine as akLine, askedPrompt as akPrompt, categoryOf as akCategory, looksAsked as akLooks,
+  aboutOf as akAbout, answerAsked as akAnswer, askedLine as akLine, askedPrompt as akPrompt, categoryOf as akCategory,
   matchAsked as akMatch, monthsOf as akMonths, normalizeAsked as akNormalize, periodOf as akPeriod, screenMoney as akScreen, spanOf as akSpan,
   spokenMoney as akSpoken, type Asked as AkAsked, type AskedInput as AkInput, type BookMonthIn as AkBook,
 } from '../../src/lib/copilot/asked';
 import type { Talk as AkTalk } from '../../src/lib/copilot/lab';
+import { askedOutright as akOutright } from '../../src/lib/copilot/tell';
 import { readFileSync as readAskFile } from 'node:fs';
 
 async function askItSuite() {
@@ -9542,8 +9543,8 @@ async function askItSuite() {
   for (const id of AK_CHIPS) assert.equal(akMatch(AK_ASKED[id].q)?.id, id, `the chip for ${id} matches itself`);
 
   /* 2. A question for the sheet, or a move for the book: a move is never answered, and a question never logged. */
-  for (const said of ['coffee 130', 'grab 240 yesterday', 'paid rent 12000', 'salary came in 50000', 'Pia paid me 150']) assert.equal(akLooks(said), false, `"${said}" is a move`);
-  for (const said of ['how much did I spend this week', 'did I spend 500 on food?', 'safe to spend', 'Any replies today', 'what should I do next']) assert.equal(akLooks(said), true, `"${said}" is a question`);
+  for (const said of ['coffee 130', 'grab 240 yesterday', 'paid rent 12000', 'salary came in 50000', 'Pia paid me 150']) assert.equal(akOutright(said), false, `"${said}" is a move`);
+  for (const said of ['how much did I spend this week', 'did I spend 500 on food?', 'safe to spend', 'Any replies today', 'what should I do next']) assert.equal(akOutright(said), true, `"${said}" is a question`);
 
   /* 3. Days, said the way the screens count them: a week is the last seven days, a month is the calendar's. */
   assert.equal(akPeriod('how much did I spend this week'), 'week');
@@ -9688,12 +9689,138 @@ async function askItSuite() {
   assert.ok(!/post<[^>]*>\('\/(?!asked)/.test(sheet) && !/actions\.(log|record|addOutcome|lab|money)/.test(sheet), 'asking writes nothing');
   assert.match(sheet, /if \(aloud && canSpeak\(\)\) speech\.speak\(out\.say\)/, 'asked aloud, answered aloud — checked when speaking, not from first-render state');
   const shell = src('app/copilot/_components/v2/CopilotApp2.tsx');
-  assert.match(shell, /looksAsked\(text\) \? actions\.openSheet\(\{ kind: 'ask', heard: text \}\) : logMove\(text\)/);
+  assert.match(shell, /if \(askedOutright\(heard\)\) return actions\.openSheet\(\{ kind: 'ask', heard \}\);/);
+  assert.ok(shell.indexOf('askedOutright(heard)') < shell.indexOf('clearlyMoney(heard'), 'a question is answered before anything is read as money');
 
   console.log('copilot-core: ask-it checks passed');
 }
 
 askItSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The mic: what was said, sorted into the record it belongs to ────────── */
+//
+// The checks are the ways the mic could put words in the person's mouth: a
+// name, a quote or an amount nobody said, a day the model picked, a note
+// rewritten into a model's view of the business, a sale filed as spending, a
+// coffee sent on a round trip to a model, and a route that keeps anything
+// before the person taps.
+
+import {
+  HEARD_MAX as TELL_HEARD_MAX, askedOutright as tellOutright, cleanHeard as tellClean, clearlyMoney as tellMoney, inWords as tellInWords, isQuestion as tellQuestion,
+  normalizeTold as tellNormalize, occurredOn as tellOccurred, readByRules as tellRules, spokenFacts as tellFacts, tellPrompt, toldAs as tellAs,
+  TOLD_KINDS as TELL_KINDS,
+} from '../../src/lib/copilot/tell';
+import { readFileSync as readTellFile } from 'node:fs';
+
+async function tellSuite() {
+  const today = '2026-10-06';
+  const cats = { out: ['Food', 'Transport'], in: ['Salary'] };
+
+  /* 1. A money move said like one goes straight to the book; anything it could be besides is sorted. */
+  for (const said of ['coffee 130', 'grab 240 yesterday', 'salary came in 50,000', 'paid rent 12000', 'deposit 5000 to savings', 'load 100']) {
+    assert.equal(tellMoney(said, today, cats), true, `"${said}" is money`);
+  }
+  assert.equal(tellMoney('Food 200', today, cats), true, 'one of their own categories, named');
+  for (const said of ['Pia paid 150', 'pia paid me 150', 'sold 3 stickers to Joel for 450', 'raised my price to 200', 'Sent 20 messages today', 'Juan 500', 'how much did I spend 500', 'talked to Mara about 150']) {
+    assert.equal(tellMoney(said, today, cats), false, `"${said}" is not filed as spending without a sort`);
+  }
+
+  /* 2. Asked, not told: the opening word decides, and a statement that opens like a plan is a statement. */
+  for (const q of ['how is my bet going', 'did Pia pay', 'Is my runway ok?', 'what should I do next']) assert.equal(tellQuestion(q), true, q);
+  for (const t of ['was at the market and sold three', 'have a call with Joel tomorrow', 'will call Mara tomorrow', 'coffee 130']) assert.equal(tellQuestion(t), false, t);
+  for (const t of ['When I met Joel he said every clinic misses calls', 'what she wants is a quote', 'how we got Pia: she saw the post']) assert.equal(tellQuestion(t), false, `"${t}" tells`);
+  assert.equal(tellQuestion('when did I last talk to Mara'), true, 'a question puts its verb before the person');
+  assert.deepEqual(tellRules('When I met Joel he said every clinic misses calls', today)?.kind, 'talk', 'so the rules log it, rather than answer it');
+
+  /* 2b. The Ask sheet's own list does not decide what is asked: a record names what a question does. */
+  for (const said of [
+    'Talked to Mara yesterday, she will introduce me to her cousin', 'Had a call with Pia, she wants to follow up next week',
+    'Sent messages to five clinics today', 'I need to follow up with Joel', 'Spent the morning on deep work',
+    'My balance is low this week', 'Runway is tight', 'Sold two to Pia', 'The trade fair was worth it, two leads', 'Talked to Mara',
+  ]) assert.equal(tellOutright(said), false, `"${said}" is told, and sorted`);
+  for (const said of ['how much did I spend this week', 'can I spend 500 today', 'who did I talk to this week', 'my balance', 'runway', 'Is my runway ok?', 'which segment replies']) {
+    assert.equal(tellOutright(said), true, `"${said}" is asked, and answered at once`);
+  }
+  assert.equal(tellOutright('should I raise my price'), false, 'not on the list: the sort finds the question, and Ask says it cannot count it');
+  assert.deepEqual(tellRules('should I raise my price', today), { kind: 'question' });
+
+  /* 3. The rules, with no model: what they can tell, and nothing they cannot. */
+  const talk = tellRules('Talked to Mara yesterday, she will introduce me to her cousin at Bright Smiles', today);
+  assert.deepEqual(talk, { kind: 'talk', talk: { who: 'Mara', role: null, problem: null, commitment: null, said: null, on: '2026-10-05' } }, 'who and the day; who they were and how it ended are the person’s to pick');
+  assert.deepEqual(tellRules('sold 3 stickers to Joel for 450', today), { kind: 'sale', sale: { who: 'Joel', amount: '450', currency: null, on: null } }, 'the price, not the count of stickers');
+  assert.deepEqual(tellRules('Pia paid me 150 yesterday', today), { kind: 'sale', sale: { who: 'Pia', amount: '150', currency: null, on: '2026-10-05' } });
+  assert.deepEqual(tellRules('booked a demo with Lakeview Resort for Thursday', today), { kind: 'meeting', sale: { who: 'Lakeview Resort', amount: null, currency: null, on: null } }, 'booked today: the Thursday it is for is not the day it counts');
+  assert.deepEqual(tellRules('raised my price to 200', today), { kind: 'offer', offer: { price_band: '200' } });
+  assert.deepEqual(tellRules('how is my bet going', today), { kind: 'question' });
+  assert.deepEqual(tellRules('coffee 130', today), { kind: 'money' });
+  assert.deepEqual(tellRules('Resorts go quiet in the rainy season', today), { kind: 'note', note: { content: 'Resorts go quiet in the rainy season' } });
+  assert.deepEqual(tellRules('Sent 20 messages today', today), { kind: 'note', note: { content: 'Sent 20 messages today' } }, 'a number is not money by being one');
+  assert.equal(tellRules('Juan 500', today), null, 'a figure with nothing to say what it is: the chooser asks');
+  assert.equal(tellRules('', today), null);
+  for (const k of TELL_KINDS) assert.equal(tellAs(k, 'Pia paid 150', today).kind, k, `the chooser can open ${k}`);
+
+  /* 4. A model's sort, held to the words: what nobody said is dropped, and the day is the app's reading. */
+  const heard = 'Talked to Mara yesterday, she said we lose two bookings a week, she will intro me to her cousin';
+  assert.deepEqual(
+    tellNormalize({ kind: 'talk', who: 'Mara', role: 'buyer', said: 'we lose two bookings a week', problem: 'yes', commitment: 'intro', on: '2026-09-01' }, { heard, today }),
+    { kind: 'talk', talk: { who: 'Mara', role: 'buyer', said: 'we lose two bookings a week', problem: 'yes', commitment: 'intro', on: '2026-10-05' } },
+    'their words kept; the day said, not the one the model gave',
+  );
+  assert.deepEqual(
+    tellNormalize({ kind: 'talk', who: 'Maria Santos', role: 'investor', said: 'They love it', problem: 'maybe', commitment: 'a lot' }, { heard, today }),
+    { kind: 'talk', talk: { who: null, role: null, said: null, problem: null, commitment: null, on: '2026-10-05' } },
+    'a name and a quote nobody said are inventions; an answer that is not one is no answer',
+  );
+  // Who sells to the buyers does not have the problem: their "yes" would count
+  // as one more business that does (lab.ts → asksProblem).
+  const supplier = tellNormalize({ kind: 'talk', who: 'Mara', role: 'seller', problem: 'yes', commitment: 'intro' }, { heard, today });
+  assert.ok(supplier?.kind === 'talk' && supplier.talk.role === 'seller' && supplier.talk.problem === null, 'a supplier is not asked the buyer’s question');
+  assert.match(tellPrompt('talked to Mara', { today, weekday: 'Tuesday', offer: {} }), /"role" \(one of "buyer", "seller", "operator", "earner", "connector"/, 'the model is asked who they were, from the same five');
+  assert.deepEqual(tellNormalize({ kind: 'sale', who: 'Pia', amount: 1500 }, { heard: 'Pia paid me 150 pesos yesterday', today }),
+    { kind: 'sale', sale: { who: 'Pia', amount: '150', currency: 'PHP', on: '2026-10-05' } }, 'an amount not said gives way to the one that was');
+  assert.deepEqual(tellNormalize({ kind: 'meeting', who: 'Joel', amount: 99 }, { heard: 'booked a call with Joel', today }),
+    { kind: 'meeting', sale: { who: 'Joel', amount: null, currency: null, on: null } }, 'a meeting has no amount');
+  assert.deepEqual(tellNormalize({ kind: 'offer', offer: { price_band: '₱200', sells: 'booking bots', for_who: 'dentists' } }, { heard: 'raised my price to 200 for dentists', today }),
+    { kind: 'offer', offer: { price_band: '₱200', for_who: 'dentists' } }, 'a price held by its figures; what was not said about the offer is not changed');
+  assert.equal(tellNormalize({ kind: 'offer', offer: { price_band: '₱250' } }, { heard: 'raised my price to 200', today }), null, 'a price nobody said changes nothing');
+  assert.deepEqual(tellNormalize({ kind: 'note', note: 'Rainy season slows resort bookings by 40%' }, { heard: 'Resorts go quiet in the rainy season', today }),
+    { kind: 'note', note: { content: 'Resorts go quiet in the rainy season' } }, 'a note is the person’s words, never a model’s version of them (invariant 12)');
+  assert.deepEqual(tellNormalize({ kind: 'question' }, { heard: 'how is my bet going', today }), { kind: 'question' });
+  assert.equal(tellNormalize({ kind: 'chat', reply: 'Great question!' }, { heard: 'hello', today }), null, 'a kind there is not is the rules’ to sort');
+  assert.equal(tellNormalize('not json', { heard: 'hello', today }), null);
+
+  /* 5. The words: compared as said, whole words only; cut where the reader stops. */
+  assert.equal(tellInWords('dr. lim', 'Met Dr. Lim from Bright Smiles', 80), 'dr. lim');
+  assert.equal(tellInWords('Mar', 'Talked to Mara', 80), null, 'part of a name is not a name');
+  assert.equal(tellClean(`  ${'word '.repeat(300)}`).length, TELL_HEARD_MAX);
+  assert.equal(tellFacts('talked to Mara on october 1st', today).on, '2026-10-01', 'a day said is read');
+  assert.equal(tellFacts('talked to Mara on august 1st', today).on, null, 'past the month a conversation can be logged for');
+  assert.deepEqual(tellFacts('talked to Mara tomorrow', today).on, null, 'a day not lived yet');
+
+  /* 6. The prompt: the words, today, the offer, and every kind with what it is. */
+  const prompt = tellPrompt('Pia paid 150', { today, weekday: 'Tuesday', offer: { sells: 'Booking automation', for_who: 'resorts', price_band: '$150' } });
+  assert.ok(prompt.includes('"Pia paid 150"') && prompt.includes('Today is Tuesday 2026-10-06.') && prompt.includes('What they sell: Booking automation, for resorts, at $150.'));
+  for (const k of TELL_KINDS) assert.ok(prompt.includes(`- "${k}":`), `the model is told what "${k}" is`);
+
+  /* 7. A sale on the day it happened: today is now, a day said is kept at its noon, a day ahead or past the month is refused. */
+  assert.deepEqual(tellOccurred(undefined, today), { ok: true, at: null });
+  assert.deepEqual(tellOccurred(today, today), { ok: true, at: null });
+  assert.deepEqual(tellOccurred('2026-10-05', today), { ok: true, at: '2026-10-05T12:00:00.000Z' });
+  assert.deepEqual(tellOccurred('2026-10-07', today), { ok: false, error: 'That day has not happened yet.' });
+  assert.deepEqual(tellOccurred('2026-09-05', today), { ok: false, error: 'Only the last 30 days can be logged.' });
+  assert.deepEqual(tellOccurred('yesterday', today), { ok: false, error: 'That is not a day.' });
+
+  /* 8. The route sorts and never keeps: nothing is written until the person taps on the sheet it opens. */
+  const route = readTellFile(new URL('../../src/app/api/copilot/tell/route.ts', import.meta.url), 'utf8');
+  assert.ok(!/insert|recordOutcome|addContextItem|saveOffer|setOffer|insertLabEvent/.test(route), 'a sort writes nothing');
+  assert.ok(/normalizeTold\(/.test(route) && /readByRules\(/.test(route), 'a model’s sort is held to the words, and the rules sort what it cannot');
+  const outcomes = readTellFile(new URL('../../src/app/api/copilot/outcomes/route.ts', import.meta.url), 'utf8');
+  assert.ok(/occurredOn\(/.test(outcomes), 'a said day is checked before an outcome is kept on it');
+
+  console.log('copilot-core: tell checks passed');
+}
+
+tellSuite().catch((e) => { console.error(e); process.exit(1); });
 
 /* ─── Words shared in: the end of a chat as the start of a test ────────────── */
 //
@@ -10119,7 +10246,7 @@ async function shelfSuite() {
   assert.match(sheet, /const keptCountOff = !!shelved && !!countRefusal\(shelved\.metric, shelved\.tries, found\);/, 'a kept count the business can no longer keep reopens the pickers');
   assert.match(sheet, /const fixed = keptCountOff \? null : play \?\? idea;/);
   assert.match(src('src/app/copilot/_components/useCopilot.ts'), /shelve: 'Kept on your shelf\. Nothing counts until you start it\.'/);
-  assert.match(src('src/app/copilot/_components/useCopilot.ts'), /'talk', 'heard', 'shelf'\]/, 'two kept tests are two sheets, not the first one’s state');
+  assert.match(src('src/app/copilot/_components/useCopilot.ts'), /'talk', 'shelf'\]/, 'two kept tests are two sheets, not the first one’s state');
 
   console.log('copilot-core: shelf checks passed');
 }

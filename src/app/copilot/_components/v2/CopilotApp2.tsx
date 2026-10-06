@@ -43,15 +43,18 @@
 // Every way into Matches still lands: its tab names open Swipe, its New opens
 // Swipe, and its other pills open the sheet on the same stage.
 //
-// The header's corner is the mic (VoiceLog.tsx): say a move from any tab and
-// the add sheet opens with it filled in; ask a question — "how much did I spend
-// this week?" — and the Ask sheet answers it, counted from the rows and read
-// aloud (lib/copilot/asked.ts). It held the capacity pill, a setting shown on
-// every screen and changed about never; that is in You → Settings.
-import { useCallback, useRef } from 'react';
-import { looksAsked } from '@/lib/copilot/asked';
+// The header's corner is the mic (VoiceLog.tsx): say what happened from any
+// tab and the sheet for it opens filled in — a move in the book, as it always
+// did, or a conversation, a sale, a meeting, a change to the offer, a note for
+// the plan (lib/copilot/tell.ts sorts; TellSheets.tsx says what it heard and
+// who sorted it). Keeping it is still a tap. Ask a question — "how much did I
+// spend this week?" — and the Ask sheet answers it, counted from the rows and
+// read aloud (lib/copilot/asked.ts). It held the capacity pill, a setting
+// shown on every screen and changed about never; that is in You → Settings.
+import { useCallback, useRef, useState } from 'react';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView } from '@/lib/copilot/nightly';
+import { askedOutright, clearlyMoney, readByRules } from '@/lib/copilot/tell';
 import type { HomeData } from '@/lib/copilot/types';
 import { greeting } from '../format';
 import Sheet from '../Sheet';
@@ -66,6 +69,7 @@ import MoneyTab, { BookFab, BookSheet, MoneyTabGuard, useBook } from './MoneyTab
 import YouTab from './YouTab';
 import SwipeTab from './SwipeTab';
 import { useVoice, VoiceButton, VoiceLive } from './VoiceLog';
+import { openReading } from './TellSheets';
 
 const TABS: Tab2[] = ['path', 'swipe', 'proof', 'money', 'you'];
 const LABEL: Record<Tab2, string> = { path: 'Path', swipe: 'Swipe', proof: 'Proof', money: 'Money', you: 'You' };
@@ -108,11 +112,43 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     if (!book.book) void book.load();
     book.openEntry(heard ? { kind: 'add', heard } : { kind: 'add' });
   };
+  // The book's own sheet, from a sort or the chooser: whatever sheet asked goes first.
+  const openMoney = (heard: string) => { dismissSheets(); logMove(heard); };
+  // What the mic heard while it is being sorted, under the greeting: a second
+  // of waiting is a second of reading the words back.
+  const [sorting, setSorting] = useState<string | null>(null);
+  const tells = useRef(0);
+  const tell = async (heard: string) => {
+    // Something said after a sort began is the one that counts: the older one's answer is dropped.
+    const n = ++tells.current;
+    setSorting(null);
+    const today = home.recent.today;
+    const categories = book.book?.categories;
+    // A question the Ask sheet can count is answered there at once, counted and
+    // read aloud: it waits on no sort, and "can I spend 500 today?" carries an
+    // amount and is still not logged.
+    if (askedOutright(heard)) return actions.openSheet({ kind: 'ask', heard });
+    // Said like a money move, the book opens at once, as the corner always
+    // did: the commonest thing said into it waits on no model.
+    if (clearlyMoney(heard, today, categories)) return logMove(heard);
+    // No model on this server: the app's own rules sort it here, with no round trip to be told so.
+    if (!home.ai) return openReading({ meta: { heard, by: 'rules', why: null }, told: readByRules(heard, today, categories) }, { actions, openMoney });
+    setSorting(heard);
+    const r = await actions.tell(heard, categories);
+    if (n !== tells.current) return;
+    setSorting(null);
+    // The sort did not come back at all — offline, a failed request: the rules
+    // sort it, and the sheet says why (invariant 13). What was said is never lost.
+    openReading(
+      r.ok && r.reading
+        ? r.reading
+        : { meta: { heard, by: 'rules', why: `The sort did not come back (${r.error ?? 'no answer'}), so the app’s own rules sorted it.` }, told: readByRules(heard, today, categories) },
+      { actions, openMoney },
+    );
+  };
   const voice = useVoice({
     onStart: () => { if (!book.book) void book.load(); },
-    // A question is answered, not logged: "did I spend 500 on food?" carries an
-    // amount and is still a question, and nothing is ever logged without a tap.
-    onHeard: (text) => (looksAsked(text) ? actions.openSheet({ kind: 'ask', heard: text }) : logMove(text)),
+    onHeard: (text) => void tell(text),
     onFailed: (why, type) => { say(why); if (type) logMove(); },
   });
   const d = useDerived(home);
@@ -130,13 +166,16 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     <div className={`cp-frame cp2-frame${tab === 'swipe' ? ' cp2-swiping' : ''}`}>
       {/* No header on Swipe: the card is the screen, as a deck of cards has to be to be read at a glance. */}
       {tab !== 'swipe' && <header className="cp-header">
-        <div>
+        <div className="cp2-header-text">
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
           {/* Tab-aware, and nothing when there is nothing true to say. While the mic is open, what it hears. */}
-          {voice.listening ? <VoiceLive voice={voice} /> : status && <p>{status}</p>}
+          {voice.listening
+            ? <VoiceLive voice={voice} hint="Listening… say what happened, or ask" />
+            : sorting ? <p className="cp2-voice-live" aria-live="polite">Sorting… &ldquo;{sorting}&rdquo;</p>
+            : status && <p>{status}</p>}
         </div>
         <div className="cp-header-right">
-          <VoiceButton voice={voice} onType={() => logMove()} />
+          <VoiceButton voice={voice} onType={() => logMove()} label="Say what happened, or ask" />
         </div>
       </header>}
 
@@ -175,7 +214,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
       {tab === 'money' && <BookFab book={book} />}
 
       <Sheet open={sheetOpen} onClose={dismissSheets}>
-        {sheet && <SheetContent key={sheetKey(sheet)} sheet={sheet} home={home} actions={actions} briefing={briefing} />}
+        {sheet && <SheetContent key={sheetKey(sheet)} sheet={sheet} home={home} actions={actions} briefing={briefing} openMoney={openMoney} />}
       </Sheet>
       <Sheet open={!!book.entry} onClose={book.closeEntry}>
         <MoneyTabGuard><BookSheet book={book} /></MoneyTabGuard>

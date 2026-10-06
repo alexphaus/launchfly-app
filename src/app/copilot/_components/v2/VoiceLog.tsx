@@ -148,12 +148,13 @@ export function useVoice(opts: {
   return { supported, listening, interim, toggle };
 }
 
-export function VoiceButton({ voice, onType }: { voice: Voice; onType: () => void }) {
+/** `label`: what the mic takes, said to a screen reader — a move on the book's own page, anything in the shell's header. */
+export function VoiceButton({ voice, onType, label = 'Say a move to log' }: { voice: Voice; onType: () => void; label?: string }) {
   if (!voice.supported) return <button className="cp2-voice-btn plus" onClick={onType} aria-label="Log a move">+</button>;
   return (
     <button
       className={`cp2-voice-btn${voice.listening ? ' on' : ''}`} onClick={voice.toggle}
-      aria-pressed={voice.listening} aria-label={voice.listening ? 'Stop listening' : 'Say a move to log, or ask'}
+      aria-pressed={voice.listening} aria-label={voice.listening ? 'Stop listening' : label}
     >
       <IconMic />
     </button>
@@ -161,6 +162,6 @@ export function VoiceButton({ voice, onType }: { voice: Voice; onType: () => voi
 }
 
 /** Under the greeting while the mic is open: the words as they are heard, so a wrong one is seen while it is said. */
-export function VoiceLive({ voice }: { voice: Voice }) {
-  return <p className="cp2-voice-live" aria-live="polite">{voice.interim ? `“${voice.interim}”` : 'Listening… say it like “coffee 130”'}</p>;
+export function VoiceLive({ voice, hint = 'Listening… say it like “coffee 130”' }: { voice: Voice; hint?: string }) {
+  return <p className="cp2-voice-live" aria-live="polite">{voice.interim ? `“${voice.interim}”` : hint}</p>;
 }

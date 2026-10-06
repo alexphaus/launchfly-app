@@ -22,9 +22,11 @@ import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
 import { hostOf, ideaOfSeed, keptOfSeed, plainLines, type Seed } from '@/lib/copilot/seed';
+import type { ToldMeta, ToldTalk } from '@/lib/copilot/tell';
 import { derive } from './derive';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions, BetFromExperiment } from '../shared';
+import { ToldLine } from './TellSheets';
 
 /** A custom bet's first count, by the part it is about: the number that part lives or dies by. */
 const PART_METRIC: Record<LinkKey, LabMetric> = { who: 'committed', reach: 'replied', close: 'meetings', pay: 'paid_at_price', deliver: 'handed' };
@@ -385,18 +387,24 @@ function SharedWords({ seed }: { seed: Seed }) {
  * defaults to a buyer, because that is what most are and what every one was
  * before there was a choice. `via` opens it as the conversation an
  * introduction led to; any introduction on record can be picked here too.
+ * `told` is one said into the mic: who, who they were, their words, the day
+ * and — the model's proposal, there to be changed — whether they have the
+ * problem and how it ended, all as first values for the person to keep.
  */
-export function TalkSheet({ home, via: viaAsked, actions }: { home: HomeData; via?: string; actions: Actions }) {
+export function TalkSheet({ home, via: viaAsked, told, actions }: {
+  home: HomeData; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; actions: Actions;
+}) {
   const today = home.recent.today;
   const yesterday = shiftDay(today, -1);
   const record: TalkRecord = { talks: home.lab?.talks ?? [], intros: home.lab?.intros };
-  const [who, setWho] = useState('');
-  const [role, setRole] = useState<TalkRole>('buyer');
-  const [problem, setProblem] = useState<Problem | null>(null);
-  const [commitment, setCommitment] = useState<Commitment | null>(null);
-  const [said, setSaid] = useState('');
-  const [on, setOn] = useState(today);
-  const [other, setOther] = useState(false);
+  const t = told?.talk;
+  const [who, setWho] = useState(t?.who ?? '');
+  const [role, setRole] = useState<TalkRole>(t?.role ?? 'buyer');
+  const [problem, setProblem] = useState<Problem | null>(t?.problem ?? null);
+  const [commitment, setCommitment] = useState<Commitment | null>(t?.commitment ?? null);
+  const [said, setSaid] = useState(t?.said ?? '');
+  const [on, setOn] = useState(t?.on ?? today);
+  const [other, setOther] = useState(!!t?.on && t.on < yesterday);
   const [via, setVia] = useState<string | null>(viaAsked ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -429,6 +437,8 @@ export function TalkSheet({ home, via: viaAsked, actions }: { home: HomeData; vi
 
   return (
     <>
+      {/* What was said, until it is logged: the next one in the sitting is typed. */}
+      {told && logged === 0 && <ToldLine meta={told.meta} kind="talk" actions={actions} />}
       {/* Said while it is the pick: tapped "No", or logged and reset for the next, it is just a log. */}
       {opened && through === opened.id && <div className="cp2-lab-sheet-book">Through {opened.who ? `${opened.who}’s` : 'an'} introduction</div>}
       <h3>Log a conversation</h3>

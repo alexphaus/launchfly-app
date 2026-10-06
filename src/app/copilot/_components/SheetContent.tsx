@@ -25,11 +25,19 @@ import BankSheet from './BankSheet';
 import OutreachSheet from './v2/Outreach';
 import { ClaudeSheet } from './v2/ClaudeSheet';
 import { BetSheet, IntroSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
+import { NoteSheet, ToldChooser, ToldLine } from './v2/TellSheets';
+import type { ToldMeta, ToldOffer } from '@/lib/copilot/tell';
 import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, FoundBySheet, HistorySheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
 import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
 import { dayLabel } from '@/lib/copilot/money/ledger';
 
-export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
+/**
+ * `openMoney` is the shell's way to the book's own sheet, for the mic's
+ * chooser; a shell without one (the original layout) offers no money there.
+ */
+export default function SheetContent({ sheet, home, actions, briefing = false, openMoney }: {
+  sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean; openMoney?: (heard: string) => void;
+}) {
   switch (sheet.kind) {
     case 'you': return <div className="cp-sheet-embed"><YouView home={home} actions={actions} briefing={briefing} /></div>;
     case 'opening': return <OpeningSheet home={home} term={sheet.term} actions={actions} />;
@@ -46,7 +54,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'targeting': return <TargetingSheet home={home} actions={actions} />;
     case 'account': return <AccountSheet home={home} actions={actions} />;
     case 'won': return <WonSheet home={home} oppId={sheet.oppId} actions={actions} />;
-    case 'offer': return <OfferSheet home={home} bet={sheet.bet} actions={actions} />;
+    case 'offer': return <OfferSheet home={home} bet={sheet.bet} told={sheet.told} actions={actions} />;
     case 'watchlist': return <WatchlistSheet home={home} actions={actions} />;
     case 'money': return <MoneySheet home={home} actions={actions} />;
     case 'commission': return <CommissionSheet home={home} id={sheet.id} actions={actions} />;
@@ -60,11 +68,13 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'bank': return <BankSheet home={home} actions={actions} />;
     case 'outreach': return <OutreachSheet home={home} stage={sheet.stage} actions={actions} />;
     case 'bet': return <BetSheet home={home} playKey={sheet.play} part={sheet.part} ideaKey={sheet.idea} experiment={sheet.experiment} seed={sheet.seed} shelfId={sheet.shelf} actions={actions} />;
-    case 'talk': return <TalkSheet home={home} via={sheet.via} actions={actions} />;
+    case 'talk': return <TalkSheet home={home} via={sheet.via} told={sheet.told} actions={actions} />;
     case 'intro': return <IntroSheet home={home} talkId={sheet.talk} actions={actions} />;
+    case 'note': return <NoteSheet home={home} told={sheet.told} actions={actions} briefing={briefing} />;
+    case 'told': return <ToldChooser meta={sheet.meta} home={home} actions={actions} openMoney={openMoney} />;
     case 'talks': return <TalksSheet home={home} actions={actions} />;
     case 'count': return <CountSheet home={home} betId={sheet.bet} actions={actions} />;
-    case 'sale': return <SaleSheet home={home} outcome={sheet.outcome} actions={actions} />;
+    case 'sale': return <SaleSheet home={home} outcome={sheet.outcome} told={sheet.told} actions={actions} />;
     case 'chain': return <ChainSheet home={home} actions={actions} />;
     case 'foundby': return <FoundBySheet home={home} actions={actions} />;
     case 'history': return <HistorySheet home={home} actions={actions} />;
@@ -835,12 +845,18 @@ function AccountSheet({ home, actions }: { home: HomeData; actions: Actions }) {
   );
 }
 
-function OfferSheet({ home, bet, actions }: { home: HomeData; bet?: string; actions: Actions }) {
+/**
+ * The offer. `told` is a change said into the mic ("raised my price to 200"):
+ * the fields said, over the offer as it stands, for the person to check and
+ * save — saving is what rewrites the waiting drafts, so it stays their tap.
+ */
+function OfferSheet({ home, bet, told, actions }: { home: HomeData; bet?: string; told?: { meta: ToldMeta; offer: ToldOffer }; actions: Actions }) {
   const o = home.profile.offer ?? {};
-  const [sells, setSells] = useState(o.sells ?? '');
-  const [forWho, setForWho] = useState(o.for_who ?? home.profile.target_segments.join(', '));
-  const [problem, setProblem] = useState(o.problem ?? '');
-  const [price, setPrice] = useState(o.price_band ?? '');
+  const t = told?.offer ?? {};
+  const [sells, setSells] = useState(t.sells ?? o.sells ?? '');
+  const [forWho, setForWho] = useState(t.for_who ?? o.for_who ?? home.profile.target_segments.join(', '));
+  const [problem, setProblem] = useState(t.problem ?? o.problem ?? '');
+  const [price, setPrice] = useState(t.price_band ?? o.price_band ?? '');
   const [proof, setProof] = useState(o.proof_url ?? '');
   // How buyers find you rides along with the offer; untouched, the saved one is
   // kept as it is. Picked here, never cleared here: "not sure" is on its own
@@ -855,6 +871,7 @@ function OfferSheet({ home, bet, actions }: { home: HomeData; bet?: string; acti
   };
   return (
     <>
+      {told && <ToldLine meta={told.meta} kind="offer" actions={actions} />}
       <h3>What do you sell?</h3>
       <p className="desc">Every message the copilot drafts is built from this. Without it, drafts fall back to your one-line headline and stay vague.</p>
       {forBet && <p className="cp-help">This version is kept in your offer&rsquo;s history as written for the bet &ldquo;{forBet.bet.belief}&rdquo;.</p>}
@@ -1664,25 +1681,6 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   );
 }
 
-/* ─── Questions ───────────────────────────────────────────────────────────── */
-
-/**
- * Five questions about your own rows, and one escape hatch.
- *
- * The app writes constantly and could be asked nothing. Everything on every other
- * screen is a decision it made or a record it rendered; the thing somebody
- * actually says out loud after a fortnight — "which of these segments ever
- * replies?" — had nowhere to go, while the answer sat in the database.
- *
- * A fixed list rather than a text box, and lib/copilot/ask.ts argues it at length.
- * The short version: a typed question has to be answered by a model, a model
- * counting rows will produce a plausible figure, and nobody can tell which time it
- * is wrong. Every answer here is arithmetic.
- *
- * The handoff at the bottom is the other half of the same honesty. These five are
- * what the app can answer by counting; for everything else it hands you the whole
- * record and gets out of the way.
- */
 /* ─── The working file ────────────────────────────────────────────────────── */
 
 /**

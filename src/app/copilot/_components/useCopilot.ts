@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActionStatus, Capacity, Channel, Goal, HomeData, Offer, OpportunityStatus, SourceKey } from '@/lib/copilot/types';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { AskAnswer } from '@/lib/copilot/ask';
+import type { Reading } from '@/lib/copilot/tell';
 import type { Connection } from '@/lib/copilot/oauth';
 import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/lib/copilot/nightly';
 import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
@@ -96,14 +97,16 @@ export function sheetKey(s: SheetState): string {
   // Two sheets of one kind opened on different things are two sheets: a bet
   // sheet opened from one play and then from another must not keep the first
   // one's line, nor a new asset the first one's kind.
-  // A second question asked into the mic is a second answer, not the first one's sheet.
-  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk', 'heard', 'shelf'] as const)
+  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk', 'shelf'] as const)
     .map((k) => (k in s ? String((s as Record<string, unknown>)[k] ?? '') : ''))
     .join(':');
   const exp = 'experiment' in s && s.experiment ? s.experiment.id : '';
+  // Two things said into the mic are two sheets, even of one kind: the second
+  // must not open on the first one's words, nor a second question on the first one's answer.
+  const told = 'told' in s && s.told ? s.told.meta.heard : 'meta' in s ? s.meta.heard : 'heard' in s ? s.heard ?? '' : '';
   // Words shared in are a sheet of their own: another share is not this one's belief.
   const seed = 'seed' in s && s.seed ? `${s.seed.text.length}${s.seed.text.slice(0, 24)}${s.seed.url ?? ''}` : '';
-  return `${s.kind}:${id}:${on}:${exp}:${seed}`;
+  return `${s.kind}:${id}:${on}:${exp}:${told}:${seed}`;
 }
 
 /** The paid finders by name, for a toast that says which one failed; the rest are feeds. */
@@ -423,6 +426,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
 
   const openSheet = (s: SheetState) => setStack((st) => [...st, s]);
   const closeSheet = () => setStack((st) => st.slice(0, -1));
+  const swapSheet = (s: SheetState) => setStack((st) => [...st.slice(0, -1), s]);
   /** Overlay tap or Escape: everything goes, not just the top. */
   const dismissSheets = useCallback(() => setStack([]), []);
   const fail = (e: unknown, fallback: string) => say(e instanceof Error ? e.message : fallback);
@@ -430,6 +434,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
   const actions: Actions = {
     openSheet,
     closeSheet,
+    swapSheet,
     setTab,
     runBrief,
     runNightly,
@@ -879,6 +884,16 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         return { ok: true, answers: r.answers };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not count that' };
+      }
+    },
+    async tell(heard, categories) {
+      // Changes nothing, so there is no home to read back and nothing to say:
+      // the sheet it opens says what was heard and who sorted it.
+      try {
+        const r = await post<{ reading: Reading }>('/tell', { heard, categories });
+        return { ok: true, reading: r.reading };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not sort that' };
       }
     },
     async handoff() {

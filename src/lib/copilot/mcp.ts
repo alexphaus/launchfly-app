@@ -39,7 +39,7 @@ export const INSTRUCTIONS = [
   'This is the user\'s own business record, from their Copilot app: what they sell and to whom, their goals, the plan, the bets they are running, the conversations they logged, and what their rows count.',
   'Every number in it was counted by the app from rows the user created. When you estimate, project or compute a rate yourself, say it is your estimate and not the app\'s.',
   'The tools speak to the user as the app does, so "you" in them is the user. Lines the user wrote are marked as theirs, and a plan or draft a model wrote is marked as one; keep the two apart from what the rows show.',
-  'It is read-only: these tools cannot send, log, change or delete anything. When the user tells you something that belongs in the record — a conversation, a sale, a meeting, a new price — tell them to log it in their Copilot app, and never say it was saved.',
+  'It is read-only: these tools cannot send, log, change or delete anything. When the user tells you something that belongs in the record — a conversation, a sale, a meeting, a new price — tell them to log it in their Copilot app, where saying it into the mic opens it filled in for them to keep, and never say it was saved.',
   'Start with get_overview.',
 ].join(' ');
 

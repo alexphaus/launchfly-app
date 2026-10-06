@@ -1570,6 +1570,51 @@ the categories to read against; before the book arrives it says "Opening your
 book…". Playwright has no mic: tests put a stand-in `SpeechRecognition` on the
 page with `addInitScript` that "says" a set phrase.
 
+**Said, and sorted** (`tell.ts`, `api/copilot/tell`, `v2/TellSheets.tsx`). The
+header's mic takes more than money now: say what happened and the sheet for it
+opens filled in — a conversation ("talked to Mara yesterday, she'll intro me
+to her cousin"), a sale ("Pia paid me 150"), a meeting ("booked a demo with
+Lakeview"), a change to the offer ("raised my price to 200"), a note for the
+plan ("resorts go quiet in the rainy season"), or money as before. A question
+is answered: one the Ask sheet can count opens it on its answer, read aloud
+(**Asked out loud**), and one it cannot opens it saying so, with the question in
+its copy for Claude. Its owner asked for an assistant to talk to; what was built is the part only this
+app can do — putting what was said into rows — and talking ideas over stays
+with Claude and ChatGPT (DIRECTION.md).
+- **A countable question waits on nothing.** `askedOutright` sends a question on
+  Ask's list straight there, before anything is read as money, so "can I spend
+  500 today?" is answered, not logged. The list alone does not decide: "talked
+  to Mara yesterday" names "who did I talk to" and is a conversation to log. So
+  it takes a question's own form — "when I met Joel…" opens like one and is told
+  (`isQuestion`) — or a few words with no figure and no verb ("safe to spend").
+  Anything else is sorted, and a question the sort finds goes to Ask as well.
+- **Money waits on nothing either.** Said like a move — an amount with a money word, a
+  currency or one of the person's categories, and none of the words that make it
+  a sale, a conversation, a price or a question (`clearlyMoney`) — the book opens
+  at once, as it always did. Everything else is sorted.
+- **A model sorts and copies; it never answers.** It says which kind of record
+  the words are and copies details out of them, each held to the words
+  (`normalizeTold`, invariant 2): a name or a quote that is not in what was said
+  is dropped, an amount must be one that was said (the largest of several: "sold
+  3 stickers to Joel for 450" is 450), and the day is the app's own reading of
+  the words (`spokenFacts`, the money reader's), never the model's — a meeting
+  booked "for Thursday" counts today. A note is kept in the words said, never a
+  model's rewrite (invariant 12). Who they were to the business, whether they
+  have the problem and how a conversation ended are the model's proposal, shown
+  as chips to change — and a supplier or someone already earning is never
+  handed the buyer's "do they have it?" (`asksProblem`).
+- **Without a model, the rules sort** (`readByRules`) what they can, and ask
+  about the rest: "Juan 500" opens the chooser rather than being filed as
+  spending. A model that times out, a cap of 300 sorts a day, or a reply that
+  does not hold to the words falls back to the rules, and the sheet says why
+  (invariant 13). The words are never lost.
+- **Every sheet it fills in says so**: the words as heard, who sorted them, and
+  "Not a conversation?" — the chooser, which opens the right sheet in the same
+  place. Nothing is kept until the sheet's own button; the route reads and never
+  writes, and a test pins that. A sale or a meeting said for another day offers
+  that day beside today, and `/api/copilot/outcomes` keeps it at that day's noon
+  (`occurredOn`, inside the month a conversation can be logged for).
+
 **Logged in another currency.** Tap the ₱ on the keypad: a select laid over the
 mark. The choice is the default for the next move, kept on the account
 (`finance.book.entry`, `setEntryCurrency`) so the shortcut's first HTML already
@@ -2483,9 +2528,11 @@ of it has been worth money. Opened from the card under the funnel on Working.
 **Asked out loud** (`asked.ts`, `AskSheet.tsx`). The sheet also takes a question
 said, typed or tapped — "how much did I spend this week?", "how is my bet
 going?", "what should I do next?" — and answers it out loud when it was asked out
-loud. Said into the header's mic, a question opens this sheet on its answer
-instead of the book (`looksAsked`: a question word, or no amount and a match;
-"did I spend 500 on food?" is still a question). The ask.ts argument holds and
+loud. Said into the header's mic, a question the list can count opens this
+sheet on its answer before anything is read as money or sorted (`askedOutright`
+in `tell.ts`: a question's own form, or a few words with no figure and no verb;
+"did I spend 500 on food?" is still a question, and "talked to Mara yesterday"
+still a conversation to log — **Said, and sorted**). The ask.ts argument holds and
 this is its spoken half: a question is only ever **matched** to a fixed list —
 the next move, the bet, the goals, safe to spend, spending and money in over some
 days and on a category or a word, balance, runway, conversations, introductions
@@ -2584,8 +2631,10 @@ load is named at the top rather than read as nothing (invariant 13).
 **What it does not do: write.** Not "not yet" in the copy and a tool in the list:
 there is no write tool, a test fails if one appears, and what Claude is told at
 `initialize` says it cannot save anything and must never say it did. What belongs
-in the record is logged in the app. Writing comes with its own scope and its own
-consent screen, not by widening this one.
+in the record is logged in the app, and Claude is told the mic is the short way
+(**Said, and sorted**): the words go in, the sheet opens filled in, the tap keeps
+it. Writing comes with its own scope and its own consent screen, not by widening
+this one.
 
 **Signing in, without a table.** Claude's OAuth requirements
 (claude.com/docs/connectors/building/authentication) are met as written: a 401
@@ -2934,7 +2983,8 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/actions/:id` | `{ status: done \| dismissed \| open }` |
 | POST/DELETE | `/api/copilot/actions/:id/send` | approve & send via API (only when the profile owns the channel) / cancel |
 | POST | `/api/copilot/actions/:id/sent` | manual dispatch: "I sent it from my own app" |
-| POST | `/api/copilot/outcomes` | `{ kind, opportunity_id?, action_id?, amount?, currency?, note? }` — `kind` is any `OUTCOME_KINDS` value, including the three worth answers |
+| POST | `/api/copilot/outcomes` | `{ kind, opportunity_id?, action_id?, amount?, currency?, note?, on? }` — `kind` is any `OUTCOME_KINDS` value, including the three worth answers; `on` is the person's day it happened, within the last 30 |
+| POST | `/api/copilot/tell` | `{ heard, categories? }` — what was said into the mic, sorted: `{ reading: { meta: { heard, by: model \| rules, why }, told } }`. Reads only; the sheet it opens keeps |
 | POST | `/api/copilot/decision` | `{ response: did \| rejected \| wrong }` — what you did about today's call |
 | POST | `/api/copilot/growth/:id` | `{ status: active \| done \| dismissed }` |
 | POST | `/api/copilot/sources/:key` | mark a connector as requested (foundation) |

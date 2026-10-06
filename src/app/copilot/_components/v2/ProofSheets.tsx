@@ -16,6 +16,7 @@ import { BET_STATE_LABEL, NOTE_MAX, TALLY_MAX, dayWords, metricWords, resultLine
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { FOUND_BY_HINT, FOUND_BY_LABEL, offerIsEmpty } from '@/lib/copilot/offer';
 import { foundOf } from '@/lib/copilot/proof';
+import type { ToldMeta, ToldSale } from '@/lib/copilot/tell';
 import { FOUND_BY, type FoundBy, type HomeData } from '@/lib/copilot/types';
 import { get } from '../api';
 import type { Actions } from '../shared';
@@ -25,6 +26,7 @@ import { IconChevron, IconExternal } from './icons2';
 import { Count, talkDay } from './LabSheets';
 import { MoveNote, MoveRow, agentIsFull, orChat, useBrief, useMove } from './MoveKit';
 import { Composer, Project } from './ProjectCard';
+import { ToldLine } from './TellSheets';
 import { AssetRow, HistoryRow, assetBet } from './ProofTab';
 
 /* ─── The chain, whole ────────────────────────────────────────────────────── */
@@ -679,14 +681,24 @@ export function CountSheet({ home, betId, actions }: { home: HomeData; betId: st
 
 /* ─── A sale or a meeting from outside the app ────────────────────────────── */
 
-export function SaleSheet({ home, outcome, actions }: { home: HomeData; outcome: 'won' | 'meeting'; actions: Actions }) {
-  const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState(salesCurrency(home.profile.finance, home.goals));
-  const [who, setWho] = useState('');
+/**
+ * A sale or a meeting, logged by hand. `told` is one said into the mic: the
+ * amount and currency said, who, and the day — offered beside today when it was
+ * another one ("Pia paid me yesterday"), so a sale lands on the day it happened.
+ */
+export function SaleSheet({ home, outcome, told, actions }: { home: HomeData; outcome: 'won' | 'meeting'; told?: { meta: ToldMeta; sale: ToldSale }; actions: Actions }) {
+  const t = told?.sale;
+  const today = home.recent.today;
+  const [amount, setAmount] = useState(t?.amount ?? '');
+  const [currency, setCurrency] = useState(t?.currency ?? salesCurrency(home.profile.finance, home.goals));
+  const [who, setWho] = useState(t?.who ?? '');
+  const [on, setOn] = useState(t?.on ?? today);
   const [busy, setBusy] = useState(false);
   const won = outcome === 'won';
   const n = Number(amount.replace(/,/g, ''));
   const bad = won && amount.trim() !== '' && !(Number.isFinite(n) && n >= 0);
+  // Only a day that was said is offered: the sheet logs today otherwise, as it always has.
+  const saidDay = t?.on && t.on !== today ? t.on : null;
   const save = async () => {
     setBusy(true);
     await actions.recordOutcome({
@@ -694,11 +706,13 @@ export function SaleSheet({ home, outcome, actions }: { home: HomeData; outcome:
       amount: won && amount.trim() ? n : undefined,
       currency: won ? currency : undefined,
       note: who.trim() || undefined,
+      on: on !== today ? on : undefined,
     });
     setBusy(false);
   };
   return (
     <>
+      {told && <ToldLine meta={told.meta} kind={won ? 'sale' : 'meeting'} actions={actions} />}
       <h3>{won ? 'Log a sale' : 'Log a meeting'}</h3>
       <p className="desc">
         {won
@@ -719,6 +733,15 @@ export function SaleSheet({ home, outcome, actions }: { home: HomeData; outcome:
         <label className="cp-label" htmlFor="cp2-pf-sw">Who — optional</label>
         <input id="cp2-pf-sw" className="cp-input sm" value={who} maxLength={80} onChange={(e) => setWho(e.target.value)} placeholder="Maria, Sunrise Dental" />
       </div>
+      {saidDay && (
+        <div className="cp-field">
+          <label className="cp-label">When</label>
+          <div className="cp-chips">
+            <button className={`cp-fchip ${on === saidDay ? 'active' : ''}`} aria-pressed={on === saidDay} onClick={() => setOn(saidDay)}>{talkDay(saidDay, today)}</button>
+            <button className={`cp-fchip ${on === today ? 'active' : ''}`} aria-pressed={on === today} onClick={() => setOn(today)}>Today</button>
+          </div>
+        </div>
+      )}
       <div className="cp-btn-row">
         <button className="cp-btn primary" disabled={busy || bad} onClick={() => void save()}>{busy ? 'Logging…' : won ? 'Log the sale' : 'Log the meeting'}</button>
         <button className="cp-btn" onClick={actions.closeSheet}>Back</button>

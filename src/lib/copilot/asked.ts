@@ -176,21 +176,6 @@ export function matchAsked(heard: string): Asked | null {
   return { id, period: periodOf(q), about: id === 'spent' || id === 'received' ? aboutOf(q) : null, by: 'rules' };
 }
 
-/**
- * Whether words said into the mic are a question for this sheet rather than a
- * move for the book. A move has an amount and no question in it; "did I spend
- * 500 on food?" is a question with an amount, and "safe to spend" one with no
- * question word.
- */
-export function looksAsked(heard: string): boolean {
-  const q = cleanAsked(heard);
-  if (!q) return false;
-  const questionWord = /^(how|what|what's|whats|which|who|whom|when|where|why|is|am|are|was|were|do|does|did|can|could|should|have|has|any|tell me|show me)\b/.test(q) || /\?\s*$/.test(heard.trim());
-  if (questionWord) return true;
-  // No question word: only a match that is plainly not a move — nothing to log without an amount.
-  return !/\d/.test(q) && matchAsked(q) !== null;
-}
-
 /* ─── Days ────────────────────────────────────────────────────────────────── */
 
 const MONTH_NAME = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

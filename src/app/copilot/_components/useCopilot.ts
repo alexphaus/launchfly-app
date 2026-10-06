@@ -35,6 +35,7 @@ const LAB_SAID: Record<LabInput['action'], string> = {
   open: 'Bet started. Only what happens from today counts.',
   stop: 'Called off. It stays in your history.',
   talk: 'Logged.',
+  intro: 'Noted. It is off your Path.',
   forget: 'Removed.',
   count: 'Counted.',
   uncount: 'Removed.',
@@ -91,7 +92,7 @@ export function sheetKey(s: SheetState): string {
   // Two sheets of one kind opened on different things are two sheets: a bet
   // sheet opened from one play and then from another must not keep the first
   // one's line, nor a new asset the first one's kind.
-  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome'] as const)
+  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk'] as const)
     .map((k) => (k in s ? String((s as Record<string, unknown>)[k] ?? '') : ''))
     .join(':');
   const exp = 'experiment' in s && s.experiment ? s.experiment.id : '';

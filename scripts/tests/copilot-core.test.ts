@@ -8344,7 +8344,7 @@ async function businessChainSuite() {
   assert.equal(inbound({ bets: [betOn('reach', 'failed', '2026-09-20'), betOn('reach', 'passed', '2026-09-01')] }).reach.state, 'testing');
   // Who buys: conversations about the problem, a sale at the price, or a bet that passed.
   assert.equal(inbound().who.state, 'untested');
-  assert.equal(inbound({ talks: { n: 4, problem: 3, committed: 1 } }).who.why, '3 of the 4 people you talked to have the problem, and 1 committed to something.');
+  assert.equal(inbound({ talks: { n: 4, problem: 3, committed: 1 } }).who.why, '3 of the 4 possible buyers you talked to have the problem, and 1 committed to something.');
   assert.equal(inbound({ wins: [150] }).who.state, 'works', 'a sale at the price is a buyer found');
   assert.equal(inbound({ wins: [1] }).who.state, 'untested', 'a one-dollar test is not one');
   assert.equal(inbound({ bets: [betOn('who', 'passed', '2026-09-20')] }).who.state, 'works');
@@ -8438,7 +8438,7 @@ async function labSuite() {
     id: 'b', part: 'reach', belief: 'They answer', play: null, idea: null, unit: null, tries: null, price: null, priceLabel: null, experiment: null, openedAt: `${b.start}T01:00:00Z`, ...b,
   });
   const none: DayRows = { sends: [], outcomes: [], finished: [], talks: [] };
-  const talk = (on: string, commitment: LabTalk['commitment'], problem: LabTalk['problem'] = 'yes'): LabTalk => ({ id: `t-${on}-${commitment}`, on, who: null, problem, commitment, said: null, at: `${on}T09:00:00Z` });
+  const talk = (on: string, commitment: LabTalk['commitment'], problem: LabTalk['problem'] = 'yes'): LabTalk => ({ id: `t-${on}-${commitment}`, on, who: null, role: 'buyer', problem, commitment, said: null, via: null, at: `${on}T09:00:00Z` });
 
   /* 1. A bet is held to what a verdict needs, and refused with what to fix — never coerced into one nobody wrote. */
   const ctx = { today, price: 150, priceLabel: '$150' };
@@ -8460,7 +8460,7 @@ async function labSuite() {
   assert.ok(own.ok && own.value.start === today, 'a bet starts the day it is written, whatever the client says');
 
   // A conversation: today unless said, never a day not lived yet, a month back at most.
-  assert.deepEqual(normalizeTalk({ problem: 'yes', commitment: 'money', who: ' Rico ', said: '' }, today), { ok: true, value: { on: today, who: 'Rico', problem: 'yes', commitment: 'money', said: null } });
+  assert.deepEqual(normalizeTalk({ problem: 'yes', commitment: 'money', who: ' Rico ', said: '' }, today), { ok: true, value: { on: today, who: 'Rico', role: 'buyer', problem: 'yes', commitment: 'money', said: null, via: null } });
   assert.deepEqual(normalizeTalk({ on: '2026-10-05' }, today), { ok: false, error: 'That day has not happened yet.' });
   assert.deepEqual(normalizeTalk({ on: '2026-09-03' }, today), { ok: false, error: 'Only the last 30 days can be logged.' });
   assert.ok(normalizeTalk({ on: '2026-09-04' }, today).ok, 'thirty days back is the edge, and inside it');
@@ -8625,7 +8625,7 @@ async function labSuite() {
   }
   assert.equal(countedFrom('logged', '2026-09-29', null, 'sign-ups'), 'From the sign-ups you log since 29 Sep: your count, not the app\'s.');
   assert.match(countedFrom('paid_at_price', '2026-09-29', '$150'), /\$150 or more/);
-  assert.deepEqual(talkCounts([talk('2026-10-04', 'money'), talk('2026-09-05', 'none', 'no'), talk('2026-09-04', 'time')], today), { n: 2, committed: 1, have: 1 }, 'the last thirty days, today included');
+  assert.deepEqual(talkCounts([talk('2026-10-04', 'money'), talk('2026-09-05', 'none', 'no'), talk('2026-09-04', 'time')], today), { n: 2, committed: 1, have: 1, by: { buyer: 2, seller: 0, operator: 0, earner: 0, connector: 0 }, introduced: 0 }, 'the last thirty days, today included');
 
   /* 9. A first draft of the belief: one buyer, one thing sold, and a number only when the person said one. */
   const offer = { sells: 'Booking automation, custom AI workflows, no website', for_who: 'Staycation & resorts, Pest control, plumbing', problem: 'Save time', price_band: '$150' };
@@ -8665,7 +8665,8 @@ async function labSuite() {
   /* 12. Nobody marks a bet passed (invariant 10): the route has no way to post a verdict. */
   const route = readLabFile(new URL('../../src/app/api/copilot/lab/route.ts', import.meta.url), 'utf8');
   const actions = [...route.matchAll(/case '([a-z_]+)'/g)].map((m) => m[1]).sort();
-  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'link', 'open', 'stop', 'talk', 'uncount'], 'a verdict is the rows’, not a request’s');
+  // "intro" says how an introduction went — asked for, or fell through — and never whether a bet passed.
+  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'intro', 'link', 'open', 'stop', 'talk', 'uncount'], 'a verdict is the rows’, not a request’s');
 
   console.log('copilot-core: lab checks passed');
 }
@@ -8950,3 +8951,183 @@ async function proofSuite() {
 }
 
 proofSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Conversations: who they were, introductions, and what they said ─────── */
+//
+// The checks are the ways this could mislead: a supplier counted as a buyer,
+// an introduction that nags forever or drops off unsaid, a conversation tied
+// to an introduction that never was, a model handed words nobody logged — or a
+// number from those words refused as if it were invented.
+
+import {
+  HEARD_MAX as CV_HEARD_MAX, INTRO_LINK_DAYS as CV_INTRO_LINK_DAYS, LAB_EVENTS as CV_LAB_EVENTS, LAB_INTRO as CV_LAB_INTRO, LAB_TALK as CV_LAB_TALK,
+  PLAY_BY_KEY as CV_PLAY_BY_KEY,
+  heardFrom as cvHeardFrom, heardLine as cvHeardLine, introSources as cvIntroSources, introState as cvIntroState, isBuyer as cvIsBuyer,
+  labFromEvents as cvLabFromEvents, normalizeBet as cvNormBet, normalizeIntroClose as cvNormIntro, normalizeTalk as cvNormTalk,
+  openIntros as cvOpenIntros, playsFor as cvPlaysFor, talkCounts as cvTalkCounts, type Talk as CvTalk,
+} from '../../src/lib/copilot/lab';
+import { ideaSources as cvIdeaSources, ideasPrompt as cvIdeasPrompt, normalizeIdeas as cvNormIdeas, talkTotals as cvTalkTotals } from '../../src/lib/copilot/ideas';
+import { assetDraftPrompt as cvDraftPrompt, checkAssetDraft as cvCheckDraft, type AssetDraftContext as CvDraftCtx } from '../../src/lib/copilot/assets';
+import { needsYou as cvNeedsYou } from '../../src/lib/copilot/today';
+import { pathNow as cvPathNow } from '../../src/lib/copilot/plan';
+import { historyOf as cvHistoryOf } from '../../src/lib/copilot/history';
+import { readFileSync as readTalkFile } from 'node:fs';
+
+async function conversationsSuite() {
+  const today = '2026-10-06';
+  const tk = (id: string, on: string, o: Partial<CvTalk> = {}): CvTalk => ({
+    id, on, who: null, role: 'buyer', problem: 'unasked', commitment: 'none', said: null, via: null, at: `${on}T09:00:00Z`, ...o,
+  });
+
+  /* 1. Who they were: a tap that defaults to a buyer, refused when it is none of the five, and the problem asked only of who could have it. */
+  const plain = cvNormTalk({ commitment: 'time' }, today);
+  assert.ok(plain.ok && plain.value.role === 'buyer' && plain.value.via === null, 'no role is a buyer, as every conversation was before there was a choice');
+  assert.deepEqual(cvNormTalk({ role: 'investor', commitment: 'none' }, today), { ok: false, error: 'Who were they to the business?' });
+  const supplier = cvNormTalk({ role: 'seller', problem: 'yes', commitment: 'intro' }, today);
+  assert.ok(supplier.ok && supplier.value.problem === 'unasked', 'a supplier’s yes is not one more business with the problem');
+  const operator = cvNormTalk({ role: 'operator', problem: 'yes', commitment: 'none' }, today);
+  assert.ok(operator.ok && operator.value.problem === 'yes', 'who runs the work can have it');
+
+  /* 2. An introduction a conversation names has to be one on record, offered on or before it. */
+  const mara = tk('11', '2026-10-01', { who: 'Mara', role: 'connector', commitment: 'intro', said: 'Talk to my cousin at Bright Smiles' });
+  const ana = tk('12', '2026-10-02', { who: 'Ana', commitment: 'time' });
+  const known = [mara, ana];
+  assert.deepEqual(cvNormTalk({ via: '99', commitment: 'none' }, today, known), { ok: false, error: 'That introduction is not in your record.' });
+  assert.deepEqual(cvNormTalk({ via: '12', commitment: 'none' }, today, known), { ok: false, error: 'That introduction is not in your record.' }, 'another call is not an introduction');
+  assert.deepEqual(cvNormTalk({ via: '11', on: '2026-09-30', commitment: 'none' }, today, known), { ok: false, error: 'That introduction was offered after this conversation.' });
+  const through = cvNormTalk({ via: '11', who: 'Dr. Reyes', commitment: 'money' }, today, known);
+  assert.ok(through.ok && through.value.via === '11');
+  assert.deepEqual(cvNormTalk({ via: '11', commitment: 'none' }, today), { ok: false, error: 'That introduction is not in your record.' }, 'nothing read, nothing to tie it to');
+  assert.deepEqual(cvNormIntro({ talk: '12', outcome: 'asked' }, known), { ok: false, error: 'That introduction is not in your record.' });
+  assert.deepEqual(cvNormIntro({ talk: '11', outcome: 'maybe' }, known), { ok: false, error: 'Did you ask for it, or did it fall through?' });
+  assert.deepEqual(cvNormIntro({ talk: '11', outcome: 'dropped' }, known), { ok: true, value: { talk: '11', outcome: 'dropped' } });
+
+  /* 3. As stored: a conversation from before roles is a buyer's, a bad reference is none, and the last word on an introduction wins. */
+  assert.ok((CV_LAB_EVENTS as readonly string[]).includes(CV_LAB_INTRO), 'read with the rest, or an introduction closed never stays closed');
+  const ev = (id: number, event_type: string, created_at: string, payload: Record<string, unknown>) => ({ id, event_type, created_at, payload });
+  const stored = cvLabFromEvents([
+    ev(1, CV_LAB_TALK, '2026-09-20T09:00:00Z', { on: '2026-09-20', who: 'Rico', problem: 'yes', commitment: 'intro' }),
+    ev(2, CV_LAB_TALK, '2026-09-21T09:00:00Z', { on: '2026-09-21', who: 'Joe', role: 'earner', commitment: 'none', via: '1' }),
+    ev(3, CV_LAB_TALK, '2026-09-21T10:00:00Z', { on: '2026-09-21', role: 'astronaut', via: 'not an id!' }),
+    ev(4, CV_LAB_INTRO, '2026-09-22T09:00:00Z', { talk: '1', outcome: 'asked' }),
+    ev(5, CV_LAB_INTRO, '2026-09-25T09:00:00Z', { talk: '1', outcome: 'dropped' }),
+    ev(6, CV_LAB_INTRO, '2026-09-26T09:00:00Z', { talk: '1', outcome: 'maybe' }),
+  ]);
+  assert.deepEqual(stored.talks.map((t) => [t.id, t.role, t.via]), [['3', 'buyer', null], ['2', 'earner', '1'], ['1', 'buyer', null]]);
+  assert.equal(stored.intros.get('1')?.outcome, 'dropped', 'asked for on Monday, fallen through by Friday');
+
+  /* 4. Where an introduction stands: a conversation through it is the answer, whatever was said before; open for a month, then lapsed. */
+  const asked = { '11': { outcome: 'asked' as const, at: '2026-10-03T00:00:00Z' } };
+  assert.equal(cvIntroState(mara, [mara, ana], undefined, today), 'open');
+  assert.equal(cvIntroState(mara, [mara, ana], asked, today), 'asked');
+  assert.equal(cvIntroState(mara, [mara, tk('13', '2026-10-04', { via: '11' })], { '11': { outcome: 'dropped', at: '2026-10-03T00:00:00Z' } }, today), 'led', 'it happened after all');
+  assert.equal(cvIntroState(mara, [mara], undefined, '2026-10-31'), 'open', 'thirty days is the edge, and inside it');
+  assert.equal(cvIntroState(mara, [mara], undefined, '2026-11-01'), 'lapsed', 'past the month, a nudge nobody can act on is noise');
+  assert.equal(cvIntroState(ana, [ana], undefined, today), null, 'another call offers no introduction');
+
+  /* 5. On the Path from the day after, oldest first, and gone once followed — never the day it was logged. */
+  const fresh = tk('14', today, { who: 'Lea', commitment: 'intro' });
+  const old = tk('15', '2026-09-20', { who: 'Tom', commitment: 'intro' });
+  const kim = tk('16', '2026-09-25', { who: 'Kim', commitment: 'intro' });
+  const viaKim = tk('17', '2026-09-28', { via: '16' });
+  const all = [fresh, viaKim, kim, mara, old];
+  assert.deepEqual(cvOpenIntros(all, undefined, today).map((x) => [x.talk.id, x.days]), [['15', 16], ['11', 5]], 'Lea’s is news today; Kim’s led somewhere');
+  assert.deepEqual(cvOpenIntros([mara], asked, today), [], 'asked for: off the Path while the other side does their part');
+
+  /* 6. What a conversation can say it came through: not one that fell through, not one offered after it; one that already led stays. */
+  const sources = cvIntroSources(all, { '15': { outcome: 'dropped', at: '2026-09-30T00:00:00Z' } }, '2026-10-02');
+  assert.deepEqual(sources.map((t) => t.id), ['11', '16'], 'newest first; Lea’s came after the day, Tom’s fell through');
+  assert.equal(cvIntroSources([old], undefined, '2026-12-01').length, 0, `past ${CV_INTRO_LINK_DAYS} days nobody remembers who made it`);
+
+  /* 7. Only a buyer is one: the chain's counts leave the people around the money out; the month's counts say who they were. */
+  const month = [
+    tk('a', '2026-10-05', { problem: 'yes', commitment: 'time' }),
+    tk('b', '2026-10-04', { role: 'seller', commitment: 'intro' }),
+    tk('c', '2026-10-03', { role: 'connector', commitment: 'intro', via: '11' }),
+    tk('d', '2026-08-01', { problem: 'yes' }),
+  ];
+  assert.deepEqual(cvTalkTotals(month), { n: 2, problem: 2, committed: 1 }, 'two buyers, all time; the supplier and the connector are heard, not counted');
+  const counts = cvTalkCounts(month, today);
+  assert.deepEqual([counts.n, counts.committed, counts.have, counts.introduced, counts.by], [3, 3, 1, 1, { buyer: 1, seller: 1, operator: 0, earner: 0, connector: 1 }]);
+  const legacy = { id: 'x', on: '2026-10-05', who: null, problem: 'yes', commitment: 'none', said: null, at: '2026-10-05T00:00:00Z' } as unknown as CvTalk;
+  assert.ok(cvIsBuyer(legacy) && cvTalkCounts([legacy], today).by.buyer === 1, 'a cached payload from before roles reads as a buyer’s');
+
+  /* 8. Needs you: an introduction right after a question — the one thing on the list lost by waiting — and the move when it leads. */
+  const asks = cvNeedsYou({
+    commissions: [
+      threadV2({ id: 'broke', status: 'blocked', objective: 'Find jobs' }, [{ kind: 'failed', summary: 'search tool returned 500' }]),
+      threadV2({ id: 'ask', status: 'blocked' }, [{ kind: 'needs_you', summary: 'Which city?' }]),
+    ],
+    capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false,
+    intros: cvOpenIntros([mara, old], undefined, today),
+  });
+  assert.deepEqual(asks.map((a) => a.key), ['q:ask', 'i:15', 'i:11', 'f:broke']);
+  assert.deepEqual([asks[2].kind, asks[2].id, asks[2].title, asks[2].detail], ['intro', '11', 'Follow up the intro from Mara', 'Offered 5 days ago — ask before they forget offering. “Talk to my cousin at Bright Smiles”']);
+  const yesterday = cvNeedsYou({ commissions: [], capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false, intros: [{ talk: { id: '9', who: null, said: null }, days: 1 }] });
+  assert.deepEqual([yesterday[0].title, yesterday[0].detail], ['Follow up an intro you were offered', 'Offered yesterday — ask before they forget offering.']);
+  const move = cvPathNow({ noOffer: false, callPending: false, queue: { count: 0, oldestDays: 0 }, asks: asks.slice(1), moves: [], capacity: 'deep', funnel: { sent: 0, replied: 0, won: 0 }, freshMatches: 0 });
+  assert.deepEqual([move.now.kind, move.now.id, move.now.cta, move.now.title], ['intro', '15', 'Follow it up', 'Follow up the intro from Tom']);
+
+  /* 9. What people said goes to the model, and a number in it is theirs: a reason that cites one keeps its reason. */
+  const heard = cvHeardFrom([
+    tk('h1', '2026-10-05', { who: 'Ana', said: 'We lose 2 bookings a week to missed calls', commitment: 'time' }),
+    tk('h2', '2026-10-04'),
+    tk('h3', '2026-10-03', { role: 'seller', said: 'Dentists pay $90 a month for answering services' }),
+  ]);
+  assert.deepEqual(heard.map((h) => h.said.slice(0, 8)), ['We lose ', 'Dentists'], 'only the ones with words, newest first');
+  assert.equal(cvHeardLine(heard[0]), 'Ana — could buy, agreed to another call: “We lose 2 bookings a week to missed calls”');
+  assert.ok(!/\b(5|Oct|2026)\b/.test(cvHeardLine(heard[0])), 'no day: its digits would pass as a number the person gave');
+  assert.equal(cvHeardFrom(Array.from({ length: 30 }, (_, i) => tk(`n${i}`, '2026-10-01', { said: 'x' }))).length, CV_HEARD_MAX);
+  const ideaCtx = {
+    part: 'who' as const, offer: { sells: 'Booking automation', for_who: 'Dental clinics', price_band: '$150' }, foundBy: 'referrals' as const, working: null,
+    links: [], bets: [], talks: { n: 1, problem: 1, committed: 1 }, assets: [],
+    coverage: { buyer: 1, seller: 1, operator: 0, earner: 0, connector: 0 }, heard: heard.map(cvHeardLine),
+  };
+  const prompt = cvIdeasPrompt(ideaCtx);
+  assert.ok(prompt.includes('- Ana — could buy, agreed to another call: “We lose 2 bookings a week to missed calls”'), 'the words, as logged');
+  assert.ok(prompt.includes("Who the last 30 days' conversations were with: 1 could buy, 1 sells to them, 0 runs the work, 0 already earns in it, 0 knows people."), 'the empty kinds are said: they are the point');
+  assert.ok(prompt.includes('"sells to them" sells something else to the same buyers'), 'the model is told what each kind is');
+  assert.ok(!cvIdeasPrompt({ ...ideaCtx, coverage: null, heard: [] }).includes('What people said'), 'nothing logged, nothing said');
+  const cited = cvNormIdeas({ ideas: [
+    { label: 'Answer the missed calls', how: 'Offer Ana a week of answered calls.', metric: 'committed', target: 1, days: 7, why: 'Ana loses 2 bookings a week to missed calls.' },
+    { label: 'Price under theirs', how: 'Ask three clinics what they pay.', metric: 'committed', target: 1, days: 7, why: 'Clinics pay $70 a month now.' },
+  ] }, { part: 'who', foundBy: 'referrals', sources: cvIdeaSources(ideaCtx) });
+  assert.deepEqual(cited.map((i) => i.why), ['Ana loses 2 bookings a week to missed calls.', null], 'her 2 is hers; a $70 nobody said is not');
+
+  /* 10. A draft hears them nameless and in their words — and a number from them is not an invented one. */
+  const draftCtx: CvDraftCtx = {
+    kind: 'script', offer: { sells: 'Booking automation', for_who: 'Dental clinics', price_band: '$150' }, foundBy: 'referrals', working: null,
+    bet: null, part: null, previous: null, ask: null, heard: heard.map((h) => cvHeardLine({ ...h, who: null })),
+  };
+  const draftPrompt = cvDraftPrompt(draftCtx);
+  assert.ok(draftPrompt.includes('- Someone — could buy, agreed to another call: “We lose 2 bookings a week to missed calls”'));
+  assert.ok(!draftPrompt.includes('Ana'), 'nameless: an asset is read by strangers, and a name reads as a testimonial nobody gave');
+  assert.ok(cvCheckDraft({ title: 'Opener', body: 'If you lose 2 bookings a week to missed calls, $150 a month stops that.' }, draftCtx).ok);
+  assert.deepEqual(cvCheckDraft({ title: 'Opener', body: 'Clinics lose 12 bookings a week.' }, draftCtx), { ok: false, why: 'it wrote a number that is not in your offer, your notes or your rows (12)' });
+
+  /* 11. The play: five people close to the money, judged by what they committed to, for any business. */
+  const five = CV_PLAY_BY_KEY.get('money-five');
+  assert.ok(five && five.part === 'who' && five.fits === 'any' && five.metric === 'committed' && five.tries?.metric === 'talks' && five.tries.planned === 5);
+  for (const found of ['outreach', 'inbound', 'referrals', 'marketplace', 'local'] as const) {
+    assert.ok(cvPlaysFor('who', found).some((p) => p.key === 'money-five'), `${found} can run it`);
+  }
+  assert.ok(cvNormBet({ part: 'who', belief: 'People around dental clinics will say what they pay for', metric: five!.metric, target: five!.target, tries: five!.tries, days: five!.days, play: five!.key }, { today, price: 150, priceLabel: '$150' }).ok);
+
+  /* 12. The history says who opened the door, and who they were where they were not a buyer. */
+  const hist = cvHistoryOf({
+    bets: [], checkpoints: [], assets: [], projects: [], wins: [], experiments: [], currency: '$', timezone: 'UTC',
+    talks: [mara, tk('20', '2026-10-04', { who: 'Dr. Reyes', commitment: 'money', via: '11', said: 'Start Monday' })],
+  });
+  const hk = Object.fromEntries(hist.map((e) => [e.key, e]));
+  assert.deepEqual([hk['talk-11'].title, hk['talk-11'].line], ['Mara offered an introduction', 'Knows people · “Talk to my cousin at Bright Smiles”']);
+  assert.deepEqual([hk['talk-20'].title, hk['talk-20'].line], ['Dr. Reyes committed money', 'Introduced by Mara · “Start Monday”']);
+
+  /* 13. The route checks an introduction against the record it reads, never one the request vouches for. */
+  const route = readTalkFile(new URL('../../src/app/api/copilot/lab/route.ts', import.meta.url), 'utf8');
+  assert.match(route, /normalizeTalk\(.*talksOnRecord/);
+  assert.match(route, /normalizeIntroClose\(.*talksOnRecord/);
+
+  console.log('copilot-core: conversations checks passed');
+}
+
+conversationsSuite().catch((e) => { console.error(e); process.exit(1); });

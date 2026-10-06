@@ -403,6 +403,7 @@ function NowCard({ now, actions, openMatches }: { now: NowMove; actions: Actions
     else if (now.kind === 'confirm') actions.openSheet({ kind: 'capture' });
     else if (now.kind === 'step' && now.item) void actions.markRoadmap(now.item, 'done');
     else if (now.kind === 'move' && now.id) actions.openSheet({ kind: 'move', id: now.id });
+    else if (now.kind === 'intro' && now.id) actions.openSheet({ kind: 'intro', talk: now.id });
     else if (now.id) actions.openSheet({ kind: 'commission', id: now.id });
   };
   return (
@@ -443,6 +444,7 @@ function NoCallYet({ home, actions }: { home: HomeData; actions: Actions }) {
 
 const CHIP: Record<AskRow['kind'], (a: AskRow) => string> = {
   question: (a) => `Answer: ${a.detail}`,
+  intro: (a) => a.title,
   fix: (a) => `Retry: ${a.title}`,
   approve: (a) => `Approve: ${a.title}`,
   confirm: () => 'Where did the replies get to?',
@@ -454,6 +456,7 @@ function AlsoChip({ ask, actions, openMatches }: { ask: AskRow; actions: Actions
   const open = () => {
     if (ask.kind === 'confirm') actions.openSheet({ kind: 'capture' });
     else if (ask.kind === 'send') openMatches('to_send');
+    else if (ask.kind === 'intro' && ask.id) actions.openSheet({ kind: 'intro', talk: ask.id });
     else if (ask.id) actions.openSheet({ kind: 'commission', id: ask.id });
   };
   return (

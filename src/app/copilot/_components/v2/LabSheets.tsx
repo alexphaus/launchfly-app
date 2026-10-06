@@ -143,7 +143,8 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
     return allowed.includes(m) ? m : 'logged';
   };
   // Words shared in start on the weak link, as the picker on Proof does: the sheet is not told which part they are about.
-  const sharedPart = seed && !asked && !shelved && !experiment ? derive(home).proof.chain.weak : null;
+  // Once, in the initialiser: derive() reads the whole home, and this component renders on every keystroke.
+  const [sharedPart] = useState<LinkKey | null>(() => (seed && !asked && !shelved && !experiment ? derive(home).proof.chain.weak : null));
   const first: LinkKey = basis?.part ?? experiment?.part ?? asked ?? sharedPart ?? 'who';
   const [part, setPart] = useState<LinkKey>(first);
   // A first draft from the offer, for the person to make theirs. Rewritten

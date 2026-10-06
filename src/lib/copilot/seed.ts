@@ -61,10 +61,12 @@ export function seedOf(raw: unknown): Seed | null {
   // A title is an app's name for what it shared, noise beside words and all there is without them.
   let text = clean(o.text) || clean(o.title);
   let url = link(clean(o.url));
-  const found = text.match(LINK);
+  // "…see https://x.com/a." ends in the link and a full stop: the stop is the sentence's, not the address's.
+  const tail = text.replace(/[\s.,;:!?]+$/, '');
+  const found = tail.match(LINK);
   const last = found ? found[found.length - 1] : null;
-  if (last && text.endsWith(last)) {
-    text = text.slice(0, text.length - last.length).replace(/[\s:–—-]+$/, '').trim();
+  if (last && tail.endsWith(last)) {
+    text = tail.slice(0, tail.length - last.length).replace(/[\s:–—-]+$/, '').trim();
     url = url ?? link(last);
   }
   let cut = false;
@@ -84,7 +86,8 @@ function plain(line: string): string {
     .replace(/^\s*(?:[-*•]|\d{1,2}[.)])\s+/, '')
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')
     .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, '$1$2')
-    .replace(/(^|[\s(])[*_]([^*_]+)[*_](?=$|[\s).,;:!?])/g, '$1$2')
+    // Emphasis wraps a word, never a space: "2 * 3 * 4" is arithmetic, not italics.
+    .replace(/(^|[\s(])[*_](\S(?:[^*_]*\S)?)[*_](?=$|[\s).,;:!?])/g, '$1$2')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();

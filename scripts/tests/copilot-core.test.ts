@@ -9727,6 +9727,10 @@ async function shareSeedSuite() {
   const long = seedOf({ text: 'word '.repeat(2000) })!;
   assert.ok(long.cut && long.text.length <= SEED_MAX && long.text.endsWith('word'), 'cut at a word, and said');
   assert.deepEqual(plainLines('## Ideas\n- **Free** pilot\n1. `Ask` five\n\n[a chat](https://x.com/a) said so'), ['Ideas', 'Free pilot', 'Ask five', 'a chat said so'], 'formatting is not what was said');
+  assert.deepEqual(plainLines('a *b* c and _d_.'), ['a b c and d.'], 'emphasis around a word goes');
+  assert.deepEqual(plainLines('Cost is 2 * 3 * 4 dollars'), ['Cost is 2 * 3 * 4 dollars'], 'arithmetic is not italics');
+  assert.deepEqual(seedOf({ text: 'Try this: https://x.com/a.' }), { text: 'Try this', url: 'https://x.com/a', cut: false }, 'the full stop after a link is the sentence’s, not the address’s');
+  assert.deepEqual(seedOf({ text: 'Is it https://x.com/a, or not?' }), { text: 'Is it https://x.com/a, or not?', url: null, cut: false }, 'a link that is not last is part of what was said');
 
   /* 2. The belief is theirs: the share only when the whole of it is one sentence that fits. */
   const one = (text: string) => seedOf({ text })!;
@@ -9779,6 +9783,7 @@ async function shareSeedSuite() {
   assert.ok(!/catch \{\s*\}/.test(reader) && (reader.match(/error: /g) ?? []).length >= 4, 'every way it fails is a sentence');
   const sheet = src('src/app/copilot/_components/v2/LabSheets.tsx');
   assert.match(sheet, /seed \? beliefOfSeed\(seed\) : suggestBelief\(/, 'a share is never given a belief written from the offer');
+  assert.match(sheet, /const \[sharedPart\] = useState<LinkKey \| null>\(\(\) => \(seed && !asked && !shelved && !experiment \? derive\(home\)\.proof\.chain\.weak : null\)\);/, 'derive() reads the whole home, so once — not on every keystroke');
   assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /seed=\{sheet\.seed\}/);
   const manifest = src('src/app/copilot2/manifest.webmanifest/route.ts');
   assert.ok(/title: 'title'/.test(manifest) && /text: 'text'/.test(manifest) && /url: 'url'/.test(manifest), 'Copilot is in the share sheet for words, not only for files');

@@ -2380,6 +2380,41 @@ a clean close over a verdict that never landed.
 where drafts die, which calls worked, what has been stood down, and whether any
 of it has been worth money. Opened from the card under the funnel on Working.
 
+**Asked out loud** (`asked.ts`, `AskSheet.tsx`). The sheet also takes a question
+said, typed or tapped — "how much did I spend this week?", "how is my bet
+going?", "what should I do next?" — and answers it out loud when it was asked out
+loud. Said into the header's mic, a question opens this sheet on its answer
+instead of the book (`looksAsked`: a question word, or no amount and a match;
+"did I spend 500 on food?" is still a question). The ask.ts argument holds and
+this is its spoken half: a question is only ever **matched** to a fixed list —
+the next move, the bet, the goals, safe to spend, spending and money in over some
+days and on a category or a word, balance, runway, conversations, introductions
+waiting, sales, sends and replies, deep work, and ask.ts's five — and the answer
+is the app's count.
+
+- **Counted where the screens count.** The answer is worked out in the sheet
+  from the home as loaded and `derive()` (the Path's and Proof's own wiring),
+  the book a month at a time (`/money/book`, in the currency the Money tab
+  shows), and ask.ts's five from their route — so what is said is what the
+  screens show.
+- **Days said the way the screens count them.** A week is the last seven days,
+  as the Path's week is; a month is the calendar's, as the book's is; and the
+  answer says which ("in the last 7 days", "this month"). Sends, replies and deep
+  work come from the two weeks the home reads back: asked about longer, the
+  answer says so and gives the metrics' own thirty days, said as thirty days.
+- **A failed read is said, never answered as nothing** (invariant 13): a book
+  that would not open, a lab that could not be read, a currency with no rate —
+  two months in two currencies are not added up.
+- **A model only places the question.** Where the rules match nothing and the
+  server has a model, `POST /api/copilot/asked` asks it which question on the
+  list it was (`normalizeAsked`: an id off the list, days only when the words
+  said some, "about" only if said or one of their categories) — never the answer.
+  The card says "understood by AI". What matches nothing is said to be
+  uncountable, and the copy for Claude carries the question.
+- **Read aloud with the phone's own voice** (`speechSynthesis`, `Speak.ts`), in
+  English, money in words ("850 pesos", `spokenMoney`). A voice that fails says
+  so on the card. Nothing is ever logged from here.
+
 **Deliberately not a chatbot, and `lib/copilot/ask.ts` argues it at length.** A
 free-text question over these rows has to be answered by a model; a model counting
 rows will produce a plausible figure; and nobody — including whoever built it —
@@ -2735,6 +2770,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/deck` | the Swipe tab, one card at a time, never answering with the home: `{ action: 'draft', kind: business \| draft \| find, id, via: whatsapp \| sms \| call \| email \| site \| post }` the card's message (`from: model \| offer`, `note` when not the model's) · `{ action: 'reach', kind, id, via, body, subject? }` the right swipe (`mode: sent` from their own number, else `open` with the draft's `actionId` and `link`) · `{ action: 'sent', id (the draft's action), via, body?, subject? }` · `{ action: 'unsent', id }` · `{ action: 'posted', kind, id, via }` · `{ action: 'skip', kind, id }` |
 | POST | `/api/copilot/moves/:id` | `{ status: done \| dismissed \| handover }` — `handover` turns a proposed Move into a live mandate |
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
+| POST | `/api/copilot/asked` | `{ heard }` → which question on the Ask list was asked (`{ asked: { id, period, about } \| null, why }`), by a model, when the sheet's own rules could not tell. Never the answer, never a write; 300 a day |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
 | POST | `/api/copilot/money/import` | multipart `file`: a bank statement. CSV/TSV/OFX, and a PDF whose running balance holds by rules, are read in the request and answer with the import and the screen; any other PDF or a screenshot answers 202 and is read by a model in `after()` (30 a day, 10 MB) |
 | GET/POST | `/api/copilot/money/book` | the Money tab. `GET ?month=YYYY-MM&view=EUR` the month's list, calendar and balance · `POST { action: 'add', id (the phone's uuid: a retry is one row), kind: in \| out, amount, currency? (typed in; converted at its day's rate), on, category?, note?, repeat?: week \| month }` · `{ action: 'edit', id, …same }` · `{ action: 'delete', id }` (an upcoming repeat stops its series) · `{ action: 'balance', balance, currency? }` (the currency only the first time) · `{ action: 'entry', currency }` (the default to type in). Every POST answers with the book for the month and view sent, or `{ balance }` with `reply: 'balance'` |

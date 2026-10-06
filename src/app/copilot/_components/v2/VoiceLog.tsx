@@ -153,7 +153,7 @@ export function VoiceButton({ voice, onType }: { voice: Voice; onType: () => voi
   return (
     <button
       className={`cp2-voice-btn${voice.listening ? ' on' : ''}`} onClick={voice.toggle}
-      aria-pressed={voice.listening} aria-label={voice.listening ? 'Stop listening' : 'Say a move to log'}
+      aria-pressed={voice.listening} aria-label={voice.listening ? 'Stop listening' : 'Say a move to log, or ask'}
     >
       <IconMic />
     </button>

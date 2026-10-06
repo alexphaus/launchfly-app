@@ -372,6 +372,20 @@ chat can say talk to suppliers; it cannot see that every conversation this month
 was with a buyer, or that the introduction Mara offered six days ago still waits.
 See COPILOT.md → **Proof**, conversations.
 
+**Then** — asked out loud. Its owner wanted the mic to be something to talk to.
+The half that is a conversation is Claude's; the half that is a question about
+the record — how much went out this week, how the bet is going, what to do
+next — is a count, and this app is the one place it can be counted. So the mic
+answers those, out loud, and nothing else: a spoken question is matched to a
+fixed list (by the app's rules, or by a model that may only say which question
+it was), counted from the same rows the screens count, and read back with the
+phone's own voice. The days are said in the answer, and when the rows do not
+reach them the answer says what it counted instead. A question that needs
+judgement is said to be one, and goes to Claude with the record. It passes the
+survival test on the rows: a chat with memory can hear "how much did I spend on
+coffee this week"; it cannot open the book. See COPILOT.md → **Ask your own
+record**, asked out loud.
+
 ---
 
 ## Where it actually stands

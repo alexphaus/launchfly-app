@@ -92,7 +92,8 @@ export function sheetKey(s: SheetState): string {
   // Two sheets of one kind opened on different things are two sheets: a bet
   // sheet opened from one play and then from another must not keep the first
   // one's line, nor a new asset the first one's kind.
-  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk'] as const)
+  // A second question asked into the mic is a second answer, not the first one's sheet.
+  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk', 'heard'] as const)
     .map((k) => (k in s ? String((s as Record<string, unknown>)[k] ?? '') : ''))
     .join(':');
   const exp = 'experiment' in s && s.experiment ? s.experiment.id : '';

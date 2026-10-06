@@ -70,7 +70,8 @@ export type SheetState =
    * Questions about your own rows, each answered by counting — plus the one
    * escape hatch for everything the list cannot answer. See lib/copilot/ask.ts.
    */
-  | { kind: 'ask' }
+  /** The five counted questions — with, when it came from the mic, the question that was asked. */
+  | { kind: 'ask'; heard?: string }
   /**
    * One Move, whole: the reasons, the artifact and the two answers. v2 lists
    * Moves as rows, and a row is not enough to act on — the artifact is the

@@ -151,7 +151,13 @@ phone the card moved a few pixels and sprang back (COPILOT.md → **Swipe**).
 `webkitSpeechRecognition` fails. Put a stand-in `SpeechRecognition` on the page
 with `addInitScript` that fires `onresult`/`onend` for a set phrase (or
 `onerror` with `not-allowed`, `no-speech`); delete both constructors to see the
-+ the header shows where a browser has none.
++ the header shows where a browser has none. A spoken question (`looksAsked`)
+opens the Ask sheet and is answered aloud: headless Chromium has no voice either,
+so define `window.speechSynthesis` and `SpeechSynthesisUtterance` in the same
+init script and record what `speak` was given. The Ask sheet reads the book a
+month at a time (`/api/copilot/money/book?month=`) and calls `/api/copilot/asked`
+only when the home says a model is configured (`home.ai`) and its rules missed;
+answer both with `page.route`.
 
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —

@@ -28,7 +28,7 @@ import { parseSpoken } from '@/lib/copilot/money/spoken';
 import { get, post } from '../api';
 import type { Actions } from '../shared';
 import type { Arrival } from '../useCopilot';
-import { local, readCachedBook, useOutbox, writeCachedBook, type Unsent } from './bookLocal';
+import { BOOK_VIEW_KEY, local, readCachedBook, useOutbox, writeCachedBook, type Unsent } from './bookLocal';
 import EntryPad from './EntryPad';
 import { BookGlyph, IconRepeat } from './icons2';
 
@@ -38,7 +38,7 @@ import { BookGlyph, IconRepeat } from './icons2';
 export type BookEntry = ({ kind: 'add'; heard?: string } | { kind: 'edit'; line: BookLine } | { kind: 'balance' }) & { n: number };
 type EntryAsk = { kind: 'add'; heard?: string } | { kind: 'edit'; line: BookLine } | { kind: 'balance' };
 
-const VIEW_KEY = 'cp2.book.view';
+const VIEW_KEY = BOOK_VIEW_KEY;
 const ALT_KEY = 'cp2.book.alt';
 const MODE_KEY = 'cp2.book.mode';
 

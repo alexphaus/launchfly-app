@@ -44,9 +44,12 @@
 // Swipe, and its other pills open the sheet on the same stage.
 //
 // The header's corner is the mic (VoiceLog.tsx): say a move from any tab and
-// the add sheet opens with it filled in. It held the capacity pill, a setting
-// shown on every screen and changed about never; that is in You → Settings.
+// the add sheet opens with it filled in; ask a question — "how much did I spend
+// this week?" — and the Ask sheet answers it, counted from the rows and read
+// aloud (lib/copilot/asked.ts). It held the capacity pill, a setting shown on
+// every screen and changed about never; that is in You → Settings.
 import { useCallback, useRef } from 'react';
+import { looksAsked } from '@/lib/copilot/asked';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView } from '@/lib/copilot/nightly';
 import type { HomeData } from '@/lib/copilot/types';
@@ -107,7 +110,9 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
   };
   const voice = useVoice({
     onStart: () => { if (!book.book) void book.load(); },
-    onHeard: (text) => logMove(text),
+    // A question is answered, not logged: "did I spend 500 on food?" carries an
+    // amount and is still a question, and nothing is ever logged without a tap.
+    onHeard: (text) => (looksAsked(text) ? actions.openSheet({ kind: 'ask', heard: text }) : logMove(text)),
     onFailed: (why, type) => { say(why); if (type) logMove(); },
   });
   const d = useDerived(home);

@@ -35,12 +35,33 @@ self.addEventListener('fetch', (event) => {
 const SHARE_PATH = '/copilot2/share';
 const SHARE_CACHE = 'copilot-share';
 const SHARE_MAX_FILES = 5;
+// Words with no file — a reply copied out of Claude or Grok — wait in a cache of
+// their own and open Proof as the start of a bet. Their own because the Money tab
+// reads every entry of SHARE_CACHE as a statement. Both strings are
+// src/lib/copilot/seed.ts's (SEED_CACHE, SEED_KEY); a worker cannot import them
+// and the suite checks they match. share/route.ts does the same for the first
+// share, before this worker is active.
+const SHARE_TEXT_CACHE = 'copilot-share-text';
+const SHARE_TEXT_KEY = SHARE_PATH + '/text';
 
 async function takeShare(request) {
-  const to = (q) => Response.redirect(new URL('/copilot2?tab=money&' + q, self.location.origin).href, 303);
+  const to = (q, tab) => Response.redirect(new URL('/copilot2?tab=' + (tab || 'money') + '&' + q, self.location.origin).href, 303);
+  let words = false;
   try {
     const form = await request.formData();
     const files = form.getAll('file').filter((f) => f && typeof f === 'object' && f.size > 0).slice(0, SHARE_MAX_FILES);
+    if (!files.length) {
+      // Stamped: kept whatever the session (a worker cannot see an httpOnly cookie), and
+      // picked up after sign-in only while it is still the share somebody just made.
+      const said = { at: Date.now() };
+      for (const k of ['title', 'text', 'url']) { const v = form.get(k); said[k] = typeof v === 'string' ? v : ''; }
+      if (said.title.trim() || said.text.trim() || said.url.trim()) {
+        words = true;
+        const kept = await caches.open(SHARE_TEXT_CACHE);
+        await kept.put(SHARE_TEXT_KEY, new Response(JSON.stringify(said), { headers: { 'content-type': 'application/json' } }));
+        return to('shared=text', 'proof');
+      }
+    }
     const cache = await caches.open(SHARE_CACHE);
     for (const k of await cache.keys()) await cache.delete(k);
     for (let i = 0; i < files.length; i++) {
@@ -50,9 +71,11 @@ async function takeShare(request) {
     }
     return to('shared=' + files.length);
   } catch (e) {
-    // Said on the Money tab rather than dropped: a share that vanished looks
-    // exactly like one that worked and imported nothing.
-    return to('shared=error&why=' + encodeURIComponent('The shared file could not be read: ' + ((e && e.message) || e)));
+    const why = (e && e.message) || e;
+    // Said where the person lands rather than dropped: a share that vanished
+    // looks exactly like one that worked and imported nothing.
+    if (words) return to('shared=text&why=' + encodeURIComponent('That share could not be kept: ' + why), 'proof');
+    return to('shared=error&why=' + encodeURIComponent('The shared file could not be read: ' + why));
   }
 }
 

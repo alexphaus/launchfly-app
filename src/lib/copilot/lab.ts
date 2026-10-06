@@ -74,7 +74,19 @@ export const LAB_LINK = 'lab_link';
 export const LAB_IDEAS = 'lab_ideas';
 /** How an introduction someone offered went, said by the person: asked for, or fell through. */
 export const LAB_INTRO = 'lab_intro';
-export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS, LAB_INTRO] as const;
+/** A test the person wrote and did not start: kept on the shelf, with its line, until it is their one bet. */
+export const LAB_SHELF = 'lab_shelf';
+/** A shelf entry taken off without being started: the last word on it. */
+export const LAB_SHELF_GONE = 'lab_shelf_gone';
+export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS, LAB_INTRO, LAB_SHELF, LAB_SHELF_GONE] as const;
+
+/**
+ * Said beside a play that came in as words shared from another app (seed.ts):
+ * a chat's reply, kept on the bet it was shared for and never shown to a model as
+ * the person's words or numbers (invariants 2 and 12). Here rather than in seed.ts
+ * so the code that writes prompts can recognise one without importing the reader.
+ */
+export const SHARED_FROM = 'Shared from another app';
 
 /* ─── What a bet can count ────────────────────────────────────────────────── */
 
@@ -149,6 +161,18 @@ export function metricsFor(foundBy: FoundBy | null): LabMetric[] {
 }
 
 /**
+ * Why a count cannot decide a test for this business, or null. Sends and replies
+ * only where the app sends: a kept test can outlive the day buyers were found by
+ * outreach, and its sheet hides the count picker for a book's play, so the rule is
+ * held where the test is written, not only where the picker is.
+ */
+export function countRefusal(metric: LabMetric, tries: { metric: LabMetric } | null, foundBy: FoundBy | null): string | null {
+  const allowed = metricsFor(foundBy);
+  const off = !allowed.includes(metric) ? metric : tries && !allowed.includes(tries.metric) ? tries.metric : null;
+  return off ? `The app cannot count ${metricWords(off, 2)} for a business whose buyers do not come through its sends. Pick a count you log.` : null;
+}
+
+/**
  * Where a bet's count comes from, said under it, so a logged number never
  * reads as a measured one and nobody wonders why last month's sends are not in
  * it.
@@ -215,9 +239,36 @@ export interface Bet {
   priceLabel: string | null;
   /** The plan's experiment this bet tests (experiment.ts), which then takes the bet's verdict. */
   experiment: string | null;
+  /** The shelf entry it was started from, which leaves the shelf with it. Optional: bets before the shelf have none. */
+  shelf?: string | null;
   openedAt: string;
 }
-export type BetDraft = Omit<Bet, 'id' | 'openedAt'>;
+export type BetDraft = Omit<Bet, 'id' | 'openedAt' | 'shelf'>;
+
+/**
+ * A test kept for later: everything a bet is but the day it starts and the price
+ * it is held to, both of which are decided the day it does. Written by the person
+ * in the bet sheet, so it has their belief and their line; a model's idea or a
+ * play from a book reaches the shelf only through that sheet, never straight.
+ */
+export interface ShelfEntry {
+  /** The event id of its keeping. */
+  id: string;
+  at: string;
+  part: LinkKey;
+  belief: string;
+  play: string | null;
+  idea: BetIdea | null;
+  metric: LabMetric;
+  unit: string | null;
+  target: number;
+  tries: { metric: LabMetric; planned: number } | null;
+  days: number;
+}
+export type ShelfDraft = Omit<ShelfEntry, 'id' | 'at'>;
+
+/** What the shelf holds. Past it a shelf is a backlog, and a backlog is where tests go to be forgotten. */
+export const SHELF_MAX = 10;
 
 export const COMMITMENTS = ['none', 'time', 'intro', 'money'] as const;
 export type Commitment = (typeof COMMITMENTS)[number];
@@ -483,6 +534,44 @@ export function normalizeBet(raw: Record<string, unknown>, ctx: { today: string;
   };
 }
 
+/**
+ * A test to keep, held to exactly what starting a bet holds it to — a part, a
+ * belief in a sentence, something countable, a line and a length — because the
+ * shelf is where tests wait to be bets and any entry has to be able to become one
+ * as it stands. "No test, no entry" is this function, not a promise: it is
+ * `normalizeBet`, less the day and price that belong to the day it starts. There
+ * is no score and no market size to give it; a field it does not know is dropped.
+ */
+export function normalizeShelf(raw: Record<string, unknown>, ctx: { today: string; price: number | null; priceLabel: string | null }): Result<ShelfDraft> {
+  const v = normalizeBet({ ...raw, experiment: null }, ctx);
+  if (!v.ok) return v;
+  const { part, belief, play, idea, metric, unit, target, tries, days } = v.value;
+  return { ok: true, value: { part, belief, play, idea, metric, unit, target, tries, days } };
+}
+
+type TestKey = Pick<ShelfEntry, 'part' | 'belief' | 'metric' | 'play' | 'idea'>;
+/**
+ * The same test twice: the same part, belief, count and play. Not the belief
+ * alone — every play and idea on a part opens the sheet with the same suggested
+ * belief, so two different plays kept as they came would read as one.
+ */
+function sameTest(a: TestKey, b: TestKey): boolean {
+  const norm = (x: string) => x.toLowerCase().replace(/\s+/g, ' ').trim();
+  const play = (e: TestKey) => e.play ?? (e.idea ? `idea:${norm(e.idea.label)}` : '');
+  return a.part === b.part && a.metric === b.metric && norm(a.belief) === norm(b.belief) && play(a) === play(b);
+}
+
+/**
+ * Why a test cannot be kept, or null: the same test twice, or a full shelf. In
+ * that order: told the shelf is full, a person takes one off to make room and is
+ * then told the test was on it all along.
+ */
+export function shelfRefusal(shelf: TestKey[], draft: TestKey): string | null {
+  if (shelf.some((e) => sameTest(e, draft))) return 'That is already on your shelf.';
+  if (shelf.length >= SHELF_MAX) return `The shelf holds ${SHELF_MAX}. Start one, or take one off, to keep another.`;
+  return null;
+}
+
 const isRole = (v: unknown): v is TalkRole => typeof v === 'string' && (TALK_ROLES as readonly string[]).includes(v);
 /** A stored event's id, as a conversation names the one it came through: digits from the table, or a test's slug. */
 const talkRef = (v: unknown) => (typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : null);
@@ -553,15 +642,12 @@ export function normalizeCheckpoint(raw: Record<string, unknown>, today: string)
 }
 
 /**
- * An idea as stored, reshaped rather than trusted: the same lengths, metrics
- * and lines a bet is held to, so an idea on screen can always become a bet.
- * Null when it does not hold together.
+ * A stored test's line — what it counts, the person's word for it, the line, the
+ * days and what it takes — reshaped rather than trusted. Null when it does not
+ * hold together. One reader for ideas and kept tests, which are held to one line.
  */
-export function ideaFromStored(v: unknown, part: LinkKey): Idea | null {
-  const o = obj(v);
-  const label = text(o.label, IDEA_LABEL_MAX);
-  const how = text(o.how, IDEA_HOW_MAX);
-  if (!label || !how || !isMetric(o.metric)) return null;
+function storedLine(o: Record<string, unknown>): Pick<Idea, 'metric' | 'unit' | 'target' | 'tries' | 'days'> | null {
+  if (!isMetric(o.metric)) return null;
   const unit = o.metric === 'logged' ? unitOf(o.unit) : null;
   if (o.metric === 'logged' && !unit) return null;
   const target = int(o.target);
@@ -570,9 +656,23 @@ export function ideaFromStored(v: unknown, part: LinkKey): Idea | null {
   const t = obj(o.tries);
   const planned = int(t.planned);
   const tries = isMetric(t.metric) && TRIES_FOR[o.metric].includes(t.metric) && planned >= 1 && planned <= PLANNED_MAX ? { metric: t.metric, planned } : null;
+  return { metric: o.metric, unit, target, tries, days };
+}
+
+/**
+ * An idea as stored, reshaped rather than trusted: the same lengths, metrics
+ * and lines a bet is held to, so an idea on screen can always become a bet.
+ * Null when it does not hold together.
+ */
+export function ideaFromStored(v: unknown, part: LinkKey): Idea | null {
+  const o = obj(v);
+  const label = text(o.label, IDEA_LABEL_MAX);
+  const how = text(o.how, IDEA_HOW_MAX);
+  const line = storedLine(o);
+  if (!label || !how || !line) return null;
   return {
     key: text(o.key, 64) ?? `ai-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}`,
-    part, label, how, metric: o.metric, unit, target, tries, days,
+    part, label, how, ...line,
     book: text(o.book, IDEA_FROM_MAX), why: text(o.why, 240),
     prep: prepOf(o.prep),
   };
@@ -596,6 +696,42 @@ export interface LabLedger {
   ideas: Partial<Record<LinkKey, IdeaSet>>;
   /** Talk id → how the introduction offered in it went, as the person last said. */
   intros: Map<string, IntroClose>;
+  /** Tests kept for later, newest first: not taken off, and not started. */
+  shelf: ShelfEntry[];
+}
+
+/** A shelf entry as stored, reshaped rather than trusted: the lengths, counts and lines a bet is held to. */
+function storedShelf(p: Record<string, unknown>, id: string, at: string): ShelfEntry | null {
+  const belief = text(p.belief, BELIEF_MAX);
+  const line = storedLine(p);
+  if (!isPart(p.part) || !belief || !line) return null;
+  const play = typeof p.play === 'string' && PLAY_BY_KEY.has(p.play) ? p.play : null;
+  return { id, at, part: p.part, belief, play, idea: play ? null : ideaOf(p.idea), ...line };
+}
+
+/**
+ * The shelf, from whichever rows are given: every test kept, less the ones taken
+ * off and the ones a bet started from, newest first. A window of the newest rows
+ * can only lose an entry, never bring a finished one back: a test's start or
+ * take-off is always newer than its keeping.
+ */
+export function shelfFromEvents(rows: LabEventRow[]): ShelfEntry[] {
+  const kept: ShelfEntry[] = [];
+  const gone = new Set<string>();
+  for (const r of [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    const p = obj(r.payload);
+    if (r.event_type === LAB_SHELF) {
+      const entry = storedShelf(p, String(r.id), r.created_at);
+      if (entry) kept.push(entry);
+    } else if (r.event_type === LAB_SHELF_GONE) {
+      if (typeof p.entry === 'string') gone.add(p.entry);
+    } else if (r.event_type === LAB_BET) {
+      // A test leaves the shelf by being started or by being taken off, whichever came: neither is undone.
+      const from = experimentId(p.shelf);
+      if (from) gone.add(from);
+    }
+  }
+  return kept.filter((e) => !gone.has(e.id)).reverse().slice(0, SHELF_MAX);
 }
 
 /** A stored bet, reshaped rather than trusted. Null when it does not hold together. */
@@ -615,11 +751,12 @@ function storedBet(p: Record<string, unknown>, id: string, at: string): Bet | nu
     tries: isMetric(t.metric) && planned >= 1 ? { metric: t.metric, planned } : null,
     price, priceLabel: price != null ? text(p.priceLabel, 24) : null,
     experiment: experimentId(p.experiment),
+    shelf: experimentId(p.shelf),
   };
 }
 
 export function labFromEvents(rows: LabEventRow[]): LabLedger {
-  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {}, intros: new Map() };
+  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {}, intros: new Map(), shelf: shelfFromEvents(rows) };
   for (const r of [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     const p = obj(r.payload);
     const id = String(r.id);
@@ -738,6 +875,20 @@ export function countIn(metric: LabMetric, from: string, to: string, rows: DayRo
   }
 }
 
+/**
+ * What the funnel counted from the day a bet began to the day it was read to:
+ * every count, not only the one that decides it (reading.ts says what is made of
+ * them). Counted by `countIn`, the function the verdict uses, so the two cannot
+ * disagree about a single row.
+ */
+export type Reading = Partial<Record<LabMetric, number>>;
+
+export function readingOf(bet: Pick<Bet, 'id' | 'start' | 'price'>, through: string, rows: DayRows): Reading {
+  const out: Reading = {};
+  for (const m of LAB_METRICS) out[m] = countIn(m, bet.start, through, rows, bet.price, bet.id);
+  return out;
+}
+
 export type BetState = 'running' | 'passed' | 'failed' | 'stopped';
 
 export const BET_STATE_LABEL: Record<BetState, string> = { running: 'Running', passed: 'Passed', failed: 'Did not pass', stopped: 'Called off' };
@@ -748,6 +899,12 @@ export interface BetView {
   result: number;
   /** What it took, when the bet says what it takes. */
   tries: number | null;
+  /**
+   * Every count since it began, to today (readingOf) — on the running bet only.
+   * Optional: a finished bet has none, and neither has a payload from before
+   * readings, whose card shows what it always did. Never read for the verdict.
+   */
+  reading?: Reading;
   /** The bet's last day. */
   last: string;
   /** Day n of the bet, while it runs. */
@@ -809,6 +966,8 @@ export interface LabHome {
   ideas?: Partial<Record<LinkKey, IdeaSet>>;
   /** Talk id → how the introduction offered in it went, where the person has said. */
   intros?: Record<string, IntroClose>;
+  /** Tests kept for later, newest first. Optional: a payload from before the shelf has none. */
+  shelf?: ShelfEntry[];
   /** The read's failure, said on the tab — never shown as an empty Lab (invariant 13). */
   unreadable: string | null;
 }
@@ -823,6 +982,13 @@ export interface LabInput {
   outcomes: Array<{ kind: string; opportunity_id: string | null; occurred_at?: string | null; amount?: number | null }>;
   /** When each project handed over was finished. */
   finished: Array<string | null | undefined>;
+  /**
+   * The shelf's own rows (store.ts loadLabEvents): kept tests wait for weeks, and
+   * a window of the newest lab events in general would drop one silently once
+   * enough counts and conversations came after it. Absent, the shelf is read from
+   * `events`.
+   */
+  shelfEvents?: LabEventRow[];
 }
 
 /**
@@ -851,7 +1017,13 @@ export function labHome(i: LabInput): LabHome {
   return {
     bets: bets.map((b) => {
       const stop = ledger.stopped.get(b.id);
-      return { ...betView(b, stop ? dayIn(stop.at, i.timezone) : null, rows, i.today), note: stop?.note ?? null };
+      const view = betView(b, stop ? dayIn(stop.at, i.timezone) : null, rows, i.today);
+      // Only the running bet is read this way — the card and Claude show no other —
+      // so forty finished bets do not cost nine counts each on every load. Read to
+      // today, never past the last day: after it, the next bet's sends are not this one's.
+      return view.state === 'running'
+        ? { ...view, note: stop?.note ?? null, reading: readingOf(b, minDay(i.today, view.last), rows) }
+        : { ...view, note: stop?.note ?? null };
     }),
     talks: ledger.talks.slice(0, MAX_TALKS),
     checkpoints: ledger.checkpoints.slice(0, MAX_CHECKPOINTS),
@@ -859,6 +1031,7 @@ export function labHome(i: LabInput): LabHome {
     links: Object.fromEntries(ledger.links),
     ideas: ledger.ideas,
     intros: Object.fromEntries(ledger.intros),
+    shelf: i.shelfEvents ? shelfFromEvents(i.shelfEvents) : ledger.shelf,
     unreadable: i.unreadable,
   };
 }
@@ -1138,6 +1311,17 @@ export function playOf(bet: Pick<Bet, 'play' | 'idea'>): { label: string; how: s
   return bet.idea ? { label: bet.idea.label, how: bet.idea.how, from: bet.idea.from } : null;
 }
 
+/**
+ * A play's name for a prompt, or null for one that came in as a shared reply: a
+ * chat's words are never shown to a model as the person's, and a number in them
+ * would pass the check that refuses numbers the person never gave (invariants 2
+ * and 12). The play is still the bet's, on the screen and for Claude, marked.
+ */
+export function playForModel(bet: Pick<Bet, 'play' | 'idea'>): string | null {
+  const p = playOf(bet);
+  return p && p.from !== SHARED_FROM ? p.label : null;
+}
+
 const lowerFirst = (s: string) => (s.length > 1 && s[1] === s[1].toLowerCase() ? s[0].toLowerCase() + s.slice(1) : s);
 
 /**
@@ -1359,6 +1543,8 @@ export interface LabView {
   links: Record<string, string[]>;
   /** Talk id → how the introduction offered in it went, where the person has said. */
   intros: Record<string, IntroClose>;
+  /** Tests kept for later, newest first. */
+  shelf: ShelfEntry[];
   line: string;
   unreadable: string | null;
 }
@@ -1377,6 +1563,7 @@ export function labView(lab: LabHome | undefined, ctx: { runwayMonths: number | 
     tallies: current ? (lab?.tallies ?? []).filter((t) => t.bet === current.bet.id) : [],
     links: lab?.links ?? {},
     intros: lab?.intros ?? {},
+    shelf: lab?.shelf ?? [],
     line: labLine(current, checkpoint.due),
     unreadable: lab?.unreadable ?? null,
   };

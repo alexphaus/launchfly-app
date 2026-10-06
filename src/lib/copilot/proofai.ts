@@ -21,7 +21,7 @@ import {
 } from './assets';
 import { LINK_STATE_LABEL, businessChain, type LinkKey } from './business';
 import { IDEAS_SYSTEM, ideaSources, ideasPrompt, normalizeIdeas, talkTotals, type IdeasContext } from './ideas';
-import { LAB_IDEAS, heardFrom, heardLine, passLine, playOf, resultLine, talkCounts } from './lab';
+import { LAB_IDEAS, heardFrom, heardLine, passLine, playForModel, resultLine, talkCounts } from './lab';
 import { rateLimit } from './limits';
 import { matchFeed } from './matches';
 import { salesCurrency } from './metrics';
@@ -93,6 +93,8 @@ export async function writeIdeas(pid: string, part: LinkKey): Promise<{ count: n
     coverage: talkCounts(home.lab?.talks ?? [], home.recent.today).by,
     // Named: an idea can say whom to go back to ("ask Maria for the intro she offered").
     heard: heardFrom(home.lab?.talks ?? []).map(heardLine),
+    // Their own words, as kept: the model is told what is already written down, not what to write.
+    shelf: (home.lab?.shelf ?? []).map((e) => ({ belief: e.belief, play: playForModel(e) })),
     assets: assetKindsOf(home.assets?.assets ?? []),
   };
   let text: string;
@@ -152,7 +154,7 @@ export async function draftAsset(pid: string, input: DraftAsk): Promise<{ asset:
   const ask = input.ask?.trim().slice(0, DRAFT_ASK_MAX) || null;
   const ctx: AssetDraftContext = {
     kind, offer: home.profile.offer ?? {}, foundBy: foundOf(home).value, working,
-    bet: bet ? { belief: bet.bet.belief, line: passLine(bet.bet, bet.last), play: playOf(bet.bet)?.label ?? null } : null,
+    bet: bet ? { belief: bet.bet.belief, line: passLine(bet.bet, bet.last), play: playForModel(bet.bet) } : null,
     part: part ? { label: part.label, state: LINK_STATE_LABEL[part.state], why: part.why } : null,
     previous: target ? { title: target.current.title, body: target.current.body } : null,
     ask,

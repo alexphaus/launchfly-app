@@ -8666,7 +8666,8 @@ async function labSuite() {
   const route = readLabFile(new URL('../../src/app/api/copilot/lab/route.ts', import.meta.url), 'utf8');
   const actions = [...route.matchAll(/case '([a-z_]+)'/g)].map((m) => m[1]).sort();
   // "intro" says how an introduction went — asked for, or fell through — and never whether a bet passed.
-  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'intro', 'link', 'open', 'stop', 'talk', 'uncount'], 'a verdict is the rows’, not a request’s');
+  // "shelve" and "unshelve" keep a test for later and take it off: a test with a line and no result, never a verdict on one.
+  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'intro', 'link', 'open', 'shelve', 'stop', 'talk', 'uncount', 'unshelve'], 'a verdict is the rows’, not a request’s');
 
   console.log('copilot-core: lab checks passed');
 }
@@ -9820,3 +9821,434 @@ async function tellSuite() {
 }
 
 tellSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Words shared in: the end of a chat as the start of a test ────────────── */
+//
+// The checks are the ways a share goes wrong: a reply read as a bank statement
+// by the Money tab, a chat's sentence put in the person's mouth as their belief
+// and handed to a model as their words, an app's title taken for what was said,
+// a link cut in half or dropped, a "</script>" in a shared reply ending the page
+// that keeps it, a share lost at the sign-in screen, a share that fails and says
+// nothing, and a reply kept as context about the business.
+
+import {
+  SEED_CACHE, SEED_FRESH_MS, SEED_FROM, SEED_KEY, SEED_MAX, hostOf as seedHost, ideaOfSeed, keptOfSeed, plainLines, seedIsFresh, seedOf, seedPage,
+} from '../../src/lib/copilot/seed';
+import {
+  IDEA_HOW_MAX as SD_HOW_MAX, IDEA_LABEL_MAX as SD_LABEL_MAX, SHARED_FROM as SD_SHARED_FROM, normalizeBet as sdNormBet, playForModel as sdPlayForModel,
+} from '../../src/lib/copilot/lab';
+import { assetDraftPrompt as sdAssetPrompt } from '../../src/lib/copilot/assets';
+import { readFileSync as readShareFile } from 'node:fs';
+
+async function shareSeedSuite() {
+  const src = (p: string) => readShareFile(new URL(`../../${p}`, import.meta.url), 'utf8');
+
+  /* 1. What a share is: words, a link or both. The link at the end is the share's own; one in the middle was said. */
+  assert.deepEqual(seedOf({ text: 'Offer a free pilot to ten guesthouses', url: '' }), { text: 'Offer a free pilot to ten guesthouses', url: null, cut: false });
+  assert.deepEqual(seedOf({ text: 'Try this: https://claude.ai/share/abc' }), { text: 'Try this', url: 'https://claude.ai/share/abc', cut: false }, 'apps put the link after the words');
+  assert.deepEqual(seedOf({ text: 'https://claude.ai/share/abc' }), { text: '', url: 'https://claude.ai/share/abc', cut: false }, 'a link and no words is still a share');
+  assert.deepEqual(seedOf({ text: 'Words\nhttps://x.com/a', url: 'https://x.com/a' }), { text: 'Words', url: 'https://x.com/a', cut: false }, 'the same link twice is one');
+  assert.deepEqual(seedOf({ text: 'See https://x.com/a for the price, then offer it' }), { text: 'See https://x.com/a for the price, then offer it', url: null, cut: false }, 'a link in the middle is part of what was said');
+  assert.equal(seedOf({ title: 'A title' })?.text, 'A title', 'a title is all there is without words');
+  assert.equal(seedOf({ title: 'Claude', text: 'Words' })?.text, 'Words', 'and noise beside them');
+  assert.equal(seedOf({}), null);
+  assert.equal(seedOf(null), null);
+  assert.equal(seedOf({ text: '   ', url: 'javascript:alert(1)' }), null, 'a javascript: link is never a link');
+  assert.equal(seedOf({ text: 'Words', url: `https://x.com/${'a'.repeat(600)}` })?.url, null, 'half an address opens the wrong page, so it is none');
+  const long = seedOf({ text: 'word '.repeat(2000) })!;
+  assert.ok(long.cut && long.text.length <= SEED_MAX && long.text.endsWith('word'), 'cut at a word, and said');
+  assert.deepEqual(plainLines('## Ideas\n- **Free** pilot\n1. `Ask` five\n\n[a chat](https://x.com/a) said so'), ['Ideas', 'Free pilot', 'Ask five', 'a chat said so'], 'formatting is not what was said');
+  assert.deepEqual(plainLines('a *b* c and _d_.'), ['a b c and d.'], 'emphasis around a word goes');
+  assert.deepEqual(plainLines('Cost is 2 * 3 * 4 dollars'), ['Cost is 2 * 3 * 4 dollars'], 'arithmetic is not italics');
+  assert.deepEqual(seedOf({ text: 'Try this: https://x.com/a.' }), { text: 'Try this', url: 'https://x.com/a', cut: false }, 'the full stop after a link is the sentence’s, not the address’s');
+  assert.deepEqual(seedOf({ text: 'Is it https://x.com/a, or not?' }), { text: 'Is it https://x.com/a, or not?', url: null, cut: false }, 'a link that is not last is part of what was said');
+  // A title beside a link is the app's name for it, not words: taken as words it became the belief and the play.
+  assert.deepEqual(seedOf({ title: 'Claude', text: '', url: 'https://claude.ai/chat/abc' }), { text: '', url: 'https://claude.ai/chat/abc', cut: false });
+  // A link ending the words that is not the one the share named was said, and stays: cut out, it was lost.
+  assert.deepEqual(seedOf({ text: 'Read this https://a.com/x', url: 'https://b.com/y' }), { text: 'Read this https://a.com/x', url: 'https://b.com/y', cut: false });
+  assert.deepEqual(seedOf({ text: `Too long ${'https://x.com/'}${'a'.repeat(600)}` })?.url, null, 'an address too long to keep whole is left in the words, not cut');
+
+  /* 2. The belief is theirs, always: nothing is filled in from a share. It once was, for a one-sentence share,
+        and one tap later the chat's sentence and its numbers reached the ideas model as the owner's own words. */
+  const one = (text: string) => seedOf({ text })!;
+  const seedSrc = src('src/lib/copilot/seed.ts');
+  assert.ok(!/export function beliefOfSeed/.test(seedSrc), 'there is no way to make a belief out of a share');
+  assert.match(src('src/app/copilot/_components/v2/LabSheets.tsx'), /useState\(\(\) => \(shelved \? shelved\.belief : seed \? '' : suggestBelief\(/, 'a shared sheet opens with an empty belief, not the share and not a draft from the offer');
+  // Kept while signed out, picked up after sign-in only while it is still the share somebody just made.
+  const now = Date.parse('2026-10-06T10:00:00Z');
+  assert.ok(seedIsFresh({ at: now - 60_000 }, now) && seedIsFresh({ at: now - SEED_FRESH_MS }, now));
+  assert.ok(!seedIsFresh({ at: now - SEED_FRESH_MS - 1 }, now), 'past half an hour it is let go, not popped up');
+  assert.ok(!seedIsFresh({}, now) && !seedIsFresh({ at: 'yesterday' }, now) && !seedIsFresh(null, now) && !seedIsFresh({ at: now + 60_000 }, now), 'no stamp, a bad one or one from the future is not fresh');
+
+  /* 3. The words ride along as the play, held to what a play holds and said to be from elsewhere. */
+  const idea = ideaOfSeed(one('Offer a free demo to ten guesthouses.\nThen ask who would pay.'))!;
+  assert.deepEqual(idea, { label: 'Offer a free demo to ten guesthouses.', how: 'Offer a free demo to ten guesthouses. Then ask who would pay.', from: SEED_FROM });
+  const wordy = ideaOfSeed(one('abc '.repeat(200)))!;
+  assert.ok(wordy.how.length <= SD_HOW_MAX && /abc…$/.test(wordy.how) && wordy.label.length <= SD_LABEL_MAX, 'cut at a word and marked, never mid-word');
+  assert.deepEqual(ideaOfSeed(seedOf({ text: 'https://www.claude.ai/share/abc' })!), { label: 'Idea from claude.ai', how: 'https://www.claude.ai/share/abc', from: SEED_FROM }, 'a link alone is the way back to the chat');
+  assert.equal(ideaOfSeed({ text: '', url: null, cut: false }), null);
+  assert.equal(seedHost('not a url'), 'a link');
+  // The link back to the chat stays with the bet, after the words — what the sheet says it keeps is what it keeps.
+  const linked = keptOfSeed(seedOf({ text: 'Offer a free pilot to ten guesthouses https://grok.com/share/xyz' })!);
+  assert.deepEqual(linked, { idea: { label: 'Offer a free pilot to ten guesthouses', how: 'Offer a free pilot to ten guesthouses https://grok.com/share/xyz', from: SEED_FROM }, whole: true, link: true });
+  const longLinked = keptOfSeed({ text: 'abc '.repeat(200).trim(), url: 'https://claude.ai/share/abc', cut: false });
+  assert.ok(longLinked.idea!.how.length <= SD_HOW_MAX && longLinked.idea!.how.endsWith('… https://claude.ai/share/abc') && !longLinked.whole && longLinked.link, 'long words are cut to leave room for the link, and the sheet says only the first lines stay');
+  const hugeLink = keptOfSeed({ text: 'Words', url: `https://x.com/${'a'.repeat(300)}`, cut: false });
+  assert.ok(!hugeLink.link && hugeLink.idea!.how === 'Words', 'a link too long to keep beside the words is not kept, and the sheet says so');
+  assert.equal(keptOfSeed({ ...one('Short'), cut: true }).whole, false, 'a share cut on the way in is not kept whole');
+  // A bet from a share is an ordinary bet: the server keeps the play as it came, and the belief is what the person typed.
+  const ctx = { today: '2026-10-06', price: 150, priceLabel: '$150' };
+  const asBet = sdNormBet({ part: 'reach', belief: 'Guesthouses answer a free demo', metric: 'replied', target: 3, days: 7, idea }, ctx);
+  assert.ok(asBet.ok && asBet.value.play === null && asBet.value.idea?.from === SEED_FROM && asBet.value.idea.how === idea.how && asBet.value.belief === 'Guesthouses answer a free demo');
+
+  /* 4. The page that keeps a first share: the same cache the worker uses, and nothing in the words can end its script. */
+  const hostile = { title: '', text: 'x</script><script>alert(1)</script>\u2028y\u2029z', url: '' };
+  const page = seedPage(hostile);
+  assert.equal(page.split('</script>').length - 1, 1, 'only the page’s own script end');
+  assert.ok(page.includes('\\u003c/script>') && !page.includes('\u2028') && !page.includes('\u2029'), 'escaped, including the line separators');
+  const kept = page.slice(page.indexOf('var p=') + 6, page.indexOf(';p.at=Date.now();'));
+  assert.deepEqual(JSON.parse(kept), hostile, 'the words come out as they went in');
+  assert.ok(page.includes(JSON.stringify(SEED_CACHE)) && page.includes(JSON.stringify(SEED_KEY)), 'the cache and key the page reads');
+  assert.ok(page.includes('could not be kept') && page.includes('/copilot2?tab=proof&shared=text'), 'a failure to keep it is said on arrival');
+  assert.ok(page.includes('p.at=Date.now();'), 'stamped, as the worker stamps its own');
+
+  /* 5. The worker, the route and the screen agree, and none of them fails quietly. */
+  const sw = src('public/sw.js');
+  assert.notEqual(SEED_CACHE, 'copilot-share');
+  assert.ok(sw.includes(`const SHARE_CACHE = 'copilot-share';`) && sw.includes(`const SHARE_TEXT_CACHE = '${SEED_CACHE}';`), 'words wait in a cache of their own: the Money tab reads every entry of the other as a statement');
+  assert.ok(sw.includes(`const SHARE_PATH = '/copilot2/share';`) && sw.includes(`const SHARE_TEXT_KEY = SHARE_PATH + '/text';`) && SEED_KEY === '/copilot2/share/text', 'the worker keeps them where the page looks');
+  assert.match(sw, /if \(!files\.length\) \{[\s\S]*?return to\('shared=text', 'proof'\)/, 'a file wins: words are for shares with none');
+  assert.match(sw, /if \(words\) return to\('shared=text&why='/, 'a share that could not be kept says why where the person lands');
+  assert.match(sw, /const said = \{ at: Date\.now\(\) \};/, 'stamped, so a share kept while signed out is only picked up while fresh');
+  const route = src('src/app/copilot2/share/route.ts');
+  // Signed out, nothing is read: a body nobody is signed in to send is not held in memory to be refused after.
+  const signedOut = route.indexOf("if (!(await currentProfileId())) return back(req, { shared: 'error', why: 'Sign in, then share it again.' });");
+  assert.ok(signedOut > 0 && signedOut < route.indexOf('req.formData()'), 'the session is checked before the body is read');
+  assert.match(route, /if \(!file && seedOf\(said\)\) return new Response\(seedPage\(said\)/);
+  const onboarding = src('src/app/copilot/_components/Onboarding.tsx');
+  assert.match(onboarding, /if \(shared === 'text'\) setArrived\(/, 'the sign-in screen says what happened to a share made while signed out');
+  assert.match(onboarding, /else if \(shared === 'error' && q\.get\('why'\)\) setArrived\(q\.get\('why'\)\);/);
+  assert.match(onboarding, /\{arrived && <p className="cp-note" role="status">\{arrived\}<\/p>\}/);
+  const hook = src('src/app/copilot/_components/useCopilot.ts');
+  assert.match(hook, /if \(shared === 'text'\) void takeText\(params\.get\('why'\)\);\s*else if \(shared \|\| params\.get\('add'\)\)/, 'a text share never becomes the Money tab’s arrival');
+  assert.match(hook, /else void takeText\(null, true\);/, 'the first open after sign-in picks up what was shared while signed out');
+  assert.match(hook, /if \(tookText\.current\) return;/, 'read once, though development runs an effect twice');
+  assert.match(hook, /else if \(!fresh\) say\('Nothing came through that share\.'\);/, 'an ordinary open with nothing waiting says nothing');
+  const reader = src('src/app/copilot/_components/sharedSeed.ts');
+  assert.match(reader, /await cache\.delete\(SEED_KEY\)/, 'spent on the first read');
+  assert.match(reader, /if \(quiet && !seedIsFresh\(raw, Date\.now\(\)\)\) return \{ seed: null, error: null \};/, 'a stale share is let go on an ordinary open');
+  assert.match(reader, /error: quiet && !found \? null : `That share could not be read:/, 'once something was found, failing to read it is said all the same');
+  assert.ok(!/catch \{\s*\}/.test(reader) && (reader.match(/error: /g) ?? []).length >= 4, 'every way it fails is a sentence');
+  const sheet = src('src/app/copilot/_components/v2/LabSheets.tsx');
+  assert.match(sheet, /const \[sharedPart\] = useState<LinkKey \| null>\(\(\) => \(seed && !asked && !shelved && !experiment \? derive\(home\)\.proof\.chain\.weak : null\)\);/, 'derive() reads the whole home, so once — not on every keystroke');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /seed=\{sheet\.seed\}/);
+  const manifest = src('src/app/copilot2/manifest.webmanifest/route.ts');
+  assert.ok(/title: 'title'/.test(manifest) && /text: 'text'/.test(manifest) && /url: 'url'/.test(manifest), 'Copilot is in the share sheet for words, not only for files');
+
+  /* 6. A shared reply is never context about the business (invariants 2 and 12): nothing a model reads imports it,
+        and a play that came in as one is never named to a model — not to the ideas writer, not to an asset draft. */
+  for (const f of ['src/lib/copilot/store.ts', 'src/lib/copilot/working.ts', 'src/lib/copilot/proofai.ts', 'src/lib/copilot/ideas.ts', 'src/lib/copilot/mcpread.ts']) {
+    assert.ok(!/from '\.\/seed'/.test(src(f)), `${f} does not read a share`);
+  }
+  assert.equal(SEED_FROM, SD_SHARED_FROM);
+  const sharedPlay = { play: null, idea: { label: 'Charge $99 a month', how: 'Charge $99 a month to ten guesthouses', from: SEED_FROM } };
+  assert.equal(sdPlayForModel(sharedPlay), null, 'a shared play is not named to a model');
+  assert.equal(sdPlayForModel({ play: null, idea: { label: 'Free demo', how: 'Offer a demo.', from: 'AI, from your record' } }), 'Free demo');
+  assert.equal(sdPlayForModel({ play: 'guarantee', idea: null }), 'A guarantee, and the price up front', 'a book’s play is named as the book names it');
+  const proofaiSrc = src('src/lib/copilot/proofai.ts');
+  assert.match(proofaiSrc, /bet: bet \? \{ belief: bet\.bet\.belief, line: passLine\(bet\.bet, bet\.last\), play: playForModel\(bet\.bet\) \} : null,/, 'an asset draft is never told a shared play');
+  assert.ok(!/playOf\(/.test(proofaiSrc), 'nothing in the model calls names a play any other way');
+  // And what an asset draft is not told, its check does not allow: the $99 is not a number the person gave.
+  const draftPrompt = sdAssetPrompt({ kind: 'script', offer: { sells: 'Booking automation', price_band: '$150' }, foundBy: 'outreach', working: null, bet: { belief: 'Guesthouses answer', line: '3 replies by 13 Oct', play: sdPlayForModel(sharedPlay) }, part: null, previous: null, ask: null, heard: [] });
+  assert.ok(!/\$99/.test(draftPrompt), 'the shared play’s figure never reaches the draft');
+
+  console.log('copilot-core: shared words checks passed');
+}
+
+shareSeedSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── A bet's first reading ───────────────────────────────────────────────── */
+//
+// The checks are the ways a reading could mislead: a second verdict that
+// disagrees with the first, a send from before the bet counted toward it, a
+// one-dollar payment read as a sale at the price, a ladder with sends in it for
+// a shop whose buyers walk in, a rung for a count nobody kept, and a card that
+// shows the plan twice.
+
+import {
+  LAB_BET as RD_BET, LAB_METRICS as RD_METRICS, LAB_STOP as RD_STOP,
+  betView as rdBetView, labHome as rdLabHome, readingOf as rdReadingOf,
+  type Bet as RdBet, type DayRows as RdRows, type LabEventRow as RdEvent,
+} from '../../src/lib/copilot/lab';
+import { readingLine as rdLine, rungsOf as rdRungs } from '../../src/lib/copilot/reading';
+import { readFileSync as readReadingFile } from 'node:fs';
+
+async function betReadingSuite() {
+  const bet = (b: Partial<RdBet> & Pick<RdBet, 'metric' | 'target' | 'days' | 'start'>): RdBet => ({
+    id: 'b', part: 'pay', belief: 'Staycation & resorts pay $150', play: null, idea: null, unit: null, tries: null, price: 150, priceLabel: '$150', experiment: null, openedAt: `${b.start}T01:00:00Z`, ...b,
+  });
+  const src = (p: string) => readReadingFile(new URL(`../../${p}`, import.meta.url), 'utf8');
+
+  /* 1. The funnel since the bet began: both ends of the window, nothing from before, a dollar is a payment and not a sale at the price. */
+  const rows: RdRows = {
+    sends: ['2026-10-04', '2026-10-05', '2026-10-05', '2026-10-06'],
+    outcomes: [
+      { kind: 'reply', day: '2026-10-04', opportunity: 'old', amount: null },
+      { kind: 'reply', day: '2026-10-06', opportunity: 'o1', amount: null },
+      { kind: 'meeting', day: '2026-10-06', opportunity: 'o1', amount: null },
+      { kind: 'won', day: '2026-10-06', opportunity: 'o2', amount: 1 },
+      { kind: 'won', day: '2026-10-06', opportunity: 'o3', amount: 1 },
+    ],
+    finished: [], talks: [],
+  };
+  const day2 = bet({ metric: 'paid_at_price', target: 2, days: 14, start: '2026-10-05' });
+  const reading = rdReadingOf(day2, '2026-10-06', rows);
+  assert.deepEqual(reading, { sent: 3, replied: 1, meetings: 1, paid: 2, paid_at_price: 0, talks: 0, committed: 0, handed: 0, logged: 0 }, 'a send and a reply from the day before do not count');
+  assert.deepEqual(Object.keys(reading).sort(), [...RD_METRICS].sort(), 'every count there is, so a card can pick its ladder');
+
+  /* 2. Never a second verdict: for the count a bet is decided on, the reading is the result, in every state — and the verdict is untouched.
+        Only the running bet carries a reading (nothing shows another); readingOf, read to the day a bet ended, is what it would have been. */
+  const ev = (id: number, event_type: string, created_at: string, payload: Record<string, unknown>): RdEvent => ({ id, event_type, created_at, payload });
+  const opened = ev(1, RD_BET, '2026-10-05T01:00:00Z', {
+    part: 'pay', belief: 'Staycation & resorts pay $150', metric: 'paid_at_price', target: 2, days: 14, start: '2026-10-05', price: 150, priceLabel: '$150',
+    tries: { metric: 'sent', planned: 20 },
+  });
+  const sends = ['2026-10-04T10:00:00Z', '2026-10-05T10:00:00Z', '2026-10-06T10:00:00Z', '2026-10-08T10:00:00Z', '2026-10-20T10:00:00Z'];
+  const outcome = (kind: string, at: string, opportunity: string, amount: number | null = null) => ({ kind, opportunity_id: opportunity, occurred_at: at, amount });
+  const outcomes = [
+    outcome('reply', '2026-10-06T11:00:00Z', 'o1'), outcome('meeting', '2026-10-06T12:00:00Z', 'o1'),
+    outcome('won', '2026-10-07T09:00:00Z', 'o2', 150), outcome('won', '2026-10-07T10:00:00Z', 'o3', 150), outcome('won', '2026-10-08T10:00:00Z', 'o4', 150),
+    outcome('won', '2026-10-06T13:00:00Z', 'o5', 1),
+  ];
+  const labAt = (today: string, events: RdEvent[]) => rdLabHome({ events, unreadable: null, timezone: 'UTC', today, sends, outcomes, finished: [] });
+  // The same bet with a line the rows never reach, so it runs out its days instead of passing on the 7th.
+  const unlucky = { ...opened, payload: { ...(opened.payload as object), target: 9 } };
+  const scenarios: Array<[string, string, RdEvent[], string]> = [
+    ['running', '2026-10-06', [opened], 'running'],
+    ['passed', '2026-10-09', [opened], 'passed'],
+    ['called off', '2026-10-09', [opened, ev(2, RD_STOP, '2026-10-06T20:00:00Z', { bet: '1', note: 'No' })], 'stopped'],
+    ['failed', '2026-10-30', [unlucky], 'failed'],
+  ];
+  const dayRows: RdRows = {
+    sends: sends.map((s) => s.slice(0, 10)),
+    outcomes: outcomes.map((o) => ({ kind: o.kind, day: o.occurred_at.slice(0, 10), opportunity: o.opportunity_id, amount: o.amount })),
+    finished: [], talks: [], tallies: [],
+  };
+  for (const [name, today, events, state] of scenarios) {
+    const v = labAt(today, events).bets[0];
+    assert.equal(v.state, state, `${name}: the state is the rows’`);
+    assert.equal(!!v.reading, state === 'running', `${name}: a reading only on the bet it is shown for`);
+    const reading = v.reading ?? rdReadingOf(v.bet, v.ended!, dayRows);
+    assert.equal(reading[v.bet.metric], v.result, `${name}: the reading and the verdict count the same rows`);
+    assert.equal(reading[v.bet.tries!.metric], v.tries, `${name}: and the plan the same`);
+    const direct = rdBetView(v.bet, v.state === 'stopped' ? '2026-10-06' : null, dayRows, today);
+    assert.deepEqual({ state: v.state, result: v.result, tries: v.tries, ended: v.ended, day: v.day, last: v.last }, { state: direct.state, result: direct.result, tries: direct.tries, ended: direct.ended, day: direct.day, last: direct.last }, `${name}: the reading did not touch the verdict`);
+  }
+  const passed = labAt('2026-10-09', [opened]).bets[0];
+  assert.equal(passed.ended, '2026-10-07');
+  assert.equal(rdReadingOf(passed.bet, passed.ended!, dayRows).sent, 2, 'a passed bet is read to the day it passed: the send on the 8th is the next bet’s');
+  const failed = labAt('2026-10-30', [unlucky]).bets[0];
+  assert.equal(rdReadingOf(failed.bet, failed.ended!, dayRows).sent, 3, 'a failed one to its last day, the 18th: the send on the 20th is not its, nor the one before it began');
+  // Running, it is read to today and no further: past the last day is a different bet's.
+  assert.equal(labAt('2026-10-06', [opened]).bets[0].reading!.sent, 2, 'sends from the day it began to today');
+
+  /* 3. The ladder: the funnel up to the line, in order, marked where it has got to — and the dollar tests are payments, not sales. */
+  const view = (b: RdBet, r: Partial<Record<(typeof RD_METRICS)[number], number>>) => ({ bet: b, reading: r });
+  const rungs = rdRungs(view(day2, reading), 'outreach');
+  assert.deepEqual(rungs.map((r) => [r.metric, r.n, r.words, r.state]), [
+    ['sent', 3, 'messages sent', 'done'], ['replied', 1, 'reply', 'done'], ['meetings', 1, 'meeting', 'done'], ['paid', 2, 'payments', 'done'], ['paid_at_price', 0, 'sales at your $150', 'next'],
+  ], '2 payments and no sale at $150: the price finding, said by the card');
+  // The card wraps short labels in a row rather than breaking a long one: grammar for its number, and the full words kept for a sentence.
+  assert.deepEqual(rungs.map((r) => r.label), ['sent', 'reply', 'meeting', 'paid', 'at $150']);
+  assert.deepEqual(rdRungs(view(day2, { ...reading, replied: 3, meetings: 0 }), 'outreach').map((r) => r.label), ['sent', 'replies', 'meetings', 'paid', 'at $150']);
+  assert.equal(rdRungs(view({ ...day2, priceLabel: null }, reading), 'outreach')[4].label, 'at your price', 'no price, no figure invented for one');
+  for (const r of rungs) assert.ok(r.label.length <= 9 + 'at your price'.length && !/\n/.test(r.label), `${r.metric}: a label is a word or two`);
+  assert.deepEqual(rungs.map((r) => [r.line, r.target]), [[false, null], [false, null], [false, null], [false, null], [true, 2]], 'the line is marked, with what it has to reach');
+  assert.equal(rdLine(view(day2, reading), 'outreach'), 'Counted since 5 Oct: 3 messages sent, 1 reply, 1 meeting, 2 payments, 0 sales at your $150.');
+  assert.deepEqual(rdRungs(view(day2, reading), 'local').map((r) => r.metric), ['meetings', 'paid', 'paid_at_price'], 'no sends for a shop whose buyers walk in');
+  assert.deepEqual(rdRungs(view(day2, reading), null).map((r) => r.metric), ['sent', 'replied', 'meetings', 'paid', 'paid_at_price'], 'unsaid, the app counts outreach once it has found or sent anything');
+  assert.deepEqual(rdRungs(view(bet({ metric: 'committed', target: 3, days: 7, start: '2026-10-05' }), { talks: 4, committed: 1 }), 'outreach').map((r) => [r.metric, r.n]), [['talks', 4], ['committed', 1]]);
+  for (const m of ['sent', 'handed', 'logged'] as const) {
+    assert.equal(rdRungs(view(bet({ metric: m, target: 3, days: 7, start: '2026-10-05', unit: m === 'logged' ? 'sign-ups' : null }), { sent: 1, handed: 1, logged: 1 }), 'outreach').length, 1, `${m} has nothing before it: one rung is no ladder`);
+  }
+  assert.deepEqual(rdRungs(view(day2, { sent: 0, replied: 0, meetings: 0, paid: 0, paid_at_price: 0 }), 'outreach').map((r) => r.state), ['next', 'later', 'later', 'later', 'later'], 'nothing yet: the next step is the first one');
+  assert.deepEqual(rdRungs(view(day2, { sent: 5, replied: 0, meetings: 1, paid: 0, paid_at_price: 0 }), 'outreach').map((r) => r.state), ['done', 'next', 'done', 'later', 'later'], 'a meeting logged by hand is still counted, and the gap before it is the one named');
+  // What it takes is a rung too: in the funnel already, or ahead of it where the funnel has no room.
+  assert.equal(rdRungs(view({ ...day2, tries: { metric: 'sent', planned: 20 } }, reading), 'outreach')[0].planned, 20);
+  const talky = rdRungs(view({ ...day2, tries: { metric: 'talks', planned: 5 } }, { ...reading, talks: 2 }), 'outreach');
+  assert.deepEqual([talky[0].metric, talky[0].planned, talky[0].n], ['talks', 5, 2]);
+  assert.deepEqual(rdRungs({ bet: day2 }, 'outreach'), [], 'a payload from before readings shows the card it always did');
+  assert.equal(rdLine({ bet: day2 }, 'outreach'), null);
+
+  /* 4. On the screen, and to Claude: the plan once, the reading only while it can still be read. */
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /\{rungs\.length > 1 && <Reading view=\{view\} rungs=\{rungs\} found=\{found\} \/>\}/);
+  assert.match(tab, /b\.tries && view\.tries != null && !planInRungs/, 'the old plan bar goes only where the ladder holds the plan');
+  const conn = src('src/app/api/copilot/mcp/read.ts');
+  assert.match(conn, /reading: v\.state === 'running' \? readingLine\(v, found\) : null/);
+  const proofDoc = (b: Record<string, unknown>) => mrProof({
+    today: '2026-10-06', verdict: { title: 'Not proven yet', line: '0 of 3.' }, links: [], weak: null, checkpoint: { due: false, last: null }, history: [],
+    bets: [{ belief: 'They pay', part: 'What they pay', state: 'running', result: '0 of 2 sales at your $150', pass: '2 sales at your $150 by 18 Oct', start: '2026-10-05', ended: null, day: 2, days: 14, note: null, play: null, ...b }],
+  } as Parameters<typeof mrProof>[0]);
+  assert.match(proofDoc({ reading: 'Counted since 5 Oct: 3 messages sent, 1 reply.' }), /It passes at 2 sales at your \$150 by 18 Oct\. Counted since 5 Oct: 3 messages sent, 1 reply\./);
+  assert.ok(!/Counted since/.test(proofDoc({})), 'a bet with no reading says what it always said');
+
+  console.log('copilot-core: bet reading checks passed');
+}
+
+betReadingSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The shelf: tests kept for later ──────────────────────────────────────── */
+//
+// The checks are the ways a shelf becomes a graveyard or a liar: an idea kept
+// with no line, a score or a market size riding in on an entry, a test that
+// cannot become the bet it was kept as, one that stays on the shelf after it
+// started, a shelf that grows without end, a write to a shelf nobody could read,
+// and a model told to suggest what is already written down.
+
+import {
+  LAB_BET as SH_BET, LAB_EVENTS as SH_EVENTS, LAB_SHELF as SH_SHELF, LAB_SHELF_GONE as SH_GONE, LAB_TALK as SH_TALK, SHELF_MAX,
+  countRefusal, labFromEvents as shLedger, labHome as shHome, labView as shView, normalizeBet as shNormBet, normalizeShelf, shelfFromEvents, shelfRefusal,
+  type LabEventRow as ShRow, type ShelfEntry as ShEntry,
+} from '../../src/lib/copilot/lab';
+import { ideaSources as shSources, ideasPrompt as shIdeasPrompt } from '../../src/lib/copilot/ideas';
+import { readFileSync as readShelfFile } from 'node:fs';
+
+async function shelfSuite() {
+  const src = (p: string) => readShelfFile(new URL(`../../${p}`, import.meta.url), 'utf8');
+  const ctx = { today: '2026-10-06', price: 150, priceLabel: '$150' };
+  const test = { part: 'pay', belief: 'Staycation & resorts pay $150 for booking automation', metric: 'paid_at_price', target: 2, days: 14, tries: { metric: 'sent', planned: 20 } };
+
+  /* 1. No test, no entry: the shelf is held to what starting a bet is held to — the same function, less the day and price that belong to the day it starts. */
+  const kept = normalizeShelf({ ...test, score: 9, marketSize: '$2B', start: '2020-01-01', price: 1, experiment: 'plan-x' }, ctx);
+  assert.ok(kept.ok);
+  assert.deepEqual(Object.keys(kept.ok ? kept.value : {}).sort(), ['belief', 'days', 'idea', 'metric', 'part', 'play', 'target', 'tries', 'unit'], 'no score, no market size, no start, no price: a field it does not know is dropped');
+  const refusals: Array<Record<string, unknown>> = [
+    { ...test, belief: '   ' }, { ...test, part: 'everything' }, { ...test, metric: 'vibes' }, { ...test, target: 0 }, { ...test, days: 0 },
+    { ...test, tries: { metric: 'paid', planned: 10 } }, { ...test, metric: 'logged', unit: '' }, { part: 'pay' },
+  ];
+  for (const raw of refusals) {
+    const a = normalizeShelf(raw, ctx);
+    const b = shNormBet(raw, ctx);
+    assert.ok(!a.ok && !b.ok && a.error === b.error, `a test with no line is refused with what a bet says: ${a.ok ? 'kept' : a.error}`);
+  }
+  const noPrice = normalizeShelf(test, { today: ctx.today, price: null, priceLabel: null });
+  assert.ok(!noPrice.ok && noPrice.error === 'Say what it costs first: a sale at your price needs a price.', 'a sale at a price nobody named is refused here too');
+
+  /* 2. Not a backlog: ten, and not the same test twice — the same part, belief, count and play, not merely the same sentence. */
+  type Key = Pick<ShEntry, 'part' | 'belief' | 'metric' | 'play' | 'idea'>;
+  const k = (o: Partial<Key>): Key => ({ part: 'pay', belief: 'They pay', metric: 'paid_at_price', play: null, idea: null, ...o });
+  const held = (n: number) => Array.from({ length: n }, (_, i) => k({ belief: `Belief ${i}` }));
+  assert.equal(shelfRefusal(held(SHELF_MAX - 1), k({ belief: 'A new one' })), null);
+  assert.equal(shelfRefusal(held(SHELF_MAX), k({ belief: 'A new one' })), `The shelf holds ${SHELF_MAX}. Start one, or take one off, to keep another.`);
+  assert.equal(shelfRefusal(held(SHELF_MAX), k({ belief: 'Belief 3' })), 'That is already on your shelf.', 'on a full shelf, a test already on it is said as that — not as a slot to free first');
+  assert.equal(shelfRefusal([k({ belief: 'They  pay $150' })], k({ belief: ' they pay $150 ' })), 'That is already on your shelf.', 'case and spacing are not a second test');
+  assert.equal(shelfRefusal([k({})], k({ part: 'reach' })), null, 'the same words about another part are another test');
+  // Every play and idea on a part opens the sheet with the same suggested belief: two different plays kept as they came are two tests.
+  const demo = { label: 'Free demo', how: 'Offer a free demo.', from: 'AI, from your record' };
+  const calls = { label: 'Cold call five', how: 'Call five owners.', from: 'AI, from your record' };
+  assert.equal(shelfRefusal([k({ idea: demo, metric: 'replied' })], k({ idea: calls, metric: 'meetings' })), null, 'two ideas, one suggested belief');
+  assert.equal(shelfRefusal([k({ play: 'guarantee' })], k({ play: 'paid-48h' })), null, 'two plays, one suggested belief');
+  assert.equal(shelfRefusal([k({ idea: demo })], k({ idea: { ...demo, label: ' FREE  demo ' } })), 'That is already on your shelf.', 'the same idea twice is still one');
+  assert.equal(shelfRefusal([k({ metric: 'replied' })], k({ metric: 'meetings' })), null, 'the same belief judged on another count is another test');
+
+  // A count the business cannot keep is refused wherever a test is written, not only hidden in the sheet.
+  assert.equal(countRefusal('replied', null, 'outreach'), null);
+  assert.equal(countRefusal('replied', null, null), null, 'unsaid, every count is open');
+  assert.equal(countRefusal('replied', null, 'local'), 'The app cannot count replies for a business whose buyers do not come through its sends. Pick a count you log.');
+  assert.match(countRefusal('meetings', { metric: 'sent' }, 'inbound') ?? '', /cannot count messages sent/, 'nor a plan counted in sends');
+  assert.equal(countRefusal('paid', { metric: 'talks' }, 'local'), null);
+
+  /* 3. What was stored, read back: newest first, and an entry leaves by being started or taken off — neither is undone. */
+  const ev = (id: number, event_type: string, created_at: string, payload: Record<string, unknown>): ShRow => ({ id, event_type, created_at, payload });
+  const entry = (id: number, belief: string, extra: Record<string, unknown> = {}) => ev(id, SH_SHELF, `2026-10-0${id}T09:00:00Z`, { ...test, belief, ...extra });
+  const rows = [
+    entry(1, 'First'), entry(2, 'Second'), entry(3, 'Third', { play: 'not-a-play' }),
+    ev(4, SH_SHELF, '2026-10-04T09:00:00Z', { ...test, belief: '' }),
+    ev(5, SH_SHELF, '2026-10-05T09:00:00Z', { ...test, belief: 'No line', target: 0 }),
+    ev(6, SH_GONE, '2026-10-06T09:00:00Z', { entry: '2' }),
+    ev(7, SH_BET, '2026-10-06T10:00:00Z', { ...test, start: '2026-10-06', belief: 'Third', price: 150, priceLabel: '$150', shelf: '3' }),
+  ];
+  const ledger = shLedger(rows);
+  assert.deepEqual(ledger.shelf.map((e) => e.belief), ['First'], 'one taken off, one started, two that did not hold together: only the first is left');
+  assert.equal(ledger.bets[0].shelf, '3', 'the bet names the entry it came from');
+  assert.equal(shLedger([...rows, entry(8, 'Fourth')].map((r) => ({ ...r, created_at: r.id === 8 ? '2026-10-08T09:00:00Z' : r.created_at }))).shelf.map((e) => e.belief).join(','), 'Fourth,First', 'newest first');
+  assert.ok(!('start' in ledger.shelf[0]) && !('price' in ledger.shelf[0]), 'what only starting decides is not on an entry');
+  const many = shLedger(Array.from({ length: SHELF_MAX + 5 }, (_, i) => ev(100 + i, SH_SHELF, `2026-09-${String(10 + i).padStart(2, '0')}T09:00:00Z`, { ...test, belief: `Belief ${i}` })));
+  assert.equal(many.shelf.length, SHELF_MAX, 'what the screen and the payload carry has an end');
+  assert.equal(many.shelf[0].belief, `Belief ${SHELF_MAX + 4}`);
+  assert.ok(SH_EVENTS.includes(SH_SHELF) && SH_EVENTS.includes(SH_GONE), 'the store reads both, or a shelf would vanish on reload');
+  const home = shHome({ events: rows, unreadable: null, timezone: 'UTC', today: '2026-10-06', sends: [], outcomes: [], finished: [] });
+  assert.deepEqual(home.shelf?.map((e) => e.belief), ['First']);
+  assert.deepEqual(shView(home, { runwayMonths: null, links: [], today: '2026-10-06' }).shelf.map((e) => e.belief), ['First']);
+  assert.deepEqual(shView(undefined, { runwayMonths: null, links: [], today: '2026-10-06' }).shelf, [], 'a server without the shelf has an empty one');
+  // Read from rows of its own: a hundred newer counts in the general window do not push a waiting test out of view.
+  const counts = Array.from({ length: 120 }, (_, i) => ev(1000 + i, SH_TALK, `2026-10-06T1${i % 10}:00:00Z`, { on: '2026-10-06', commitment: 'none' }));
+  const windowed = shHome({ events: counts, shelfEvents: rows, unreadable: null, timezone: 'UTC', today: '2026-10-06', sends: [], outcomes: [], finished: [] });
+  assert.deepEqual(windowed.shelf?.map((e) => e.belief), ['First'], 'the shelf comes from its own rows when they are given');
+  // A window of the newest rows can only lose an entry: its start or take-off is newer than its keeping, so it is in any window the keeping is in.
+  for (let n = 1; n <= rows.length; n++) {
+    const newest = [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, n);
+    const shown = shelfFromEvents(newest).map((e) => e.belief);
+    assert.ok(shown.every((b) => b === 'First'), `a window of the newest ${n} never brings back the one taken off or the one started`);
+  }
+
+  /* 4. A kept test can become the bet it was kept as, as it stands — the point of keeping it whole. */
+  const draft = normalizeShelf({ ...test, metric: 'logged', unit: 'Enquiries', tries: null, idea: { label: 'Free demo', how: 'Offer a free demo to ten guesthouses.', from: 'AI, from your record' } }, ctx);
+  assert.ok(draft.ok);
+  const back = shLedger([ev(1, SH_SHELF, '2026-10-01T09:00:00Z', draft.ok ? { ...draft.value } : {})]).shelf[0];
+  const asBet = shNormBet({ ...back }, ctx);
+  assert.ok(asBet.ok && asBet.value.belief === test.belief && asBet.value.metric === 'logged' && asBet.value.unit === 'enquiries' && asBet.value.idea?.from === 'AI, from your record' && asBet.value.target === 2 && asBet.value.days === 14);
+
+  /* 5. A model is told what is already written down, in the person's own words, and a number in them is theirs. */
+  const bare = { offer: { sells: 'Booking automation' }, working: null, links: [], bets: [], talks: { n: 0, problem: 0, committed: 0 }, assets: [] };
+  const withShelf = shIdeasPrompt({ ...bare, part: 'pay', foundBy: 'outreach', shelf: [{ belief: 'Guesthouses answer when I write', play: 'Free demo' }, { belief: 'They pay', play: null }] });
+  assert.ok(/do not suggest these again:\n- "Guesthouses answer when I write" \(the play: Free demo\)\n- "They pay"\n/.test(withShelf), 'the play is named, so a suggested belief kept twice still says which ideas are kept');
+  assert.ok(!/shelf/.test(shIdeasPrompt({ ...bare, part: 'pay', foundBy: 'outreach' })), 'no shelf, no line about one');
+  const sources = shSources({ ...bare, part: 'pay', foundBy: 'outreach', shelf: [{ belief: 'I charge $150', play: 'Charge $99 up front' }] });
+  assert.ok(sources.includes('I charge $150') && !sources.some((x) => x.includes('$99')), 'a belief is the person’s; a play’s name is not, and its number is not theirs');
+  assert.match(src('src/lib/copilot/proofai.ts'), /shelf: \(home\.lab\?\.shelf \?\? \[\]\)\.map\(\(e\) => \(\{ belief: e\.belief, play: playForModel\(e\) \}\)\)/, 'a play kept from a share is never named to the model');
+
+  /* 6. Claude reads the shelf, marked as tests not started, with where each play came from. */
+  const proof = (shelf?: Array<{ belief: string; part: string; line: string; from: string | null }>) => mrProof({
+    today: '2026-10-06', verdict: { title: 'Not proven yet', line: '0 of 3.' }, links: [], weak: null, bets: [], checkpoint: { due: false, last: null }, history: [], shelf,
+  } as Parameters<typeof mrProof>[0]);
+  const doc = proof([{ belief: 'Guesthouses answer a free demo', part: 'They hear', line: '3 replies within 1 week', from: 'Free demo (AI, from your record)' }]);
+  assert.match(doc, /## On the shelf: tests kept for later, not started\n- "Guesthouses answer a free demo" — on they hear\. The test: 3 replies within 1 week\. The play: Free demo \(AI, from your record\)\./);
+  assert.ok(doc.indexOf('On the shelf') < doc.indexOf('Pivot or persevere'));
+  assert.ok(!/On the shelf/.test(proof()) && !/On the shelf/.test(proof([])), 'a record with no shelf reads as it always did');
+
+  /* 7. The route and the screen: guarded where a write could lie, and said when it did. */
+  const route = src('src/app/api/copilot/lab/route.ts');
+  assert.match(route, /case 'shelve': \{[\s\S]*?if \(home\.lab\?\.unreadable\) return fail\([\s\S]*?normalizeShelf\(obj\(b\.bet\)[\s\S]*?shelfRefusal\(home\.lab\?\.shelf \?\? \[\], v\.value\)/, 'refused when the shelf cannot be read, held to a bet’s rules, capped');
+  assert.match(route, /case 'unshelve': \{[\s\S]*?if \(home\.lab\?\.unreadable\) return fail\([\s\S]*?if \(!home\.lab\?\.shelf\?\.some\(\(e\) => e\.id === id\)\) return fail\([\s\S]*?LAB_SHELF_GONE/, 'only what is on the shelf can be taken off, and a read that failed says so rather than "not on your shelf"');
+  assert.equal((route.match(/countRefusal\(v\.value\.metric, v\.value\.tries, foundOf\(home\)\.value\)/g) ?? []).length, 2, 'a count the business cannot keep is refused on open and on keep alike');
+  const store = src('src/lib/copilot/store.ts');
+  assert.match(store, /read\(\[LAB_SHELF, LAB_SHELF_GONE, LAB_BET\], SHELF_EVENT_LIMIT\)/, 'the shelf has a window of its own');
+  assert.match(store, /shelfEvents: labEvents\.shelfRows,/);
+  assert.match(route, /if \(shelf && !home\.lab\?\.shelf\?\.some\(\(e\) => e\.id === shelf\)\) return fail\('That test is no longer on your shelf\.'\);/, 'a bet cannot name a test nobody kept');
+  assert.match(route, /LAB_BET, \{ \.\.\.v\.value, shelf \}/, 'and the bet names the one it came from, which is how the entry leaves');
+  const iface = src('src/lib/copilot/lab.ts').match(/export interface ShelfEntry \{[\s\S]*?\n\}/)![0];
+  assert.ok(!/score|market|viab|rank/i.test(iface), 'a kept idea is a test with a line: nothing in it estimates its worth');
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /<Shelf home=\{home\} d=\{d\} actions=\{actions\} \/>\s*<PickABet/, 'with no bet running, the person’s own tests come before the generic ones');
+  assert.match(tab, /\{!running && <button className="cp-btn sm primary" disabled=\{busy === e\.id\} onClick=\{\(\) => actions\.openSheet\(\{ kind: 'bet', shelf: e\.id \}\)\}>Start it<\/button>\}/, 'Start is offered only when the slot is free, and not while that row is being taken off');
+  // While a bet runs the picker is not shown and Start is not offered, so the shelf is the only way into the sheet — and that is when ideas arrive.
+  assert.match(tab, /if \(!shelf\.length && !running\) return null;/, 'nothing to show, and nothing running: no card');
+  assert.match(tab, /if \(!shelf\.length\) return <div className="cp2-shelf-solo">\{keep\}<\/div>;/, 'an empty shelf under a running bet is only the way to fill it');
+  assert.match(tab, /\{running && keep\}/);
+  assert.match(tab, /'Keep another idea for later' : 'Keep an idea for later'/);
+  const sheet = src('src/app/copilot/_components/v2/LabSheets.tsx');
+  assert.match(sheet, /\{!experiment && !shelfId && \(/, 'the plan’s experiment and a kept test are already waiting somewhere');
+  // The entry as it was when the sheet opened: taken off meanwhile, Start still names it and the server says it is gone.
+  assert.match(sheet, /const \[shelved\] = useState\(\(\) => \(shelfId \? home\.lab\?\.shelf\?\.find\(\(e\) => e\.id === shelfId\) \?\? null : null\)\);/);
+  assert.match(sheet, /shelf: shelfId \?\? null/);
+  assert.match(sheet, /const keptCountOff = !!shelved && !!countRefusal\(shelved\.metric, shelved\.tries, found\);/, 'a kept count the business can no longer keep reopens the pickers');
+  assert.match(sheet, /const fixed = keptCountOff \? null : play \?\? idea;/);
+  assert.match(src('src/app/copilot/_components/useCopilot.ts'), /shelve: 'Kept on your shelf\. Nothing counts until you start it\.'/);
+  assert.match(src('src/app/copilot/_components/useCopilot.ts'), /'talk', 'shelf'\]/, 'two kept tests are two sheets, not the first one’s state');
+
+  console.log('copilot-core: shelf checks passed');
+}
+
+shelfSuite().catch((e) => { console.error(e); process.exit(1); });

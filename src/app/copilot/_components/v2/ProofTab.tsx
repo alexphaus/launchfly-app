@@ -41,7 +41,8 @@ import {
 } from '@/lib/copilot/lab';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { assetMakers, betNext, betWork, ideasStale, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
-import type { HomeData } from '@/lib/copilot/types';
+import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
+import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
 import { AssetGlyph, IconCheck, IconChevron, IconCross, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph } from './icons2';
@@ -68,8 +69,19 @@ export default function ProofTab({ home, d, actions, briefing }: { home: HomeDat
         <>
           {lab.checkpoint.due && <Checkpoint d={d} actions={actions} />}
           {lab.current
-            ? <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={full} />
-            : <PickABet home={home} d={d} actions={actions} />}
+            ? (
+              <>
+                <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={full} />
+                <Shelf home={home} d={d} actions={actions} />
+              </>
+            )
+            : (
+              // The person's own kept tests before the generic ones: what they wrote down to run next is what they came back for.
+              <>
+                <Shelf home={home} d={d} actions={actions} />
+                <PickABet home={home} d={d} actions={actions} />
+              </>
+            )}
         </>
       )}
       <Assets home={home} d={d} actions={actions} />
@@ -310,6 +322,9 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   const work = betWork(view, { links: d.proof.lab.links, commissions: home.commissions, assets: d.proof.assets, talks: d.proof.lab.talks, tallies: d.proof.lab.tallies });
   const next = betNext(b.metric, found, b.unit);
   const over = overPlan(view);
+  // The funnel up to the line, counted since the bet began: something to read on day one, when the bar is empty.
+  const rungs = rungsOf(view, found);
+  const planInRungs = rungs.length > 1 && rungs.some((r) => r.planned != null);
   // A bet decided by a sale but planned in conversations still needs its log one tap away.
   const logToo = b.tries?.metric === 'talks' && next.go !== 'talk';
   // Reached by outreach, a sale still comes in from outside the app sometimes — a referral, a walk-in.
@@ -341,7 +356,9 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
       <div className="cp2-lab-bar" role="progressbar" aria-label="Toward the pass line" aria-valuemin={0} aria-valuemax={b.target} aria-valuenow={Math.min(view.result, b.target)}>
         <i style={{ width: `${pctOf(view.result, b.target)}%` }} />
       </div>
-      {b.tries && view.tries != null && (
+      {rungs.length > 1 && <Reading view={view} rungs={rungs} found={found} />}
+      {/* The plan has its place on the ladder when the ladder holds it; shown twice it would read as two plans. */}
+      {b.tries && view.tries != null && !planInRungs && (
         <div className="cp2-pf-tries">
           <span>{view.tries} of {b.tries.planned} {metricWords(b.tries.metric, b.tries.planned)}</span>
           <span className="cp2-pf-tries-bar" aria-hidden><i style={{ width: `${pctOf(view.tries, b.tries.planned)}%` }} /></span>
@@ -381,6 +398,24 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * What the funnel counted since the bet began, step by step to the line — so a
+ * bet decided on a sale says something on day one. Not the verdict: the bar above
+ * is that, and nothing here moves it (reading.ts).
+ */
+function Reading({ view, rungs, found }: { view: BetView; rungs: Rung[]; found: FoundBy | null }) {
+  return (
+    <ol className="cp2-rd" aria-label={readingLine(view, found) ?? 'Counted since the bet began'}>
+      {rungs.map((r) => (
+        <li key={r.metric} className={`cp2-rd-step ${r.state}${r.line ? ' line' : ''}`}>
+          <b>{r.n}{r.target != null ? <i>/{r.target}</i> : r.planned != null ? <i>/{r.planned}</i> : null}</b>
+          <span>{r.label}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -540,6 +575,68 @@ function HandOver({ view, actions, full }: { view: BetView; actions: Actions; fu
         <button className="cp-btn sm primary" disabled={!text.trim() || busy || full} onClick={() => void go()}>{busy ? 'Writing…' : 'Hand over'}</button>
       </div>
       {full && <p className="cp-help">{MAX_ACTIVE_COMMISSIONS} projects are on the go. Finish or stop one to hand over another.</p>}
+      {error && <p className="cp-help cp2-err">{error}</p>}
+    </div>
+  );
+}
+
+/* ─── The shelf ───────────────────────────────────────────────────────────── */
+
+/**
+ * Tests kept for later, each with its belief, its line and where its play came
+ * from. They wait here, not in a chat: a test somebody wrote down is the cheapest
+ * kind to start, and one bet runs at a time because two share every count — so
+ * Start is only offered when the slot is free, and the card says why when it is
+ * not. Nothing here is scored or ranked: an idea on the shelf is a test with a
+ * line, and the rows are what judge it once it is started.
+ *
+ * While a bet runs this is the only way into the bet sheet — the picker is not
+ * shown — and that is when new ideas arrive, so it carries its own way to keep
+ * one: the sheet says one bet at a time, leaves Start off, and keeps Keep.
+ */
+function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+  const shelf = d.proof.lab.shelf;
+  const running = !!d.proof.lab.current;
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  if (!shelf.length && !running) return null;
+  const { priceLabel } = betPrice(home.profile.offer?.price_band, d.currency);
+  const keep = (
+    <button className="cp2-lab-own" onClick={() => actions.openSheet({ kind: 'bet', part: d.proof.chain.weak ?? undefined })}>
+      <span>{shelf.length ? 'Keep another idea for later' : 'Keep an idea for later'}</span>
+      <IconChevron />
+    </button>
+  );
+  // Nothing on it and a bet running: no card for an empty shelf, only the way to put something on it.
+  if (!shelf.length) return <div className="cp2-shelf-solo">{keep}</div>;
+  const off = async (id: string) => {
+    setBusy(id); setError(null);
+    const r = await actions.lab({ action: 'unshelve', id });
+    setBusy(null);
+    if (!r.ok) setError(r.error ?? 'Could not take it off');
+  };
+  return (
+    <div className="cp-card cp2-shelf">
+      <div className="cp-eyebrow">On your shelf · {shelf.length}</div>
+      <p className="cp2-shelf-s">
+        {running ? 'Each waits with its test written. One bet runs at a time, so the next starts when this one ends.' : 'Each waits with its test written. Start one, or write another below.'}
+      </p>
+      {shelf.map((e) => {
+        const play = playOf(e);
+        return (
+          <div key={e.id} className="cp2-shelf-row">
+            <span className="cp2-shelf-part">{LINK_LABEL[e.part]}</span>
+            <b className="cp2-clamp2">{e.belief}</b>
+            <span className="cp2-shelf-line">{playLine(e, priceLabel)}</span>
+            {play && <span className="cp2-shelf-from">{play.from} · {play.label}</span>}
+            <div className="cp2-shelf-do">
+              {!running && <button className="cp-btn sm primary" disabled={busy === e.id} onClick={() => actions.openSheet({ kind: 'bet', shelf: e.id })}>Start it</button>}
+              <button className="cp2-link muted" disabled={busy === e.id} onClick={() => void off(e.id)}>{busy === e.id ? 'Taking off…' : 'Take off'}</button>
+            </div>
+          </div>
+        );
+      })}
+      {running && keep}
       {error && <p className="cp-help cp2-err">{error}</p>}
     </div>
   );

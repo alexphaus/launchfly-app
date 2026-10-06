@@ -93,12 +93,18 @@ export interface BetIn {
   note: string | null;
   /** The play it runs, and where the play is from. */
   play: string | null;
+  /**
+   * The funnel since it began, "Counted since 5 Oct: 11 messages sent, 1 reply…"
+   * (reading.ts): what to answer "how is it going" from on day two, when the
+   * count it is decided on is still nothing.
+   */
+  reading?: string | null;
 }
 
 const BET_STATE: Record<BetIn['state'], string> = { running: 'running', passed: 'passed', failed: 'did not pass', stopped: 'called off' };
 
 function runningLine(b: BetIn): string {
-  return `"${b.belief}" — on ${b.part.toLowerCase()}. Day ${b.day} of ${b.days}: ${b.result}. It passes at ${b.pass}.${b.play ? ` The play: ${b.play}.` : ''}`;
+  return `"${b.belief}" — on ${b.part.toLowerCase()}. Day ${b.day} of ${b.days}: ${b.result}. It passes at ${b.pass}.${b.play ? ` The play: ${b.play}.` : ''}${b.reading ? ` ${b.reading}` : ''}`;
 }
 
 /* ─── get_overview ────────────────────────────────────────────────────────── */
@@ -214,6 +220,8 @@ export interface ProofIn extends Missing {
   checkpoint: { due: boolean; last: { on: string; decision: string; grade: string | null } | null };
   /** Newest first, as the history shows it. */
   history: Array<{ day: string; title: string; line: string | null }>;
+  /** Tests kept for later, newest first: not started, so nothing about them has been counted. */
+  shelf?: Array<{ belief: string; part: string; line: string; from: string | null }>;
 }
 
 /** History entries returned: the newest, which are the ones a decision is made from. */
@@ -234,6 +242,8 @@ export function proofText(i: ProofIn): string {
       [running ? `Running: ${runningLine(running)}` : 'No bet running.'],
       past.length ? ['Earlier, newest first:', ...past.map((b) => bullet(`${b.start} · "${b.belief}" — on ${b.part.toLowerCase()}: ${BET_STATE[b.state]}${b.ended ? ` on ${b.ended}` : ''}, ${b.result} against ${b.pass}.${b.note ? ` You wrote: "${b.note}"` : ''}`))] : [],
     )],
+    // doc() leaves out a section with no lines, so a record with no shelf reads as it always did.
+    ['On the shelf: tests kept for later, not started', (i.shelf ?? []).map((e) => bullet(`"${e.belief}" — on ${e.part.toLowerCase()}. The test: ${e.line}.${e.from ? ` The play: ${e.from}.` : ''}`))],
     ['Pivot or persevere', lines(
       i.checkpoint.due && 'A checkpoint is due now.',
       i.checkpoint.last ? `Last decided on ${i.checkpoint.last.on}: ${i.checkpoint.last.decision}.${i.checkpoint.last.grade ? ` ${i.checkpoint.last.grade}` : ''}` : 'No checkpoint decided yet.',

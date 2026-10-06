@@ -1,8 +1,8 @@
 // src/app/api/copilot/lab/route.ts
-// The bets' writes: open a bet, call one off, log a conversation or a count,
-// say how an introduction went, tie a project to a bet, answer the checkpoint,
-// ask for ideas, and say how buyers find you. Each is validated by lib/copilot/lab.ts and stored as an
-// event. A verdict is never posted here — there is no "mark it passed" —
+// The bets' writes: open a bet, call one off, keep a test on the shelf or take
+// it off, log a conversation or a count, say how an introduction went, tie a
+// project to a bet, answer the checkpoint, ask for ideas, and say how buyers find
+// you. Each is validated by lib/copilot/lab.ts and stored as an event. A verdict is never posted here — there is no "mark it passed" —
 // because it is computed from the rows on every load (invariant 10's
 // reasoning: a bet the person could pass by tapping would be graded by the one
 // person most hoping it passes).
@@ -10,9 +10,10 @@
 import { todayIso } from '@/lib/copilot/db';
 import { LINK_KEYS, type LinkKey } from '@/lib/copilot/business';
 import {
-  LAB_BET, LAB_CHECKPOINT, LAB_COUNT, LAB_INTRO, LAB_LINK, LAB_STOP, LAB_TALK, NOTE_MAX,
-  betPrice, labFromEvents, normalizeBet, normalizeCheckpoint, normalizeIntroClose, normalizeTalk, normalizeTally,
+  LAB_BET, LAB_CHECKPOINT, LAB_COUNT, LAB_INTRO, LAB_LINK, LAB_SHELF, LAB_SHELF_GONE, LAB_STOP, LAB_TALK, NOTE_MAX,
+  betPrice, countRefusal, labFromEvents, normalizeBet, normalizeCheckpoint, normalizeIntroClose, normalizeShelf, normalizeTalk, normalizeTally, shelfRefusal,
 } from '@/lib/copilot/lab';
+import { foundOf } from '@/lib/copilot/proof';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { isFoundBy } from '@/lib/copilot/offer';
 import { ProofModelError, ProofRefusal, writeIdeas } from '@/lib/copilot/proofai';
@@ -60,7 +61,16 @@ export async function POST(req: Request) {
         // next week must not rewrite whether this one passed.
         const v = normalizeBet(obj(b.bet), { today, ...betPrice(home.profile.offer?.price_band, salesCurrency(home.profile.finance, home.goals)) });
         if (!v.ok) return fail(v.error);
-        await insertLabEvent(auth.pid, LAB_BET, { ...v.value });
+        // A count this business cannot keep is refused here, not only hidden in the
+        // sheet: a kept test can outlive the way its buyers were found.
+        const off = countRefusal(v.value.metric, v.value.tries, foundOf(home).value);
+        if (off) return fail(off);
+        // Started from the shelf: the entry has to be one that is on it, so a tap
+        // from a stale screen cannot tie a bet to a test nobody kept — and the entry
+        // leaves the shelf with the bet, because the bet names it.
+        const shelf = str(obj(b.bet).shelf) || null;
+        if (shelf && !home.lab?.shelf?.some((e) => e.id === shelf)) return fail('That test is no longer on your shelf.');
+        await insertLabEvent(auth.pid, LAB_BET, { ...v.value, shelf });
         // The plan's experiment, made a bet: it is being tried now, and the bet
         // will give it its verdict (lab.ts experimentVerdicts).
         if (v.value.experiment) {
@@ -69,6 +79,33 @@ export async function POST(req: Request) {
             await insertExperimentMark(auth.pid, { id: v.value.experiment, title: v.value.idea?.label ?? v.value.belief, angle: null, state: 'started' });
           }
         }
+        return json({ ok: true, home: await loadHome(auth.pid) });
+      }
+      case 'shelve': {
+        const home = await loadHome(auth.pid);
+        if (!home) return fail('Not found', 404);
+        // Refused rather than guessed: with the shelf unreadable, the cap and the
+        // duplicate check would pass on a shelf nobody could see.
+        if (home.lab?.unreadable) return fail(`Your shelf could not be read just now, so nothing can be kept on it safely: ${home.lab.unreadable}`);
+        // The same rules a bet is held to, less the day and price that belong to the
+        // day it starts: a test with no line is not kept (lab.ts normalizeShelf).
+        const v = normalizeShelf(obj(b.bet), { today, ...betPrice(home.profile.offer?.price_band, salesCurrency(home.profile.finance, home.goals)) });
+        if (!v.ok) return fail(v.error);
+        const off = countRefusal(v.value.metric, v.value.tries, foundOf(home).value);
+        if (off) return fail(off);
+        const no = shelfRefusal(home.lab?.shelf ?? [], v.value);
+        if (no) return fail(no);
+        await insertLabEvent(auth.pid, LAB_SHELF, { ...v.value });
+        return json({ ok: true, home: await loadHome(auth.pid) });
+      }
+      case 'unshelve': {
+        const id = str(b.id);
+        const home = await loadHome(auth.pid);
+        if (!home) return fail('Not found', 404);
+        // The read's failure, not "not on your shelf" about an entry the person can see on it (invariant 13).
+        if (home.lab?.unreadable) return fail(`Your shelf could not be read just now, so nothing can be taken off it: ${home.lab.unreadable}`);
+        if (!home.lab?.shelf?.some((e) => e.id === id)) return fail('That is not on your shelf.');
+        await insertLabEvent(auth.pid, LAB_SHELF_GONE, { entry: id });
         return json({ ok: true, home: await loadHome(auth.pid) });
       }
       case 'stop': {

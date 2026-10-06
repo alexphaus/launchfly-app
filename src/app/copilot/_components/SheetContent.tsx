@@ -23,6 +23,7 @@ import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
 import BankSheet from './BankSheet';
 import OutreachSheet from './v2/Outreach';
+import { ClaudeSheet } from './v2/ClaudeSheet';
 import { BetSheet, IntroSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
 import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, FoundBySheet, HistorySheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
 import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
@@ -52,6 +53,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'handover': return <HandoverSheet home={home} actions={actions} />;
     case 'working': return <WorkingSheet home={home} actions={actions} />;
     case 'ask': return <AskSheet actions={actions} />;
+    case 'claude': return <ClaudeSheet actions={actions} />;
     case 'move': return <MoveSheet home={home} id={sheet.id} actions={actions} />;
     case 'capture': return <CaptureSheet home={home} actions={actions} />;
     case 'focus': return <FocusSheet home={home} actions={actions} />;

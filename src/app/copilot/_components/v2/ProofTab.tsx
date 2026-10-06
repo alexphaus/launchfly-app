@@ -41,7 +41,8 @@ import {
 } from '@/lib/copilot/lab';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { assetMakers, betNext, betWork, ideasStale, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
-import type { HomeData } from '@/lib/copilot/types';
+import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
+import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
 import { AssetGlyph, IconCheck, IconChevron, IconCross, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph } from './icons2';
@@ -310,6 +311,9 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   const work = betWork(view, { links: d.proof.lab.links, commissions: home.commissions, assets: d.proof.assets, talks: d.proof.lab.talks, tallies: d.proof.lab.tallies });
   const next = betNext(b.metric, found, b.unit);
   const over = overPlan(view);
+  // The funnel up to the line, counted since the bet began: something to read on day one, when the bar is empty.
+  const rungs = rungsOf(view, found);
+  const planInRungs = rungs.length > 1 && rungs.some((r) => r.planned != null);
   // A bet decided by a sale but planned in conversations still needs its log one tap away.
   const logToo = b.tries?.metric === 'talks' && next.go !== 'talk';
   // Reached by outreach, a sale still comes in from outside the app sometimes — a referral, a walk-in.
@@ -341,7 +345,9 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
       <div className="cp2-lab-bar" role="progressbar" aria-label="Toward the pass line" aria-valuemin={0} aria-valuemax={b.target} aria-valuenow={Math.min(view.result, b.target)}>
         <i style={{ width: `${pctOf(view.result, b.target)}%` }} />
       </div>
-      {b.tries && view.tries != null && (
+      {rungs.length > 1 && <Reading view={view} rungs={rungs} found={found} />}
+      {/* The plan has its place on the ladder when the ladder holds it; shown twice it would read as two plans. */}
+      {b.tries && view.tries != null && !planInRungs && (
         <div className="cp2-pf-tries">
           <span>{view.tries} of {b.tries.planned} {metricWords(b.tries.metric, b.tries.planned)}</span>
           <span className="cp2-pf-tries-bar" aria-hidden><i style={{ width: `${pctOf(view.tries, b.tries.planned)}%` }} /></span>
@@ -381,6 +387,24 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * What the funnel counted since the bet began, step by step to the line — so a
+ * bet decided on a sale says something on day one. Not the verdict: the bar above
+ * is that, and nothing here moves it (reading.ts).
+ */
+function Reading({ view, rungs, found }: { view: BetView; rungs: Rung[]; found: FoundBy | null }) {
+  return (
+    <ol className="cp2-rd" aria-label={readingLine(view, found) ?? 'Counted since the bet began'}>
+      {rungs.map((r) => (
+        <li key={r.metric} className={`cp2-rd-step ${r.state}${r.line ? ' line' : ''}`}>
+          <b>{r.n}{r.target != null ? <i>/{r.target}</i> : r.planned != null ? <i>/{r.planned}</i> : null}</b>
+          <span>{r.words}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 

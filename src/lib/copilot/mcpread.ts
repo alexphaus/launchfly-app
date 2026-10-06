@@ -93,12 +93,18 @@ export interface BetIn {
   note: string | null;
   /** The play it runs, and where the play is from. */
   play: string | null;
+  /**
+   * The funnel since it began, "Counted since 5 Oct: 11 messages sent, 1 reply…"
+   * (reading.ts): what to answer "how is it going" from on day two, when the
+   * count it is decided on is still nothing.
+   */
+  reading?: string | null;
 }
 
 const BET_STATE: Record<BetIn['state'], string> = { running: 'running', passed: 'passed', failed: 'did not pass', stopped: 'called off' };
 
 function runningLine(b: BetIn): string {
-  return `"${b.belief}" — on ${b.part.toLowerCase()}. Day ${b.day} of ${b.days}: ${b.result}. It passes at ${b.pass}.${b.play ? ` The play: ${b.play}.` : ''}`;
+  return `"${b.belief}" — on ${b.part.toLowerCase()}. Day ${b.day} of ${b.days}: ${b.result}. It passes at ${b.pass}.${b.play ? ` The play: ${b.play}.` : ''}${b.reading ? ` ${b.reading}` : ''}`;
 }
 
 /* ─── get_overview ────────────────────────────────────────────────────────── */

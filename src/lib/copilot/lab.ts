@@ -738,6 +738,20 @@ export function countIn(metric: LabMetric, from: string, to: string, rows: DayRo
   }
 }
 
+/**
+ * What the funnel counted from the day a bet began to the day it was read to:
+ * every count, not only the one that decides it (reading.ts says what is made of
+ * them). Counted by `countIn`, the function the verdict uses, so the two cannot
+ * disagree about a single row.
+ */
+export type Reading = Partial<Record<LabMetric, number>>;
+
+export function readingOf(bet: Pick<Bet, 'id' | 'start' | 'price'>, through: string, rows: DayRows): Reading {
+  const out: Reading = {};
+  for (const m of LAB_METRICS) out[m] = countIn(m, bet.start, through, rows, bet.price, bet.id);
+  return out;
+}
+
 export type BetState = 'running' | 'passed' | 'failed' | 'stopped';
 
 export const BET_STATE_LABEL: Record<BetState, string> = { running: 'Running', passed: 'Passed', failed: 'Did not pass', stopped: 'Called off' };
@@ -748,6 +762,12 @@ export interface BetView {
   result: number;
   /** What it took, when the bet says what it takes. */
   tries: number | null;
+  /**
+   * Every count since it began, read to the day it ended or to today (readingOf).
+   * Optional: a payload from before it existed has none, and the card then shows
+   * what it always did. Never read for the verdict.
+   */
+  reading?: Reading;
   /** The bet's last day. */
   last: string;
   /** Day n of the bet, while it runs. */
@@ -851,7 +871,10 @@ export function labHome(i: LabInput): LabHome {
   return {
     bets: bets.map((b) => {
       const stop = ledger.stopped.get(b.id);
-      return { ...betView(b, stop ? dayIn(stop.at, i.timezone) : null, rows, i.today), note: stop?.note ?? null };
+      const view = betView(b, stop ? dayIn(stop.at, i.timezone) : null, rows, i.today);
+      // Read to the day the bet ended, or to today while it runs: after the end
+      // the next bet's sends are not this one's.
+      return { ...view, note: stop?.note ?? null, reading: readingOf(b, view.ended ?? minDay(i.today, view.last), rows) };
     }),
     talks: ledger.talks.slice(0, MAX_TALKS),
     checkpoints: ledger.checkpoints.slice(0, MAX_CHECKPOINTS),

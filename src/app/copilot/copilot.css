@@ -1292,6 +1292,16 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-pass { font-size: 13px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-src { font-size: 12px; line-height: 1.45; color: var(--muted); margin-top: 3px; }
 .cp-root[data-theme="soft"] .cp2-lab-over { font-size: 12px; line-height: 1.45; font-weight: 600; color: var(--warn); margin-top: 4px; }
+/* The funnel since the bet began, step by step to the line (reading.ts): something to read while the bar is still empty. */
+.cp-root[data-theme="soft"] .cp2-rd { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+.cp-root[data-theme="soft"] .cp2-rd-step { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px 6px 8px 9px; border-radius: 12px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-rd-step b { font-size: 17px; font-weight: 700; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cp-root[data-theme="soft"] .cp2-rd-step b i { font-style: normal; font-size: 11px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-rd-step span { font-size: 10.5px; line-height: 1.25; color: var(--muted); overflow-wrap: anywhere; }
+.cp-root[data-theme="soft"] .cp2-rd-step.next { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.cp-root[data-theme="soft"] .cp2-rd-step.later { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.cp-root[data-theme="soft"] .cp2-rd-step.later b { color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-rd-step.line span { font-weight: 600; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-playing { margin-top: 14px; padding: 11px 13px; border-radius: 14px; background: var(--line); }
 .cp-root[data-theme="soft"] .cp2-lab-playing p { font-size: 13px; line-height: 1.5; color: var(--ink); margin-top: 3px; }
 .cp-root[data-theme="soft"] .cp2-lab-book { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }

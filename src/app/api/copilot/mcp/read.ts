@@ -10,6 +10,7 @@ import { LINK_LABEL, LINK_STATE_LABEL } from '@/lib/copilot/business';
 import { markSeen } from '@/lib/copilot/connector';
 import { talkTotals } from '@/lib/copilot/ideas';
 import { decisionWords, gradeWords, passLine, playOf, resultLine, talkCounts, type BetView } from '@/lib/copilot/lab';
+import { readingLine } from '@/lib/copilot/reading';
 import { answersText, conversationsText, overviewText, planText, proofText, type AskIn, type BetIn, type NowIn } from '@/lib/copilot/mcpread';
 import type { ToolName, ToolOutcome } from '@/lib/copilot/mcp';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
@@ -20,7 +21,7 @@ import { loadHome } from '@/lib/copilot/store';
 import { getProfile } from '@/lib/copilot/base';
 import { todayIso } from '@/lib/copilot/db';
 import { ASK_LABEL } from '@/lib/copilot/today';
-import type { HomeData } from '@/lib/copilot/types';
+import type { FoundBy, HomeData } from '@/lib/copilot/types';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -76,7 +77,7 @@ function missingOf(home: HomeData, parts: Array<'lab' | 'plan' | 'assets' | 'rec
   ].filter((x): x is string => !!x);
 }
 
-function betOf(v: BetView): BetIn {
+function betOf(v: BetView, found: FoundBy | null): BetIn {
   const play = playOf(v.bet);
   return {
     belief: v.bet.belief,
@@ -90,6 +91,8 @@ function betOf(v: BetView): BetIn {
     days: v.bet.days,
     note: v.note,
     play: play ? `${play.label}${play.from ? ` (${play.from})` : ''}` : null,
+    // Only while it runs: an ended bet's verdict is its result, and the ladder is for reading one in progress.
+    reading: v.state === 'running' ? readingLine(v, found) : null,
   };
 }
 
@@ -114,7 +117,7 @@ function overviewOf(home: HomeData, d: Derived): string {
     verdict: chain.verdict,
     links: chain.links.map((l) => ({ label: l.label, state: LINK_STATE_LABEL[l.state], why: l.why })),
     weak: chain.weak ? LINK_LABEL[chain.weak] : null,
-    bet: d.proof.lab.current ? betOf(d.proof.lab.current) : null,
+    bet: d.proof.lab.current ? betOf(d.proof.lab.current, d.proof.found.value) : null,
     checkpointDue: d.proof.lab.checkpoint.due,
     now: nowOf(d),
     asks: asksOf(d),
@@ -157,7 +160,7 @@ function proofOf(home: HomeData, d: Derived): string {
     verdict: chain.verdict,
     links: chain.links.map((l) => ({ label: l.label, state: LINK_STATE_LABEL[l.state], what: l.what, facts: l.facts, why: l.why })),
     weak: chain.weak ? LINK_LABEL[chain.weak] : null,
-    bets: d.proof.bets.map(betOf),
+    bets: d.proof.bets.map((b) => betOf(b, d.proof.found.value)),
     checkpoint: { due: cp.due, last: cp.last ? { on: cp.last.on, decision: decisionWords(cp.last), grade: gradeWords(cp.last, cp.grade) } : null },
     history: d.proof.history.map((h) => ({ day: h.day, title: h.title, line: h.line })),
     missing: missingOf(home, ['lab', 'assets']),

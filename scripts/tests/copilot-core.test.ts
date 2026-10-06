@@ -9791,3 +9791,122 @@ async function shareSeedSuite() {
 }
 
 shareSeedSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── A bet's first reading ───────────────────────────────────────────────── */
+//
+// The checks are the ways a reading could mislead: a second verdict that
+// disagrees with the first, a send from before the bet counted toward it, a
+// one-dollar payment read as a sale at the price, a ladder with sends in it for
+// a shop whose buyers walk in, a rung for a count nobody kept, and a card that
+// shows the plan twice.
+
+import {
+  LAB_BET as RD_BET, LAB_METRICS as RD_METRICS, LAB_STOP as RD_STOP,
+  betView as rdBetView, labHome as rdLabHome, readingOf as rdReadingOf,
+  type Bet as RdBet, type DayRows as RdRows, type LabEventRow as RdEvent,
+} from '../../src/lib/copilot/lab';
+import { readingLine as rdLine, rungsOf as rdRungs } from '../../src/lib/copilot/reading';
+import { readFileSync as readReadingFile } from 'node:fs';
+
+async function betReadingSuite() {
+  const bet = (b: Partial<RdBet> & Pick<RdBet, 'metric' | 'target' | 'days' | 'start'>): RdBet => ({
+    id: 'b', part: 'pay', belief: 'Staycation & resorts pay $150', play: null, idea: null, unit: null, tries: null, price: 150, priceLabel: '$150', experiment: null, openedAt: `${b.start}T01:00:00Z`, ...b,
+  });
+  const src = (p: string) => readReadingFile(new URL(`../../${p}`, import.meta.url), 'utf8');
+
+  /* 1. The funnel since the bet began: both ends of the window, nothing from before, a dollar is a payment and not a sale at the price. */
+  const rows: RdRows = {
+    sends: ['2026-10-04', '2026-10-05', '2026-10-05', '2026-10-06'],
+    outcomes: [
+      { kind: 'reply', day: '2026-10-04', opportunity: 'old', amount: null },
+      { kind: 'reply', day: '2026-10-06', opportunity: 'o1', amount: null },
+      { kind: 'meeting', day: '2026-10-06', opportunity: 'o1', amount: null },
+      { kind: 'won', day: '2026-10-06', opportunity: 'o2', amount: 1 },
+      { kind: 'won', day: '2026-10-06', opportunity: 'o3', amount: 1 },
+    ],
+    finished: [], talks: [],
+  };
+  const day2 = bet({ metric: 'paid_at_price', target: 2, days: 14, start: '2026-10-05' });
+  const reading = rdReadingOf(day2, '2026-10-06', rows);
+  assert.deepEqual(reading, { sent: 3, replied: 1, meetings: 1, paid: 2, paid_at_price: 0, talks: 0, committed: 0, handed: 0, logged: 0 }, 'a send and a reply from the day before do not count');
+  assert.deepEqual(Object.keys(reading).sort(), [...RD_METRICS].sort(), 'every count there is, so a card can pick its ladder');
+
+  /* 2. Never a second verdict: for the count a bet is decided on, the reading is the result, in every state — and the verdict is untouched. */
+  const ev = (id: number, event_type: string, created_at: string, payload: Record<string, unknown>): RdEvent => ({ id, event_type, created_at, payload });
+  const opened = ev(1, RD_BET, '2026-10-05T01:00:00Z', {
+    part: 'pay', belief: 'Staycation & resorts pay $150', metric: 'paid_at_price', target: 2, days: 14, start: '2026-10-05', price: 150, priceLabel: '$150',
+    tries: { metric: 'sent', planned: 20 },
+  });
+  const sends = ['2026-10-04T10:00:00Z', '2026-10-05T10:00:00Z', '2026-10-06T10:00:00Z', '2026-10-08T10:00:00Z', '2026-10-20T10:00:00Z'];
+  const outcome = (kind: string, at: string, opportunity: string, amount: number | null = null) => ({ kind, opportunity_id: opportunity, occurred_at: at, amount });
+  const outcomes = [
+    outcome('reply', '2026-10-06T11:00:00Z', 'o1'), outcome('meeting', '2026-10-06T12:00:00Z', 'o1'),
+    outcome('won', '2026-10-07T09:00:00Z', 'o2', 150), outcome('won', '2026-10-07T10:00:00Z', 'o3', 150), outcome('won', '2026-10-08T10:00:00Z', 'o4', 150),
+    outcome('won', '2026-10-06T13:00:00Z', 'o5', 1),
+  ];
+  const labAt = (today: string, events: RdEvent[]) => rdLabHome({ events, unreadable: null, timezone: 'UTC', today, sends, outcomes, finished: [] });
+  // The same bet with a line the rows never reach, so it runs out its days instead of passing on the 7th.
+  const unlucky = { ...opened, payload: { ...(opened.payload as object), target: 9 } };
+  const scenarios: Array<[string, string, RdEvent[], string]> = [
+    ['running', '2026-10-06', [opened], 'running'],
+    ['passed', '2026-10-09', [opened], 'passed'],
+    ['called off', '2026-10-09', [opened, ev(2, RD_STOP, '2026-10-06T20:00:00Z', { bet: '1', note: 'No' })], 'stopped'],
+    ['failed', '2026-10-30', [unlucky], 'failed'],
+  ];
+  for (const [name, today, events, state] of scenarios) {
+    const v = labAt(today, events).bets[0];
+    assert.equal(v.state, state, `${name}: the state is the rows’`);
+    assert.equal(v.reading![v.bet.metric], v.result, `${name}: the reading and the verdict count the same rows`);
+    assert.equal(v.reading![v.bet.tries!.metric], v.tries, `${name}: and the plan the same`);
+    const direct = rdBetView(v.bet, v.state === 'stopped' ? '2026-10-06' : null, {
+      sends: sends.map((s) => s.slice(0, 10)),
+      outcomes: outcomes.map((o) => ({ kind: o.kind, day: o.occurred_at.slice(0, 10), opportunity: o.opportunity_id, amount: o.amount })),
+      finished: [], talks: [], tallies: [],
+    }, today);
+    assert.deepEqual({ state: v.state, result: v.result, tries: v.tries, ended: v.ended, day: v.day, last: v.last }, { state: direct.state, result: direct.result, tries: direct.tries, ended: direct.ended, day: direct.day, last: direct.last }, `${name}: the reading did not touch the verdict`);
+  }
+  const passed = labAt('2026-10-09', [opened]).bets[0];
+  assert.equal(passed.ended, '2026-10-07');
+  assert.equal(passed.reading!.sent, 2, 'a passed bet is read to the day it passed: the send on the 8th is the next bet’s');
+  assert.equal(labAt('2026-10-30', [unlucky]).bets[0].reading!.sent, 3, 'a failed one to its last day, the 18th: the send on the 20th is not its, nor the one before it began');
+
+  /* 3. The ladder: the funnel up to the line, in order, marked where it has got to — and the dollar tests are payments, not sales. */
+  const view = (b: RdBet, r: Partial<Record<(typeof RD_METRICS)[number], number>>) => ({ bet: b, reading: r });
+  const rungs = rdRungs(view(day2, reading), 'outreach');
+  assert.deepEqual(rungs.map((r) => [r.metric, r.n, r.words, r.state]), [
+    ['sent', 3, 'messages sent', 'done'], ['replied', 1, 'reply', 'done'], ['meetings', 1, 'meeting', 'done'], ['paid', 2, 'payments', 'done'], ['paid_at_price', 0, 'sales at your $150', 'next'],
+  ], '2 payments and no sale at $150: the price finding, said by the card');
+  assert.deepEqual(rungs.map((r) => [r.line, r.target]), [[false, null], [false, null], [false, null], [false, null], [true, 2]], 'the line is marked, with what it has to reach');
+  assert.equal(rdLine(view(day2, reading), 'outreach'), 'Counted since 5 Oct: 3 messages sent, 1 reply, 1 meeting, 2 payments, 0 sales at your $150.');
+  assert.deepEqual(rdRungs(view(day2, reading), 'local').map((r) => r.metric), ['meetings', 'paid', 'paid_at_price'], 'no sends for a shop whose buyers walk in');
+  assert.deepEqual(rdRungs(view(day2, reading), null).map((r) => r.metric), ['sent', 'replied', 'meetings', 'paid', 'paid_at_price'], 'unsaid, the app counts outreach once it has found or sent anything');
+  assert.deepEqual(rdRungs(view(bet({ metric: 'committed', target: 3, days: 7, start: '2026-10-05' }), { talks: 4, committed: 1 }), 'outreach').map((r) => [r.metric, r.n]), [['talks', 4], ['committed', 1]]);
+  for (const m of ['sent', 'handed', 'logged'] as const) {
+    assert.equal(rdRungs(view(bet({ metric: m, target: 3, days: 7, start: '2026-10-05', unit: m === 'logged' ? 'sign-ups' : null }), { sent: 1, handed: 1, logged: 1 }), 'outreach').length, 1, `${m} has nothing before it: one rung is no ladder`);
+  }
+  assert.deepEqual(rdRungs(view(day2, { sent: 0, replied: 0, meetings: 0, paid: 0, paid_at_price: 0 }), 'outreach').map((r) => r.state), ['next', 'later', 'later', 'later', 'later'], 'nothing yet: the next step is the first one');
+  assert.deepEqual(rdRungs(view(day2, { sent: 5, replied: 0, meetings: 1, paid: 0, paid_at_price: 0 }), 'outreach').map((r) => r.state), ['done', 'next', 'done', 'later', 'later'], 'a meeting logged by hand is still counted, and the gap before it is the one named');
+  // What it takes is a rung too: in the funnel already, or ahead of it where the funnel has no room.
+  assert.equal(rdRungs(view({ ...day2, tries: { metric: 'sent', planned: 20 } }, reading), 'outreach')[0].planned, 20);
+  const talky = rdRungs(view({ ...day2, tries: { metric: 'talks', planned: 5 } }, { ...reading, talks: 2 }), 'outreach');
+  assert.deepEqual([talky[0].metric, talky[0].planned, talky[0].n], ['talks', 5, 2]);
+  assert.deepEqual(rdRungs({ bet: day2 }, 'outreach'), [], 'a payload from before readings shows the card it always did');
+  assert.equal(rdLine({ bet: day2 }, 'outreach'), null);
+
+  /* 4. On the screen, and to Claude: the plan once, the reading only while it can still be read. */
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /\{rungs\.length > 1 && <Reading view=\{view\} rungs=\{rungs\} found=\{found\} \/>\}/);
+  assert.match(tab, /b\.tries && view\.tries != null && !planInRungs/, 'the old plan bar goes only where the ladder holds the plan');
+  const conn = src('src/app/api/copilot/mcp/read.ts');
+  assert.match(conn, /reading: v\.state === 'running' \? readingLine\(v, found\) : null/);
+  const proofDoc = (b: Record<string, unknown>) => mrProof({
+    today: '2026-10-06', verdict: { title: 'Not proven yet', line: '0 of 3.' }, links: [], weak: null, checkpoint: { due: false, last: null }, history: [],
+    bets: [{ belief: 'They pay', part: 'What they pay', state: 'running', result: '0 of 2 sales at your $150', pass: '2 sales at your $150 by 18 Oct', start: '2026-10-05', ended: null, day: 2, days: 14, note: null, play: null, ...b }],
+  } as Parameters<typeof mrProof>[0]);
+  assert.match(proofDoc({ reading: 'Counted since 5 Oct: 3 messages sent, 1 reply.' }), /It passes at 2 sales at your \$150 by 18 Oct\. Counted since 5 Oct: 3 messages sent, 1 reply\./);
+  assert.ok(!/Counted since/.test(proofDoc({})), 'a bet with no reading says what it always said');
+
+  console.log('copilot-core: bet reading checks passed');
+}
+
+betReadingSuite().catch((e) => { console.error(e); process.exit(1); });

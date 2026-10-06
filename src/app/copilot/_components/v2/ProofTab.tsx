@@ -844,6 +844,7 @@ export function HistoryRow({ e, today, actions }: { e: HistoryEntry; today: stri
 function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
   const talks = d.proof.lab.talks;
   const c = talkCounts(talks, home.recent.today);
+  const intros = d.proof.intros;
   const jobs = splitThreads(home.commissions ?? []);
   const offered = home.moves.filter((m) => m.artifact?.kind === 'plan').length;
   const projects = [
@@ -864,6 +865,12 @@ function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; ac
                 ? `${c.n} in ${TALK_BACK_DAYS} days · ${c.committed} committed · ${c.have} have the problem`
                 : talks.length ? `None in the last ${TALK_BACK_DAYS} days` : 'Who you talked to, and what they committed'}
             </span>
+            {/* Said where the conversations are, as well as on the Path: an introduction is lost by waiting. */}
+            {intros.length > 0 && (
+              <span className="s cp2-pf-needs">
+                {intros.length === 1 ? `The intro from ${intros[0].talk.who || 'someone'} waits on you` : `${intros.length} introductions wait on you`}
+              </span>
+            )}
           </span>
           <IconChevron />
         </button>

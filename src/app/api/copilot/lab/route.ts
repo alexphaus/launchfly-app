@@ -1,7 +1,7 @@
 // src/app/api/copilot/lab/route.ts
 // The bets' writes: open a bet, call one off, log a conversation or a count,
-// tie a project to a bet, answer the checkpoint, ask for ideas, and say how
-// buyers find you. Each is validated by lib/copilot/lab.ts and stored as an
+// say how an introduction went, tie a project to a bet, answer the checkpoint,
+// ask for ideas, and say how buyers find you. Each is validated by lib/copilot/lab.ts and stored as an
 // event. A verdict is never posted here — there is no "mark it passed" —
 // because it is computed from the rows on every load (invariant 10's
 // reasoning: a bet the person could pass by tapping would be graded by the one
@@ -10,13 +10,13 @@
 import { todayIso } from '@/lib/copilot/db';
 import { LINK_KEYS, type LinkKey } from '@/lib/copilot/business';
 import {
-  LAB_BET, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_STOP, LAB_TALK, NOTE_MAX,
-  betPrice, normalizeBet, normalizeCheckpoint, normalizeTalk, normalizeTally,
+  LAB_BET, LAB_CHECKPOINT, LAB_COUNT, LAB_INTRO, LAB_LINK, LAB_STOP, LAB_TALK, NOTE_MAX,
+  betPrice, labFromEvents, normalizeBet, normalizeCheckpoint, normalizeIntroClose, normalizeTalk, normalizeTally,
 } from '@/lib/copilot/lab';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { isFoundBy } from '@/lib/copilot/offer';
 import { ProofModelError, ProofRefusal, writeIdeas } from '@/lib/copilot/proofai';
-import { deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, loadHome, setFoundBy } from '@/lib/copilot/store';
+import { deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, loadHome, loadLabEvents, setFoundBy } from '@/lib/copilot/store';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
@@ -25,6 +25,18 @@ export const maxDuration = 60;
 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
+
+/**
+ * The conversations on record, for checking that an introduction named in a
+ * write is one. The events alone, not the whole home: logging a call is the
+ * commonest write here. Throws when they cannot be read — an introduction
+ * that cannot be checked is not one to tie a conversation to.
+ */
+async function talksOnRecord(pid: string) {
+  const events = await loadLabEvents(pid);
+  if (events.unreadable) throw new Error(`Your conversations could not be read just now, so the introduction cannot be checked: ${events.unreadable}`);
+  return labFromEvents(events.rows).talks;
+}
 
 export async function POST(req: Request) {
   const auth = await profileIdOr401();
@@ -69,9 +81,18 @@ export async function POST(req: Request) {
         return json({ ok: true, home: await loadHome(auth.pid) });
       }
       case 'talk': {
-        const v = normalizeTalk(obj(b.talk), today);
+        const raw = obj(b.talk);
+        const v = normalizeTalk(raw, today, raw.via ? await talksOnRecord(auth.pid) : []);
         if (!v.ok) return fail(v.error);
         await insertLabEvent(auth.pid, LAB_TALK, { ...v.value });
+        return json({ ok: true, home: await loadHome(auth.pid) });
+      }
+      case 'intro': {
+        // How an introduction went, in the person's words: asked for, or fell
+        // through. Logging the conversation it led to says the rest.
+        const v = normalizeIntroClose(obj(b.intro), await talksOnRecord(auth.pid));
+        if (!v.ok) return fail(v.error);
+        await insertLabEvent(auth.pid, LAB_INTRO, { ...v.value });
         return json({ ok: true, home: await loadHome(auth.pid) });
       }
       case 'forget': {

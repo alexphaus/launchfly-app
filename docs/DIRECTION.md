@@ -155,6 +155,14 @@ new.
   held to a real link. See COPILOT.md → **What it looks for is worked out**.
 - **`emailApi` as a sold feature.** `setSendMode()` has no route calling it. A
   test fails if the pricing page advertises it again.
+- **A file on every person.** A contact list, a map of who knows whom, a
+  follow-up cadence for everyone you have met. Considered in October 2026, when
+  networking came up as information acquisition, and declined: the app keeps
+  conversations by what each one was — who they were to the business, what they
+  said, what they committed — and an introduction until it is followed, because
+  those are rows a bet and a model can read. A person's file is a CRM, and a
+  harness keeps contacts better. A weekly quota of conversations went with it:
+  advice dressed as a test.
 - **An assistant to talk things over with.** Considered in October 2026, when
   its owner asked for the mic to open a voice assistant for ideas, leverage and
   updates, "like talking to a person". Declined as a chat: open conversation is
@@ -353,13 +361,32 @@ bet, and that the one before it did not pass. Drafting stays text from the
 person's own words, kept and judged here; building is still exported (see **What
 is deliberately not built**). See COPILOT.md → **Proof**.
 
+**Then** — the people around the money. Its owner brought an argument about
+networking as information acquisition: alone, a founder's bottleneck is finding
+out, and the people close to the money — buyers, people who sell to them, people
+who run the work, people already earning from them, people who know them — know
+what a stranger cannot learn. What changed is small on purpose. A conversation
+says in one tap who it was with, and only a buyer counts as one: who-buys had
+been counting every conversation, a supplier's too. An introduction offered is
+perishable work, so it waits on the Path from the next day until a conversation
+is logged through it or the person says how it went, and lapses off after a
+month rather than nag. What people said, in their words, goes to the model that
+writes ideas and drafts — the person's own rows, so a number in them passes the
+check that refuses invented ones. One play joins the books: five people close to
+the money in a week, judged as The Mom Test judges, by what they committed to.
+Declined: a file on every person, a weekly quota, and anything that messages
+people for the user (invariant 4). It passes the survival test on the join — a
+chat can say talk to suppliers; it cannot see that every conversation this month
+was with a buyer, or that the introduction Mara offered six days ago still waits.
+See COPILOT.md → **Proof**, conversations.
+
 **Then** — the mic, sorting. It understood money only: "coffee 130" opened the
 book filled in, and anything else said into it was read as a move. Its owner
 asked for an assistant to talk to instead, about ideas, moves and what changed.
 The part of that only this app can do is the record, so that is what the mic
 became: say what happened, and the sheet for it opens filled in — a
-conversation, a sale, a meeting, a change to the offer, a note for the plan,
-money as before. A model sorts and copies; it never answers. Every detail it
+conversation and who it was with, a sale, a meeting, a change to the offer, a
+note for the plan, money as before. A model sorts and copies; it never answers. Every detail it
 copies is held to the words, the day is the app's own reading, a note stays in
 the person's words, and nothing is kept until their tap. Money said like money
 waits on no model, and without one the app's rules sort what they can and ask

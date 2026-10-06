@@ -39,6 +39,17 @@
 // explain The Mom Test; it cannot read two weeks of your sends and payments and
 // say that a guarantee moved nothing at your price.
 //
+// The conversations are the one place the person brings in what the rows
+// cannot see, so they carry three things beyond the count. Who it was, to the
+// business: alone, a founder's bottleneck is finding out, and the people around
+// the money — who sells to the buyers, who runs the work, who already earns in
+// it, who knows them — know what a buyer will not tell a stranger. Only a buyer
+// counts as one; the chain's "who buys" never sees the rest. An introduction,
+// which goes cold in days: offered, it is something to follow up on the Path
+// until a conversation is logged through it or the person says how it went.
+// And their words, which a model writing an idea or a draft is shown — the
+// person's own rows, so a number in them is one they gave (invariant 2).
+//
 // Stored without a migration, as copilot_events rows (LAB_EVENTS), the way deep
 // work and the plan's ticks are. Pure: no DB import.
 
@@ -61,7 +72,9 @@ export const LAB_COUNT = 'lab_count';
 export const LAB_LINK = 'lab_link';
 /** Ideas a model wrote for one part of the business (ideas.ts). The newest per part is the one shown. */
 export const LAB_IDEAS = 'lab_ideas';
-export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS] as const;
+/** How an introduction someone offered went, said by the person: asked for, or fell through. */
+export const LAB_INTRO = 'lab_intro';
+export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS, LAB_INTRO] as const;
 
 /* ─── What a bet can count ────────────────────────────────────────────────── */
 
@@ -219,18 +232,63 @@ export const PROBLEMS = ['yes', 'no', 'unasked'] as const;
 export type Problem = (typeof PROBLEMS)[number];
 export const PROBLEM_LABEL: Record<Problem, string> = { yes: 'They have it', no: 'They do not', unasked: 'Did not come up' };
 
+export const TALK_ROLES = ['buyer', 'seller', 'operator', 'earner', 'connector'] as const;
+export type TalkRole = (typeof TALK_ROLES)[number];
+/**
+ * Who a conversation was with, by what they know. A buyer knows their own
+ * problem. Who sells to them knows what they already pay for; who runs the work
+ * knows where it breaks; who already earns in it knows what sells; who knows
+ * people can open the next door. A tap, never a field to fill: the point is to
+ * see who you have not talked to, not to keep a file on anyone.
+ */
+export const TALK_ROLE_LABEL: Record<TalkRole, string> = {
+  buyer: 'Could buy', seller: 'Sells to them', operator: 'Runs the work', earner: 'Already earns in it', connector: 'Knows people',
+};
+
+/**
+ * Whether "do they have the problem?" is theirs to answer. Somebody who sells to
+ * the buyers, or already earns from them, does not have the problem; their
+ * buyers do, and that is what they say, in their words.
+ */
+export function asksProblem(role: TalkRole): boolean {
+  return role === 'buyer' || role === 'operator';
+}
+
 export interface Talk {
   id: string;
   /** The day it happened, the person's. */
   on: string;
   who: string | null;
+  /**
+   * Who they were to the business. A conversation logged before there was a
+   * choice reads as a buyer's: the sheet then said "one conversation with
+   * someone who could buy", so that is what it was logged as.
+   */
+  role: TalkRole;
   problem: Problem;
   commitment: Commitment;
   /** Their words, when worth keeping — the best first line a message ever gets. */
   said: string | null;
+  /** The conversation where somebody offered the introduction this one came through. */
+  via: string | null;
   at: string;
 }
 export type TalkDraft = Omit<Talk, 'id' | 'at'>;
+
+/**
+ * Who a conversation was with, read defensively: a payload from before there
+ * was a choice (a cached home, a server mid-deploy) has no role, and was a
+ * buyer's.
+ */
+export const roleOf = (t: Pick<Talk, 'role'>): TalkRole => t.role ?? 'buyer';
+
+/** Only a buyer is one: the chain's "who buys" and its conversations to close never count the people around the money. */
+export const isBuyer = (t: Pick<Talk, 'role'>): boolean => roleOf(t) === 'buyer';
+
+export const INTRO_OUTCOMES = ['asked', 'dropped'] as const;
+export type IntroOutcome = (typeof INTRO_OUTCOMES)[number];
+/** How the person closed an introduction: they asked for it, or it fell through. */
+export interface IntroClose { outcome: IntroOutcome; at: string }
 
 /** One logging of the person's own count for a bet: "3 sign-ups on 2 Oct". */
 export interface Tally {
@@ -300,6 +358,22 @@ export const IDEA_FROM_MAX = 60;
 export const TALLY_MAX = 1000;
 /** A week of calls logged on a Sunday is the usual case; a month is the edge of remembering one honestly. */
 export const TALK_BACK_DAYS = 30;
+/**
+ * How long an introduction waits on the Path: from the day after it was
+ * offered — the day it was logged, it is news, not a chore — for a month. Past
+ * that, whoever offered it has forgotten, and a nudge that cannot be acted on is
+ * noise; the conversation keeps it.
+ */
+export const INTRO_WAIT_DAYS = 1;
+export const INTRO_DAYS = 30;
+/**
+ * How long after an introduction a conversation can say it came through it.
+ * Longer than the nudge: a slow intro still counts as an intro, and the
+ * nudge's month is about remembering to ask, not about when the call happens.
+ */
+export const INTRO_LINK_DAYS = 60;
+/** What a model is shown of what people said: the newest, enough to hear a pattern, short of a transcript. */
+export const HEARD_MAX = 10;
 /** The checkpoint's rhythm: every two weeks, once a bet has ended since the last one. */
 export const CHECKPOINT_DAYS = 14;
 /** A bet's length until the person has started two: two weeks, the usual size of a play here. */
@@ -409,14 +483,45 @@ export function normalizeBet(raw: Record<string, unknown>, ctx: { today: string;
   };
 }
 
-export function normalizeTalk(raw: Record<string, unknown>, today: string): Result<TalkDraft> {
+const isRole = (v: unknown): v is TalkRole => typeof v === 'string' && (TALK_ROLES as readonly string[]).includes(v);
+/** A stored event's id, as a conversation names the one it came through: digits from the table, or a test's slug. */
+const talkRef = (v: unknown) => (typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : null);
+
+/**
+ * A conversation as the person logged it. `via` names the introduction it came
+ * through, and has to be one in their record, offered on or before this
+ * conversation's day: `known` is that record, which the caller reads only when
+ * there is a `via` to check.
+ */
+export function normalizeTalk(raw: Record<string, unknown>, today: string, known: Array<Pick<Talk, 'id' | 'on' | 'commitment'>> = []): Result<TalkDraft> {
   const on = raw.on == null || raw.on === '' ? today : raw.on;
   if (!isIsoDay(on)) return { ok: false, error: 'That is not a day.' };
   if (on > today) return { ok: false, error: 'That day has not happened yet.' };
   if (on < shiftDay(today, -TALK_BACK_DAYS)) return { ok: false, error: `Only the last ${TALK_BACK_DAYS} days can be logged.` };
-  const problem = (PROBLEMS as readonly string[]).includes(raw.problem as string) ? (raw.problem as Problem) : 'unasked';
+  // Missing is a buyer, as every conversation was before there was a choice;
+  // anything else unknown is refused rather than filed as one.
+  if (raw.role != null && raw.role !== '' && !isRole(raw.role)) return { ok: false, error: 'Who were they to the business?' };
+  const role: TalkRole = isRole(raw.role) ? raw.role : 'buyer';
+  let via: string | null = null;
+  if (raw.via != null && raw.via !== '') {
+    const intro = known.find((t) => t.id === talkRef(raw.via));
+    if (!intro || intro.commitment !== 'intro') return { ok: false, error: 'That introduction is not in your record.' };
+    if (intro.on > on) return { ok: false, error: 'That introduction was offered after this conversation.' };
+    via = intro.id;
+  }
+  // Asked only of the people who could have it: a supplier's "yes" would read
+  // as one more business with the problem.
+  const problem = asksProblem(role) && (PROBLEMS as readonly string[]).includes(raw.problem as string) ? (raw.problem as Problem) : 'unasked';
   const commitment = (COMMITMENTS as readonly string[]).includes(raw.commitment as string) ? (raw.commitment as Commitment) : 'none';
-  return { ok: true, value: { on, who: text(raw.who, WHO_MAX), problem, commitment, said: text(raw.said, SAID_MAX) } };
+  return { ok: true, value: { on, who: text(raw.who, WHO_MAX), role, problem, commitment, said: text(raw.said, SAID_MAX), via } };
+}
+
+/** How an introduction went, said once the person knows: only an introduction in their record. */
+export function normalizeIntroClose(raw: Record<string, unknown>, talks: Array<Pick<Talk, 'id' | 'commitment'>>): Result<{ talk: string; outcome: IntroOutcome }> {
+  const t = talks.find((x) => x.id === talkRef(raw.talk));
+  if (!t || t.commitment !== 'intro') return { ok: false, error: 'That introduction is not in your record.' };
+  if (!(INTRO_OUTCOMES as readonly string[]).includes(raw.outcome as string)) return { ok: false, error: 'Did you ask for it, or did it fall through?' };
+  return { ok: true, value: { talk: t.id, outcome: raw.outcome as IntroOutcome } };
 }
 
 /**
@@ -489,6 +594,8 @@ export interface LabLedger {
   links: Map<string, string[]>;
   /** The newest ideas for each part. */
   ideas: Partial<Record<LinkKey, IdeaSet>>;
+  /** Talk id → how the introduction offered in it went, as the person last said. */
+  intros: Map<string, IntroClose>;
 }
 
 /** A stored bet, reshaped rather than trusted. Null when it does not hold together. */
@@ -512,7 +619,7 @@ function storedBet(p: Record<string, unknown>, id: string, at: string): Bet | nu
 }
 
 export function labFromEvents(rows: LabEventRow[]): LabLedger {
-  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {} };
+  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {}, intros: new Map() };
   for (const r of [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     const p = obj(r.payload);
     const id = String(r.id);
@@ -527,8 +634,10 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
       if (!isIsoDay(p.on)) continue;
       out.talks.push({
         id, on: p.on, at: r.created_at, who: text(p.who, WHO_MAX), said: text(p.said, SAID_MAX),
+        role: isRole(p.role) ? p.role : 'buyer',
         problem: (PROBLEMS as readonly string[]).includes(p.problem as string) ? (p.problem as Problem) : 'unasked',
         commitment: (COMMITMENTS as readonly string[]).includes(p.commitment as string) ? (p.commitment as Commitment) : 'none',
+        via: talkRef(p.via),
       });
     } else if (r.event_type === LAB_CHECKPOINT) {
       if (!isIsoDay(p.on) || !(LAB_DECISIONS as readonly string[]).includes(p.decision as string)) continue;
@@ -552,6 +661,10 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
       const ideas = (Array.isArray(p.ideas) ? p.ideas : []).map((x) => ideaFromStored(x, part)).filter((x): x is Idea => !!x).slice(0, 3);
       // Newest wins: the rows arrive oldest first.
       if (ideas.length) out.ideas[part] = { part, ideas, model: text(p.model, 80), at: r.created_at };
+    } else if (r.event_type === LAB_INTRO) {
+      const talk = talkRef(p.talk);
+      // The last word wins: asked for on Monday, fallen through by Friday.
+      if (talk && (INTRO_OUTCOMES as readonly string[]).includes(p.outcome as string)) out.intros.set(talk, { outcome: p.outcome as IntroOutcome, at: r.created_at });
     }
   }
   out.bets.reverse();
@@ -694,6 +807,8 @@ export interface LabHome {
   links?: Record<string, string[]>;
   /** The newest ideas a model wrote, per part. */
   ideas?: Partial<Record<LinkKey, IdeaSet>>;
+  /** Talk id → how the introduction offered in it went, where the person has said. */
+  intros?: Record<string, IntroClose>;
   /** The read's failure, said on the tab — never shown as an empty Lab (invariant 13). */
   unreadable: string | null;
 }
@@ -743,6 +858,7 @@ export function labHome(i: LabInput): LabHome {
     tallies: ledger.tallies.slice(0, MAX_TALLIES),
     links: Object.fromEntries(ledger.links),
     ideas: ledger.ideas,
+    intros: Object.fromEntries(ledger.intros),
     unreadable: i.unreadable,
   };
 }
@@ -855,11 +971,110 @@ export function gradeWords(c: Pick<Checkpoint, 'decision' | 'part'>, grade: Grad
   return grade === 'better' ? `${what} has moved forward since.` : grade === 'worse' ? `${what} has slipped since.` : `${what} has not moved since.`;
 }
 
-/** The last month of conversations, counted: how many, how many ended in a commitment, how many had the problem. */
-export function talkCounts(talks: Talk[], today: string): { n: number; committed: number; have: number } {
-  const recent = talks.filter((t) => t.on > shiftDay(today, -TALK_BACK_DAYS) && t.on <= today);
-  return { n: recent.length, committed: recent.filter((t) => t.commitment !== 'none').length, have: recent.filter((t) => t.problem === 'yes').length };
+export interface TalkCounts {
+  n: number;
+  committed: number;
+  have: number;
+  /** Who they were with: the gap a founder alone cannot see is the kind of person never asked. */
+  by: Record<TalkRole, number>;
+  /** How many came through somebody's introduction. */
+  introduced: number;
 }
+
+/** The last month of conversations, counted: how many, how many ended in a commitment, how many had the problem, with whom, and through whom. */
+export function talkCounts(talks: Talk[], today: string): TalkCounts {
+  const recent = talks.filter((t) => t.on > shiftDay(today, -TALK_BACK_DAYS) && t.on <= today);
+  const by = Object.fromEntries(TALK_ROLES.map((r) => [r, recent.filter((t) => roleOf(t) === r).length])) as Record<TalkRole, number>;
+  return {
+    n: recent.length,
+    committed: recent.filter((t) => t.commitment !== 'none').length,
+    have: recent.filter((t) => t.problem === 'yes').length,
+    by,
+    introduced: recent.filter((t) => t.via).length,
+  };
+}
+
+/* ─── Introductions ───────────────────────────────────────────────────────── */
+
+export type IntroState = 'open' | 'asked' | 'led' | 'dropped' | 'lapsed';
+
+export const INTRO_STATE_LABEL: Record<IntroState, string> = {
+  open: 'Intro to follow up', asked: 'Intro asked for', led: 'Intro led to a conversation', dropped: 'Intro fell through', lapsed: 'Intro not followed up',
+};
+
+/**
+ * Where an introduction stands. A conversation logged through it is the
+ * result, whatever was said about it before; then what the person last said;
+ * then open for INTRO_DAYS, and lapsed after — read off the calendar, never
+ * asked. Null for a conversation that offered none.
+ */
+export function introState(
+  t: Pick<Talk, 'id' | 'on' | 'commitment'>, talks: Array<Pick<Talk, 'via'>>, closed: Record<string, IntroClose> | undefined, today: string,
+): IntroState | null {
+  if (t.commitment !== 'intro') return null;
+  if (talks.some((x) => x.via === t.id)) return 'led';
+  const c = closed?.[t.id];
+  if (c) return c.outcome;
+  return daysBetween(t.on, today) > INTRO_DAYS ? 'lapsed' : 'open';
+}
+
+export interface OpenIntro { talk: Talk; days: number }
+
+/**
+ * The introductions waiting on the person, oldest first: the one nearest to
+ * going cold leads. Each from the day after it was offered (INTRO_WAIT_DAYS).
+ */
+export function openIntros(talks: Talk[], closed: Record<string, IntroClose> | undefined, today: string): OpenIntro[] {
+  return talks
+    .filter((t) => introState(t, talks, closed, today) === 'open')
+    .map((t) => ({ talk: t, days: daysBetween(t.on, today) }))
+    .filter((x) => x.days >= INTRO_WAIT_DAYS)
+    .sort((a, b) => b.days - a.days || a.talk.at.localeCompare(b.talk.at));
+}
+
+/**
+ * The introductions a conversation on `on` can say it came through, newest
+ * first: offered on or before it, within INTRO_LINK_DAYS, and not fallen
+ * through. One that already led somewhere stays — "I will put you in touch with
+ * a couple of people" is two conversations.
+ */
+export function introSources(talks: Talk[], closed: Record<string, IntroClose> | undefined, on: string): Talk[] {
+  return talks
+    .filter((t) => t.commitment === 'intro' && t.on <= on && daysBetween(t.on, on) <= INTRO_LINK_DAYS && closed?.[t.id]?.outcome !== 'dropped')
+    .sort((a, b) => b.on.localeCompare(a.on) || b.at.localeCompare(a.at));
+}
+
+/* ─── What people said ────────────────────────────────────────────────────── */
+
+/** A conversation's words, as a model is shown them. */
+export interface Heard { who: string | null; role: TalkRole; commitment: Commitment; said: string }
+
+/**
+ * The newest words the person kept, at most `max`. What a model writing an idea
+ * or a draft hears from outside the app: the person's own rows, so a number in
+ * them is one they gave.
+ */
+export function heardFrom(talks: Talk[], max = HEARD_MAX): Heard[] {
+  return [...talks]
+    .sort((a, b) => b.on.localeCompare(a.on) || b.at.localeCompare(a.at))
+    .filter((t): t is Talk & { said: string } => !!t.said)
+    .slice(0, max)
+    .map((t) => ({ who: t.who, role: roleOf(t), commitment: t.commitment, said: t.said }));
+}
+
+const HEARD_ENDED: Record<Commitment, string> = { none: 'no commitment', time: 'agreed to another call', intro: 'offered an introduction', money: 'committed money' };
+
+/**
+ * "Maria — could buy, offered an introduction: “We lose two bookings a week”".
+ * Without the day: its digits would pass as a number the person gave.
+ */
+export function heardLine(h: Heard): string {
+  return `${h.who ?? 'Someone'} — ${TALK_ROLE_LABEL[h.role].toLowerCase()}, ${HEARD_ENDED[h.commitment]}: “${h.said}”`;
+}
+
+/** What each kind of person is, for a model reading heardLine's: the labels are short, and "sells to them" means nothing without it. */
+export const HEARD_ROLES_NOTE =
+  'Who each was: "could buy" is a possible buyer; "sells to them" sells something else to the same buyers; "runs the work" does the work the offer touches; "already earns in it" already makes money from these buyers; "knows people" knows them.';
 
 /* ─── Saying it ───────────────────────────────────────────────────────────── */
 
@@ -995,6 +1210,15 @@ export const PLAYS: Play[] = [
     how: 'Ask about the last time the problem cost them, not about your idea. A compliment is not a result: another call, an intro or money is.',
     metric: 'committed', target: 3, tries: { metric: 'talks', planned: 10 }, days: 14,
     prep: { label: 'Interview questions', by: 'ai', ask: 'Write five questions for a problem conversation with the businesses I sell to: about their past, not about my idea' },
+  },
+  {
+    // The buyers are not the only ones who know. Five kinds of people around
+    // the money, one conversation each; judged, like the book's, by what they
+    // committed to, and an introduction to the next person counts.
+    key: 'money-five', book: 'The Mom Test', part: 'who', label: 'Five people close to the money', fits: 'any',
+    how: 'Talk to one person who could buy, one who sells to them, one who runs the work, one who already earns in it and one who knows them. Ask what it costs them, what they pay for now, and who else to ask. An intro or another call counts.',
+    metric: 'committed', target: 2, tries: { metric: 'talks', planned: 5 }, days: 7,
+    prep: { label: 'The questions', by: 'ai', ask: 'Write questions for five people close to the money in my market: about what it costs them and what they pay for now, never about my idea' },
   },
   {
     key: 'one-niche', book: 'Crossing the Chasm', part: 'who', label: 'One niche for two weeks', fits: ['outreach'],
@@ -1133,6 +1357,8 @@ export interface LabView {
   tallies: Tally[];
   /** Bet id → the projects handed over for it. */
   links: Record<string, string[]>;
+  /** Talk id → how the introduction offered in it went, where the person has said. */
+  intros: Record<string, IntroClose>;
   line: string;
   unreadable: string | null;
 }
@@ -1150,6 +1376,7 @@ export function labView(lab: LabHome | undefined, ctx: { runwayMonths: number | 
     ideas: lab?.ideas ?? {},
     tallies: current ? (lab?.tallies ?? []).filter((t) => t.bet === current.bet.id) : [],
     links: lab?.links ?? {},
+    intros: lab?.intros ?? {},
     line: labLine(current, checkpoint.due),
     unreadable: lab?.unreadable ?? null,
   };

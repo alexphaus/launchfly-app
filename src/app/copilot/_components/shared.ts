@@ -10,7 +10,7 @@ import type { PayeeRole } from '@/lib/copilot/money/ledger';
 import type { OutreachStage } from '@/lib/copilot/matches';
 import type { AssetKind } from '@/lib/copilot/assets';
 import type { LinkKey, LinkState } from '@/lib/copilot/business';
-import type { BetIdea, Commitment, LabDecision, LabMetric, Problem } from '@/lib/copilot/lab';
+import type { BetIdea, Commitment, IntroOutcome, LabDecision, LabMetric, Problem, TalkRole } from '@/lib/copilot/lab';
 import type { FoundBy } from '@/lib/copilot/types';
 import type { Reading, ToldMeta, ToldOffer, ToldSale, ToldTalk } from '@/lib/copilot/tell';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
@@ -100,8 +100,14 @@ export type SheetState =
    * written from scratch on a part.
    */
   | { kind: 'bet'; play?: string; part?: LinkKey; idea?: string; experiment?: BetFromExperiment }
-  /** Proof: log one conversation — The Mom Test's record of what was committed. */
-  | { kind: 'talk'; told?: { meta: ToldMeta; talk: ToldTalk } }
+  /**
+   * Proof: log one conversation — The Mom Test's record of what was committed —
+   * optionally as the one an introduction led to (`via`), or as one said into
+   * the mic (`told`).
+   */
+  | { kind: 'talk'; via?: string; told?: { meta: ToldMeta; talk: ToldTalk } }
+  /** The Path and Proof: an introduction somebody offered, by the conversation it was offered in, and what to do about it. */
+  | { kind: 'intro'; talk: string }
   /** Proof: every conversation logged, with the way to log another. */
   | { kind: 'talks' }
   /** Proof: log the person's own count for a bet ("3 sign-ups"). */
@@ -145,7 +151,8 @@ export type LabInput =
       };
     }
   | { action: 'stop'; id: string; note?: string }
-  | { action: 'talk'; talk: { on?: string; who?: string; problem: Problem; commitment: Commitment; said?: string } }
+  | { action: 'talk'; talk: { on?: string; who?: string; role: TalkRole; problem: Problem; commitment: Commitment; said?: string; via?: string } }
+  | { action: 'intro'; intro: { talk: string; outcome: IntroOutcome } }
   | { action: 'forget'; id: string }
   | { action: 'count'; bet: string; count: { n: number; on?: string; note?: string } }
   | { action: 'uncount'; id: string }

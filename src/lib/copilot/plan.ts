@@ -111,7 +111,7 @@ export function pathHere(ladder: { steps: PathStep[]; current: number }, f: Funn
 
 /* ─── The move ────────────────────────────────────────────────────────────── */
 
-export type NowKind = 'offer' | 'call' | 'send' | 'question' | 'fix' | 'approve' | 'confirm' | 'step' | 'move' | 'find' | 'rest';
+export type NowKind = 'offer' | 'call' | 'send' | 'question' | 'intro' | 'fix' | 'approve' | 'confirm' | 'step' | 'move' | 'find' | 'rest';
 
 export interface NowMove {
   kind: NowKind;
@@ -122,7 +122,7 @@ export interface NowMove {
   size: string | null;
   /** The one tap. Null for the call, which carries its own. */
   cta: string | null;
-  /** The commission or Move it opens. */
+  /** The commission, Move or introduction it opens. */
   id?: string;
   /** The drawn plan's step it is, which the one tap marks done. */
   item?: string;
@@ -153,6 +153,7 @@ export interface NowInput {
 
 const ASK_NOW: Record<AskRow['kind'], { title: (a: AskRow) => string; cta: string; size: string }> = {
   question: { title: (a) => a.title, cta: 'Answer it', size: 'a few minutes' },
+  intro: { title: (a) => a.title, cta: 'Follow it up', size: 'a few minutes' },
   fix: { title: (a) => `Get "${a.title}" going again`, cta: 'Open it', size: 'one tap' },
   approve: { title: (a) => `Approve "${a.title}"`, cta: 'Read the plan', size: 'a few minutes' },
   confirm: { title: (a) => a.title, cta: 'Answer it', size: 'a few minutes' },
@@ -168,11 +169,11 @@ const ASK_NOW: Record<AskRow['kind'], { title: (a: AskRow) => string; cta: strin
  * not need an offer at all; then the offer, when there is none, because nothing
  * else can be drafted; the drafts, because on an outbound path nothing moves until
  * something goes out, and they are finished work earning nothing; then whatever
- * a person is blocking — a question, a breakage, an approval, a reply with no
- * ending; then the planner's first Move that fits the time you set; then the
- * businesses worth a message. Once the call is answered it is a receipt, and
- * the move is the next thing — the call's card said as much, and the old Path
- * left it at the centre of the screen anyway.
+ * a person is blocking — a question, an introduction, a breakage, an approval,
+ * a reply with no ending; then the planner's first Move that fits the time you
+ * set; then the businesses worth a message. Once the call is answered it is a
+ * receipt, and the move is the next thing — the call's card said as much, and
+ * the old Path left it at the centre of the screen anyway.
  */
 export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
   const cap = CAPACITY_META[input.capacity];

@@ -218,10 +218,11 @@ export function doneForYou(input: DoneInput): DoneReport {
 
 /* ─── Needs you ───────────────────────────────────────────────────────────── */
 
-export type AskKind = 'question' | 'fix' | 'approve' | 'confirm' | 'send';
+export type AskKind = 'question' | 'intro' | 'fix' | 'approve' | 'confirm' | 'send';
 
 export const ASK_LABEL: Record<AskKind, string> = {
   question: 'Question',
+  intro: 'Introduction',
   fix: 'Needs a fix',
   approve: 'Approve',
   confirm: 'Confirm',
@@ -233,8 +234,15 @@ export interface AskRow {
   kind: AskKind;
   title: string;
   detail: string;
-  /** The commission, for question / fix / approve. */
+  /** The commission, for question / fix / approve; the conversation it was offered in, for intro. */
   id?: string;
+}
+
+/** An introduction somebody offered that nobody has followed up (lab.ts openIntros). */
+export interface IntroAsk {
+  talk: { id: string; who: string | null; said: string | null };
+  /** Days since it was offered. */
+  days: number;
 }
 
 export interface NeedsInput {
@@ -245,13 +253,17 @@ export interface NeedsInput {
   queueIsCall: boolean;
   /** Invariant 1: with a blank offer the queue is not the next step, the offer is — and the call says so. */
   noOffer: boolean;
+  /** Introductions waiting to be followed up, oldest first. */
+  intros?: IntroAsk[];
 }
 
 /**
  * Every ask, one row each, in the order a person should clear them: a worker
  * stopped on a question first (nothing on that mandate moves until it is
- * answered), then a breakage, then the counts the ledger needs repaired, then
- * approvals, then the queue.
+ * answered), then an introduction somebody offered — the one thing here that
+ * is lost by waiting, because the person who offered it forgets — then a
+ * breakage, then the counts the ledger needs repaired, then approvals, then
+ * the queue.
  *
  * A breakage is `fix`, never `question`. They both arrive as status 'blocked',
  * and when both wore "Needs you" a morning of outages read as a morning of the
@@ -275,7 +287,13 @@ export function needsYou(input: NeedsInput): AskRow[] {
     }
   }
 
-  const out: AskRow[] = [...questions, ...fixes];
+  const intros: AskRow[] = (input.intros ?? []).map(({ talk: t, days }) => ({
+    key: `i:${t.id}`, kind: 'intro', id: t.id,
+    title: t.who ? `Follow up the intro from ${t.who}` : 'Follow up an intro you were offered',
+    detail: `${days === 1 ? 'Offered yesterday' : `Offered ${days} days ago`} — ask before they forget offering.${t.said ? ` “${t.said}”` : ''}`,
+  }));
+
+  const out: AskRow[] = [...questions, ...intros, ...fixes];
   if (input.capture) out.push({ key: 'capture', kind: 'confirm', title: input.capture.headline, detail: input.capture.because });
   out.push(...approvals);
   if (input.queue.count > 0 && !input.queueIsCall && !input.noOffer) {

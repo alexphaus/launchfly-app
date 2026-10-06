@@ -30,7 +30,7 @@
 // Pure: no DB import, no model call. The route (api/copilot/tell) makes the
 // call; the shell (CopilotApp2) opens the sheet.
 
-import { COMMITMENTS, PROBLEMS, SAID_MAX, TALK_BACK_DAYS, WHO_MAX, type Commitment, type Problem } from './lab';
+import { COMMITMENTS, PROBLEMS, SAID_MAX, TALK_BACK_DAYS, TALK_ROLES, WHO_MAX, asksProblem, type Commitment, type Problem, type TalkRole } from './lab';
 import { shiftDay } from './focus';
 import { parseSpoken } from './money/spoken';
 
@@ -49,6 +49,8 @@ const OFFER_MAX: Record<OfferField, number> = { sells: 240, for_who: 120, proble
 
 export interface ToldTalk {
   who: string | null;
+  /** Who they were to the business, when the words say; null leaves the sheet's own default. */
+  role: TalkRole | null;
   problem: Problem | null;
   commitment: Commitment | null;
   /** Their words, as they appear in what was said. */
@@ -216,7 +218,7 @@ export function readByRules(heard: string, today: string, categories?: { out: st
   const facts = spokenFacts(heard, today);
   if (isQuestion(heard)) return { kind: 'question' };
   if (MEETING.test(heard)) return { kind: 'meeting', sale: { who: talkedWith(heard), amount: null, currency: null, on: meetingDay(heard, facts.on) } };
-  if (TALK.test(heard)) return { kind: 'talk', talk: { who: talkedWith(heard), problem: null, commitment: null, said: null, on: facts.on } };
+  if (TALK.test(heard)) return { kind: 'talk', talk: { who: talkedWith(heard), role: null, problem: null, commitment: null, said: null, on: facts.on } };
   const payer = someonePaid(heard);
   if ((payer || SALE.test(heard)) && facts.amounts.length) {
     return { kind: 'sale', sale: { who: payer ?? namedAfter(heard, 'to|from'), amount: saleAmount(facts.amounts), currency: facts.currency, on: facts.on } };
@@ -239,7 +241,7 @@ export function toldAs(kind: ToldKind, heard: string, today: string): Told {
   switch (kind) {
     case 'money': return { kind };
     case 'question': return { kind };
-    case 'talk': return { kind, talk: { who: talkedWith(heard), problem: null, commitment: null, said: null, on: facts.on } };
+    case 'talk': return { kind, talk: { who: talkedWith(heard), role: null, problem: null, commitment: null, said: null, on: facts.on } };
     case 'sale': return { kind, sale: { who: someonePaid(heard) ?? namedAfter(heard, 'to|from'), amount: saleAmount(facts.amounts), currency: facts.currency, on: facts.on } };
     case 'meeting': return { kind, sale: { who: talkedWith(heard), amount: null, currency: null, on: meetingDay(heard, facts.on) } };
     case 'offer': return { kind, offer: facts.amounts.length && /\bprice|charge\b/i.test(heard) ? { price_band: facts.amounts[0] } : {} };
@@ -279,11 +281,11 @@ export function tellPrompt(heard: string, c: { today: string; weekday: string; o
     'Kinds:',
     ...TOLD_KINDS.map((k) => `- "${k}": ${KIND_HELP[k]}`),
     '',
-    'For "talk": "who" (the person or business, as said), "said" (their words, copied exactly, or null), "problem" (one of "yes", "no", "unasked": whether they have the problem the owner fixes), "commitment" (one of "none", "time", "intro", "money": another call, an introduction, money, or nothing).',
+    'For "talk": "who" (the person or business, as said), "role" (one of "buyer", "seller", "operator", "earner", "connector", only if the words say: could buy it, sells to the owner\'s buyers, runs the work, already earns from those buyers, or knows people), "said" (their words, copied exactly, or null), "problem" (one of "yes", "no", "unasked": whether they have the problem the owner fixes), "commitment" (one of "none", "time", "intro", "money": another call, an introduction, money, or nothing).',
     'For "sale" and "meeting": "who", and for a sale "amount" (a number, as said) and "currency" (only if said).',
     'For "offer": "offer": {"sells", "for_who", "problem", "price_band"}, each only if they said it, in their words.',
     '',
-    'Return {"kind": "...", "who": ..., "said": ..., "problem": ..., "commitment": ..., "amount": ..., "currency": ..., "offer": {...}}',
+    'Return {"kind": "...", "who": ..., "role": ..., "said": ..., "problem": ..., "commitment": ..., "amount": ..., "currency": ..., "offer": {...}}',
   ].join('\n');
 }
 
@@ -310,17 +312,22 @@ export function normalizeTold(raw: unknown, c: { heard: string; today: string })
       // The person's words, as said: a model's rewrite of a note is a view of
       // the business the working file has no tier for (invariant 12).
       return { kind, note: { content: c.heard.slice(0, NOTE_MAX) } };
-    case 'talk':
+    case 'talk': {
+      const role = oneOf(TALK_ROLES, o.role);
       return {
         kind,
         talk: {
           who: inWords(o.who, c.heard, WHO_MAX),
+          role,
           said: inWords(o.said, c.heard, SAID_MAX),
-          problem: oneOf(PROBLEMS, o.problem),
+          // Theirs to answer only if they could have it: a supplier's "yes"
+          // would read as one more business with the problem (lab.ts).
+          problem: role && !asksProblem(role) ? null : oneOf(PROBLEMS, o.problem),
           commitment: oneOf(COMMITMENTS, o.commitment),
           on: facts.on,
         },
       };
+    }
     case 'sale':
     case 'meeting': {
       // An amount the model gives must be one the words carry; failing that,

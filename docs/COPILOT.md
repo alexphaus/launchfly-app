@@ -351,7 +351,8 @@ log of what already happened", in its owner's words). The rules are in `plan.ts`
   drafts, because on an outbound path nothing moves until something goes out —
   "Send 25 of your 51 drafts, about 75 min of your 150", with what that is at your
   own reply rate, marked early under `RATE_SAMPLE` sends; then whatever a person
-  is blocking — a question, a breakage, an approval, a reply with no ending; then
+  is blocking — a question, an introduction somebody offered (the one thing here
+  lost by waiting), a breakage, an approval, a reply with no ending; then
   the planner's first Move that fits your capacity; then businesses worth a
   message. The rest of what needs you is a chip beside it, at most `MAX_ALSO`.
   Once answered, the call is a receipt at the foot of the evidence, said in its
@@ -842,7 +843,8 @@ there carries no business and lands on the goal like any other.
 on the weak part first, with the last bet's result. First come **ideas a model
 wrote for this business** (`ideas.ts`, `proofai.ts writeIdeas`): three, from the
 person's words, the chain with its rules and numbers, the bets already run and how
-each ended, the conversations logged and the assets there are — asked for once a
+each ended, the conversations logged (who they were with, and what people said
+in their words) and the assets there are — asked for once a
 visit when there are none, or when the record has moved since the last were
 written (a bet ended, or two weeks went by: `ideasStale`), and again on a tap.
 Each is held to what a bet is before it is kept — a count this business can keep,
@@ -879,7 +881,9 @@ in use, undated. A demo with a link can be made the proof every message carries.
 weak part's first: no demo while the price is unproven, no landing page where
 buyers find you online, no script while closing is stuck, no workflow once
 selling works. **A draft by AI** (`proofai.ts draftAsset`) is written from the
-offer, the working file as written, the part it is for and the bet, and is held
+offer, the working file as written, the part it is for, the bet, and what people
+said in the conversations logged — nameless and never quoted, because an asset is
+read by strangers and a name in it reads as a testimonial nobody gave — and is held
 to the rule a message is (deck.ts `checkDraft`): no placeholder, no link the
 person did not give, and no number that is not in their words or rows
 (`numberOutside`; a step's number, a duration and a time of day are
@@ -899,8 +903,36 @@ projects finished or stopped, sales with their amount and who where known, and
 the plan's experiment verdicts (not the ones the app inferred). What the person
 wrote they tried before the app is at the foot, in their words.
 
-**Behind it**: the conversation log (The Mom Test's: who, whether they have the
-problem, what they committed), the projects — the box to hand anything over or
+**Conversations** (`lab.ts`) are The Mom Test's log, and the one place the
+person brings in what the rows cannot see: who, when, whether they have the
+problem, what they committed, their words — and **who they were to the
+business**, a tap: could buy, sells to them, runs the work, already earns in it,
+knows people. Alone, a founder's bottleneck is finding out, and the people
+around the money know what a buyer will not tell a stranger. Only "could buy" is
+a buyer: the chain's who-buys, and the conversations its close and pay parts
+count, are buyers alone (`talkTotals`) — a supplier counted as a buyer made who
+buys look tested by people who never could. A conversation logged before there
+was a choice was logged as a buyer's (the sheet said so) and reads as one; so
+does a cached payload with no role. The problem is asked only of a buyer or
+whoever runs the work. Bets still count every conversation — Five people close
+to the money is judged on them — so no verdict already given moves. The log
+counts the month's conversations by who they were with, the empty kinds shown
+rather than hidden; when every one was with a buyer it says so and offers that
+play. **An introduction** offered in a conversation is perishable: from the next
+day it is in Needs you on the Path, right after a worker's question, until a
+conversation is logged through it (`via`, checked against the record, never
+taken from the request) or the person says they asked for it or it fell through
+(`lab_intro`, the last word winning). A conversation logged through it closes it
+whatever was said before; after `INTRO_DAYS` it lapses off the Path rather than
+nag, and stays on its conversation. The history says who opened the door. **What
+people said** goes to the model with who they were and the month's counts by kind
+— named for ideas, so one can say whom to go back to; nameless for drafts. It is
+the person's own rows, so a number in it is one they gave and passes
+`numberOutside`; the prompt says one person's number is not a rate. Nothing here
+keeps a file on anyone, sets a quota, or messages people for you (DIRECTION.md).
+
+**Behind it**: the conversation log, with an introduction that waits said on
+its line, the projects — the box to hand anything over or
 copy it for Claude, the projects on the go with a question answered or a
 breakage retried on the card, what the app offers to take on, and what finished,
 with the bet each was for — and the agents as one line, the roster folded under
@@ -914,11 +946,12 @@ and the part its kind works on; and an experiment made a bet shows the bet's
 progress or verdict instead of asking for a tap. When the bet ends, its verdict
 becomes the experiment's (`experimentVerdicts`: passed is worked, did not pass is
 failed, called off is could not tell), written by `settleBetExperiments` before
-the next plan is drawn, so the planner hears what the rows said.
+the next plan is drawn, so the planner hears what the rows said. An
+introduction that waits is in Needs you, as above.
 
 Stored without a migration, as `copilot_events` rows: the bets' `lab_bet`,
 `lab_bet_stopped`, `lab_talk`, `lab_checkpoint`, `lab_count`, `lab_link`,
-`lab_ideas`, and the assets' `asset_version`, `asset_retired`,
+`lab_ideas`, `lab_intro`, and the assets' `asset_version`, `asset_retired`,
 `asset_restored`. A read that fails is said on the tab and never drawn as empty.
 
 **You asks three questions of the week** — what created value, what was wasted,
@@ -1458,8 +1491,10 @@ with Claude and ChatGPT (DIRECTION.md).
   3 stickers to Joel for 450" is 450), and the day is the app's own reading of
   the words (`spokenFacts`, the money reader's), never the model's — a meeting
   booked "for Thursday" counts today. A note is kept in the words said, never a
-  model's rewrite (invariant 12). Whether they have the problem and how a
-  conversation ended are the model's proposal, shown as chips to change.
+  model's rewrite (invariant 12). Who they were to the business, whether they
+  have the problem and how a conversation ended are the model's proposal, shown
+  as chips to change — and a supplier or someone already earning is never
+  handed the buyer's "do they have it?" (`asksProblem`).
 - **Without a model, the rules sort** (`readByRules`) what they can, and ask
   about the rest: "Juan 500" opens the chooser rather than being filed as
   spending. A model that times out, a cap of 300 sorts a day, or a reply that
@@ -2704,7 +2739,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/goals` | create / update a goal |
 | POST | `/api/copilot/targeting` | `{ target_segments, target_area }` |
 | POST | `/api/copilot/offer` | `{ sells, for_who, problem, price_band, proof_url, found_by?, bet? }` — every change is recorded as a version of the offer; `bet` ties that version to the bet it was written for |
-| POST | `/api/copilot/lab` | the bets: `open` (with `idea`, `unit`, `experiment`), `stop`, `talk`, `forget`, `count`, `uncount`, `link` (a project to a bet), `checkpoint`, `ideas` (three from a model, for one part), `found_by` — never a verdict |
+| POST | `/api/copilot/lab` | the bets: `open` (with `idea`, `unit`, `experiment`), `stop`, `talk` (with `role` and `via`, the introduction it came through), `intro` (asked for, or fell through), `forget`, `count`, `uncount`, `link` (a project to a bet), `checkpoint`, `ideas` (three from a model, for one part), `found_by` — never a verdict |
 | GET/POST | `/api/copilot/assets` | `GET ?id=` one asset whole · `POST` `add`, `version`, `draft` (by AI), `retire`, `restore`, `adopt` (make a version of the offer yours), `proof` (a demo's link as the proof) |
 | POST | `/api/copilot/finance` | `{ monthly_burn, cash, currency }` |
 | POST | `/api/copilot/opportunities/:id` | `{ status: saved \| dismissed \| acted \| new }` |
@@ -2745,7 +2780,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET | `/copilot2/log` | the Log money shortcut's own page: the keypad, three reads, kept by the service worker for offline |
 | POST | `/copilot2/share` | the manifest's share target: multipart `file`. Normally taken by the service worker; this route is the fallback, importing through the upload route and redirecting to the Money tab |
 | GET/POST | `/api/copilot/money` | `GET` the statements, polled while one is read · `POST { action: 'confirm' \| 'discard', id }` · `{ action: 'currency', id, currency }` (three letters, for a file that named none) · `{ action: 'name', key, role: client \| employer \| self \| other \| null, opportunity_id? }` · `{ action: 'forget', confirm: 'DELETE' }` |
-| POST | `/api/copilot/lab` | the Lab: `{ action: 'open', bet: { part, belief, play?, metric, target, tries?, days } }` — refused while a bet runs, or while the Lab cannot be read · `{ action: 'stop', id, note? }` · `{ action: 'talk', talk: { on?, who?, problem, commitment, said? } }` · `{ action: 'forget', id }` · `{ action: 'checkpoint', checkpoint: { decision, part?, note?, chain } }`. No action posts a verdict. Each answers with the home (`copilot_events`) |
+| POST | `/api/copilot/lab` | the Lab: `{ action: 'open', bet: { part, belief, play?, metric, target, tries?, days } }` — refused while a bet runs, or while the Lab cannot be read · `{ action: 'stop', id, note? }` · `{ action: 'talk', talk: { on?, who?, role?, problem, commitment, said?, via? } }` — `via` must be an introduction on record, offered on or before it · `{ action: 'intro', intro: { talk, outcome: 'asked' | 'dropped' } }` · `{ action: 'forget', id }` · `{ action: 'checkpoint', checkpoint: { decision, part?, note?, chain } }`. No action posts a verdict. Each answers with the home (`copilot_events`) |
 | POST/DELETE | `/api/copilot/focus` | `{ minutes, on?, note? }` — log a block of deep work (`copilot_events`, `focus_logged`) · `?id=` removes one |
 | GET/POST | `/api/copilot/roadmap` | the Path's drawn plan: `POST { action: 'draw', reason? }` writes a `copilot_agent_runs` row of kind `roadmap`, draws in `after()` and returns 202 (or the draw in flight; 12 a day) · `POST { action: 'mark', item, state: done \| dropped \| open }` ticks a step or milestone of the current plan (`copilot_events`, `roadmap_marked`) · `GET` is the latest draw, polled while it runs |
 

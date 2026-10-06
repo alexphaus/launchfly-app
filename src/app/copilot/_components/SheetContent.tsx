@@ -23,7 +23,7 @@ import { isSearchableSegment, placeOf, ratingOf } from '@/lib/copilot/matches';
 import { useShell } from './shell';
 import BankSheet from './BankSheet';
 import OutreachSheet from './v2/Outreach';
-import { BetSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
+import { BetSheet, IntroSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
 import { NoteSheet, ToldChooser, ToldLine } from './v2/TellSheets';
 import type { ToldMeta, ToldOffer } from '@/lib/copilot/tell';
 import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, FoundBySheet, HistorySheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
@@ -66,7 +66,8 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'bank': return <BankSheet home={home} actions={actions} />;
     case 'outreach': return <OutreachSheet home={home} stage={sheet.stage} actions={actions} />;
     case 'bet': return <BetSheet home={home} playKey={sheet.play} part={sheet.part} ideaKey={sheet.idea} experiment={sheet.experiment} actions={actions} />;
-    case 'talk': return <TalkSheet home={home} told={sheet.told} actions={actions} />;
+    case 'talk': return <TalkSheet home={home} via={sheet.via} told={sheet.told} actions={actions} />;
+    case 'intro': return <IntroSheet home={home} talkId={sheet.talk} actions={actions} />;
     case 'note': return <NoteSheet home={home} told={sheet.told} actions={actions} briefing={briefing} />;
     case 'told': return <ToldChooser meta={sheet.meta} home={home} actions={actions} openMoney={openMoney} />;
     case 'talks': return <TalksSheet home={home} actions={actions} />;

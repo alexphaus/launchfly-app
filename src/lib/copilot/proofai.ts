@@ -21,7 +21,7 @@ import {
 } from './assets';
 import { LINK_STATE_LABEL, businessChain, type LinkKey } from './business';
 import { IDEAS_SYSTEM, ideaSources, ideasPrompt, normalizeIdeas, talkTotals, type IdeasContext } from './ideas';
-import { LAB_IDEAS, passLine, playOf, resultLine } from './lab';
+import { LAB_IDEAS, heardFrom, heardLine, passLine, playOf, resultLine, talkCounts } from './lab';
 import { rateLimit } from './limits';
 import { matchFeed } from './matches';
 import { salesCurrency } from './metrics';
@@ -90,6 +90,9 @@ export async function writeIdeas(pid: string, part: LinkKey): Promise<{ count: n
     links: chain.links,
     bets: (home.lab?.bets ?? []).map((v) => ({ state: v.state, result: v.result, belief: v.bet.belief, part: v.bet.part, line: resultLine(v) })),
     talks: talkTotals(home.lab?.talks ?? []),
+    coverage: talkCounts(home.lab?.talks ?? [], home.recent.today).by,
+    // Named: an idea can say whom to go back to ("ask Maria for the intro she offered").
+    heard: heardFrom(home.lab?.talks ?? []).map(heardLine),
     assets: assetKindsOf(home.assets?.assets ?? []),
   };
   let text: string;
@@ -153,6 +156,9 @@ export async function draftAsset(pid: string, input: DraftAsk): Promise<{ asset:
     part: part ? { label: part.label, state: LINK_STATE_LABEL[part.state], why: part.why } : null,
     previous: target ? { title: target.current.title, body: target.current.body } : null,
     ask,
+    // Nameless: an asset is read by strangers, and a name in it would read as
+    // a testimonial nobody gave.
+    heard: heardFrom(home.lab?.talks ?? []).map((h) => heardLine({ ...h, who: null })),
   };
   let text: string;
   try {

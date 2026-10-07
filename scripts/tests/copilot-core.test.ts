@@ -7334,6 +7334,7 @@ async function moneyFromTheBank() {
     ['owed', 'off', 'Nothing logged'],
     ['focus', 'on', '3.5h this week'],
     ['feeds', 'attention', '2 of 5 failing'],
+    ['signals', 'off', 'No link yet: sign-ups are typed, if at all'],
   ]);
   assert.equal(mSensors({ bank: { ready: false, rows: 0, to: null, reading: 0, review: 0, failed: 0, unreadable: null }, owed: { open: 0 }, focus: { minutesWeek: 0 }, feeds: { total: 0, failing: 0 } })[0].line, 'Not set up on this server yet', 'an unapplied migration is not "nothing uploaded"');
   assert.equal(mSensors({ bank: { ready: true, rows: 10, to: null, reading: 0, review: 1, failed: 0, unreadable: null }, owed: { open: 0 }, focus: { minutesWeek: 0 }, feeds: { total: 0, failing: 0 } })[0].state, 'attention');
@@ -9144,7 +9145,7 @@ conversationsSuite().catch((e) => { console.error(e); process.exit(1); });
 
 import {
   AS_SCOPES as OC_AS_SCOPES, CODE_TTL_S as OC_CODE_TTL, MCP_GRANT as OC_GRANT, MCP_REVOKE as OC_REVOKE, MCP_SEEN as OC_SEEN,
-  REFRESH_GRACE_S as OC_GRACE, SCOPE_READ as OC_READ,
+  REFRESH_GRACE_S as OC_GRACE, SCOPE_PROPOSE as OC_PROPOSE, SCOPE_READ as OC_READ,
   askerOf as ocAsker, authServerMetadata as ocASM, authenticateClient as ocAuthClient, basicAuth as ocBasic, checkAuthorize as ocCheck,
   checkCodeGrant as ocCheckCode, checkRefreshGrant as ocCheckRefresh, clientOf as ocClientOf, clientRef as ocClientRef, clientSecret as ocSecret,
   connectionsOf as ocConnections, consentToken as ocConsent, consentTokenMatches as ocConsentOk, grantLive as ocLive, issueCode as ocIssue,
@@ -9329,7 +9330,7 @@ async function connectorSuite() {
   const prm = ocPRM(`${base}/`);
   assert.equal(prm.resource, resource, 'the resource is exactly the URL pasted into Claude');
   assert.equal(prm.authorization_servers[0], base, 'Claude reads only the first');
-  assert.deepEqual(prm.scopes_supported, [OC_READ]);
+  assert.deepEqual(prm.scopes_supported, [OC_READ, OC_PROPOSE], 'both listed: Claude asks for both, and the consent screen decides');
   const asm = ocASM(base) as Record<string, unknown>;
   assert.equal(asm.issuer, base);
   assert.equal(asm.authorization_endpoint, `${base}/copilot2/connect`);
@@ -9339,7 +9340,7 @@ async function connectorSuite() {
   assert.deepEqual(asm.scopes_supported, [...OC_AS_SCOPES], 'offline_access listed, so Claude asks for the refresh token');
   assert.equal(asm.client_id_metadata_document_supported, undefined, 'no metadata documents: they mean fetching any URL a client names');
   const www = ocWww(base);
-  assert.ok(www.startsWith('Bearer ') && www.includes(`resource_metadata="${base}/.well-known/oauth-protected-resource/api/copilot/mcp"`) && www.includes(`scope="${OC_READ}"`));
+  assert.ok(www.startsWith('Bearer ') && www.includes(`resource_metadata="${base}/.well-known/oauth-protected-resource/api/copilot/mcp"`) && www.includes(`scope="${OC_READ} ${OC_PROPOSE}"`));
   assert.ok(ocWww(base, { error: 'invalid_token', description: 'It "expired"' }).startsWith('Bearer error="invalid_token", error_description="It expired"'), 'quotes cannot break the header');
   assert.ok(ocSame('https://APP.example.com/api/copilot/mcp/', resource));
   assert.equal(ocSame('https://app.example.com/api/copilot/other', resource), false);
@@ -9478,7 +9479,8 @@ async function connectorSuite() {
     assert.ok(!/currentProfileId|profileIdOr401|cookies\(/.test(s), `${name} never reads the session: the token is the only credential, which is why any origin may call it`);
   }
   assert.match(mcpRoute, /status: 401[\s\S]*www-authenticate/, 'a 401 with the header is the only thing that starts Claude\'s sign-in');
-  assert.ok(mcpRead.indexOf('markSeen(who.pid, who.grant, name, null)') < mcpRead.indexOf('readTool(name, args, who.pid)'), 'a read is recorded before it is made');
+  assert.ok(mcpRead.indexOf('markSeen(who.pid, who.grant, name, null)') < mcpRead.indexOf('readTool(name as ReadToolName, args, who.pid)'), 'a read is recorded before it is made');
+  assert.ok(mcpRead.indexOf('markSeen(who.pid, who.grant, name, null)') < mcpRead.indexOf('proposeTool(name as ProposeToolName, args, who)'), 'and so is a proposal');
   const authorizeRoute = src('app/api/copilot/oauth/authorize/route.ts');
   assert.ok(!/export (async )?function GET/.test(authorizeRoute), 'a code is issued by the tap\'s POST, never by a GET a preview could make');
   assert.match(authorizeRoute, /consentTokenMatches\(/);
@@ -10227,7 +10229,7 @@ async function shelfSuite() {
   assert.match(store, /read\(\[LAB_SHELF, LAB_SHELF_GONE, LAB_BET\], SHELF_EVENT_LIMIT\)/, 'the shelf has a window of its own');
   assert.match(store, /shelfEvents: labEvents\.shelfRows,/);
   assert.match(route, /if \(shelf && !home\.lab\?\.shelf\?\.some\(\(e\) => e\.id === shelf\)\) return fail\('That test is no longer on your shelf\.'\);/, 'a bet cannot name a test nobody kept');
-  assert.match(route, /LAB_BET, \{ \.\.\.v\.value, shelf \}/, 'and the bet names the one it came from, which is how the entry leaves');
+  assert.match(route, /LAB_BET, \{ \.\.\.v\.value, shelf, /, 'and the bet names the one it came from, which is how the entry leaves');
   const iface = src('src/lib/copilot/lab.ts').match(/export interface ShelfEntry \{[\s\S]*?\n\}/)![0];
   assert.ok(!/score|market|viab|rank/i.test(iface), 'a kept idea is a test with a line: nothing in it estimates its worth');
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
@@ -10270,3 +10272,554 @@ async function sharedFileConfirmSuite() {
 }
 
 sharedFileConfirmSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Proof, honest about what it counts ──────────────────────────────────── */
+//
+// The live account, read through the connector on 7 Oct, showed four ways the
+// chain told a founder more than its rows held: a new offer judged by the old
+// one's sales, a bet opened read back as progress, six meetings called six
+// conversations, and one tap opening the same bet twice.
+
+import {
+  PIVOT_REACH as pfReach, businessChain as pfChain, chainChanges as pfChanges, evidenceState as pfEvidence, restartsOf as pfRestarts,
+  snapshotChain as pfSnapshot, triedWords as pfTried, type ChainInput as PfInput,
+} from '../../src/lib/copilot/business';
+import { erasOf as pfErasOf, pivotWords as pfPivotWords } from '../../src/lib/copilot/proof';
+import { eraCounts as pfEraCounts } from '../../src/lib/copilot/era';
+import { checkpointView as pfCheckpoint, gradeWords as pfGradeWords, isOpenNonce as pfNonce, openRace as pfRace } from '../../src/lib/copilot/lab';
+import { FOUND_BY as pfFoundBy } from '../../src/lib/copilot/types';
+import { FOUND_BY_PHRASE as pfPhrase } from '../../src/lib/copilot/offer';
+import { goalOutlook as pfOutlook } from '../../src/lib/copilot/outlook';
+
+async function proofHonestSuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(p, 'utf8');
+  // The account on 7 Oct: the app it sells now, found online, and September's two $1 tests and six meetings from selling to trades.
+  const founder: PfInput = {
+    offer: { sells: 'Founder OS Copilot App', for_who: "People who want a business but don't know how to start", problem: 'Not knowing what to do that moves the needle', price_band: '$29/month' },
+    said: {}, segments: [], area: 'Manila', web: false,
+    funnel: { matched: 116, sent: 27, replied: 2, meetings: 6, won: 2, outside: 0 },
+    worthAMessage: 0, bySegment: [], byChannel: [{ channel: 'whatsapp', sent: 27 }],
+    wins: [1, 1], queue: 0, wonRecent: { amount: 1, days: 30 },
+    goal: { title: 'Save Exit PH [NOV]', target: 1500, current: 0 }, currency: '$', workerConnected: true, agents: [], topOpening: null,
+    foundBy: 'inbound', talks: { n: 0, problem: 0, committed: 0 },
+    bets: [{ part: 'who', state: 'running', start: '2026-10-07', line: '0 of 3 commitments', when: null, result: 0 }],
+  };
+  const parts = (i: PfInput) => Object.fromEntries(pfChain(i).links.map((l) => [l.key, l]));
+
+  /* 1. Before: the new offer judged on the old one's rows — the screen the owner saw. */
+  const was = parts(founder);
+  assert.equal(was.pay.state, 'stuck');
+  assert.equal(was.pay.why, '6 meetings and 2 paid, none at your $29. From 5 on, that says more about the price or the proof than about luck.',
+    'six meetings are six meetings: no logged conversation is summed into "6 conversations"');
+  assert.equal(was.close.why, '2 won so far. At 3 it stops being luck.');
+  assert.equal(pfTried(0, 6), '6 meetings');
+  assert.equal(pfTried(2, 6), '2 conversations and 6 meetings');
+  assert.equal(pfTried(1, 0), '1 conversation');
+  assert.equal(pfTried(0, 0), '0 conversations');
+
+  /* 2. A pivot restarts the part it changed and every part measured after it; delivery only on its own. */
+  assert.deepEqual(pfReach.who, ['who', 'reach', 'close', 'pay']);
+  assert.deepEqual(pfReach.pay, ['pay']);
+  assert.deepEqual(pfReach.deliver, ['deliver']);
+  const cp = (on: string, decision: 'pivot' | 'persevere', part: 'who' | 'reach' | 'close' | 'pay' | 'deliver' | null) => ({ id: on, on, decision, part, note: null, chain: {}, at: `${on}T10:00:00Z` });
+  assert.deepEqual(pfRestarts([cp('2026-10-07', 'pivot', 'who')]), {
+    who: { on: '2026-10-07', pivot: 'who' }, reach: { on: '2026-10-07', pivot: 'who' }, close: { on: '2026-10-07', pivot: 'who' }, pay: { on: '2026-10-07', pivot: 'who' },
+  });
+  // A later pivot on the price restarts the price alone; persevere restarts nothing.
+  const two = pfRestarts([cp('2026-10-21', 'pivot', 'pay'), cp('2026-10-14', 'persevere', null), cp('2026-10-07', 'pivot', 'who')]);
+  assert.deepEqual([two.who?.on, two.close?.on, two.pay?.on, two.pay?.pivot, two.deliver], ['2026-10-07', '2026-10-07', '2026-10-21', 'pay', undefined]);
+  // On one day, a part's own pivot names it.
+  assert.equal(pfRestarts([cp('2026-10-07', 'pivot', 'who'), cp('2026-10-07', 'pivot', 'pay')]).pay?.pivot, 'pay');
+  assert.equal(pfPivotWords('who'), 'Who buys, how they hear, how they say yes and what they pay');
+  assert.equal(pfPivotWords('deliver'), 'How you deliver');
+
+  /* 3. After the pivot: judged on what came after it, with what came before said and not counted. */
+  const zero = { funnel: { sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, bySegment: [], byChannel: [], wins: [], talks: { n: 0, problem: 0, committed: 0 } };
+  const era = (part: 'who' | 'reach' | 'close' | 'pay') => ({ ...zero, since: '2026-10-07', pivot: 'who' as const, ...(part ? {} : {}) });
+  const after: PfInput = { ...founder, eras: { who: era('who'), reach: era('reach'), close: era('close'), pay: era('pay') } };
+  const now = parts(after);
+  assert.deepEqual(pfChain(after).links.map((l) => l.state), ['testing', 'untested', 'untested', 'untested', 'missing']);
+  assert.equal(now.pay.facts, 'Nothing paid yet');
+  assert.equal(now.pay.since, 'Counted since 7 Oct, when you pivoted who buys.');
+  assert.equal(now.pay.before, 'Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
+  assert.equal(now.pay.more[0], now.pay.before, 'said first when the part is open');
+  assert.equal(now.close.before, 'Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
+  // Only what each part would have counted: found online, How they hear never read a send, so the 27 are not its "before".
+  assert.equal(now.reach.before, undefined);
+  assert.equal(now.who.before, 'Before 7 Oct: 2 paid, at $1 each. Not counted here, and kept in History.');
+  const linked = parts({ ...after, signals: { linked: true, signup: 5, enquiry: 1 }, eras: { ...after.eras, reach: { ...era('reach'), signals: { signup: 2, enquiry: 0 } } } });
+  assert.equal(linked.reach.before, 'Before 7 Oct: 3 sign-ups · 1 enquiry. Not counted here, and kept in History.');
+  assert.equal(parts({ ...after, signals: { linked: true, signup: 5, enquiry: 1 } }).reach.before, undefined, 'an era with no count of its own does not call every sign-up older');
+  // Outreach: the sends are How they hear's, and the replies are where How they say yes starts.
+  const sent = parts({ ...after, foundBy: 'outreach' });
+  assert.equal(sent.reach.before, 'Before 7 Oct: 27 messages sent · 2 replies. Not counted here, and kept in History.');
+  assert.equal(sent.close.before, 'Before 7 Oct: 2 replies · 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
+  assert.equal(sent.who.before, 'Before 7 Oct: 27 messages sent · 2 replies · 2 paid, at $1 each. Not counted here, and kept in History.');
+  assert.equal(now.deliver.since, undefined, 'delivery was not pivoted');
+  assert.deepEqual(pfChain(after).verdict, { proven: false, title: 'Not proven yet', line: 'Proven at 3 paid at your $29. So far: 0.', since: 'Counted since 7 Oct, when you pivoted who buys.' });
+  // A sale at the new price after the pivot counts, and the old ones still do not.
+  const sold = parts({ ...after, wins: [1, 1, 29], funnel: { ...after.funnel, won: 3 }, eras: { ...after.eras, pay: { ...era('pay'), funnel: { ...zero.funnel, won: 1 }, wins: [29] } } });
+  assert.equal(sold.pay.facts, '1 paid, $29 — all at your $29 or more');
+  assert.equal(sold.pay.before, 'Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
+  // Bets from before the pivot are not the new business's evidence either.
+  const oldBet = { part: 'reach' as const, state: 'passed' as const, start: '2026-09-20', line: '5 of 5 enquiries', when: '25 Sep', result: 5 };
+  assert.equal(parts({ ...after, bets: [oldBet] }).reach.state, 'untested');
+  assert.match(parts({ ...after, bets: [oldBet] }).reach.before ?? '', /1 bet\./);
+  assert.equal(parts({ ...founder, bets: [oldBet] }).reach.state, 'works', 'with no pivot, every bet still counts — and the $1 sales with it');
+  // No pivot, no change: the chain reads exactly as it did.
+  assert.deepEqual(pfChain(founder).links.map((l) => [l.state, l.why]), pfChain({ ...founder, eras: undefined }).links.map((l) => [l.state, l.why]));
+  assert.equal(pfChain(founder).verdict.since, undefined);
+
+  /* 4. The counts are the funnel's own, from the person's day on, and a payload without them reads as before. */
+  const rows = {
+    opportunities: [{ id: 'o1', status: 'won', source: 'maps', source_kind: 'business', data: {}, reason: null, title: 'A & D Plumbing' }],
+    executions: [
+      { approval_state: 'sent' as const, channel: 'whatsapp' as const, opportunity_id: 'o1', sent_at: '2026-09-01T02:00:00Z' },
+      // 01:30 on 7 Oct in Manila: on the pivot's day there, though it is the 6th in UTC.
+      { approval_state: 'sent' as const, channel: 'whatsapp' as const, opportunity_id: null, sent_at: '2026-10-06T17:30:00Z' },
+      { approval_state: 'sent' as const, channel: 'whatsapp' as const, opportunity_id: null, sent_at: null },
+    ],
+    outcomes: [
+      { kind: 'won' as const, opportunity_id: 'o1', occurred_at: '2026-09-12T03:00:00Z', amount: 1 },
+      // A reply after the pivot to a message the app sent before it is still the app's send, not one logged outside.
+      { kind: 'reply' as const, opportunity_id: 'o1', occurred_at: '2026-10-08T03:00:00Z', amount: null },
+      { kind: 'won' as const, opportunity_id: null, occurred_at: '2026-10-08T05:00:00Z', amount: 29 },
+    ],
+  } as unknown as Parameters<typeof pfEraCounts>[0];
+  const counted = pfEraCounts(rows, '2026-10-07', 'Asia/Manila', founder.offer);
+  assert.deepEqual(counted.funnel, { sent: 1, replied: 1, meetings: 0, won: 1, outside: 0 });
+  assert.deepEqual(counted.wins, [29]);
+  assert.equal(pfEraCounts(rows, '2026-10-07', 'UTC', founder.offer).funnel.sent, 0, 'the same send is the 6th in UTC');
+  const lab = (eras?: Record<string, unknown>) => ({ lab: { bets: [], talks: [{ id: 't1', on: '2026-10-08', who: null, role: 'buyer', problem: 'yes', commitment: 'time', said: null, via: null, at: '' }, { id: 't0', on: '2026-10-01', who: null, role: 'buyer', problem: 'yes', commitment: 'none', said: null, via: null, at: '' }], checkpoints: [cp('2026-10-07', 'pivot', 'who')], unreadable: null, eras } }) as unknown as Parameters<typeof pfErasOf>[0];
+  const fromPayload = pfErasOf(lab({ '2026-10-07': counted }));
+  assert.deepEqual(Object.keys(fromPayload ?? {}), ['who', 'reach', 'close', 'pay']);
+  assert.deepEqual(fromPayload?.who?.talks, { n: 1, problem: 1, committed: 1 }, 'only the conversations since the pivot');
+  assert.equal(pfErasOf(lab(undefined)), undefined, 'a payload cached before the server counted reads all time, never as empty');
+  const store = src('src/lib/copilot/store.ts');
+  assert.match(store, /const pivotDays = Object\.values\(restartsOf\(lab\.checkpoints\)\)\.map\(\(r\) => r!\.on\);\s*if \(pivotDays\.length\) lab\.eras = erasFor\(pivotDays, diagRows,/, 'counted where the rows are, from the rows the funnel counts');
+
+  /* 5. A bet opened is a test begun, not progress. */
+  const bare = now.who;
+  assert.equal(bare.state, 'testing');
+  assert.equal(bare.bare, true);
+  assert.equal(bare.why, 'A bet on it is running. Nothing counted yet.');
+  assert.equal(pfEvidence(bare), 'untested');
+  const counting = parts({ ...after, bets: [{ ...founder.bets![0], line: '1 of 3 commitments', result: 1 }] }).who;
+  assert.deepEqual([counting.bare, pfEvidence(counting)], [undefined, 'testing'], 'one commitment counted is something');
+  assert.equal(parts({ ...after, eras: { ...after.eras, who: { ...era('who'), talks: { n: 1, problem: 1, committed: 0 } } } }).who.bare, undefined, 'a conversation logged is something');
+  // Called off before it counted anything: said as what it was.
+  assert.equal(parts({ ...after, bets: [{ ...founder.bets![0], state: 'stopped', when: '7 Oct' }] }).who.why, 'The last bet on it was called off: 0 of 3 commitments.');
+  // "Since you last looked": a device that saw Untested is told nothing when a bet opens, and something when it counts.
+  const saw = { at: '2026-10-07T01:00:00Z', states: { who: 'untested' as const } };
+  assert.deepEqual(pfChanges(saw, pfChain(after).links), []);
+  assert.deepEqual(pfChanges(saw, pfChain({ ...after, bets: [{ ...founder.bets![0], line: '1 of 3 commitments', result: 1 }] }).links).map((c) => [c.key, c.from, c.to]), [['who', 'untested', 'testing']]);
+  // A snapshot from before `bare` kept the label: not news either way.
+  assert.deepEqual(pfChanges({ at: saw.at, states: { who: 'testing' } }, pfChain(after).links), []);
+  assert.equal(pfSnapshot('2026-10-07T02:00:00Z', pfChain(after).links).states.who, 'untested', 'kept as evidence');
+  // The checkpoint's read-back: the owner's "Who buys has moved forward since" over an empty log.
+  const links = pfChain(after).links;
+  const pivotBack = (who: 'untested' | 'testing') => pfCheckpoint({ checkpoints: [{ ...cp('2026-10-07', 'pivot', 'who'), chain: { who } }], bets: [], links, today: '2026-10-07' }).grade;
+  assert.equal(pivotBack('untested'), 'same');
+  assert.equal(pfGradeWords({ decision: 'pivot', part: 'who' }, pivotBack('untested')), 'Who buys has not moved since.');
+  assert.equal(pivotBack('testing'), 'same', 'a checkpoint from before `bare` kept the label: not read as a slip');
+  const realLinks = pfChain({ ...after, eras: { ...after.eras, who: { ...era('who'), talks: { n: 2, problem: 2, committed: 1 } } } }).links;
+  assert.equal(pfCheckpoint({ checkpoints: [{ ...cp('2026-10-07', 'pivot', 'who'), chain: { who: 'untested' } }], bets: [], links: realLinks, today: '2026-10-10' }).grade, 'better', 'two conversations logged is a step');
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /chain: Object\.fromEntries\(links\.map\(\(l\) => \[l\.key, evidenceState\(l\)\]\)\)/, 'the checkpoint keeps the chain as evidence');
+  const sheets = src('src/app/copilot/_components/v2/ProofSheets.tsx');
+  assert.match(sheets, /chain: Object\.fromEntries\(links\.map\(\(l\) => \[l\.key, evidenceState\(l\)\]\)\)/, 'and so does a pivot made from the chain');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /case 'pivot': return <PivotSheet home=\{home\} actions=\{actions\} \/>;/);
+  assert.match(sheets, /actions\.openSheet\(\{ kind: 'pivot' \}\)/, 'a pivot does not wait for the checkpoint to come due');
+
+  /* 6. "How buyers find you" in a sentence, never the label spliced in. */
+  for (const f of pfFoundBy) assert.ok(!/^(they|you)\b/i.test(pfPhrase[f]) || f === 'outreach', `${f}: "buyers ${pfPhrase[f]}" has no second subject`);
+  assert.equal(`Sends and replies are left out: buyers ${pfPhrase.inbound}, not through what the app sends.`, 'Sends and replies are left out: buyers find you online, not through what the app sends.');
+  const labSheets = src('src/app/copilot/_components/v2/LabSheets.tsx');
+  assert.match(labSheets, /buyers \{FOUND_BY_PHRASE\[found\]\}, not through what the app sends\./);
+  assert.ok(!/buyers find you \{FOUND_BY_LABEL/.test(labSheets), 'the stutter is gone');
+
+  /* 7. One tap, one bet. The second of two that raced is withdrawn; a retry of the same tap is answered as the tap was. */
+  assert.ok(pfNonce('6b0f3c1e-2a4d-4c8e-9f10-123456789abc') && !pfNonce('x') && !pfNonce('a b c d e f g h') && !pfNonce(7));
+  const v = (id: string, state: 'running' | 'stopped' | 'passed', openedAt: string, nonce: string | null = null) => ({ state, bet: { id, openedAt, nonce } });
+  assert.equal(pfRace([v('10', 'running', '2026-10-07T09:00:00Z')], '10'), null, 'alone: kept');
+  assert.deepEqual(pfRace([v('11', 'running', '2026-10-07T09:00:01Z', 'n-aaaaaaaa'), v('10', 'running', '2026-10-07T09:00:00Z', 'n-aaaaaaaa')], '11'), { first: '10', same: true }, 'the same tap twice: the second answers as the first');
+  assert.deepEqual(pfRace([v('11', 'running', '2026-10-07T09:00:01Z', 'n-bbbbbbbb'), v('10', 'running', '2026-10-07T09:00:00Z', 'n-aaaaaaaa')], '11'), { first: '10', same: false }, 'two taps: the second is refused');
+  assert.equal(pfRace([v('11', 'running', '2026-10-07T09:00:01Z'), v('10', 'running', '2026-10-07T09:00:00Z')], '10'), null, 'the first written stays');
+  assert.deepEqual(pfRace([v('11', 'running', '2026-10-07T09:00:00Z'), v('10', 'running', '2026-10-07T09:00:00Z')], '11'), { first: '10', same: false }, 'one instant: the table’s order decides');
+  assert.equal(pfRace([v('11', 'running', '2026-10-07T09:00:01Z'), v('10', 'passed', '2026-10-07T09:00:00Z'), v('9', 'stopped', '2026-10-07T08:59:00Z')], '11'), null, 'a bet that passed or was called off freed the slot');
+  const route = src('src/app/api/copilot/lab/route.ts');
+  assert.match(route, /if \(nonce && home\.lab\?\.bets\.some\(\(x\) => x\.bet\.nonce === nonce\)\) return json\(\{ ok: true, home \}\);/, 'a retry of a tap that opened its bet is not refused');
+  assert.match(route, /const id = await insertLabEvent\(auth\.pid, LAB_BET,[\s\S]*?const race = after\?\.lab && !after\.lab\.unreadable \? openRace\(after\.lab\.bets, id\) : null;\s*if \(race\) \{\s*await withdrawLabBet\(auth\.pid, id\);/, 'the write is read back, and the second withdrawn');
+  assert.match(labSheets, /if \(starting\.current\) return;\s*starting\.current = true;/, 'a second tap before the render does nothing');
+  assert.match(labSheets, /action: 'open',\s*nonce,/);
+
+  /* 8. A goal is not walked back to sends for a business whose buyers do not come through them. */
+  const exit = { id: 'g1', title: 'Save Exit PH [NOV]', metric: 'currency' as const, unit: '$', target_value: 1500, current_value: 0, horizon_days: 62, created_at: '2026-10-07T01:00:00Z' };
+  const base = { today: '2026-10-07', price: 29, selling: true, currency: '$', capacity: 'moderate' as const, funnel: { windowDays: 30, sent: 27, won: 1, wonAmount: 1 } };
+  assert.match(pfOutlook(exit, base).line, /sends at what yours have earned/, 'nobody said: as it always read');
+  const online = pfOutlook(exit, { ...base, viaSends: false });
+  assert.ok(!/send/.test(online.line), online.line);
+  assert.equal(online.line, '52 sales at your $29 in 62 days: about $169 a week. You were paid $1 in the last 30 days, about $0 a week.');
+  assert.equal(online.verdict, 'off_track');
+  assert.match(pfOutlook(exit, { ...base, viaSends: true }).line, /sends at what yours have earned/, 'outreach walks the chain from sends, as before');
+
+  console.log('copilot-core: proof honest checks passed');
+}
+
+proofHonestSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Projects: a day that has passed, and the bet's own slot ─────────────── */
+//
+// On 7 Oct the owner's Proof said "3 waiting on you": two questions about
+// guesthouses in Manila for 5 Oct, and one breakage. The two held two of the
+// three slots, so "Hand part of this bet over" was greyed out for the bet's
+// whole fortnight by errands whose night had already gone.
+
+import {
+  MAX_ACTIVE_COMMISSIONS as pdMax, datesNamed as pdDates, lapsedOn as pdLapsed, roomForProject as pdRoom, roomToStart as pdStart, takesASlot as pdSlot,
+} from '../../src/lib/copilot/commission';
+import { waitingOnYou as pdWaiting } from '../../src/lib/copilot/business';
+import { needsYou as pdNeeds } from '../../src/lib/copilot/today';
+import { agentRoster as pdRoster } from '../../src/lib/copilot/machine';
+
+async function projectsDaySuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(p, 'utf8');
+  const today = '2026-10-07';
+
+  /* 1. The days a project's own words name. */
+  assert.deepEqual(pdDates('List the three cheapest guesthouses in Manila for Oct 5 with links', '2026-09-28'), ['2026-10-05']);
+  assert.deepEqual(pdDates('List short-stay rooms in Manila available from Oct 5, cheapest first', '2026-09-28'), ['2026-10-05'], '", cheapest" is not a year');
+  assert.deepEqual(pdDates('Which year should I use for October 5: 2025 or 2026?', '2026-09-28'), ['2026-10-05'], 'a year only when it is attached');
+  assert.deepEqual(pdDates('Book it for the 5th of October 2025', '2026-09-28'), ['2025-10-05']);
+  assert.deepEqual(pdDates('Flights from Oct 5 to Oct 9', '2026-09-28'), ['2026-10-05', '2026-10-09']);
+  assert.deepEqual(pdDates('Check in 2026-10-05', '2026-09-28'), ['2026-10-05']);
+  assert.deepEqual(pdDates('Find a venue for 12 Jan', '2026-09-28'), ['2027-01-12'], 'the next one after it was written');
+  assert.deepEqual(pdDates('Plan for Oct 5', '2026-10-06'), ['2027-10-05'], 'written after this year’s: it meant next year’s');
+  assert.deepEqual(pdDates('Step by step plan to exit Philippines', '2026-09-15'), []);
+  assert.deepEqual(pdDates('Feb 30 or 2026-02-30', '2026-01-01'), [], 'a day that does not exist is not read as one');
+
+  /* 2. Lapsed: only waiting on the person, only once the last day named has gone. */
+  const c = (objective: string, status: 'draft' | 'active' | 'blocked' | 'done' | 'stopped', id = objective) => ({ id, objective, status, created_at: '2026-09-28T03:00:00Z' });
+  const guesthouses = c('List the three cheapest guesthouses in Manila for Oct 5 with links', 'blocked', 'g');
+  const rooms = c('List short-stay rooms in Manila available from Oct 5, cheapest first', 'blocked', 'r');
+  const exit = c('Step by step plan to exit Philippines', 'blocked', 'x');
+  assert.equal(pdLapsed(guesthouses, today), '2026-10-05');
+  assert.equal(pdLapsed(guesthouses, '2026-10-05'), null, 'on the day itself it is still the day');
+  assert.equal(pdLapsed({ ...guesthouses, status: 'draft' }, today), '2026-10-05', 'a draft nobody approved lapses too');
+  assert.equal(pdLapsed({ ...guesthouses, status: 'active' }, today), null, 'running work is never lapsed: the worker is not waiting on anyone');
+  assert.equal(pdLapsed({ ...guesthouses, status: 'done' }, today), null);
+  assert.equal(pdLapsed(c('Flights from Oct 5 to Oct 9', 'blocked'), today), null, 'the latest day named is the one that has to pass');
+  assert.equal(pdLapsed(exit, today), null, 'no day named, nothing inferred');
+  assert.deepEqual([pdSlot(guesthouses, today), pdSlot(exit, today), pdSlot({ ...exit, status: 'done' }, today)], [false, true, false]);
+
+  /* 3. The three slots, counted as the server counts them. */
+  const errands = [guesthouses, rooms, exit];
+  assert.equal(pdRoom(errands, today), true, 'two of three are past their day: room for one more');
+  const three = [exit, c('Pricing check', 'active', 'p'), c('Client onboarding', 'draft', 'o')];
+  assert.equal(pdRoom(three, today), false, `${pdMax} on the go is the cap`);
+  assert.equal(pdRoom(three, today, []), true, 'the running bet keeps a slot of its own');
+  assert.equal(pdRoom([...three, c('Interview questions', 'active', 'b1')], today, ['b1']), false, 'one at a time for the bet');
+  assert.equal(pdRoom([...three, c('Interview questions', 'done', 'b1')], today, ['b1']), true, 'a finished one frees it');
+  // Starting: the draft for the bet starts past three running; a draft that is not the bet's does not.
+  const running3 = [c('a', 'active', 'a'), c('b', 'active', 'b'), c('c', 'blocked', 'c'), c('Interview questions', 'draft', 'b1')];
+  assert.equal(pdStart(running3, 'b1', today), false);
+  assert.equal(pdStart(running3, 'b1', today, ['b1']), true);
+  assert.equal(pdStart([...running3, c('Find groups', 'active', 'b0')], 'b1', today, ['b0', 'b1']), false, 'the bet’s slot is already running');
+  assert.equal(pdStart([c('a', 'active', 'a'), c('b', 'active', 'b'), guesthouses, c('d', 'draft', 'd')], 'd', today), true, 'a lapsed question is not running work');
+
+  /* 4. Not waiting on you, not on the Path, not the Researcher's — said on its card instead. */
+  const tg = threadV2({ id: 'g', objective: guesthouses.objective, status: 'blocked', created_at: guesthouses.created_at }, [{ kind: 'needs_you', summary: 'Which of these three should I use for the next booking step?' }]);
+  const tr = threadV2({ id: 'r', objective: rooms.objective, status: 'blocked', created_at: rooms.created_at }, [{ kind: 'needs_you', summary: 'Which year should I use for October 5: 2025 or 2026?' }]);
+  const tx = threadV2({ id: 'x', status: 'blocked' }, [{ kind: 'failed', summary: 'Email cannot be sent' }]);
+  assert.equal(pdWaiting([tg, tr, tx]), 3, 'without a day, as before');
+  assert.equal(pdWaiting([tg, tr, tx], today), 1, 'the owner’s "3 waiting on you" was one');
+  const asks = pdNeeds({ commissions: [tg, tr, tx], capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false, today });
+  assert.deepEqual(asks.map((a) => a.key), ['f:x']);
+  assert.equal(pdNeeds({ commissions: [tg, tr, tx], capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false }).length, 3);
+  const roster = (t?: string) => pdRoster({
+    now: new Date('2026-10-07T01:00:00Z'), today: t, supplyLastRun: null, sourced: 0, hasTargeting: false, matchesLeft: 10, sources: [], finds: 0, offerEmpty: false, queueCount: 0, drafted: 0,
+    workerConnected: true, commissions: [tg, tr, threadV2({ id: 'y', status: 'active' })], lastCronRun: null, lastRun: null, jobsRan: null, broke: [],
+  } as Parameters<typeof pdRoster>[0]).find((a) => a.key === 'researcher')!;
+  assert.equal(roster(today).line, '1 project running');
+  assert.equal(roster(undefined).line, '3 projects running · 2 waiting on you');
+  const card = src('src/app/copilot/_components/v2/ProjectCard.tsx');
+  assert.match(card, /const lapsed = today \? lapsedOn\(c, today\) : null;/);
+  assert.match(card, /It was for \{dayWords\(lapsed\)\}, which has passed/);
+  assert.match(card, /actions\.commissionAction\(c\.id, 'stop'\)/, 'Stop on the card: inferred, never acted on for them');
+  assert.match(src('src/app/copilot/_components/v2/ProofSheets.tsx'), /<Project key=\{t\.commission\.id\} thread=\{t\} actions=\{actions\} today=\{home\.recent\.today\} \/>/);
+
+  /* 5. The bet's own project is the bet's: checked on the record, tied by the server, approved into its slot. */
+  const create = src('src/app/api/copilot/commissions/route.ts');
+  assert.match(create, /const running = home\?\.lab\?\.bets\.find\(\(x\) => x\.state === 'running' && x\.bet\.id === b\.bet\);\s*if \(!running\) return fail\('That bet is not running\.'\);/, 'a slot only for the bet that runs');
+  assert.match(create, /forBet: bet\?\.linked,/);
+  assert.match(create, /insertLabEvent\(auth\.pid, LAB_LINK, \{ bet: bet\.id, commission: commission\.id \}\)/, 'tied in the same request');
+  assert.match(src('src/app/api/copilot/commissions/[id]/route.ts'), /approveCommission\(auth\.pid, id, \{ today: before\?\.recent\.today, forBet: bet \? before\?\.lab\?\.links\?\.\[bet\.bet\.id\] \?\? \[\] : undefined \}\)/);
+  const store = src('src/lib/copilot/store.ts');
+  assert.match(store, /if \(!roomForProject\(all, today, input\.forBet\)\) \{/);
+  assert.match(store, /if \(!roomToStart\(all, id, today, opts\.forBet\)\) \{/);
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /full=\{agentIsFull\(home, lab\.links\[lab\.current\.bet\.id\] \?\? \[\]\)\}/, 'the bet’s card counts its own slot');
+  assert.match(tab, /authority: 'read', bet: view\.bet\.id \}\);/);
+  assert.match(tab, /move\.run\(m, why, tie, b\.id\)/, 'its prep goes over as the bet’s own too');
+  assert.match(src('src/lib/copilot/jobs/propose.ts'), /held: commissions\.filter\(\(c\) => takesASlot\(c, todayIso\(ctx\.profile\.timezone\)\)\)\.length,/, 'proposals count slots as the cap does');
+
+  console.log('copilot-core: projects day checks passed');
+}
+
+projectsDaySuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The count link: sign-ups, enquiries and sales, measured ─────────────── */
+//
+// "How they hear" for a business its buyers find was the one part the app could
+// not see. The owner's forms and Stripe already send webhooks; the link is their
+// address, and what it keeps is the count and nothing about who.
+
+import {
+  SIGNAL_IN as sgIn, SIGNAL_LINK as sgLink, kindOf as sgKind, readSignal as sgRead, signalCounts as sgCounts, signalLine as sgLine,
+  signalsFromEvents as sgFrom, signalUrl as sgUrl, stripeAmount as sgStripeAmount, unitSignal as sgUnit,
+} from '../../src/lib/copilot/signal';
+import { readSignalToken as sgReadToken, signalToken as sgToken, tokenOfLink as sgTokenOf } from '../../src/lib/copilot/signalkey';
+import { countIn as sgCountIn, countedFrom as sgCountedFrom } from '../../src/lib/copilot/lab';
+import { businessChain as sgChain, type ChainInput as SgInput } from '../../src/lib/copilot/business';
+import { sensorViews as sgSensors } from '../../src/lib/copilot/sensors';
+
+async function countLinkSuite() {
+  const { readFileSync } = await import('node:fs');
+  const { createHash } = await import('node:crypto');
+  const src = (p: string) => readFileSync(p, 'utf8');
+
+  /* 1. What a post counts: the link's own kind first, then the body's; never a guess. */
+  assert.deepEqual(['sign-up', 'Sign Ups', 'signups', 'waitlist', 'lead', 'Enquiries', 'inquiry', 'payment', 'orders', 'walk-ins', 'hello'].map(sgKind),
+    ['signup', 'signup', 'signup', 'signup', 'enquiry', 'enquiry', 'enquiry', 'sale', 'sale', null, null]);
+  const form = { name: 'Maria Santos', email: 'maria@example.com', phone: '+63 917 000 0000', message: 'Interested', submission_id: 'sub_123' };
+  const signup = sgRead(form, 'signup');
+  assert.deepEqual(signup, { ok: true, value: { kind: 'signup', amount: null, currency: null, ref: 'sub_123', from: 'link', what: 'form' } });
+  assert.ok(!/maria|example|917|Interested/i.test(JSON.stringify(signup)), 'nothing about who filled it in is kept');
+  assert.deepEqual(sgRead({ kind: 'enquiry' }, null), { ok: true, value: { kind: 'enquiry', amount: null, currency: null, ref: null, from: 'link', what: 'form' } });
+  assert.equal(sgRead({ kind: 'sale' }, 'signup').ok, true, 'the link says what its posts count, whatever the payload says');
+  assert.equal((sgRead({ kind: 'sale' }, 'signup') as { value: { kind: string } }).value.kind, 'signup');
+  const none = sgRead({ email: 'x@y.z' }, null);
+  assert.deepEqual([none.ok, (none as { status: number }).status], [false, 400]);
+  assert.match((none as { error: string }).error, /\?kind=signup/);
+  assert.equal((sgRead({}, 'banana') as { status: number }).status, 400);
+  assert.deepEqual(sgRead({ amount: '29.00', currency: 'usd', id: 'pay_9' }, 'sale'), { ok: true, value: { kind: 'sale', amount: 29, currency: 'USD', ref: 'pay_9', from: 'link', what: 'payment' } });
+  assert.equal((sgRead({ amount: 0 }, 'sale') as { value: { amount: number | null } }).value.amount, null, 'a sale with no amount is a sale of no known amount, never of nothing');
+  assert.equal(sgRead({ amount: -5 }, 'sale').ok, false);
+
+  /* 2. Stripe: two events count, the rest echo a payment already counted. */
+  const ev = (type: string, object: Record<string, unknown>) => ({ object: 'event', id: `evt_${type}`, type, data: { object } });
+  assert.deepEqual(sgRead(ev('invoice.paid', { amount_paid: 2900, currency: 'usd' }), null), { ok: true, value: { kind: 'sale', amount: 29, currency: 'USD', ref: 'evt_invoice.paid', from: 'stripe', what: 'invoice.paid' } });
+  assert.equal((sgRead(ev('invoice.paid', { amount_paid: 3000, currency: 'jpy' }), null) as { value: { amount: number } }).value.amount, 3000, 'yen has no cents');
+  assert.equal(sgStripeAmount(29500, 'KWD'), 29.5);
+  assert.equal((sgRead(ev('checkout.session.completed', { mode: 'payment', payment_status: 'paid', amount_total: 15000, currency: 'php' }), null) as { value: { amount: number } }).value.amount, 150);
+  assert.equal(sgRead(ev('checkout.session.completed', { mode: 'subscription', payment_status: 'paid', amount_total: 2900, currency: 'usd' }), null).ok, 'skip', 'its first invoice counts it');
+  assert.equal(sgRead(ev('checkout.session.completed', { mode: 'payment', payment_status: 'unpaid', amount_total: 2900, currency: 'usd' }), null).ok, 'skip');
+  assert.equal(sgRead(ev('charge.succeeded', { amount: 2900, currency: 'usd' }), null).ok, 'skip', 'a charge echoes the invoice: counted, one payment would be two sales');
+  assert.equal(sgRead(ev('invoice.paid', { amount_paid: 0, currency: 'usd' }), null).ok, 'skip');
+
+  /* 3. Another currency is kept and said, never added as the same money. */
+  assert.deepEqual(sgCounts({ kind: 'sale', currency: 'EUR' }, 'USD'), { counted: false, why: 'In EUR, and your sales are counted in USD, so it is not added to them.' });
+  assert.deepEqual(sgCounts({ kind: 'sale', currency: null }, 'USD'), { counted: true, why: null });
+  assert.deepEqual(sgCounts({ kind: 'signup', currency: 'EUR' }, 'USD'), { counted: true, why: null });
+
+  /* 4. The token: the account and the link's generation, signed; anything else is not a link. */
+  const key = createHash('sha256').update('test-secret').digest();
+  const tok = sgToken('2b0c9f1e-0000-4000-8000-000000000001', 'gen_abcdefgh', key);
+  assert.deepEqual(sgReadToken(tok, key), { pid: '2b0c9f1e-0000-4000-8000-000000000001', gen: 'gen_abcdefgh' });
+  assert.equal(sgReadToken(tok.replace('gen_abcdefgh', 'gen_abcdefgx'), key), null, 'another generation is another link');
+  assert.equal(sgReadToken(tok, createHash('sha256').update('other').digest()), null);
+  assert.equal(sgReadToken(`${tok}x`, key), null);
+  assert.equal(sgReadToken('a.b', key), null);
+  assert.equal(sgTokenOf(`https://launchfly.ai/api/copilot/signal/${encodeURIComponent(tok)}?kind=signup`), tok);
+  assert.equal(sgTokenOf(tok), tok);
+  assert.equal(sgUrl('https://launchfly.ai/', tok, 'signup'), `https://launchfly.ai/api/copilot/signal/${encodeURIComponent(tok)}?kind=signup`);
+
+  /* 5. What was stored: the newest link names the one that works; a failed sale a retry settled is one sale. */
+  const rows = [
+    { id: 1, event_type: sgLink, payload: { gen: 'old_generation' }, created_at: '2026-10-01T00:00:00Z' },
+    { id: 2, event_type: sgLink, payload: { gen: 'new_generation' }, created_at: '2026-10-05T00:00:00Z' },
+    { id: 3, event_type: sgIn, payload: { kind: 'signup', from: 'link', counted: true }, created_at: '2026-10-06T00:00:00Z' },
+    { id: 4, event_type: sgIn, payload: { kind: 'sale', amount: 29, currency: 'USD', ref: 'evt_1', from: 'stripe', counted: false, failed: true, why: 'The sale could not be recorded: timeout' }, created_at: '2026-10-06T01:00:00Z' },
+    { id: 5, event_type: sgIn, payload: { kind: 'sale', amount: 29, currency: 'USD', ref: 'evt_1', from: 'stripe', counted: true }, created_at: '2026-10-06T01:05:00Z' },
+    { id: 6, event_type: sgIn, payload: { kind: 'sale', amount: 29, currency: 'EUR', ref: 'evt_2', from: 'stripe', counted: false, why: 'In EUR' }, created_at: '2026-10-06T02:00:00Z' },
+    { id: 7, event_type: sgIn, payload: { kind: 'nonsense' }, created_at: '2026-10-06T03:00:00Z' },
+  ];
+  const read = sgFrom(rows);
+  assert.deepEqual([read.gen, read.made], ['new_generation', '2026-10-05T00:00:00Z']);
+  assert.deepEqual(read.signals.map((s) => [s.id, s.kind, s.counted, s.failed]), [['6', 'sale', false, false], ['5', 'sale', true, false], ['3', 'signup', true, false]]);
+  assert.equal(sgLine({ signup: 12, enquiry: 0, sale: 1 }), '12 sign-ups · 1 sale');
+  assert.equal(sgLine({}), '');
+
+  /* 6. A bet counting "sign-ups" counts what the link recorded, and says so. */
+  assert.deepEqual(['sign-ups', 'Signups', 'enquiries', 'leads', 'walk-ins', 'orders', null].map(sgUnit), ['signup', 'signup', 'enquiry', 'enquiry', null, null, null]);
+  const day = (on: string, kind: 'signup' | 'enquiry' = 'signup') => ({ kind, on });
+  const dayRows = { sends: [], outcomes: [], finished: [], talks: [], tallies: [{ bet: 'b1', n: 2, on: '2026-10-08' }], signals: [day('2026-10-07'), day('2026-10-08'), day('2026-10-08', 'enquiry'), day('2026-10-01')] };
+  assert.equal(sgCountIn('logged', '2026-10-07', '2026-10-20', dayRows, null, 'b1', 'sign-ups'), 4, 'two typed and two the link recorded since the bet began');
+  assert.equal(sgCountIn('logged', '2026-10-07', '2026-10-20', dayRows, null, 'b1', 'enquiries'), 3);
+  assert.equal(sgCountIn('logged', '2026-10-07', '2026-10-20', dayRows, null, 'b1', 'walk-ins'), 2, 'a word the link does not send stays the person’s to log');
+  assert.equal(sgCountedFrom('logged', '2026-10-07', null, 'sign-ups', true), 'From the sign-ups your count link records, and any you log, since 7 Oct.');
+  assert.equal(sgCountedFrom('logged', '2026-10-07', null, 'sign-ups', false), 'From the sign-ups you log since 7 Oct: your count, not the app\'s.');
+
+  /* 7. How they hear, read through the link. */
+  const quiet: SgInput = {
+    offer: { sells: 'Founder OS Copilot App', for_who: 'People starting out', price_band: '$29/month' }, said: {}, segments: [], area: null, web: false,
+    funnel: { matched: 0, sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, worthAMessage: 0, bySegment: [], byChannel: [], wins: [], queue: 0,
+    wonRecent: { amount: 0, days: 30 }, goal: null, currency: '$', workerConnected: false, agents: [], topOpening: null, foundBy: 'inbound',
+  };
+  const reach = (x: Partial<SgInput>) => sgChain({ ...quiet, ...x }).links.find((l) => l.key === 'reach')!;
+  assert.ok(reach({ signals: { linked: false, signup: 0, enquiry: 0 } }).moves.some((m) => m.key === 'reach-link' && m.by === 'you'), 'no link yet: the way to make one is on the part');
+  assert.ok(!reach({ signals: { linked: true, signup: 0, enquiry: 0 } }).moves.some((m) => m.key === 'reach-link'));
+  assert.match(reach({ signals: { linked: true, signup: 0, enquiry: 0 } }).why, /^Your count link has recorded nothing yet\./);
+  const heard = reach({ signals: { linked: true, signup: 12, enquiry: 3 } });
+  assert.deepEqual([heard.state, heard.facts], ['testing', '12 sign-ups and 3 enquiries through your count link']);
+  assert.equal(heard.why, '12 sign-ups and 3 enquiries through your count link. A bet on how they hear says whether that is enough.', 'a count is not a verdict: a bet is');
+  const withBet = reach({ signals: { linked: true, signup: 2, enquiry: 0 }, bets: [{ part: 'reach', state: 'running', start: '2026-10-07', line: '0 of 5 sign-ups', when: null, result: 0 }] });
+  assert.equal(withBet.bare, undefined, 'something arrived: not a bet opened over nothing');
+  assert.equal(withBet.facts, 'Running: 0 of 5 sign-ups · 2 sign-ups through your count link');
+  assert.equal(reach({}).why, 'The app cannot see this way in, so a bet counts it: the enquiries and sign-ups that come in.', 'a payload from before the link reads as it did');
+
+  /* 8. Records says it, and the sheet exists. */
+  const views = (signals?: Parameters<typeof sgSensors>[0]['signals']) => sgSensors({ bank: null, owed: { open: 0 }, focus: { minutesWeek: 0 }, feeds: { total: 0, failing: 0 }, signals }).find((v) => v.key === 'signals')!;
+  assert.deepEqual([views().state, views().line], ['off', 'No link yet: sign-ups are typed, if at all']);
+  assert.deepEqual([views({ made: true, line: '', last: null, unreadable: null, failed: 0 }).line], ['Linked · nothing sent to it yet']);
+  assert.deepEqual([views({ made: true, line: '12 sign-ups · 1 sale', last: null, unreadable: null, failed: 0 }).state, views({ made: true, line: '12 sign-ups · 1 sale', last: null, unreadable: null, failed: 0 }).line], ['on', '12 sign-ups · 1 sale']);
+  assert.equal(views({ made: true, line: 'x', last: null, unreadable: null, failed: 1 }).line, '1 sale could not be recorded');
+  assert.equal(views({ made: true, line: 'x', last: null, unreadable: 'timeout', failed: 0 }).state, 'attention');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /case 'signals': return <SignalsSheet home=\{home\} actions=\{actions\} \/>;/);
+
+  /* 9. The door: a GET never counts, a replaced link is refused, and nothing reads a cookie. */
+  const door = src('src/app/api/copilot/signal/[token]/route.ts');
+  const getFn = door.slice(door.indexOf('export function GET'), door.indexOf('async function bodyOf'));
+  assert.ok(!/recordSignal|rateLimit/.test(getFn), 'invariant 8: opening the link counts nothing');
+  assert.match(door, /if \(gen !== who\.gen\) return answer\(\{ ok: false, error: 'This link was replaced by a newer one in the app, so it no longer counts\.' \}, 410\);/);
+  assert.match(door, /rateLimit\(`signal:\$\{who\.pid\}`, SIGNALS_PER_HOUR, 60 \* 60\)/);
+  assert.match(door, /if \(then && \/\^https\?:\\\/\\\/\/i\.test\(then\)\)/, 'only a web address to send a visitor on to');
+  assert.ok(!/cookies\(|currentProfileId|profileIdOr401/.test(door), 'the link is the credential');
+  const store = src('src/lib/copilot/store.ts');
+  assert.match(store, /\.eq\('payload->>ref', d\.ref\)/, 'a retry of one event is one signal');
+  assert.match(store, /kind: 'won', amount: d\.amount, currency: d\.currency, source: 'webhook',/, 'a sale is a sale the whole app already reads');
+  assert.match(src('src/app/api/copilot/onboard/route.ts'), /after\(async \(\) => \{\s*await countOwnSignup\(pid\)/, 'the app’s own sign-ups, for its operator, after the answer');
+  assert.match(src('src/app/api/copilot/health/route.ts'), /ownCountLink: \{ ok: !own,/);
+  assert.match(src('src/lib/copilot/ownsignal.ts'), /ref: `account:\$\{newAccount\}`, from: 'app'/, 'counted under the account id, and nothing else about it');
+
+  console.log('copilot-core: count link checks passed');
+}
+
+countLinkSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Claude proposes; the person keeps ───────────────────────────────────── */
+//
+// The connector read the record and wrote nothing, and the record's slowest
+// input was the person retyping what they had already told a chat. A proposal
+// carries it over and counts for nothing until their tap — on a connection they
+// let propose, by a tick, and never one made to read.
+
+import {
+  PROPOSALS_OPEN_MAX as ppMax, openProposals as ppOpen, proposalLine as ppLine, proposalRoom as ppRoom, proposeTalk as ppTalk, proposeTest as ppTest,
+  MCP_PROPOSAL as ppEvent, MCP_PROPOSAL_END as ppEnd, type Proposal as PpProposal,
+} from '../../src/lib/copilot/proposals';
+import { SCOPE_PROPOSE as ppScope, SCOPE_READ as ppRead, canPropose as ppCan, grantedScope as ppGranted } from '../../src/lib/copilot/oauth';
+import { PROPOSE_INSTRUCTIONS as ppTold, PROPOSE_TOOLS as ppTools, TOOLS as ppReadTools, handleRpc as ppRpc } from '../../src/lib/copilot/mcp';
+import { needsYou as ppNeeds } from '../../src/lib/copilot/today';
+import { pathNow as ppNow } from '../../src/lib/copilot/plan';
+
+async function proposalsSuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(p, 'utf8');
+  const today = '2026-10-07';
+  const ctx = { today, price: 29, priceLabel: '$29', foundBy: 'inbound' as const, shelf: [], open: [] as PpProposal[] };
+
+  /* 1. A conversation: held to the person's own rule, how it ended said, no introduction picked for them. */
+  const talk = ppTalk({ who: 'Maria', role: 'buyer', problem: 'yes', commitment: 'time', said: 'I never know what to do first', why: 'From the call you described' }, ctx);
+  assert.ok(talk.ok);
+  assert.deepEqual(talk.ok && talk.value.talk, { on: today, who: 'Maria', role: 'buyer', problem: 'yes', commitment: 'time', said: 'I never know what to do first', via: null });
+  assert.match((ppTalk({ who: 'Maria' }, ctx) as { error: string }).error, /Say how it ended/, 'a model that did not say how it ended does not say "nothing" for them');
+  assert.match((ppTalk({ commitment: 'none', via: '123' }, ctx) as { error: string }).error, /Leave out via/);
+  assert.equal((ppTalk({ commitment: 'none', on: '2026-10-09' }, ctx) as { ok: boolean }).ok, false, 'a day not lived yet is refused, as the sheet refuses it');
+  assert.equal(ppTalk({ commitment: 'none', role: 'seller', problem: 'yes' }, ctx).ok && (ppTalk({ commitment: 'none', role: 'seller', problem: 'yes' }, ctx) as { value: { talk: { problem: string } } }).value.talk.problem, 'unasked', 'the problem is asked only of who could have it');
+  const waitingTalk: PpProposal = { id: '1', kind: 'talk', at: '', grant: 'g', why: null, talk: (talk as { value: { talk: PpProposal['talk'] } }).value.talk, test: null };
+  assert.match((ppTalk({ who: 'maria', role: 'buyer', problem: 'yes', commitment: 'time', said: 'I never know what to do first' }, { ...ctx, open: [waitingTalk] }) as { error: string }).error, /already proposed/);
+
+  /* 2. A test: a count this business can keep, not one already kept, its play said as Claude's. */
+  const test = ppTest({ part: 'who', belief: 'People starting out have the problem I fix', metric: 'committed', target: 3, days: 14, tries: { metric: 'talks', planned: 10 }, play: 'Ten problem conversations', how: 'Ask about the last time it cost them.' }, ctx);
+  assert.ok(test.ok);
+  assert.deepEqual(test.ok && test.value.test.idea, { label: 'Ten problem conversations', how: 'Ask about the last time it cost them.', from: 'Claude, proposed' });
+  assert.match((ppTest({ part: 'reach', belief: 'They answer', metric: 'replied', target: 2, days: 7 }, ctx) as { error: string }).error, /cannot count replies/, 'sends and replies only where the app sends');
+  assert.match((ppTest({ part: 'pay', belief: 'They pay', metric: 'paid_at_price', target: 2, days: 7 }, { ...ctx, price: null }) as { error: string }).error, /needs a price/);
+  const kept = { part: 'who' as const, belief: 'People starting out have the problem I fix', metric: 'committed' as const, play: null, idea: { label: 'Ten problem conversations', how: 'x', from: 'Claude, proposed' } };
+  assert.match((ppTest({ part: 'who', belief: 'People starting out have the problem I fix', metric: 'committed', target: 3, days: 14, play: 'Ten problem conversations', how: 'y' }, { ...ctx, shelf: [kept] }) as { error: string }).error, /already on the shelf or waiting/);
+  assert.equal(ppRoom(Array.from({ length: ppMax }, (_, k) => ({ ...waitingTalk, id: String(k) }))) !== null, true, `${ppMax} waiting is the most`);
+  assert.equal(ppRoom([waitingTalk]), null);
+
+  /* 3. Read back: ended ones gone, the newest first, a draft that no longer holds dropped rather than shown half. */
+  const rows = [
+    { id: 10, event_type: ppEvent, payload: { kind: 'talk', grant: 'g', talk: { on: '2026-10-06', who: 'Ana', role: 'buyer', problem: 'yes', commitment: 'intro' } }, created_at: '2026-10-06T10:00:00Z' },
+    { id: 11, event_type: ppEvent, payload: { kind: 'test', grant: 'g', test: { part: 'pay', belief: 'They pay $29', metric: 'paid_at_price', target: 2, days: 14 } }, created_at: '2026-10-06T11:00:00Z' },
+    { id: 12, event_type: ppEvent, payload: { kind: 'talk', talk: { who: 'Ben' } }, created_at: '2026-10-06T12:00:00Z' },
+    { id: 13, event_type: ppEvent, payload: { kind: 'talk', talk: { who: 'Cy', commitment: 'none' } }, created_at: '2026-10-06T13:00:00Z' },
+    { id: 14, event_type: ppEnd, payload: { proposal: '13', outcome: 'dropped' }, created_at: '2026-10-06T14:00:00Z' },
+  ];
+  const open = ppOpen(rows, today);
+  assert.deepEqual(open.map((p) => p.id), ['12', '11', '10'], 'newest first, the dropped one gone');
+  assert.equal(ppLine(open[2]), 'A conversation with Ana: could buy, they have it, an intro');
+  assert.equal(ppLine(open[1], '$29'), 'A test on what they pay: “They pay $29” — 2 sales at your $29 within 2 weeks');
+  assert.equal(open[0].talk?.commitment, 'none', 'read back by the sheet’s own rule: a stored conversation with no ending reads as nothing, as one logged before there was a choice does');
+
+  /* 4. Its own scope, by a tick: granted only when the person widens it. */
+  assert.equal(ppGranted(`${ppRead} ${ppScope} offline_access`), ppRead, 'asked is not granted');
+  assert.equal(ppGranted(ppRead, true), `${ppRead} ${ppScope}`);
+  assert.ok(ppCan(`${ppRead} ${ppScope}`) && !ppCan(ppRead) && !ppCan(undefined));
+  const authorize = src('src/app/api/copilot/oauth/authorize/route.ts');
+  assert.match(authorize, /scope: grantedScope\(form\.scope, form\.propose === 'yes'\)/);
+  const consent = src('src/app/copilot2/connect/page.tsx');
+  assert.match(consent, /<input type="checkbox" name="propose" value="yes" \/>/, 'a tick, unticked until the person ticks it');
+  assert.ok(!/defaultChecked|checked=/.test(consent), 'never ticked for them');
+  assert.match(consent, /Nothing it proposes counts until you do\./);
+
+  /* 5. The protocol: a connection made to read lists no proposal and is refused one; one let propose is told what a proposal is. */
+  const ran: string[] = [];
+  const reader = { call: async (name: string) => { ran.push(name); return { text: `ran ${name}` }; } };
+  const proposer = { ...reader, propose: true };
+  const listed = async (c: typeof reader) => ((await ppRpc({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, c as never)) as { result: { tools: Array<{ name: string }> } }).result.tools.map((t) => t.name);
+  assert.deepEqual(await listed(reader), ppReadTools.map((t) => t.name));
+  assert.deepEqual(await listed(proposer), [...ppReadTools, ...ppTools].map((t) => t.name));
+  const refused = await ppRpc({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'propose_conversation', arguments: { commitment: 'none' } } }, reader as never) as { result: { isError: boolean; content: Array<{ text: string }> } };
+  assert.ok(refused.result.isError && /can only read/.test(refused.result.content[0].text) && !ran.length, 'refused before it runs, with the way to get it');
+  await ppRpc({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'propose_conversation', arguments: { commitment: 'none' } } }, proposer as never);
+  assert.deepEqual(ran, ['propose_conversation']);
+  const init = await ppRpc({ jsonrpc: '2.0', id: 4, method: 'initialize', params: {} }, proposer as never) as { result: { instructions: string } };
+  assert.equal(init.result.instructions, ppTold);
+  assert.ok(/not saved/.test(ppTold) && /never that it was logged or kept/.test(ppTold) && /never a number they did not give/.test(ppTold));
+  for (const t of ppTools) {
+    assert.deepEqual([t.annotations.readOnlyHint, t.annotations.destructiveHint], [false, false], `${t.name} adds to an inbox and destroys nothing`);
+    assert.ok(t.name.startsWith('propose_'), t.name);
+  }
+  for (const t of [...ppReadTools, ...ppTools]) {
+    assert.ok(/^(get|propose)_/.test(t.name), `no tool writes the record itself — logs, keeps, starts, sends: ${t.name}`);
+  }
+  assert.match(src('src/app/api/copilot/mcp/route.ts'), /const propose = canPropose\(auth\.scope\);/);
+  assert.match(src('src/app/api/copilot/mcp/read.ts'), /if \(proposing && !who\.propose\) return \{ text: 'This connection can only read\.', isError: true \};/, 'checked again where it runs');
+  assert.match(src('src/app/copilot/_components/v2/ClaudeSheet.tsx'), new RegExp(`includes\\('${ppScope.replace('.', '\\.')}'\\)`), 'the screen’s spelling of the scope is the scope');
+
+  /* 6. Waiting on the person: beside the move, never the move, and kept once. */
+  const proposals = [{ id: '10', line: 'A conversation with Ana: could buy, they have it, an intro', why: 'From the call you described' }];
+  const asks = ppNeeds({ commissions: [], capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false, proposals });
+  assert.deepEqual(asks.map((a) => [a.kind, a.id]), [['proposal', '10']]);
+  assert.equal(asks[0].detail, 'Proposed by Claude — From the call you described. Not logged until you keep it.');
+  const now = ppNow({ noOffer: false, callPending: false, queue: { count: 0, oldestDays: 0 }, asks, moves: [], capacity: 'moderate', funnel: { sent: 0, replied: 0, won: 0 } as never, freshMatches: 0 });
+  assert.notEqual(now.now.kind, 'proposal', 'a proposal blocks nothing');
+  assert.deepEqual(now.also.map((a) => a.kind), ['proposal']);
+  const keep = src('src/app/api/copilot/proposals/route.ts');
+  assert.match(keep, /if \(!\(await claimProposal\(auth\.pid, id, 'kept'\)\)\) return json\(\{ ok: true, home: await loadHome\(auth\.pid\) \}\);\s*try \{\s*await insertLabEvent\(auth\.pid, write\.type, write\.payload\);\s*\} catch \(e\) \{\s*await unclaimProposal\(auth\.pid, id\);/, 'claimed first, put back if the write fails');
+  assert.match(keep, /normalizeTalk\(\{ \.\.\.p\.talk, via: null \}, home\.recent\.today\)/, 'checked again as the person’s own, today');
+  assert.match(keep, /shelfRefusal\(home\.lab\?\.shelf \?\? \[\], v\.value\)/);
+  assert.match(src('src/app/api/copilot/lab/route.ts'), /if \(proposal && !\(await claimProposal\(auth\.pid, proposal, 'kept'\)\)\)/, 'changed first on the sheet, kept by its save, once');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /case 'proposals': return <ProposalsSheet home=\{home\} actions=\{actions\} \/>;/);
+  assert.match(src('src/app/copilot/_components/v2/LabSheets.tsx'), /\.\.\.\(proposed && logged === 0 \? \{ proposal: proposed\.id \} : \{\}\),/, 'only the first save is the proposal; the next is the person’s own');
+
+  console.log('copilot-core: proposals checks passed');
+}
+
+proposalsSuite().catch((e) => { console.error(e); process.exit(1); });

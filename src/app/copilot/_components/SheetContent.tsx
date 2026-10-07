@@ -24,10 +24,12 @@ import AskSheet from './AskSheet';
 import BankSheet from './BankSheet';
 import OutreachSheet from './v2/Outreach';
 import { ClaudeSheet } from './v2/ClaudeSheet';
+import { SignalsSheet } from './v2/SignalsSheet';
+import { ProposalsSheet } from './v2/ProposalsSheet';
 import { BetSheet, IntroSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
 import { NoteSheet, ToldChooser, ToldLine } from './v2/TellSheets';
 import type { ToldMeta, ToldOffer } from '@/lib/copilot/tell';
-import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, FoundBySheet, HistorySheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
+import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, FoundBySheet, HistorySheet, PivotSheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
 import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
 import { dayLabel } from '@/lib/copilot/money/ledger';
 
@@ -62,13 +64,15 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'working': return <WorkingSheet home={home} actions={actions} />;
     case 'ask': return <AskSheet home={home} heard={sheet.heard} actions={actions} />;
     case 'claude': return <ClaudeSheet actions={actions} />;
+    case 'signals': return <SignalsSheet home={home} actions={actions} />;
+    case 'proposals': return <ProposalsSheet home={home} actions={actions} />;
     case 'move': return <MoveSheet home={home} id={sheet.id} actions={actions} />;
     case 'capture': return <CaptureSheet home={home} actions={actions} />;
     case 'focus': return <FocusSheet home={home} actions={actions} />;
     case 'bank': return <BankSheet home={home} actions={actions} />;
     case 'outreach': return <OutreachSheet home={home} stage={sheet.stage} actions={actions} />;
     case 'bet': return <BetSheet home={home} playKey={sheet.play} part={sheet.part} ideaKey={sheet.idea} experiment={sheet.experiment} seed={sheet.seed} shelfId={sheet.shelf} actions={actions} />;
-    case 'talk': return <TalkSheet home={home} via={sheet.via} told={sheet.told} actions={actions} />;
+    case 'talk': return <TalkSheet home={home} via={sheet.via} told={sheet.told} proposal={sheet.proposal} actions={actions} />;
     case 'intro': return <IntroSheet home={home} talkId={sheet.talk} actions={actions} />;
     case 'note': return <NoteSheet home={home} told={sheet.told} actions={actions} briefing={briefing} />;
     case 'told': return <ToldChooser meta={sheet.meta} home={home} actions={actions} openMoney={openMoney} />;
@@ -76,6 +80,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'count': return <CountSheet home={home} betId={sheet.bet} actions={actions} />;
     case 'sale': return <SaleSheet home={home} outcome={sheet.outcome} told={sheet.told} actions={actions} />;
     case 'chain': return <ChainSheet home={home} actions={actions} />;
+    case 'pivot': return <PivotSheet home={home} actions={actions} />;
     case 'foundby': return <FoundBySheet home={home} actions={actions} />;
     case 'history': return <HistorySheet home={home} actions={actions} />;
     case 'asset': return <AssetSheet home={home} id={sheet.id} assetKind={sheet.assetKind} bet={sheet.bet} actions={actions} />;

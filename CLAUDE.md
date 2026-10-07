@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 66 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 81 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -130,6 +130,16 @@ Export → Share → Copilot) and the Log money shortcut's move to `/copilot2/lo
 need the app reinstalled, or Chrome's next refresh of it; the old shortcut URL
 redirects meanwhile.
 
+**The count link** (You → Records → Sign-ups and sales, `/api/copilot/signal/*`)
+needs no migration and no new secret: links are signed with a key derived from
+`COPILOT_SESSION_SECRET`, signals are `copilot_events` rows, sales are
+`copilot_outcomes` with `source = 'webhook'`. The addresses it shows are built
+from `NEXT_PUBLIC_APP_URL`, and `/api/copilot/signal/*` must be reachable from
+the outside (Stripe, form tools). Rotating the session secret ends every link. If
+the app is what you sell, set `COPILOT_OWN_COUNT_LINK` to your own link and each
+new account counts as a sign-up on your Proof; `/api/copilot/health` says when
+it is set and wrong.
+
 **The Claude connector** (You → Claude, `/api/copilot/mcp`) needs no migration
 and no new secret: its client ids, codes and tokens are signed with a key derived
 from `COPILOT_SESSION_SECRET`, and its few rows are `copilot_events`. It does need
@@ -137,7 +147,9 @@ from `COPILOT_SESSION_SECRET`, and its few rows are `copilot_events`. It does ne
 discovery document's `resource` and every token's audience are built from it, and
 Claude refuses a mismatch — and `/.well-known/*` and `/api/copilot/*` reachable
 from Anthropic's `160.79.104.0/21`. Rotating the session secret ends every
-connection; each has to be added again.
+connection; each has to be added again. Proposing (`copilot.propose`) is a tick
+on the consent screen: a connection made before it, or without the tick, only
+reads — disconnect it under You → Claude and connect again to let it propose.
 
 **Testing the connector:** Allow on the consent screen answers with a 303 to
 claude.ai, and a Playwright route handler does not see a redirect's target — read

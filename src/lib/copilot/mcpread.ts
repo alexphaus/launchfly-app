@@ -121,7 +121,7 @@ export interface OverviewIn extends Missing {
   /** The lead goal's verdict and the sentence behind it (outlook.ts), every number in it computed. */
   outlook: { title: string; verdict: string; line: string } | null;
   runwayMonths: number | null;
-  verdict: { title: string; line: string };
+  verdict: { title: string; line: string; since?: string };
   links: Array<{ label: string; state: string; why: string }>;
   weak: string | null;
   bet: BetIn | null;
@@ -140,7 +140,7 @@ export function overviewText(i: OverviewIn): string {
     ])],
     ['Where you are', lines(hereLine(i.here), i.here.counts, i.runwayMonths != null && `Runway: ${i.runwayMonths} months.`)],
     ['Is it proven? Each part, as your rows read it', [
-      `${i.verdict.title}. ${i.verdict.line}`,
+      `${i.verdict.title}. ${i.verdict.line}${i.verdict.since ? ` ${i.verdict.since}` : ''}`,
       ...i.links.map((l) => bullet(`${l.label}: ${l.state}. ${l.why}`)),
       ...lines(i.weak && `Weakest part: ${i.weak}.`),
     ]],
@@ -213,8 +213,9 @@ export function planText(i: PlanIn): string {
 
 export interface ProofIn extends Missing {
   today: string;
-  verdict: { title: string; line: string };
-  links: Array<{ label: string; state: string; what: string | null; facts: string; why: string }>;
+  verdict: { title: string; line: string; since?: string };
+  /** `since` and `before`: where a part's count starts after a pivot, and what the pivot left out of it (business.ts withEra). */
+  links: Array<{ label: string; state: string; what: string | null; facts: string; why: string; since?: string; before?: string }>;
   weak: string | null;
   bets: BetIn[];
   checkpoint: { due: boolean; last: { on: string; decision: string; grade: string | null } | null };
@@ -233,9 +234,9 @@ export function proofText(i: ProofIn): string {
   // A count that only says again what the reason says is left out: "Nothing paid yet. Nothing paid yet."
   const sameAs = (a: string, b: string) => clean(a).replace(/\.$/, '') === clean(b).replace(/\.$/, '');
   return doc('Is your business proven? From your Copilot app', i.today, [
-    ['The verdict', [`${i.verdict.title}. ${i.verdict.line}`]],
+    ['The verdict', [`${i.verdict.title}. ${i.verdict.line}${i.verdict.since ? ` ${i.verdict.since}` : ''}`]],
     ['Each part, as your rows read it', [
-      ...i.links.map((l) => bullet(lines(`${l.label}: ${l.state}.`, l.what && `What it is, in your words: ${l.what}.`, clean(l.facts) && !sameAs(l.facts, l.why) && `Counted: ${clean(l.facts)}.`, l.why).join(' '))),
+      ...i.links.map((l) => bullet(lines(`${l.label}: ${l.state}.`, l.what && `What it is, in your words: ${l.what}.`, l.since, clean(l.facts) && !sameAs(l.facts, l.why) && `Counted: ${clean(l.facts)}.`, l.why, l.before).join(' '))),
       ...lines(i.weak && `Weakest part: ${i.weak}.`),
     ]],
     ['Bets', blocks(

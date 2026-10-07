@@ -14,7 +14,7 @@ import { appBaseUrl } from '@/lib/copilot/auth';
 import { claimPairCode, extraRedirects, PAIR_TRIES } from '@/lib/copilot/connector';
 import { readForm } from '@/lib/copilot/http';
 import { clientIp, rateLimit } from '@/lib/copilot/limits';
-import { CONSENT_PATH, checkAuthorize, codeRedirect, consentTokenMatches, errorRedirect, issueCode, resourceUrl } from '@/lib/copilot/oauth';
+import { CONSENT_PATH, checkAuthorize, codeRedirect, consentTokenMatches, errorRedirect, grantedScope, issueCode, resourceUrl } from '@/lib/copilot/oauth';
 import { currentProfileId, oauthKey } from '@/lib/copilot/session';
 
 export const runtime = 'nodejs';
@@ -62,6 +62,8 @@ export async function POST(req: Request) {
     if (!pid || !consentTokenMatches(form.consent, pid, r, master)) return screen('again');
   }
 
-  const code = issueCode(r, pid, { master, nowS: Math.floor(Date.now() / 1000) });
+  // Proposing is granted by the tick alone (oauth.ts grantedScope): a client asks
+  // for every scope listed, and only the person widens a connection past reading.
+  const code = issueCode({ ...r, scope: grantedScope(form.scope, form.propose === 'yes') }, pid, { master, nowS: Math.floor(Date.now() / 1000) });
   return see(codeRedirect(r.redirect, code, r.state));
 }

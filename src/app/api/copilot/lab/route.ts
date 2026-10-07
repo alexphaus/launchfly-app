@@ -11,13 +11,14 @@ import { todayIso } from '@/lib/copilot/db';
 import { LINK_KEYS, type LinkKey } from '@/lib/copilot/business';
 import {
   LAB_BET, LAB_CHECKPOINT, LAB_COUNT, LAB_INTRO, LAB_LINK, LAB_SHELF, LAB_SHELF_GONE, LAB_STOP, LAB_TALK, NOTE_MAX,
-  betPrice, countRefusal, labFromEvents, normalizeBet, normalizeCheckpoint, normalizeIntroClose, normalizeShelf, normalizeTalk, normalizeTally, shelfRefusal,
+  betPrice, countRefusal, isOpenNonce, labFromEvents, normalizeBet, normalizeCheckpoint, normalizeIntroClose, normalizeShelf, normalizeTalk, normalizeTally,
+  openRace, shelfRefusal,
 } from '@/lib/copilot/lab';
 import { foundOf } from '@/lib/copilot/proof';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { isFoundBy } from '@/lib/copilot/offer';
 import { ProofModelError, ProofRefusal, writeIdeas } from '@/lib/copilot/proofai';
-import { deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, loadHome, loadLabEvents, setFoundBy } from '@/lib/copilot/store';
+import { claimProposal, deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, loadHome, loadLabEvents, setFoundBy, unclaimProposal, withdrawLabBet } from '@/lib/copilot/store';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
@@ -26,6 +27,7 @@ export const maxDuration = 60;
 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
+const RUNNING = 'A bet is running. Let it finish, or call it off, before the next one.';
 
 /**
  * The conversations on record, for checking that an introduction named in a
@@ -51,12 +53,16 @@ export async function POST(req: Request) {
   try {
     switch (b.action) {
       case 'open': {
+        const nonce = isOpenNonce(b.nonce) ? b.nonce : null;
         const home = await loadHome(auth.pid);
         if (!home) return fail('Not found', 404);
         // Refused rather than guessed: with the bets unreadable, a second bet
         // could open beside one already running, and both would share every send.
         if (home.lab?.unreadable) return fail(`Your bets could not be read just now, so a new one cannot be opened safely: ${home.lab.unreadable}`);
-        if (home.lab?.bets.some((x) => x.state === 'running')) return fail('A bet is running. Let it finish, or call it off, before the next one.');
+        // A retry of a tap that already opened its bet is answered as that tap
+        // was: "a bet is running" about the bet it just started reads as a failure.
+        if (nonce && home.lab?.bets.some((x) => x.bet.nonce === nonce)) return json({ ok: true, home });
+        if (home.lab?.bets.some((x) => x.state === 'running')) return fail(RUNNING);
         // The offer's price as it stands now, kept on the bet: a price changed
         // next week must not rewrite whether this one passed.
         const v = normalizeBet(obj(b.bet), { today, ...betPrice(home.profile.offer?.price_band, salesCurrency(home.profile.finance, home.goals)) });
@@ -70,16 +76,25 @@ export async function POST(req: Request) {
         // leaves the shelf with the bet, because the bet names it.
         const shelf = str(obj(b.bet).shelf) || null;
         if (shelf && !home.lab?.shelf?.some((e) => e.id === shelf)) return fail('That test is no longer on your shelf.');
-        await insertLabEvent(auth.pid, LAB_BET, { ...v.value, shelf });
+        const id = await insertLabEvent(auth.pid, LAB_BET, { ...v.value, shelf, ...(nonce ? { nonce } : {}) });
+        // Read back: the check above ran before the write, so two taps can both
+        // have passed it. The second one written goes (lab.ts openRace).
+        const after = await loadHome(auth.pid);
+        const race = after?.lab && !after.lab.unreadable ? openRace(after.lab.bets, id) : null;
+        if (race) {
+          await withdrawLabBet(auth.pid, id);
+          return race.same ? json({ ok: true, home: await loadHome(auth.pid) }) : fail(RUNNING);
+        }
         // The plan's experiment, made a bet: it is being tried now, and the bet
         // will give it its verdict (lab.ts experimentVerdicts).
         if (v.value.experiment) {
           const marks = home.roadmap?.experiments ?? [];
           if (!marks.some((m) => m.id === v.value.experiment && m.state === 'started')) {
             await insertExperimentMark(auth.pid, { id: v.value.experiment, title: v.value.idea?.label ?? v.value.belief, angle: null, state: 'started' });
+            return json({ ok: true, home: await loadHome(auth.pid) });
           }
         }
-        return json({ ok: true, home: await loadHome(auth.pid) });
+        return json({ ok: true, home: after });
       }
       case 'shelve': {
         const home = await loadHome(auth.pid);
@@ -121,7 +136,17 @@ export async function POST(req: Request) {
         const raw = obj(b.talk);
         const v = normalizeTalk(raw, today, raw.via ? await talksOnRecord(auth.pid) : []);
         if (!v.ok) return fail(v.error);
-        await insertLabEvent(auth.pid, LAB_TALK, { ...v.value });
+        // Opened from what Claude proposed and changed first: this save is the
+        // person keeping it, so the proposal ends with it — claimed first, so a
+        // second tap or the other phone keeps it once (lib/copilot/proposals.ts).
+        const proposal = typeof b.proposal === 'string' && b.proposal ? b.proposal : null;
+        if (proposal && !(await claimProposal(auth.pid, proposal, 'kept'))) return json({ ok: true, home: await loadHome(auth.pid) });
+        try {
+          await insertLabEvent(auth.pid, LAB_TALK, { ...v.value });
+        } catch (e) {
+          if (proposal) await unclaimProposal(auth.pid, proposal);
+          throw e;
+        }
         return json({ ok: true, home: await loadHome(auth.pid) });
       }
       case 'intro': {

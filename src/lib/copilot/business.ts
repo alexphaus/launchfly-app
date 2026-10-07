@@ -55,7 +55,7 @@
 // Pure: no DB import.
 
 import type { AssetKind } from './assets';
-import { blockedOn } from './commission';
+import { blockedOn, lapsedOn } from './commission';
 import { MIN_SAMPLE } from './diagnose';
 import type { Agent, AgentKey } from './machine';
 import { FOUND_BY_LABEL, foundByOf } from './offer';
@@ -116,7 +116,7 @@ export const WHO_IN_ASK = 60;
 export type MoveBy = 'you' | 'ai' | 'claude';
 
 export type MoveGo =
-  | { sheet: 'offer' | 'targeting' | 'working' | 'foundby' | 'talk' }
+  | { sheet: 'offer' | 'targeting' | 'working' | 'foundby' | 'talk' | 'signals' }
   | { outreach: 'to_send' }
   | { tab: 'swipe' }
   /** Start a bet on this part: the bet sheet, opened on it. */
@@ -152,6 +152,16 @@ export interface BusinessLink {
    */
   runner: { by: 'ai' | 'you' | 'both'; name: string; problem: string | null };
   moves: LinkMove[];
+  /**
+   * Testing only because a bet is open on it: nothing counted yet. True to say
+   * — a test is running — and not a step forward, so a checkpoint's read-back
+   * and "since you last looked" do not call it one (evidenceState).
+   */
+  bare?: boolean;
+  /** "Counted since 7 Oct, when you pivoted who buys.": where its count starts, when a pivot restarted it. */
+  since?: string;
+  /** What that pivot left out of it, said: "Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not counted here…". Also first in `more`. */
+  before?: string;
 }
 
 export interface ChainInput {
@@ -194,6 +204,68 @@ export interface ChainInput {
   talks?: { n: number; problem: number; committed: number };
   /** The assets that stand for a part, by title: a demo (pay), a script (close), a landing page (reach), a workflow (deliver). */
   assets?: { demo: string | null; script: string | null; landing: string | null; workflow: string | null };
+  /**
+   * Per part, the rows since the newest pivot that changed it (PIVOT_REACH).
+   * A part with none is judged on everything, as before there were pivots.
+   */
+  eras?: Partial<Record<LinkKey, PartEra>>;
+  /**
+   * What the count link recorded (signal.ts): sign-ups and enquiries, counted,
+   * and whether there is a link at all. Absent on a payload from before it.
+   */
+  signals?: { linked: boolean; signup: number; enquiry: number };
+}
+
+/**
+ * What a pivot restarts: the part it changes and every part measured after it.
+ * A new buyer hears, says yes and pays differently, so what the old buyer did
+ * at any of those says nothing about the new one. Delivery is the product's,
+ * and only a pivot on it restarts it.
+ */
+export const PIVOT_REACH: Record<LinkKey, readonly LinkKey[]> = {
+  who: ['who', 'reach', 'close', 'pay'],
+  reach: ['reach', 'close', 'pay'],
+  close: ['close', 'pay'],
+  pay: ['pay'],
+  deliver: ['deliver'],
+};
+
+/** The funnel's own counts from one day on (era.ts eraCounts): the shapes ChainInput holds all time. */
+export interface EraCounts {
+  funnel: { sent: number; replied: number; meetings: number; won: number; outside: number };
+  bySegment: ChainInput['bySegment'];
+  byChannel: ChainInput['byChannel'];
+  wins: Array<number | null>;
+}
+
+/** What one part is judged on after a pivot: the rows since its day, and the pivot that set it. */
+export interface PartEra extends EraCounts {
+  /** The person's day of the pivot. Rows from it on count; rows before it are said, not counted. */
+  since: string;
+  /** The part the pivot changed: this one, or one before it. */
+  pivot: LinkKey;
+  /** The conversations with buyers logged since, as ChainInput's talks. */
+  talks: { n: number; problem: number; committed: number };
+  /** What the count link recorded since. */
+  signals?: { signup: number; enquiry: number };
+}
+
+/**
+ * Per part, the newest pivot that restarts it. Read off the checkpoints the
+ * person answered — a pivot is their word that the business changed there,
+ * never something the app infers from an edited offer. On one day, a part's own
+ * pivot names it over an earlier part's.
+ */
+export function restartsOf(checkpoints: Array<{ on: string; decision: string; part: LinkKey | null }>): Partial<Record<LinkKey, { on: string; pivot: LinkKey }>> {
+  const out: Partial<Record<LinkKey, { on: string; pivot: LinkKey }>> = {};
+  for (const c of checkpoints) {
+    if (c.decision !== 'pivot' || !c.part || !PIVOT_REACH[c.part]) continue;
+    for (const k of PIVOT_REACH[c.part]) {
+      const cur = out[k];
+      if (!cur || c.on > cur.on || (c.on === cur.on && c.part === k)) out[k] = { on: c.on, pivot: c.part };
+    }
+  }
+  return out;
 }
 
 /** A bet, as the chain reads it: which part, how it stands, and its count said in a line ("3 of 3 commitments"). */
@@ -205,6 +277,8 @@ export interface ChainBet {
   start: string;
   /** "18 Sep": the day it crossed the line, ran out or was called off. Null while it runs. */
   when: string | null;
+  /** Its count so far. Optional: a bet read before it was carried counts as something counted. */
+  result?: number;
 }
 
 export interface Verdict {
@@ -212,6 +286,8 @@ export interface Verdict {
   title: string;
   /** The bar and the count against it — never a forecast. */
   line: string;
+  /** Where the count against the bar starts, when a pivot restarted what they pay. */
+  since?: string;
 }
 
 export interface Chain {
@@ -230,6 +306,16 @@ export function saidList(xs: string[], max = 3): string {
   const rest = clean.length - shown.length;
   if (rest > 0) return `${shown.join(', ')} +${rest}`;
   return shown.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}` : shown[0] ?? '';
+}
+
+/**
+ * "2 conversations and 6 meetings": the tries a close or a price was put to,
+ * each by its own name. Summed under one word, six meetings and no logged
+ * conversation read "6 conversations" beside a log that said none.
+ */
+export function triedWords(talks: number, meetings: number): string {
+  const parts = [talks ? plural(talks, 'conversation') : null, meetings ? plural(meetings, 'meeting') : null].filter((x): x is string => !!x);
+  return parts.length ? parts.join(' and ') : plural(0, 'conversation');
 }
 
 const CHANNEL_WORD: Record<string, string> = { whatsapp: 'WhatsApp', email: 'email', sms: 'text', call: 'calls' };
@@ -275,7 +361,6 @@ export function winsLine(w: WinRead, currency: string): string {
 
 export function businessChain(i: ChainInput): Chain {
   const offerSet = !!i.offer.sells?.trim();
-  const wins = readWins(i.wins, i.offer.price_band);
   const ai: MoveBy = i.workerConnected ? 'ai' : 'claude';
   // Who the business sells to, in their words first. An ask carries the
   // instruction and not a second copy of the offer: the worker is sent the offer
@@ -289,16 +374,120 @@ export function businessChain(i: ChainInput): Chain {
   // Said beats read: the person's word for how buyers find them, else outreach
   // when the app has sent or found for them, else nobody has said.
   const found = i.foundBy !== undefined ? { value: i.foundBy, said: i.foundBy != null } : foundByOf(i.offer, i.funnel.sent, i.funnel.matched);
-  const ctx: Ctx = { offerSet, whoShort, ai, agent, found: found.value, outbound: found.value === 'outreach', wins };
-
+  const outbound = found.value === 'outreach';
+  // Each part read on its own rows: since the pivot that restarted it, or all
+  // time where none did (eraView). The verdict is held to what they pay's.
+  const at = (k: LinkKey): [ChainInput, Ctx] => {
+    const v = eraView(i, k);
+    return [v, { offerSet, whoShort, ai, agent, found: found.value, outbound, wins: readWins(v.wins, i.offer.price_band) }];
+  };
+  const [pv, pc] = at('pay');
   const links: BusinessLink[] = [
-    whoLink(i, ctx),
-    reachLink(i, ctx),
-    closeLink(i, ctx),
-    payLink(i, wins, ctx),
-    deliverLink(i, ctx),
-  ];
-  return { links, weak: weakLink(links, offerSet), verdict: chainVerdict(offerSet, wins, i.currency) };
+    whoLink(...at('who')),
+    reachLink(...at('reach')),
+    closeLink(...at('close')),
+    payLink(pv, pc.wins, pc),
+    deliverLink(...at('deliver')),
+  ].map((l) => withEra(l, i, outbound));
+  const verdict = chainVerdict(offerSet, pc.wins, i.currency);
+  return { links, weak: weakLink(links, offerSet), verdict: i.eras?.pay && offerSet ? { ...verdict, since: sinceLine(i.eras.pay) } : verdict };
+}
+
+/* ─── Since a pivot ───────────────────────────────────────────────────────── */
+
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "7 Oct", from the day's own digits (lab.ts dayWords, which this module cannot import: lab reads the chain). */
+const dayOf = (day: string) => {
+  const [, m, d] = day.slice(0, 10).split('-').map(Number);
+  return m && d ? `${d} ${MONTH[m - 1] ?? ''}`.trim() : day;
+};
+
+/** "Counted since 7 Oct, when you pivoted who buys." */
+export function sinceLine(e: Pick<PartEra, 'since' | 'pivot'>): string {
+  return `Counted since ${dayOf(e.since)}, when you pivoted ${LINK_LABEL[e.pivot].toLowerCase()}.`;
+}
+
+/**
+ * The input as one part reads it after a pivot: the funnel, the sales, the
+ * conversations and the bets from its day on. What it found (`matched`) stays
+ * whole — a business found is supply, not evidence about the new offer — and so
+ * do the drafts waiting, which are today's.
+ */
+function eraView(i: ChainInput, k: LinkKey): ChainInput {
+  const e = i.eras?.[k];
+  if (!e) return i;
+  return {
+    ...i,
+    funnel: { ...e.funnel, matched: i.funnel.matched },
+    bySegment: e.bySegment,
+    byChannel: e.byChannel,
+    wins: e.wins,
+    talks: e.talks,
+    bets: (i.bets ?? []).filter((b) => b.start >= e.since),
+    signals: i.signals ? { linked: i.signals.linked, ...(e.signals ?? { signup: 0, enquiry: 0 }) } : undefined,
+  };
+}
+
+/** `all` less `some`, as multisets: the amounts paid before a day, from every amount and the ones since. */
+function lessOf(all: number[], some: number[]): number[] {
+  const left = [...some];
+  return all.filter((a) => {
+    const at = left.indexOf(a);
+    if (at < 0) return true;
+    left.splice(at, 1);
+    return false;
+  });
+}
+
+/**
+ * What a pivot left out of a part, said on it: the rows before its day that
+ * would have counted. Kept, not deleted — History has every one — and said, so
+ * a part that reads "untested" the day after a pivot is not mistaken for a
+ * business with no record.
+ */
+function beforeLine(i: ChainInput, e: PartEra, k: LinkKey, outbound: boolean): string | null {
+  const f = i.funnel;
+  const t = i.talks ?? { n: 0, problem: 0, committed: 0 };
+  const known = (xs: Array<number | null>) => xs.filter((a): a is number => typeof a === 'number' && Number.isFinite(a) && a > 0);
+  const paidBefore = lessOf(known(i.wins), known(e.wins));
+  // Never fewer sales than amounts: two reads of one table a moment apart can disagree by a row.
+  const winsBefore = Math.max(0, i.wins.length - e.wins.length, paidBefore.length);
+  const n = {
+    sent: Math.max(0, f.sent - e.funnel.sent),
+    replied: Math.max(0, f.replied - e.funnel.replied),
+    meetings: Math.max(0, f.meetings - e.funnel.meetings),
+    talks: outbound ? 0 : Math.max(0, t.n - e.talks.n),
+    // An era with no count of its own says nothing came before, rather than every sign-up did.
+    signup: e.signals ? Math.max(0, (i.signals?.signup ?? 0) - e.signals.signup) : 0,
+    enquiry: e.signals ? Math.max(0, (i.signals?.enquiry ?? 0) - e.signals.enquiry) : 0,
+  };
+  // Said as the pay part says a sale, without the price: the price is the new one's.
+  const paid = winsBefore ? winsLine({ count: winsBefore, known: paidBefore, atPrice: 0, price: null }, i.currency) : null;
+  const betsBefore = (i.bets ?? []).filter((b) => b.part === k && b.start < e.since).length;
+  const sent = n.sent && `${plural(n.sent, 'message')} sent`;
+  const replies = n.replied && plural(n.replied, 'reply', 'replies');
+  const talks = n.talks && plural(n.talks, 'conversation');
+  const meetings = n.meetings && plural(n.meetings, 'meeting');
+  // Only what the part reads where the business is: a business found online
+  // never counted a send on How they hear, so "27 messages sent" before its
+  // pivot is a number about some other way in, said as if it were this one's.
+  const parts = ({
+    who: outbound ? [sent, replies, paid] : [talks && `${talks} with buyers`, paid],
+    reach: outbound ? [sent, replies] : [n.signup && plural(n.signup, 'sign-up'), n.enquiry && plural(n.enquiry, 'enquiry', 'enquiries')],
+    close: outbound ? [replies, meetings, paid] : [talks, meetings, paid],
+    pay: [talks, meetings, paid],
+    deliver: [],
+  } as Record<LinkKey, Array<string | 0 | null>>)[k].filter((x): x is string => !!x);
+  if (betsBefore) parts.push(plural(betsBefore, 'bet'));
+  return parts.length ? `Before ${dayOf(e.since)}: ${parts.join(' · ')}. Not counted here, and kept in History.` : null;
+}
+
+/** A part as a pivot left it: where its count starts, and what came before, said first when it is open. */
+function withEra(l: BusinessLink, i: ChainInput, outbound: boolean): BusinessLink {
+  const e = i.eras?.[l.key];
+  if (!e) return l;
+  const before = beforeLine(i, e, l.key, outbound);
+  return before ? { ...l, since: sinceLine(e), before, more: [before, ...l.more] } : { ...l, since: sinceLine(e) };
 }
 
 interface Ctx {
@@ -335,6 +524,20 @@ function betMore(bets: ChainBet[]): string[] {
 
 /** The newest bet on a part that passed, if any. */
 const passedOf = (bets: ChainBet[]) => bets.find((b) => b.state === 'passed') ?? null;
+
+/**
+ * Whether a part's bets have told it anything: one ran its course, or one has
+ * counted something. A bet opened today, or one called off before it counted
+ * anything, is a test begun and not a result.
+ */
+const betsCounted = (bets: ChainBet[]) => bets.some((b) => b.state === 'passed' || b.state === 'failed' || (b.result ?? 1) > 0);
+
+/** What a part's newest bet says about it, when bets are all it has. */
+function betSaid(b: ChainBet): string {
+  if (b.state === 'running') return (b.result ?? 1) > 0 ? `A bet is running: ${b.line} so far.` : 'A bet on it is running. Nothing counted yet.';
+  if (b.state === 'stopped') return `The last bet on it was called off: ${b.line}.`;
+  return b.state === 'passed' ? `A bet passed${b.when ? ` on ${b.when}` : ''}: ${b.line}.` : `The last bet did not pass: ${b.line}.`;
+}
 
 /** The last two bets that ran out short of the line, with nothing passed since: the part is not working by its own record. */
 function twoShort(bets: ChainBet[]): [ChainBet, ChainBet] | null {
@@ -442,8 +645,9 @@ function whoByOwnCount(i: ChainInput, c: Ctx, what: string | null, bets: ChainBe
   }
   if (t.n || bets.length) {
     return { ...base, state: 'testing',
-      why: t.n ? `${t.problem} of the ${plural(t.n, 'possible buyer')} you talked to have the problem${t.committed ? `, and ${t.committed} committed to something` : ''}.` : `A bet on it is ${bets[0].state === 'running' ? 'running' : 'done, and did not pass'}.`,
-      moves: ask ? [ask] : [] };
+      why: t.n ? `${t.problem} of the ${plural(t.n, 'possible buyer')} you talked to have the problem${t.committed ? `, and ${t.committed} committed to something` : ''}.` : betSaid(bets[0]),
+      moves: ask ? [ask] : [],
+      ...(t.n || betsCounted(bets) ? {} : { bare: true }) };
   }
   return { ...base, state: 'untested', why: 'No possible buyer has been asked yet. Ten conversations about the problem is the quickest way to know.', moves: ask ? [ask] : [] };
 }
@@ -517,6 +721,15 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   const runner = { by: 'you' as const, name: 'You', problem: null };
   const more = betMore(bets);
   const landing = i.assets?.landing ?? null;
+  // What arrived through the count link: measured, so a part with it is never
+  // bare, and said beside the bet's count rather than in place of it — a number
+  // of sign-ups is not a verdict on whether they are enough; a bet is.
+  const sig = i.signals;
+  const arrived = sig ? sig.signup + sig.enquiry : 0;
+  const heard = arrived
+    ? `${[sig!.signup ? plural(sig!.signup, 'sign-up') : null, sig!.enquiry ? plural(sig!.enquiry, 'enquiry', 'enquiries') : null].filter(Boolean).join(' and ')} through your count link`
+    : null;
+  const linkMove: LinkMove | null = sig && !sig.linked ? { key: 'reach-link', label: 'Count sign-ups by themselves', by: 'you', go: { sheet: 'signals' } } : null;
   if (!c.offerSet) {
     return { key: 'reach', label: LINK_LABEL.reach, what: null, facts: '', more, state: 'missing', runner, moves: [],
       why: 'Nothing is written from a blank offer — say what you sell first.' };
@@ -528,11 +741,12 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   }
   const found = c.found as Exclude<FoundBy, 'outreach'>;
   const what = `${FOUND_BY_LABEL[found]}${landing ? ` · ${landing}` : ''}`;
-  const facts = bets[0] ? `${BET_SAID[bets[0].state]}: ${bets[0].line}` : 'No count yet';
+  const facts = [bets[0] ? `${BET_SAID[bets[0].state]}: ${bets[0].line}` : null, heard].filter(Boolean).join(' · ') || 'No count yet';
   const base = { key: 'reach' as const, label: LINK_LABEL.reach, what, facts, more, runner };
   const passed = bets.filter((b) => b.state === 'passed');
   const page: LinkMove | null = found === 'inbound' && !landing ? { key: 'reach-landing', label: 'A landing page', by: 'you', go: { asset: 'landing_page' } } : null;
   const ask = betMove('reach', 'Bet on how they hear');
+  const moves = [ask, page, linkMove].filter((m): m is LinkMove => !!m);
   if (passed.length >= 2) {
     return { ...base, state: 'works', why: `${passed.length} bets on how they hear passed. Twice is a pattern, not luck.`, moves: [] };
   }
@@ -544,17 +758,23 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   if (short) {
     return { ...base, state: 'stuck',
       why: `The last two bets on how they hear did not pass: ${short[0].line}, then ${short[1].line}.`,
-      moves: [ask, page].filter((m): m is LinkMove => !!m) };
+      moves };
   }
   if (bets.length) {
     const b = bets[0];
     return { ...base, state: 'testing',
-      why: b.state === 'running' ? `A bet is running: ${b.line} so far.` : b.state === 'passed' ? `A bet passed${b.when ? ` on ${b.when}` : ''}: ${b.line}. Once more and it is a pattern.` : `The last bet did not pass: ${b.line}.`,
-      moves: [ask, page].filter((m): m is LinkMove => !!m) };
+      why: b.state === 'passed' ? `A bet passed${b.when ? ` on ${b.when}` : ''}: ${b.line}. Once more and it is a pattern.` : betSaid(b),
+      moves,
+      ...(betsCounted(bets) || arrived ? {} : { bare: true }) };
+  }
+  if (heard) {
+    return { ...base, state: 'testing', why: `${capital(heard)}. A bet on how they hear says whether that is enough.`, moves };
   }
   return { ...base, state: 'untested',
-    why: `The app cannot see this way in, so a bet counts it: ${OWN_COUNT[found]}.`,
-    moves: [ask, page].filter((m): m is LinkMove => !!m) };
+    why: sig?.linked
+      ? `Your count link has recorded nothing yet. It counts ${OWN_COUNT[found]} as they come in; a bet says whether they are enough.`
+      : `The app cannot see this way in, so a bet counts it: ${OWN_COUNT[found]}.`,
+    moves };
 }
 
 function closeLink(i: ChainInput, c: Ctx): BusinessLink {
@@ -575,11 +795,11 @@ function closeLink(i: ChainInput, c: Ctx): BusinessLink {
     if (won >= REPEAT_WINS) return { ...base, state: 'works', why: `${won} won. At ${REPEAT_WINS} it is something you can repeat, not luck.`, moves: [] };
     if (conv >= CLOSE_SAMPLE && !won) {
       return { ...base, state: 'stuck',
-        why: `${plural(conv, 'conversation')} and nobody paid. From ${CLOSE_SAMPLE} on, that says more about the ask than about luck.`,
+        why: `${capital(triedWords(t.n, meetings))} and nobody paid. From ${CLOSE_SAMPLE} on, that says more about the ask than about luck.`,
         moves: [scriptMove, betMove('close', 'Bet on how they say yes')].filter((m): m is LinkMove => !!m) };
     }
     return { ...base, state: 'testing',
-      why: won ? `${won} won so far. At ${REPEAT_WINS} it stops being luck.` : `${plural(conv, 'conversation')} and nothing won yet.`,
+      why: won ? `${won} won so far. At ${REPEAT_WINS} it stops being luck.` : `${capital(triedWords(t.n, meetings))} and nothing won yet.`,
       moves: [scriptMove, log].filter((m): m is LinkMove => !!m) };
   }
 
@@ -606,8 +826,9 @@ function closeLink(i: ChainInput, c: Ctx): BusinessLink {
 function payLink(i: ChainInput, w: WinRead, c: Ctx): BusinessLink {
   const m = (n: number) => moneyLabel(n, i.currency);
   // The conversations a price was put to: meetings where the app sent, and the
-  // ones the person logged where it did not.
-  const conv = i.funnel.meetings + (c.outbound ? 0 : (i.talks?.n ?? 0));
+  // ones the person logged where it did not — each said by its own name.
+  const talked = c.outbound ? 0 : (i.talks?.n ?? 0);
+  const conv = i.funnel.meetings + talked;
   const what = i.offer.price_band?.trim() || null;
   const bets = betsOn(i, 'pay');
   const more = [
@@ -636,7 +857,7 @@ function payLink(i: ChainInput, w: WinRead, c: Ctx): BusinessLink {
   }
   if (w.count && !w.atPrice && conv >= CLOSE_SAMPLE) {
     return { ...base, state: 'stuck',
-      why: `${c.outbound ? `${conv} meetings` : plural(conv, 'conversation')} and ${w.count} paid, none at your ${m(w.price)}. From ${CLOSE_SAMPLE} on, that says more about the price or the proof than about luck.`,
+      why: `${capital(triedWords(talked, i.funnel.meetings))} and ${w.count} paid, none at your ${m(w.price)}. From ${CLOSE_SAMPLE} on, that says more about the price or the proof than about luck.`,
       moves: [proof, pricing].filter((x): x is LinkMove => !!x) };
   }
   if (!w.count) return { ...base, state: 'untested', why: 'Nothing paid yet.', moves: proof ? [proof] : [] };
@@ -708,8 +929,19 @@ export function chainVerdict(offerSet: boolean, w: WinRead, currency: string): V
 /** What this device last saw, so a part that moved can say so. A convenience about the screen; nothing is decided from it. */
 export interface SeenChain { at: string; states: Partial<Record<LinkKey, LinkState>> }
 
+/**
+ * A part's state as evidence: testing with nothing counted (`bare`) is where
+ * untested was. Starting a bet moved "who buys" from Untested to Testing on the
+ * live account, and the screen called that progress twice — "since you last
+ * looked" and the checkpoint's "has moved forward since" — over a log with no
+ * conversation in it. What is kept and compared is this, never the label.
+ */
+export function evidenceState(l: Pick<BusinessLink, 'state' | 'bare'>): LinkState {
+  return l.state === 'testing' && l.bare ? 'untested' : l.state;
+}
+
 export function snapshotChain(at: string, links: BusinessLink[]): SeenChain {
-  return { at, states: Object.fromEntries(links.map((l) => [l.key, l.state])) };
+  return { at, states: Object.fromEntries(links.map((l) => [l.key, evidenceState(l)])) };
 }
 
 /** Whatever came out of storage, reshaped rather than trusted. Null when it does not hold together. */
@@ -730,13 +962,18 @@ export interface ChainChange { key: LinkKey; from: LinkState; to: LinkState }
 /**
  * Each part whose verdict moved since this device last looked. No snapshot is
  * no change — a first visit is not "everything moved", the same rule the
- * Path's plan keeps.
+ * Path's plan keeps. Compared as evidence (evidenceState), so a bet opened is
+ * not news. A part bare now that was kept as Testing is not news either: a
+ * snapshot from before `bare` kept the label, and cannot say whether anything
+ * had been counted then.
  */
 export function chainChanges(seen: SeenChain | null, links: BusinessLink[]): ChainChange[] {
   if (!seen) return [];
   return links.flatMap((l) => {
     const from = seen.states[l.key];
-    return from && from !== l.state ? [{ key: l.key, from, to: l.state }] : [];
+    const to = evidenceState(l);
+    if (!from || from === to || (l.bare && from === 'testing')) return [];
+    return [{ key: l.key, from, to }];
   });
 }
 
@@ -747,9 +984,13 @@ export function changeLine(c: ChainChange): string {
 
 /* ─── The rest of the tab ─────────────────────────────────────────────────── */
 
-/** Projects that cannot move without the person: a draft to approve, a question, or a breakage to retry. */
-export function waitingOnYou(threads: CommissionThread[]): number {
-  return threads.filter((t) => t.commission.status === 'draft' || blockedOn(t.commission, t.report) !== null).length;
+/**
+ * Projects that cannot move without the person: a draft to approve, a question,
+ * or a breakage to retry — less any waiting on a day that has passed
+ * (commission.ts lapsedOn), which nothing the person answers can now make useful.
+ */
+export function waitingOnYou(threads: CommissionThread[], today?: string): number {
+  return threads.filter((t) => (t.commission.status === 'draft' || blockedOn(t.commission, t.report) !== null) && !(today && lapsedOn(t.commission, today))).length;
 }
 
 /**

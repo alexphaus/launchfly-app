@@ -25,6 +25,16 @@ export function oauthKey(): Buffer {
   return createHmac('sha256', secret()).update('copilot-oauth-v1').digest();
 }
 
+/**
+ * The key a count link is signed with (signalkey.ts): derived like the
+ * connector's, so a link can never pass for a session cookie, nor a cookie for
+ * a link. Rotating the session secret ends every count link, as it ends every
+ * connection; each is made again from You.
+ */
+export function signalKey(): Buffer {
+  return createHmac('sha256', secret()).update('copilot-signal-v1').digest();
+}
+
 function sign(profileId: string): string {
   return createHmac('sha256', secret()).update(profileId).digest('hex');
 }

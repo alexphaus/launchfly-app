@@ -45,7 +45,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   try {
     switch (b.action) {
       case 'approve': {
-        const c = await approveCommission(auth.pid, id);
+        // The running bet's own slot (commission.ts roomToStart) and the
+        // person's day, read off the record rather than the request.
+        const before = await loadHome(auth.pid);
+        const bet = before?.lab && !before.lab.unreadable ? before.lab.bets.find((x) => x.state === 'running') ?? null : null;
+        const c = await approveCommission(auth.pid, id, { today: before?.recent.today, forBet: bet ? before?.lab?.links?.[bet.bet.id] ?? [] : undefined });
         // Null means it was not a draft. Re-approving would reset approved_at
         // and lose when the mandate was actually granted, which is the one
         // timestamp that matters if anybody asks what the app was allowed to do.

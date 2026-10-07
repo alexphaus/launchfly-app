@@ -18,6 +18,8 @@ import { cronTimeoutMs, extraBody, maxOutputTokens, resolveLlmConfig } from '../
 import { describeMetrics, salesCurrency } from '../metrics';
 import { countOpenMoves, loadCommissions, loadMoveAnswers, loadStandingRefusals, loadWorking } from '../store';
 import { dismissedStreak } from '../moves';
+import { takesASlot } from '../commission';
+import { todayIso } from '../db';
 import { loadWorthLedger } from '../outcomes';
 import {
   PROPOSAL_BUDGET_MINUTES, PROPOSE_JOB, PROPOSE_SYSTEM, parseProposal, proposalFrom, proposePrompt, shouldPropose,
@@ -80,7 +82,8 @@ export const proposeJob: Job = {
     ]);
 
     const gate = shouldPropose({
-      held: commissions.filter((c) => c.status !== 'done' && c.status !== 'stopped').length,
+      // As the cap counts them: a project waiting on a day that has passed holds no slot.
+      held: commissions.filter((c) => takesASlot(c, todayIso(ctx.profile.timezone))).length,
       openProposals,
       binnedInARow: dismissedStreak(answers, PROPOSE_JOB),
       hasGoal: !!goal,

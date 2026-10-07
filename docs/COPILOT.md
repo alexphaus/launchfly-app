@@ -559,8 +559,11 @@ somebody sells toward, sales at their price and sends at what their sends have
 *earned* (money per send, so two $1 wins are not two sales at $150) — and gives a
 word: on track, tight, off track, too early to tell, no date, no number. Before
 `RATE_SAMPLE` sends it is too early, and it says what would tell ("11 more and
-the rate is a number"). Never a probability (invariant 2). A goal with no number
-is measured by the plan's milestones for it. The lines go into the planner's
+the rate is a number"). Never a probability (invariant 2). Only where buyers come
+through what the app sends (`viaSends`): "about 40,500 sends" was the goal line
+for an app its buyers find online, from a rate earned writing to plumbers, so a
+business that said its buyers find it gets the goal in sales and the pace it was
+actually paid. A goal with no number is measured by the plan's milestones for it. The lines go into the planner's
 prompt, which is what lets it cite them past the number guard. The Path shows
 the verdict for the goal the plan leads with (`roadmapLeadGoal`: its first open
 milestone's goal, else the person's first) under **You are here**, as a pill,
@@ -962,6 +965,46 @@ a pivot against the part it changed, persevere against the whole chain. **The
 clock** is runway in bets: the runway the bank gives over the pace kept (the
 median gap between bet starts).
 
+**A pivot restarts the count** (`business.ts` `PIVOT_REACH`, `restartsOf`,
+`era.ts`). Its owner pivoted who buys on 7 Oct, from booking automation for
+resorts to the app itself for people starting out, and Proof went on judging the
+new offer by September's two $1 tests and six meetings with trades: "What they
+pay: Not working" was a verdict on plumbers. A pivot is the person's word that
+the old rows measure a different business, so from its day the part it changed
+and every part measured after it — who buys, how they hear, how they say yes,
+what they pay — are judged only on what came after; delivery is the product's,
+and only its own pivot restarts it. The funnel's counts from that day are
+`diagnose()`'s own over the rows from the day on, worked out in `loadHome` (the
+payload carries totals, not rows) and carried as `lab.eras`; conversations and
+bets are cut on the client by their day. Nothing is deleted: a restarted part
+says where its count starts ("Counted since 7 Oct, when you pivoted who buys")
+and what was left out ("Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not
+counted here, and kept in History"), and so does the verdict and Claude's read.
+Each part's "before" lists only what that part reads where the business is: for
+a business found online, How they hear never counted a send, so its before line
+is the sign-ups and enquiries the count link had, not September's 27 messages.
+A payload from before the server counted eras reads all time, never as empty.
+**A pivot does not wait for the checkpoint**: "Changed what you sell, or who
+for?" under the chain (`PivotSheet`) writes the same checkpoint row. An edited
+offer restarts nothing by itself — a reworded offer is not a new business, and
+only its owner knows which one it was.
+
+**A bet opened is not progress** (`bare`, `evidenceState`). A part that is
+testing only because a bet is open on it, with nothing counted yet, says so ("A
+bet on it is running. Nothing counted yet.") and is kept and compared as
+untested: "since you last looked" does not announce it, and a checkpoint's
+read-back does not call it "moved forward" — both did, on the owner's account,
+over a log with no conversation in it. What the checkpoint keeps with its answer
+is the chain as evidence. A snapshot or checkpoint from before `bare` kept the
+label, and a part bare now that it kept as Testing is read as unchanged rather
+than as a slip.
+
+**One tap, one bet.** The route reads for a running bet before it writes, so a
+double tap could open two (the owner's history has the same bet twice on 7 Oct,
+one called off). The sheet sends one word per Start (`nonce`); a retry of it is
+answered as the tap was, and the write is read back — of two running bets opened
+in a race, the second is withdrawn by the request that wrote it (`openRace`).
+
 **Assets** (`assets.ts`): the offer, a demo, a script, a landing page, a
 workflow, a price test. An asset is an identity and a list of versions; each
 version says who made it (AI or you), when, from which bet or project, and holds
@@ -1028,6 +1071,19 @@ people said** goes to the model with who they were and the month's counts by kin
 the person's own rows, so a number in it is one they gave and passes
 `numberOutside`; the prompt says one person's number is not a rate. Nothing here
 keeps a file on anyone, sets a quota, or messages people for you (DIRECTION.md).
+
+**A project's day can pass** (`commission.ts` `lapsedOn`). "List guesthouses in
+Manila for Oct 5" asked on 7 Oct which of three to book, and that question sat on
+the Path as something owed and held one of three project slots. A draft or a
+blocked project whose objective names days, all of them past, is now neither
+waiting on you nor a slot taken, on Proof, the Path, the Researcher's line, and
+the server's cap alike; its card says the day has passed and puts Stop one tap
+away. Read off the person's words — a year only when one is attached, otherwise
+the first such day after it was written — and never acted on: nothing is stopped
+for them. Running work never lapses. **The running bet keeps a slot of its own**
+(`roomForProject`, `roomToStart`): whatever else is on the go, one project for
+it can be handed over and started, checked on the record and tied to the bet by
+the create route itself, so errands cannot grey out "Hand part of this bet over".
 
 **Behind it**: the conversation log, with an introduction that waits said on
 its line, the projects — the box to hand anything over or
@@ -1400,6 +1456,48 @@ nothing else. PDFs and screenshots need a model — the brief's, or
 `COPILOT_STATEMENT_MODEL` on the same endpoint when the brief's model does not
 take images. Without the migration the Bank statements sheet says it is not set
 up, `/api/copilot/health` names the file, and every other screen is unchanged.
+
+### Sign-ups and sales — the count link (`signal.ts`, `signalkey.ts`, `api/copilot/signal`)
+
+For a business its buyers find, "how they hear" was the one part the chain
+could not see ("The app cannot see this way in, so a bet counts it"), and a bet
+counted it only as fast as the person typed tallies. Every sign-up and payment
+already happens in software that sends webhooks; the count link is their
+address. Records → Sign-ups and sales makes one, with an address per kind
+(`?kind=signup`, `?kind=enquiry`, `?kind=sale`) for form tools — the link says
+what each post counts, whatever the tool's payload looks like — and a plain one
+for Stripe (Developers → Webhooks, events `invoice.paid` and
+`checkout.session.completed`).
+
+- **What counts.** Each POST is one signal (`readSignal`). Of Stripe's events only
+  `invoice.paid` (every subscription payment, the first included) and a one-off
+  `checkout.session.completed` count: the others repeat the same payment, and
+  counted, one payment would be two or three sales. Anything else is answered
+  200 with why, so Stripe does not retry it. A sale becomes an outcome won
+  (`source: 'webhook'`), so the pay part, the verdict, the goal and the history
+  read it as they read a sale logged by hand; one in another currency than sales
+  are counted in is kept and said, never added as the same money. Sign-ups and
+  enquiries feed how they hear as counted rows (`ChainInput.signals`), and a bet
+  that counts "sign-ups" or "enquiries" (`unitSignal`) counts them by itself, its
+  line saying both sources.
+- **What it keeps.** The kind, a sale's amount and currency, and an id for
+  spotting a retry (`ref`, so Stripe's resend is one sale). Never a name, an
+  email or anything else a form sends about the person who filled it in.
+- **The link is a secret.** `pid.gen.signature`, signed with a key derived from
+  the session secret (`signalKey`); "Make a new link" writes a new generation and
+  the old link gets a 410. A GET counts nothing (invariant 8) — a link preview or
+  a browser tab must not add a sign-up. Three hundred an hour per account, past
+  which it is spam, not people. A sale whose outcome could not be written is kept
+  as a failed signal, said on the sheet and on Records, and the sender is
+  answered 500 so it tries again; its retry settles it.
+- **The operator's own.** When the app is what its operator sells,
+  `COPILOT_OWN_COUNT_LINK` names their own link, and each new account counts as a
+  sign-up there under its id (`ownsignal.ts`), nothing else about it.
+  `/api/copilot/health` says when it is set and wrong.
+
+No migration: links and signals are `copilot_events` rows, sales the outcomes
+table already written. A plain HTML form can add `&then=` and a thank-you
+page's address to be sent on after counting.
 
 ### The money book — the Money tab (`money/book.ts`, `money/bookstore.ts`)
 
@@ -2628,13 +2726,32 @@ second count of them. The text speaks to the person as the screens do; a plan a
 model drew is marked as one (invariant 12), and a part of the home that failed to
 load is named at the top rather than read as nothing (invariant 13).
 
-**What it does not do: write.** Not "not yet" in the copy and a tool in the list:
-there is no write tool, a test fails if one appears, and what Claude is told at
-`initialize` says it cannot save anything and must never say it did. What belongs
-in the record is logged in the app, and Claude is told the mic is the short way
-(**Said, and sorted**): the words go in, the sheet opens filled in, the tap keeps
-it. Writing comes with its own scope and its own consent screen, not by widening
-this one.
+**What it does not do: write.** There is no tool that logs, keeps, starts or
+sends — a test fails if one appears — and what Claude is told at `initialize`
+says it cannot save anything and must never say it did. What belongs in the
+record is logged in the app, and Claude is told the mic is the short way (**Said,
+and sorted**): the words go in, the sheet opens filled in, the tap keeps it.
+
+**What it may do if the person lets it: propose** (`proposals.ts`,
+`api/copilot/mcp/propose.ts`, `api/copilot/proposals`). The record's slowest
+input was the person retyping what they had already told a chat — the owner's
+bet counted conversations and none had been logged in a month. A connection
+granted `copilot.propose` also lists `propose_conversation` and `propose_test`.
+That scope is its own, as this section always said writing would be: listed so
+Claude asks for it, granted only by a tick on the consent screen, never because a
+client asked; a connection made to read lists no proposal tool and is refused
+one in the protocol and again where tools run. Each proposal is held, arriving
+and again when kept, to the rule the person's own entry meets (`normalizeTalk`,
+with how it ended required rather than defaulted; `normalizeShelf` and its
+refusals), and a refusal goes back to Claude as a tool error with the reason.
+What passes waits in an inbox (`mcp_proposal` rows): not logged, not on the
+shelf, not counted. Needs you shows each beside the move — never as it — and the
+person logs it, keeps it on the shelf, changes a conversation first on its sheet,
+or drops it; keeping claims the proposal before writing and puts it back if the
+write fails, so two taps keep it once. Nothing proposed starts a bet, calls one
+off, records a sale or contacts anyone (invariants 4 and 11), and Claude is told
+a proposal is not saved. You → Claude says which connections may propose;
+changing that is connecting again.
 
 **Signing in, without a table.** Claude's OAuth requirements
 (claude.com/docs/connectors/building/authentication) are met as written: a 401

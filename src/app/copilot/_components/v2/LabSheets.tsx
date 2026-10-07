@@ -7,7 +7,7 @@
 // it has to reach, what it counts and its last day are said back in one
 // sentence before the button — the pass line — because a line set after the
 // result is in is not a test, it is a description.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { LINK_KEYS, LINK_LABEL, type LinkKey } from '@/lib/copilot/business';
 import { shiftDay } from '@/lib/copilot/focus';
 import {
@@ -18,7 +18,8 @@ import {
   type Commitment, type IntroClose, type IntroOutcome, type LabMetric, type Problem, type Talk, type TalkRole,
 } from '@/lib/copilot/lab';
 import { salesCurrency } from '@/lib/copilot/metrics';
-import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
+import { FOUND_BY_PHRASE } from '@/lib/copilot/offer';
+import { unitSignal } from '@/lib/copilot/signal';
 import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
 import { hostOf, ideaOfSeed, keptOfSeed, plainLines, type Seed } from '@/lib/copilot/seed';
@@ -26,6 +27,7 @@ import type { ToldMeta, ToldTalk } from '@/lib/copilot/tell';
 import { derive } from './derive';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions, BetFromExperiment } from '../shared';
+import { newMoveId } from './bookLocal';
 import { ToldLine } from './TellSheets';
 
 /** A custom bet's first count, by the part it is about: the number that part lives or dies by. */
@@ -171,6 +173,12 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
   const [days, setDays] = useState(basis?.days ?? experiment?.days ?? DEFAULT_BET_DAYS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // One word for this sheet's Start, sent with every try of it: the server
+  // answers a retry as it answered the tap, and withdraws a second bet that two
+  // taps raced to open (lab.ts openRace). Disabling the button is not enough —
+  // it is disabled by a render, and a second tap can land before the render.
+  const [nonce] = useState(newMoveId);
+  const starting = useRef(false);
 
   const running = home.lab?.bets.find((b) => b.state === 'running') ?? null;
   const needsPrice = !!METRIC[metric].priced && price == null;
@@ -195,11 +203,15 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
     ? { label: idea.label, how: idea.how, from: idea.book ? `AI, after ${idea.book}` : 'AI, from your record', prep: idea.prep }
     : experiment ? { label: experiment.title, how: experiment.test, from: 'Your plan' } : seed ? ideaOfSeed(seed) : keptIdea);
   const start = async () => {
+    if (starting.current) return;
+    starting.current = true;
     setBusy(true); setError(null);
     const r = await actions.lab({
       action: 'open',
+      nonce,
       bet: { part, belief: belief.trim(), play: play?.key ?? null, idea: playFrom(), metric, unit: shownUnit, target, tries, days, experiment: experiment?.id ?? null, shelf: shelfId ?? null },
     });
+    starting.current = false;
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not start it');
     actions.closeSheet();
@@ -271,7 +283,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
             ))}
           </div>
           {/* Where buyers do not come through the app's sends, its sends cannot decide anything: said, not hidden. */}
-          {found && found !== 'outreach' && <p className="cp-help">Sends and replies are left out: buyers find you {FOUND_BY_LABEL[found].toLowerCase()}, not through what the app sends.</p>}
+          {found && found !== 'outreach' && <p className="cp-help">Sends and replies are left out: buyers {FOUND_BY_PHRASE[found]}, not through what the app sends.</p>}
         </div>
       )}
 
@@ -279,7 +291,11 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
         <div className="cp-field">
           <label className="cp-label" htmlFor="cp2-lab-unit">What you will count</label>
           <input id="cp2-lab-unit" className="cp-input sm" value={unit} maxLength={UNIT_MAX} onChange={(e) => setUnit(e.target.value)} placeholder="sign-ups" />
-          <p className="cp-help">A word or two, plural: sign-ups, enquiries, orders, walk-ins. You log them as they come in.</p>
+          <p className="cp-help">
+            {home.signals?.made && unitSignal(unit)
+              ? `Your count link records ${unit.trim()} by itself: log only the ones it cannot see.`
+              : 'A word or two, plural: sign-ups, enquiries, orders, walk-ins. You log them as they come in.'}
+          </p>
         </div>
       )}
 
@@ -324,7 +340,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
       <div className="cp2-lab-preview">
         <span className="cp2-lab-preview-k">Pass line</span>
         <b>{passLine({ metric, target, tries, priceLabel, unit: shownUnit }, shiftDay(today, days - 1))}</b>
-        <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel, shownUnit)}</span>
+        <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel, shownUnit, !!home.signals?.made)}</span>
       </div>
 
       {/* Said before the tap, with the way to fix it, rather than refused after it. */}
@@ -391,13 +407,16 @@ function SharedWords({ seed }: { seed: Seed }) {
  * and — the model's proposal, there to be changed — whether they have the
  * problem and how it ended, all as first values for the person to keep.
  */
-export function TalkSheet({ home, via: viaAsked, told, actions }: {
-  home: HomeData; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; actions: Actions;
+export function TalkSheet({ home, via: viaAsked, told, proposal: proposalId, actions }: {
+  home: HomeData; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; proposal?: string; actions: Actions;
 }) {
   const today = home.recent.today;
   const yesterday = shiftDay(today, -1);
   const record: TalkRecord = { talks: home.lab?.talks ?? [], intros: home.lab?.intros };
-  const t = told?.talk;
+  // What Claude proposed, as the sheet's first values (lib/copilot/proposals.ts):
+  // the person's to change, and kept only by this sheet's own save.
+  const [proposed] = useState(() => (proposalId ? home.proposals?.open.find((p) => p.id === proposalId && p.kind === 'talk') ?? null : null));
+  const t: Partial<ToldTalk> | undefined = told?.talk ?? (proposed?.talk ? { ...proposed.talk } : undefined);
   const [who, setWho] = useState(t?.who ?? '');
   const [role, setRole] = useState<TalkRole>(t?.role ?? 'buyer');
   const [problem, setProblem] = useState<Problem | null>(t?.problem ?? null);
@@ -428,6 +447,8 @@ export function TalkSheet({ home, via: viaAsked, told, actions }: {
         on, who: who.trim() || undefined, role, problem: asksProblem(role) ? problem ?? 'unasked' : 'unasked', commitment,
         said: said.trim() || undefined, via: through ?? undefined,
       },
+      // The first save is the proposal kept; the sheet stays open for the next conversation, which is the person's own.
+      ...(proposed && logged === 0 ? { proposal: proposed.id } : {}),
     });
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not log that');
@@ -439,6 +460,7 @@ export function TalkSheet({ home, via: viaAsked, told, actions }: {
     <>
       {/* What was said, until it is logged: the next one in the sitting is typed. */}
       {told && logged === 0 && <ToldLine meta={told.meta} kind="talk" actions={actions} />}
+      {proposed && logged === 0 && <div className="cp2-lab-sheet-book">Proposed by Claude{proposed.why ? ` — ${proposed.why}` : ''}. Change anything, then log it.</div>}
       {/* Said while it is the pick: tapped "No", or logged and reset for the next, it is just a log. */}
       {opened && through === opened.id && <div className="cp2-lab-sheet-book">Through {opened.who ? `${opened.who}’s` : 'an'} introduction</div>}
       <h3>Log a conversation</h3>

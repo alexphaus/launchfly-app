@@ -50,6 +50,9 @@ const LAB_SAID: Record<LabInput['action'], string> = {
   checkpoint: 'Decided. The next checkpoint reads it back.',
 };
 
+/** A pivot, said back: what it did to the count, which is what the person will see change. */
+const PIVOTED = 'Pivoted. What it changed counts from today; what came before stays in History.';
+
 /** What each asset write did, said back. */
 const ASSET_SAID: Record<AssetInput['action'], string> = {
   add: 'Added to your assets.',
@@ -63,7 +66,7 @@ const ASSET_SAID: Record<AssetInput['action'], string> = {
 import { api, del, get, post, upload } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
-import type { Actions, AssetInput, LabInput, OutcomeInput, SheetState, Tab, Tab2 } from './shared';
+import type { Actions, AssetInput, LabInput, OutcomeInput, SheetState, SignalLinks, Tab, Tab2 } from './shared';
 
 export interface CopilotConfig<T extends Tab | Tab2> {
   /** Where the app opens. */
@@ -629,14 +632,14 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async createCommission(input) {
       try {
-        const r = await post<{ home: HomeData; commission?: { id: string } | null }>('/commissions', input);
+        const r = await post<{ home: HomeData; commission?: { id: string } | null; tied?: boolean; untied?: string | null }>('/commissions', input);
         setHome(r.home);
         // Says what happens next, because what happens next is nothing until
         // they approve it — and a commission that silently sits in draft looks
         // exactly like one the app ignored.
         say('Written. Read it and approve it to start.');
         // The id, so a caller can open the draft it just wrote straight onto its approve button.
-        return { ok: true, id: r.commission?.id };
+        return { ok: true, id: r.commission?.id, tied: !!r.tied, untied: r.untied ?? null };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
       }
@@ -904,6 +907,34 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         return { ok: false, error: e instanceof Error ? e.message : 'Could not gather your context' };
       }
     },
+    async answerProposal(id, action) {
+      try {
+        const r = await post<{ home: HomeData }>('/proposals', { action, id });
+        setHome(r.home);
+        say(action === 'keep' ? 'Kept. It is yours now, and it counts.' : 'Dropped. Nothing of it was kept.');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not answer that' };
+      }
+    },
+    async signalLinks() {
+      try {
+        const r = await get<{ links: SignalLinks | null }>('/signal');
+        return { ok: true, links: r.links };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not read your link' };
+      }
+    },
+    async makeSignalLink() {
+      try {
+        const r = await post<{ links: SignalLinks; home: HomeData }>('/signal', { action: 'make' });
+        setHome(r.home);
+        say('Made. Anything still sending to the old link stops counting.');
+        return { ok: true, links: r.links };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not make a link' };
+      }
+    },
     async connections() {
       try {
         const r = await get<{ url: string; connections: Connection[]; unreadable?: string | null }>('/connections');
@@ -979,7 +1010,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
       try {
         const r = await post<{ home: HomeData }>('/lab', input);
         setHome(r.home);
-        say(LAB_SAID[input.action]);
+        say(input.action === 'checkpoint' && input.checkpoint.decision === 'pivot' ? PIVOTED : LAB_SAID[input.action]);
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };

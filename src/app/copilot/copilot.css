@@ -1500,6 +1500,22 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pf-sheet-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); margin-bottom: 4px; }
 .cp-root[data-theme="soft"] .cp2-pf-sheetlist { margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-pf-foundrow { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; margin-bottom: 14px; padding: 13px 16px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); }
+/* What Claude proposed: what each would write, and the three answers. */
+.cp-root[data-theme="soft"] .cp2-pp-row { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-pp-do { display: flex; flex-wrap: wrap; gap: 8px; }
+.cp-root[data-theme="soft"] .cp2-pp-drop { margin-left: auto; }
+/* The count link's sheet: one address per kind, then what it recorded. */
+.cp-root[data-theme="soft"] .cp2-sg-links { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
+.cp-root[data-theme="soft"] .cp2-sg-link .cp2-cl-url code { word-break: break-all; }
+.cp-root[data-theme="soft"] .cp2-sg-new { margin-top: 16px; }
+/* A project whose day has passed: said instead of its question, with Stop. */
+.cp-root[data-theme="soft"] .cp2-bz-pastday { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--line); }
+.cp-root[data-theme="soft"] .cp2-bz-pastday p { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bz-pastday .cp-btn { flex: none; }
+/* Under the chain: the way to pivot without waiting for the checkpoint. */
+.cp-root[data-theme="soft"] .cp2-pf-pivotrow { margin: 14px 0 0; }
+/* Where a count starts after a pivot: on the verdict and on each part it restarted. */
+.cp-root[data-theme="soft"] .cp2-pf-countfrom { display: block; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-pf-onpart { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--tint); font-size: 12.5px; line-height: 1.45; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-pf-onpart span { flex: 1; min-width: 0; }
 .cp-root[data-theme="soft"] .cp2-pf-onpart b { font-weight: 600; }
@@ -2372,6 +2388,10 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-cn-list { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
 .cp-root[data-theme="soft"] .cp2-cn-list li { padding: 11px 14px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); font-size: 13.5px; line-height: 1.45; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-cn-list b { font-weight: 700; }
+/* Proposing: its own scope, a tick the person makes or does not. */
+.cp-root[data-theme="soft"] .cp2-cn-propose { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 14px; padding: 11px 14px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); font-size: 13px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-cn-propose input { margin-top: 3px; width: 18px; height: 18px; flex: none; accent-color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-cn-propose b { font-weight: 700; }
 .cp-root[data-theme="soft"] .cp2-cn-back { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-cn-back b { color: var(--ink); font-weight: 600; }
 .cp-root[data-theme="soft"] .cp2-cn-warn { margin: 0 0 16px; padding: 11px 14px; border-radius: 14px; background: rgba(194, 112, 61, 0.1); font-size: 13px; line-height: 1.45; color: #A85F2E; }

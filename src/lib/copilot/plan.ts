@@ -111,7 +111,7 @@ export function pathHere(ladder: { steps: PathStep[]; current: number }, f: Funn
 
 /* ─── The move ────────────────────────────────────────────────────────────── */
 
-export type NowKind = 'offer' | 'call' | 'send' | 'question' | 'intro' | 'fix' | 'approve' | 'confirm' | 'step' | 'move' | 'find' | 'rest';
+export type NowKind = 'offer' | 'call' | 'send' | 'question' | 'intro' | 'fix' | 'approve' | 'confirm' | 'proposal' | 'step' | 'move' | 'find' | 'rest';
 
 export interface NowMove {
   kind: NowKind;
@@ -158,6 +158,8 @@ const ASK_NOW: Record<AskRow['kind'], { title: (a: AskRow) => string; cta: strin
   approve: { title: (a) => `Approve "${a.title}"`, cta: 'Read the plan', size: 'a few minutes' },
   confirm: { title: (a) => a.title, cta: 'Answer it', size: 'a few minutes' },
   send: { title: (a) => a.title, cta: 'Open the drafts', size: '' },
+  // Never the move (pathNow leaves proposals beside it): here so the record of kinds is whole.
+  proposal: { title: (a) => `Claude proposes: ${a.title}`, cta: 'Keep or drop it', size: 'one tap' },
 };
 
 /**
@@ -223,7 +225,9 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
   // "nothing on this path moves until something goes out" about one stale sales
   // draft, over a plan about market stalls. The plan is told the drafts exist
   // and decides; until it asks for them they are a chip beside the move.
-  const blocking = input.hasPlan ? asks.filter((a) => a.kind !== 'send') : asks;
+  // A proposal blocks nothing — it is a chat's draft waiting for a yes — so it
+  // waits beside the move and never takes the move's place over the plan.
+  const blocking = (input.hasPlan ? asks.filter((a) => a.kind !== 'send') : asks).filter((a) => a.kind !== 'proposal');
   const ask = blocking[0];
   if (ask) {
     const k = ASK_NOW[ask.kind];

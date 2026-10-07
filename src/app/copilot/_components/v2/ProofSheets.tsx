@@ -8,14 +8,14 @@ import {
   ASSET_BLURB, ASSET_KINDS, ASSET_LABEL, BODY_MAX, DRAFT_ASK_MAX, NOTE_MAX as ASSET_NOTE_MAX, OFFER_ASSET, TITLE_MAX, URL_MAX,
   type Asset, type AssetKind, type AssetVersion,
 } from '@/lib/copilot/assets';
-import { LINK_STATE_LABEL, type BusinessLink, type LinkKey } from '@/lib/copilot/business';
+import { LINK_LABEL, LINK_STATE_LABEL, evidenceState, type BusinessLink, type LinkKey } from '@/lib/copilot/business';
 import { splitThreads } from '@/lib/copilot/commission';
 import { shiftDay } from '@/lib/copilot/focus';
 import { historyMonths, type HistoryKind } from '@/lib/copilot/history';
 import { BET_STATE_LABEL, NOTE_MAX, TALLY_MAX, dayWords, metricWords, resultLine, type BetView } from '@/lib/copilot/lab';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { FOUND_BY_HINT, FOUND_BY_LABEL, offerIsEmpty } from '@/lib/copilot/offer';
-import { foundOf } from '@/lib/copilot/proof';
+import { foundOf, pivotWords } from '@/lib/copilot/proof';
 import type { ToldMeta, ToldSale } from '@/lib/copilot/tell';
 import { FOUND_BY, type FoundBy, type HomeData } from '@/lib/copilot/types';
 import { get } from '../api';
@@ -76,6 +76,67 @@ export function ChainSheet({ home, actions }: { home: HomeData; actions: Actions
           ))}
         </ol>
       </div>
+      {/* The checkpoint asks every two weeks; a business that changed today should not wait for it to be judged as the one it was. */}
+      {!lab.unreadable && (
+        <button className="cp2-pf-foundrow cp2-pf-pivotrow" onClick={() => actions.openSheet({ kind: 'pivot' })}>
+          <span className="cp2-row-main">
+            <span className="t">Changed what you sell, or who for?</span>
+            <span className="s">Pivot that part, and it counts from today. What came before stays in History.</span>
+          </span>
+          <IconChevron />
+        </button>
+      )}
+    </>
+  );
+}
+
+/* ─── Pivot, now ──────────────────────────────────────────────────────────── */
+
+/**
+ * A pivot, made when the business changed rather than when the checkpoint came
+ * due. It is the checkpoint's own answer — the same row, read back the same way
+ * — and the person's word, never inferred from an edited offer: a reworded offer
+ * is not a new business, and only its owner knows which one it was.
+ */
+export function PivotSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  const d = useDerived(home);
+  const links = d.proof.chain.links;
+  const [part, setPart] = useState<LinkKey | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pivot = async () => {
+    if (!part) return;
+    setBusy(true); setError(null);
+    const r = await actions.lab({
+      action: 'checkpoint',
+      checkpoint: { decision: 'pivot', part, note: note.trim() || undefined, chain: Object.fromEntries(links.map((l) => [l.key, evidenceState(l)])) },
+    });
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? 'Could not save that');
+    actions.closeSheet();
+  };
+  return (
+    <>
+      <h3>Pivot a part</h3>
+      <p className="desc">When the business changed in one part — a new buyer, a new price, a new way in — the rows from before measure the old one. A pivot says so, and from today that part and every part after it count again.</p>
+      <div className="cp-field">
+        <label className="cp-label">Which part changed</label>
+        <div className="cp-chips">
+          {links.map((l) => (
+            <button key={l.key} className={`cp-fchip ${part === l.key ? 'active' : ''}`} aria-pressed={part === l.key} onClick={() => setPart(l.key)}>{l.label}</button>
+          ))}
+        </div>
+        {part && <p className="cp-help">{pivotWords(part)} count from today. Nothing is deleted: every row before it stays in History and is said on its part.</p>}
+      </div>
+      <div className="cp-field">
+        <label className="cp-label" htmlFor="cp2-pivot-why">Why, in a line — optional</label>
+        <input id="cp2-pivot-why" className="cp-input sm" value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="Switched from resorts to people starting out" />
+      </div>
+      {error && <div className="cp-error">{error}</div>}
+      <button className="cp-btn primary block" disabled={busy || !part} onClick={() => void pivot()}>
+        {busy ? 'Saving…' : part ? `Pivot ${LINK_LABEL[part].toLowerCase()}` : 'Pick the part'}
+      </button>
     </>
   );
 }
@@ -84,6 +145,7 @@ function Part({ link: l, weak, bet, move, full, actions }: { link: BusinessLink;
   return (
     <div className="cp2-bz-detail">
       {weak && <span className="cp2-bz-weak">The weak link</span>}
+      {l.since && <span className="cp2-pf-countfrom">{l.since}</span>}
       <p className="cp2-bz-why">{l.why}</p>
       {l.more.map((m) => <p key={m} className="cp2-bz-more">{m}</p>)}
       {/* Who runs it, where an agent does some of it. A part that is yours alone needs no line saying so. */}
@@ -552,7 +614,7 @@ export function ProjectsSheet({ home, actions }: { home: HomeData; actions: Acti
         {live.length > 0 && (
           <>
             <div className="cp-section"><span className="lead">On the go</span>{d.proof.waiting > 0 && <span className="count">{d.proof.waiting} waiting on you</span>}</div>
-            <div className="cp2-pf-projects">{live.map((t) => <Project key={t.commission.id} thread={t} actions={actions} />)}</div>
+            <div className="cp2-pf-projects">{live.map((t) => <Project key={t.commission.id} thread={t} actions={actions} today={home.recent.today} />)}</div>
           </>
         )}
         {offers.map((m) => (

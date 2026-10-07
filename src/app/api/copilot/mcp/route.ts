@@ -1,7 +1,8 @@
 // src/app/api/copilot/mcp/route.ts
 // The MCP server Claude connects to: Streamable HTTP, answered as plain JSON
 // (no event stream — every tool answers in one response), stateless (no
-// session id), and read-only (lib/copilot/mcp.ts says why).
+// session id), and read-only unless the person let it propose — which writes
+// to an inbox in the app and never to the record (lib/copilot/mcp.ts says why).
 //
 // Every request needs a token, initialize included: there is nothing here
 // worth reading without the person's account. Without one the answer is a 401
@@ -16,7 +17,7 @@ import { appBaseUrl } from '@/lib/copilot/auth';
 import { authorizeCall } from '@/lib/copilot/connector';
 import { OPEN_CORS } from '@/lib/copilot/http';
 import { handleBody, headerVersionOk, parseError } from '@/lib/copilot/mcp';
-import { resourceUrl, wwwAuthenticate } from '@/lib/copilot/oauth';
+import { canPropose, resourceUrl, wwwAuthenticate } from '@/lib/copilot/oauth';
 import { runTool } from './read';
 
 export const runtime = 'nodejs';
@@ -43,7 +44,9 @@ export async function POST(req: Request) {
   }
   let body: unknown;
   try { body = await req.json(); } catch { return Response.json(parseError(), { status: 400, headers }); }
-  const out = await handleBody(body, { call: (name, args) => runTool(name, args, { pid: auth.pid, grant: auth.grant }) });
+  // Proposing only where the person ticked it when they connected (oauth.ts SCOPE_PROPOSE).
+  const propose = canPropose(auth.scope);
+  const out = await handleBody(body, { propose, call: (name, args) => runTool(name, args, { pid: auth.pid, grant: auth.grant, propose }) });
   if (out.status === 202) return new Response(null, { status: 202, headers });
   return Response.json(out.json, { headers });
 }

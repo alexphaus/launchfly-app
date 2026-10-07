@@ -60,6 +60,13 @@ export interface OutlookInput {
   price: number | null;
   /** Whether they sell something: the chain from sends to sales applies only then. */
   selling: boolean;
+  /**
+   * Whether buyers come through what the app sends, as the person said. False
+   * walks no goal back to sends: "about 40,500 sends" was the live account's
+   * goal line for an app its buyers find online, from a rate earned writing to
+   * plumbers. Absent — nobody said — reads as it always did.
+   */
+  viaSends?: boolean;
   currency: string;
   capacity: Capacity;
   /** Counts over the metrics window. */
@@ -117,9 +124,10 @@ export function goalOutlook(g: OutlookGoal, input: OutlookInput): GoalOutlook {
   if (due.daysLeft <= 0) return { ...base, verdict: 'off_track', line: `Its date has passed with ${amount(gap)} to go. Move the date, or change what the plan does about it.` };
 
   const f = input.funnel;
-  if (g.metric === 'currency' && input.selling && input.price && input.price > 0) {
-    const sales = Math.ceil(gap / input.price);
-    const need = `${plural(sales, 'sale')} at your ${money(input.price)} in ${plural(due.daysLeft, 'day')}`;
+  const priced = g.metric === 'currency' && input.selling && !!input.price && input.price > 0;
+  if (priced && input.viaSends !== false) {
+    const sales = Math.ceil(gap / input.price!);
+    const need = `${plural(sales, 'sale')} at your ${money(input.price!)} in ${plural(due.daysLeft, 'day')}`;
     if (f.sent < RATE_SAMPLE) {
       return {
         ...base, verdict: 'too_early',
@@ -134,7 +142,7 @@ export function goalOutlook(g: OutlookGoal, input: OutlookInput): GoalOutlook {
     // Money per send, when the wins carried amounts: it holds both how often a
     // send turns into a sale and what a sale turned out to be worth. A $1 win
     // counted as a sale at $150 would call a plan on track that is not.
-    const perSend = f.wonAmount > 0 ? f.wonAmount / f.sent : (f.won * input.price) / f.sent;
+    const perSend = f.wonAmount > 0 ? f.wonAmount / f.sent : (f.won * input.price!) / f.sent;
     const basis = f.wonAmount > 0 ? `${money(f.wonAmount)} from ${plural(f.sent, 'send')}` : `${plural(f.won, 'sale')} from ${plural(f.sent, 'send')}`;
     const sends = Math.ceil(gap / perSend);
     const days = Math.ceil(sends / sendsPerDay(input.capacity));
@@ -150,7 +158,11 @@ export function goalOutlook(g: OutlookGoal, input: OutlookInput): GoalOutlook {
   const needed = daily ? gap / due.daysLeft : gap / (due.daysLeft / 7);
   // The rate without its unit for a count: "about 1 a day", never "1 applications a day".
   const rate = g.metric === 'currency' ? money(needed) : Math.ceil(needed).toLocaleString('en-US');
-  const needs = `${capital(amount(gap))} to go in ${plural(due.daysLeft, 'day')}: about ${rate} a ${per}`;
+  // Selling at a price to buyers who do not come through sends: the goal in
+  // sales, and the pace beside it is the money that came in, not a send rate.
+  const needs = priced
+    ? `${capital(plural(Math.ceil(gap / input.price!), 'sale'))} at your ${money(input.price!)} in ${plural(due.daysLeft, 'day')}: about ${rate} a ${per}`
+    : `${capital(amount(gap))} to go in ${plural(due.daysLeft, 'day')}: about ${rate} a ${per}`;
   // What they were paid is the only pace the app sees for money it is not
   // selling toward. It is said as what it is, beside what the goal needs.
   if (g.metric === 'currency' && f.wonAmount > 0 && f.windowDays > 0) {

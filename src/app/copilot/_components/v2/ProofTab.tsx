@@ -29,7 +29,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ASSET_LABEL, OFFER_ASSET, type Asset, type AssetGap, type AssetKind } from '@/lib/copilot/assets';
 import {
-  LINK_LABEL, LINK_STATE_LABEL, changeLine, chainChanges, parseSeenChain, snapshotChain,
+  LINK_LABEL, LINK_STATE_LABEL, changeLine, chainChanges, evidenceState, parseSeenChain, snapshotChain,
   type ChainChange, type LinkKey, type LinkMove, type SeenChain,
 } from '@/lib/copilot/business';
 import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } from '@/lib/copilot/commission';
@@ -40,7 +40,7 @@ import {
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
-import { assetMakers, betNext, betWork, ideasStale, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
+import { assetMakers, betNext, betWork, ideasStale, pivotWords, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
 import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
@@ -71,7 +71,8 @@ export default function ProofTab({ home, d, actions, briefing }: { home: HomeDat
           {lab.current
             ? (
               <>
-                <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={full} />
+                {/* The bet keeps a slot of its own: errands on the go do not grey out the work it exists to move (commission.ts roomForProject). */}
+                <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={agentIsFull(home, lab.links[lab.current.bet.id] ?? [])} />
                 <Shelf home={home} d={d} actions={actions} />
               </>
             )
@@ -159,6 +160,8 @@ function Verdict({ home, d, actions, changes }: { home: HomeData; d: Derived; ac
       <div className={`cp2-bz-verdict ${v.proven ? 'proven' : ''}`}>
         <span className="cp2-bz-verdict-t">{v.title}</span>
         <span className="cp2-bz-verdict-s">{v.line}</span>
+        {/* Said where the count is: "So far: 0" the day after a pivot is the new business's 0, not the old one's. */}
+        {v.since && <span className="cp2-pf-countfrom">{v.since}</span>}
       </div>
       <button
         className="cp2-pf-chain" onClick={() => actions.openSheet({ kind: 'chain' })}
@@ -229,8 +232,9 @@ function Checkpoint({ d, actions }: { d: Derived; actions: Actions }) {
     const r = await actions.lab({
       action: 'checkpoint',
       // The chain as it stands, kept with the answer: the next checkpoint
-      // reads the decision back against what the chain did after it.
-      checkpoint: { decision, part: decision === 'pivot' ? part : null, note: note.trim() || undefined, chain: Object.fromEntries(links.map((l) => [l.key, l.state])) },
+      // reads the decision back against what the chain did after it — as
+      // evidence, so a bet opened since is not read back as a step forward.
+      checkpoint: { decision, part: decision === 'pivot' ? part : null, note: note.trim() || undefined, chain: Object.fromEntries(links.map((l) => [l.key, evidenceState(l)])) },
     });
     setBusy(false);
     if (!r.ok) setError(r.error ?? 'Could not save that');
@@ -281,6 +285,7 @@ function Checkpoint({ d, actions }: { d: Derived; actions: Actions }) {
               <button key={l.key} className={`cp-fchip ${part === l.key ? 'active' : ''}`} aria-pressed={part === l.key} onClick={() => setPart(l.key)}>{l.label}</button>
             ))}
           </div>
+          {part && <p className="cp-help">{pivotWords(part)} count from today. What came before stays in History and is said on its part.</p>}
         </div>
       )}
       {decision && (
@@ -365,7 +370,7 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         </div>
       )}
       <p className="cp2-lab-pass"><b>Pass line:</b> {passLine(b, view.last)}.</p>
-      <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit)}</p>
+      <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit, !!home.signals?.made)}</p>
       {over && <p className="cp2-lab-over">{over}</p>}
 
       {play && (
@@ -539,7 +544,7 @@ function Prep({ home, view, work, actions, brief, full, canDraft }: { home: Home
   return (
     <div className="cp2-lab-prep">
       <span className="cp2-lab-prep-k">Get it ready</span>
-      <MoveRow m={m} rerouted={m.by !== raw.by} busy={move.busy === m.key} onRun={() => void move.run(m, why, tie)} />
+      <MoveRow m={m} rerouted={m.by !== raw.by} busy={move.busy === m.key} onRun={() => void move.run(m, why, tie, b.id)} />
       {move.note?.key === m.key && <MoveNote note={move.note} />}
       {error && <p className="cp-help cp2-err">{error}</p>}
     </div>
@@ -555,13 +560,13 @@ function HandOver({ view, actions, full }: { view: BetView; actions: Actions; fu
     const objective = text.trim();
     if (!objective) return;
     setBusy(true); setError(null);
-    const r = await actions.createCommission({ objective, why: `For the bet "${view.bet.belief}".`.slice(0, 300), authority: 'read' });
-    if (!r.ok || !r.id) { setBusy(false); return setError(r.error ?? 'Could not hand that over'); }
-    const tied = await actions.lab({ action: 'link', bet: view.bet.id, commission: r.id });
+    // As the bet's own: it takes the slot the bet keeps, and the server ties it to the bet.
+    const r = await actions.createCommission({ objective, why: `For the bet "${view.bet.belief}".`.slice(0, 300), authority: 'read', bet: view.bet.id });
     setBusy(false);
+    if (!r.ok || !r.id) return setError(r.error ?? 'Could not hand that over');
     setText('');
     // Said, not swallowed: a project the bet does not know about is still a project, under Projects.
-    if (!tied.ok) return setError(`Handed over, but not tied to this bet: ${tied.error ?? 'it did not save'}. It is under Projects.`);
+    if (!r.tied) return setError(`Handed over, but not tied to this bet: ${r.untied ?? 'it did not save'}. It is under Projects.`);
     actions.openSheet({ kind: 'commission', id: r.id });
   };
   return (
@@ -574,7 +579,8 @@ function HandOver({ view, actions, full }: { view: BetView; actions: Actions; fu
         />
         <button className="cp-btn sm primary" disabled={!text.trim() || busy || full} onClick={() => void go()}>{busy ? 'Writing…' : 'Hand over'}</button>
       </div>
-      {full && <p className="cp-help">{MAX_ACTIVE_COMMISSIONS} projects are on the go. Finish or stop one to hand over another.</p>}
+      {/* Full here means the bet's own slot is taken too: another project for it is already on the go. */}
+      {full && <p className="cp-help">A project for this bet is already on the go, and so are {MAX_ACTIVE_COMMISSIONS} others. Finish or stop one to hand over another.</p>}
       {error && <p className="cp-help cp2-err">{error}</p>}
     </div>
   );
@@ -946,6 +952,7 @@ function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; ac
   const offered = home.moves.filter((m) => m.artifact?.kind === 'plan').length;
   const projects = [
     d.proof.waiting ? `${d.proof.waiting} ${d.proof.waiting === 1 ? 'needs' : 'need'} you` : null,
+    d.proof.lapsed ? `${d.proof.lapsed} past ${d.proof.lapsed === 1 ? 'its' : 'their'} day` : null,
     jobs.running.length ? `${jobs.running.length} running` : null,
     offered ? `${offered} offered` : null,
     jobs.finished.length ? `${jobs.finished.length} finished` : null,

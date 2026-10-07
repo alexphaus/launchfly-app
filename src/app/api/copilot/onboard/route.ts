@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
+import { countOwnSignup } from '@/lib/copilot/ownsignal';
 import { describeDbError } from '@/lib/copilot/db';
 import { completeOnboarding, parseOnboarding } from '@/lib/copilot/onboarding';
 import { setSessionCookie } from '@/lib/copilot/session';
@@ -19,6 +20,13 @@ export async function POST(req: Request) {
   try { input = parseOnboarding(await readJson(req)); } catch (e) { return fail(e instanceof Error ? e.message : 'Invalid input'); }
   try {
     const pid = await completeOnboarding(input);
+    // A sign-up on the operator's own count link, when the app is what they sell
+    // (ownsignal.ts). After the answer: a new account never waits on it. A link
+    // that is set and wrong is named on /api/copilot/health, where the operator
+    // looks, and logged here with the account it missed.
+    after(async () => {
+      await countOwnSignup(pid).catch((e: unknown) => console.error(`[copilot/onboard] own count link missed account ${pid}:`, e instanceof Error ? e.message : e));
+    });
     const res = NextResponse.json({ ok: true, profileId: pid }, { headers: NO_STORE });
     setSessionCookie(res, pid);
     return res;

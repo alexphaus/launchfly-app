@@ -6,7 +6,7 @@
 // the agent's cap is said the same everywhere it bites.
 import { useRef, useState } from 'react';
 import type { LinkMove } from '@/lib/copilot/business';
-import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX } from '@/lib/copilot/commission';
+import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, roomForProject } from '@/lib/copilot/commission';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 import { IconChevron, IconExternal } from './icons2';
@@ -14,9 +14,12 @@ import { IconChevron, IconExternal } from './icons2';
 /**
  * Three projects on the go is the cap the server keeps. A move for the agent
  * then offers the chat instead, and says why, rather than failing on the tap.
+ * Counted as the server counts (commission.ts roomForProject): a project
+ * waiting on a day that has passed holds no slot, and `forBet` — the projects
+ * tied to the running bet — gives the bet its own.
  */
-export const agentIsFull = (home: HomeData): boolean =>
-  home.commissions.filter((t) => t.commission.status === 'draft' || t.commission.status === 'active' || t.commission.status === 'blocked').length >= MAX_ACTIVE_COMMISSIONS;
+export const agentIsFull = (home: HomeData, forBet?: readonly string[]): boolean =>
+  !roomForProject(home.commissions.map((t) => t.commission), home.recent.today, forBet);
 
 /* ─── The brief, for a chat ───────────────────────────────────────────────── */
 
@@ -66,8 +69,13 @@ export const orChat = (m: LinkMove, full: boolean): LinkMove => (m.by === 'ai' &
 export function useMove(actions: Actions, brief: Brief) {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ key: string; text: string; bad: boolean; claude: boolean } | null>(null);
-  /** `onCreated` hears the project a move for the agent wrote, so a bet can claim the work done for it. */
-  const run = async (m: LinkMove, why?: string, onCreated?: (id: string) => void | Promise<void>) => {
+  /**
+   * `onCreated` hears the project a move for the agent wrote, so a bet can claim
+   * the work done for it. `bet`, the running bet's id, hands it over as the bet's
+   * own — its reserved slot, tied by the server — and `onCreated` then hears it
+   * only when the tie did not save.
+   */
+  const run = async (m: LinkMove, why?: string, onCreated?: (id: string) => void | Promise<void>, bet?: string) => {
     setNote(null);
     if (m.by === 'you') {
       const go = m.go;
@@ -83,11 +91,11 @@ export function useMove(actions: Actions, brief: Brief) {
     if (m.by === 'ai') {
       // Written as a draft and opened on its approve button: one more tap, and
       // the person has read what is being authorised before anything runs.
-      const r = await actions.createCommission({ objective: (m.ask ?? m.label).slice(0, OBJECTIVE_MAX), why: why?.slice(0, 300), authority: 'read' });
+      const r = await actions.createCommission({ objective: (m.ask ?? m.label).slice(0, OBJECTIVE_MAX), why: why?.slice(0, 300), authority: 'read', ...(bet ? { bet } : {}) });
       setBusy(null);
       if (!r.ok) return setNote({ key: m.key, text: r.error ?? 'Could not hand that over', bad: true, claude: false });
       if (r.id) {
-        await onCreated?.(r.id);
+        if (!r.tied) await onCreated?.(r.id);
         actions.openSheet({ kind: 'commission', id: r.id });
       }
       return;

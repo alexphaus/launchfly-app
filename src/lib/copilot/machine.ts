@@ -13,7 +13,7 @@
 //
 // Pure: no DB import.
 
-import { blockedOn } from './commission';
+import { blockedOn, lapsedOn } from './commission';
 import type { CommissionThread } from './types';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -44,6 +44,8 @@ export interface Agent {
 
 export interface RosterInput {
   now: Date;
+  /** The person's day: a project waiting on a day that has passed is neither a question nor a breakage of the Researcher's (commission.ts lapsedOn). */
+  today?: string;
   supplyLastRun: string | null;
   sourced: number;
   hasTargeting: boolean;
@@ -144,7 +146,7 @@ export function agentRoster(input: RosterInput): Agent[] {
     };
 
   // Researcher — the worker that takes handed-over projects.
-  const live = input.commissions.filter((t) => t.commission.status === 'active' || t.commission.status === 'blocked');
+  const live = input.commissions.filter((t) => (t.commission.status === 'active' || t.commission.status === 'blocked') && !(input.today && lapsedOn(t.commission, input.today)));
   const faulted = live.filter((t) => blockedOn(t.commission, t.report) === 'worker');
   const asking = live.filter((t) => blockedOn(t.commission, t.report) === 'you');
   const finished = input.commissions.filter((t) => t.commission.status === 'done' || t.commission.status === 'stopped').length;

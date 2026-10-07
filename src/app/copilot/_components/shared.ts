@@ -114,7 +114,7 @@ export type SheetState =
    * optionally as the one an introduction led to (`via`), or as one said into
    * the mic (`told`).
    */
-  | { kind: 'talk'; via?: string; told?: { meta: ToldMeta; talk: ToldTalk } }
+  | { kind: 'talk'; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; proposal?: string }
   /** The Path and Proof: an introduction somebody offered, by the conversation it was offered in, and what to do about it. */
   | { kind: 'intro'; talk: string }
   /** Proof: every conversation logged, with the way to log another. */
@@ -129,6 +129,12 @@ export type SheetState =
   | { kind: 'told'; meta: ToldMeta }
   /** Proof: the chain, whole — each part's rule, its evidence and what would move it. */
   | { kind: 'chain' }
+  /** Proof: pivot one part now, without waiting for the checkpoint to come due. The parts it changes count from today. */
+  | { kind: 'pivot' }
+  /** Records: the count link — where forms and checkout send sign-ups, enquiries and sales (lib/copilot/signal.ts). */
+  | { kind: 'signals' }
+  /** What Claude proposed, each to keep, change or drop (lib/copilot/proposals.ts). */
+  | { kind: 'proposals' }
   /** Proof: how buyers find the business. */
   | { kind: 'foundby' }
   /** Proof: the history, whole, by month. */
@@ -150,10 +156,15 @@ export interface BetFromExperiment {
   part: LinkKey;
 }
 
+/** The count link's addresses: each kind's, and the plain one Stripe sends to. */
+export type SignalLinks = { signup: string; enquiry: string; sale: string; stripe: string };
+
 /** What a bet can be told. A verdict is not among them: it is the rows'. */
 export type LabInput =
   | {
       action: 'open';
+      /** This sheet's own word for its Start tap (lab.ts isOpenNonce): a retry of it answers as the tap did, never with a second bet. */
+      nonce?: string;
       bet: {
         part: LinkKey; belief: string; play: string | null; idea?: BetIdea | null; metric: LabMetric; unit?: string | null; target: number;
         tries: { metric: LabMetric; planned: number } | null; days: number; experiment?: string | null;
@@ -171,7 +182,8 @@ export type LabInput =
     }
   | { action: 'unshelve'; id: string }
   | { action: 'stop'; id: string; note?: string }
-  | { action: 'talk'; talk: { on?: string; who?: string; role: TalkRole; problem: Problem; commitment: Commitment; said?: string; via?: string } }
+  /** `proposal`: the proposal it was opened from (lib/copilot/proposals.ts), which this save keeps. */
+  | { action: 'talk'; talk: { on?: string; who?: string; role: TalkRole; problem: Problem; commitment: Commitment; said?: string; via?: string }; proposal?: string }
   | { action: 'intro'; intro: { talk: string; outcome: IntroOutcome } }
   | { action: 'forget'; id: string }
   | { action: 'count'; bet: string; count: { n: number; on?: string; note?: string } }
@@ -293,7 +305,11 @@ export interface Actions {
   settleWorking(id: string, status: 'live' | 'declined'): Promise<{ ok: boolean; error?: string }>;
   removeWorking(id: string): Promise<void>;
   /** Write a mandate. Always created as a draft — approving is a second act. */
-  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string; id?: string }>;
+  /**
+   * `bet`: the running bet's id — the project is its own, takes the slot the bet
+   * keeps, and is tied to it by the server (`tied`; `untied` says why not).
+   */
+  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number; bet?: string }): Promise<{ ok: boolean; error?: string; id?: string; tied?: boolean; untied?: string | null }>;
   /** Grant authority, carry on after answering, call it off, finish, or mark read. */
   /**
    * `answer` is the user's reply to a needs_you, and only 'unblock' carries one.
@@ -360,6 +376,12 @@ export interface Actions {
   disconnect(grant: string): Promise<{ ok: boolean; connections?: Connection[]; error?: string }>;
   /** A code to type on Claude's sign-in screen, good once for ten minutes. */
   pairCode(): Promise<{ ok: boolean; code?: string; expiresAt?: string; error?: string }>;
+  /** The count link's addresses, one per kind and Stripe's; `links` null before one was made (lib/copilot/signal.ts). */
+  signalLinks(): Promise<{ ok: boolean; links?: SignalLinks | null; error?: string }>;
+  /** A new count link, which ends the one in use. */
+  makeSignalLink(): Promise<{ ok: boolean; links?: SignalLinks; error?: string }>;
+  /** Keep what Claude proposed as it stands — logged, or on the shelf — or drop it (lib/copilot/proposals.ts). */
+  answerProposal(id: string, action: 'keep' | 'drop'): Promise<{ ok: boolean; error?: string }>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
   /**

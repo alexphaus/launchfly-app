@@ -14,12 +14,14 @@ import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster } from '@/lib/copilot/machine';
 import { LINK_LABEL, businessChain, teamLine, waitingOnYou } from '@/lib/copilot/business';
+import { lapsedOn } from '@/lib/copilot/commission';
 import { assetGaps } from '@/lib/copilot/assets';
 import { historyOf } from '@/lib/copilot/history';
-import { labView, openIntros } from '@/lib/copilot/lab';
+import { betPrice, labView, openIntros } from '@/lib/copilot/lab';
+import { proposalLine } from '@/lib/copilot/proposals';
 import { chainInputOf, foundOf, proofLine, saidOf } from '@/lib/copilot/proof';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
-import { offerIsEmpty } from '@/lib/copilot/offer';
+import { isFoundBy, offerIsEmpty } from '@/lib/copilot/offer';
 import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
 import { pathAhead, pathHere, pathNow, planStatus, priceOf } from '@/lib/copilot/plan';
 import { SIZE_LABEL, goalMarkers, markMap, moneyWaiting, replacesCall, roadmapDue, roadmapFirstStep, roadmapLeadGoal, roadmapSignature, roadmapView } from '@/lib/copilot/roadmap';
@@ -84,6 +86,8 @@ export function derive(home: HomeData) {
     queueIsCall: home.callMove?.job === 'send_queue',
     noOffer,
     intros,
+    today: home.recent.today,
+    proposals: (home.proposals?.open ?? []).map((p) => ({ id: p.id, line: proposalLine(p, betPrice(home.profile.offer?.price_band, currency).priceLabel), why: p.why })),
   });
   // A brand new account: nothing to call, nothing found, nothing handed over.
   // One card that says what is happening beats five empty sections.
@@ -141,6 +145,7 @@ export function derive(home: HomeData) {
     today: home.recent.today,
     price: priceOf(home.profile.offer?.price_band),
     selling: !noOffer,
+    viaSends: isFoundBy(home.profile.offer?.found_by) ? home.profile.offer!.found_by === 'outreach' : undefined,
     currency,
     capacity: home.profile.capacity,
     funnel: { windowDays: home.metrics.window_days, sent: home.metrics.sent, won: home.metrics.won, wonAmount: home.metrics.won_amount },
@@ -251,6 +256,7 @@ export function derive(home: HomeData) {
   /* The team: each agent placed on the part of the business it runs, and one line for Proof */
   const team = agentRoster({
     now,
+    today: home.recent.today,
     supplyLastRun: home.supplyLastRun,
     sourced: home.metrics.pipeline.sourced,
     // Maps targeting or a web search it can plan: either is the Scout with something to do.
@@ -314,7 +320,9 @@ export function derive(home: HomeData) {
       timezone: home.profile.timezone,
     }),
     team: teamLine(team),
-    waiting: waitingOnYou(home.commissions),
+    waiting: waitingOnYou(home.commissions, home.recent.today),
+    /** Projects waiting on a day that has passed: said under Projects with Stop, counted as neither waiting nor a slot. */
+    lapsed: home.commissions.filter((t) => !!lapsedOn(t.commission, home.recent.today)).length,
     intros,
   };
 

@@ -614,7 +614,7 @@ export function ProjectsSheet({ home, actions }: { home: HomeData; actions: Acti
         {live.length > 0 && (
           <>
             <div className="cp-section"><span className="lead">On the go</span>{d.proof.waiting > 0 && <span className="count">{d.proof.waiting} waiting on you</span>}</div>
-            <div className="cp2-pf-projects">{live.map((t) => <Project key={t.commission.id} thread={t} actions={actions} />)}</div>
+            <div className="cp2-pf-projects">{live.map((t) => <Project key={t.commission.id} thread={t} actions={actions} today={home.recent.today} />)}</div>
           </>
         )}
         {offers.map((m) => (

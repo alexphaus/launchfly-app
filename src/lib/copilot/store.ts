@@ -32,7 +32,7 @@ import {
 } from './working';
 import {
   MAX_ACTIVE_COMMISSIONS, MAX_BUDGET_MINUTES, MIN_BUDGET_MINUTES, OBJECTIVE_MAX, SUMMARY_MAX, WHY_MAX,
-  commissionIdFromMove, commissionLine, nextStatus, reportOf,
+  commissionIdFromMove, commissionLine, lapsedOn, nextStatus, reportOf, roomForProject, roomToStart, takesASlot,
   type Authority, type Commission, type CommissionEvent, type CommissionResult,
   type CommissionStatus, type CommissionStep,
 } from './commission';
@@ -2352,16 +2352,23 @@ export async function insertAssetEvent(profileId: string, type: (typeof ASSET_EV
 export async function createCommission(profileId: string, input: {
   objective: string; why?: string | null; goal_id?: string | null;
   authority?: Authority; budget_minutes?: number; plan?: CommissionStep[];
+  /** The person's day, for what has lapsed (commission.ts lapsedOn). Absent: today in UTC, a day out at most. */
+  today?: string;
+  /** For the running bet: the projects already tied to it, so it keeps its own slot (roomForProject). */
+  forBet?: readonly string[];
 }): Promise<Commission | null> {
   // Drafts count. The first version filtered to active|blocked, so five
   // commissions could be written in a row — every one of them passed a check
   // that could not see the other four — and then approved one by one past a cap
-  // approveCommission did not enforce at all.
-  const held = (await loadCommissions(profileId)).filter((c) => c.status !== 'done' && c.status !== 'stopped');
+  // approveCommission did not enforce at all. A project waiting on a day that
+  // has passed does not, and the running bet keeps a slot of its own.
+  const all = await loadCommissions(profileId);
+  const today = input.today ?? new Date().toISOString().slice(0, 10);
   // Three mandates is a person with three priorities; eight is a person with
   // none, and the whole product is an argument against that.
-  if (held.length >= MAX_ACTIVE_COMMISSIONS) {
-    throw new Error(`You have ${held.length} things on the go. Finish or stop one first.`);
+  if (!roomForProject(all, today, input.forBet)) {
+    const held = all.filter((c) => takesASlot(c, today)).length;
+    throw new Error(`You have ${held} things on the go. Finish or stop one first.`);
   }
   const { data, error } = await copilotDb().from('copilot_commissions').insert({
     profile_id: profileId,
@@ -2388,13 +2395,16 @@ export async function createCommission(profileId: string, input: {
  * approved_at and lose when the mandate was actually granted, which is the one
  * timestamp that matters if anybody ever asks what the app was allowed to do.
  */
-export async function approveCommission(profileId: string, id: string): Promise<Commission | null> {
+export async function approveCommission(profileId: string, id: string, opts: { today?: string; forBet?: readonly string[] } = {}): Promise<Commission | null> {
   // The cap, enforced at the moment a mandate actually starts consuming
   // anything. createCommission's check is upstream of the act; this one is the
-  // act, and it is the one that was missing.
-  const running = (await loadCommissions(profileId)).filter((c) => c.status === 'active' || c.status === 'blocked');
-  if (running.length >= MAX_ACTIVE_COMMISSIONS) {
-    throw new Error(`${running.length} are already running. Finish or stop one before starting this.`);
+  // act, and it is the one that was missing. The same exceptions it makes: a
+  // day that has passed holds no slot, and the running bet keeps one.
+  const all = await loadCommissions(profileId);
+  const today = opts.today ?? new Date().toISOString().slice(0, 10);
+  if (!roomToStart(all, id, today, opts.forBet)) {
+    const running = all.filter((c) => c.id !== id && (c.status === 'active' || c.status === 'blocked') && !lapsedOn(c, today)).length;
+    throw new Error(`${running} are already running. Finish or stop one before starting this.`);
   }
   const now = new Date().toISOString();
   const { data, error } = await copilotDb().from('copilot_commissions')

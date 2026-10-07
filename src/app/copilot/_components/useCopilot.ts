@@ -632,14 +632,14 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async createCommission(input) {
       try {
-        const r = await post<{ home: HomeData; commission?: { id: string } | null }>('/commissions', input);
+        const r = await post<{ home: HomeData; commission?: { id: string } | null; tied?: boolean; untied?: string | null }>('/commissions', input);
         setHome(r.home);
         // Says what happens next, because what happens next is nothing until
         // they approve it — and a commission that silently sits in draft looks
         // exactly like one the app ignored.
         say('Written. Read it and approve it to start.');
         // The id, so a caller can open the draft it just wrote straight onto its approve button.
-        return { ok: true, id: r.commission?.id };
+        return { ok: true, id: r.commission?.id, tied: !!r.tied, untied: r.untied ?? null };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
       }

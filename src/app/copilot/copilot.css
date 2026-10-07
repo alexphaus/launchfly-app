@@ -1500,6 +1500,10 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pf-sheet-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); margin-bottom: 4px; }
 .cp-root[data-theme="soft"] .cp2-pf-sheetlist { margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-pf-foundrow { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; margin-bottom: 14px; padding: 13px 16px; border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); }
+/* A project whose day has passed: said instead of its question, with Stop. */
+.cp-root[data-theme="soft"] .cp2-bz-pastday { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--line); }
+.cp-root[data-theme="soft"] .cp2-bz-pastday p { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bz-pastday .cp-btn { flex: none; }
 /* Under the chain: the way to pivot without waiting for the checkpoint. */
 .cp-root[data-theme="soft"] .cp2-pf-pivotrow { margin: 14px 0 0; }
 /* Where a count starts after a pivot: on the verdict and on each part it restarted. */

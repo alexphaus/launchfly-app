@@ -10456,3 +10456,104 @@ async function proofHonestSuite() {
 }
 
 proofHonestSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Projects: a day that has passed, and the bet's own slot ─────────────── */
+//
+// On 7 Oct the owner's Proof said "3 waiting on you": two questions about
+// guesthouses in Manila for 5 Oct, and one breakage. The two held two of the
+// three slots, so "Hand part of this bet over" was greyed out for the bet's
+// whole fortnight by errands whose night had already gone.
+
+import {
+  MAX_ACTIVE_COMMISSIONS as pdMax, datesNamed as pdDates, lapsedOn as pdLapsed, roomForProject as pdRoom, roomToStart as pdStart, takesASlot as pdSlot,
+} from '../../src/lib/copilot/commission';
+import { waitingOnYou as pdWaiting } from '../../src/lib/copilot/business';
+import { needsYou as pdNeeds } from '../../src/lib/copilot/today';
+import { agentRoster as pdRoster } from '../../src/lib/copilot/machine';
+
+async function projectsDaySuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(p, 'utf8');
+  const today = '2026-10-07';
+
+  /* 1. The days a project's own words name. */
+  assert.deepEqual(pdDates('List the three cheapest guesthouses in Manila for Oct 5 with links', '2026-09-28'), ['2026-10-05']);
+  assert.deepEqual(pdDates('List short-stay rooms in Manila available from Oct 5, cheapest first', '2026-09-28'), ['2026-10-05'], '", cheapest" is not a year');
+  assert.deepEqual(pdDates('Which year should I use for October 5: 2025 or 2026?', '2026-09-28'), ['2026-10-05'], 'a year only when it is attached');
+  assert.deepEqual(pdDates('Book it for the 5th of October 2025', '2026-09-28'), ['2025-10-05']);
+  assert.deepEqual(pdDates('Flights from Oct 5 to Oct 9', '2026-09-28'), ['2026-10-05', '2026-10-09']);
+  assert.deepEqual(pdDates('Check in 2026-10-05', '2026-09-28'), ['2026-10-05']);
+  assert.deepEqual(pdDates('Find a venue for 12 Jan', '2026-09-28'), ['2027-01-12'], 'the next one after it was written');
+  assert.deepEqual(pdDates('Plan for Oct 5', '2026-10-06'), ['2027-10-05'], 'written after this year’s: it meant next year’s');
+  assert.deepEqual(pdDates('Step by step plan to exit Philippines', '2026-09-15'), []);
+  assert.deepEqual(pdDates('Feb 30 or 2026-02-30', '2026-01-01'), [], 'a day that does not exist is not read as one');
+
+  /* 2. Lapsed: only waiting on the person, only once the last day named has gone. */
+  const c = (objective: string, status: 'draft' | 'active' | 'blocked' | 'done' | 'stopped', id = objective) => ({ id, objective, status, created_at: '2026-09-28T03:00:00Z' });
+  const guesthouses = c('List the three cheapest guesthouses in Manila for Oct 5 with links', 'blocked', 'g');
+  const rooms = c('List short-stay rooms in Manila available from Oct 5, cheapest first', 'blocked', 'r');
+  const exit = c('Step by step plan to exit Philippines', 'blocked', 'x');
+  assert.equal(pdLapsed(guesthouses, today), '2026-10-05');
+  assert.equal(pdLapsed(guesthouses, '2026-10-05'), null, 'on the day itself it is still the day');
+  assert.equal(pdLapsed({ ...guesthouses, status: 'draft' }, today), '2026-10-05', 'a draft nobody approved lapses too');
+  assert.equal(pdLapsed({ ...guesthouses, status: 'active' }, today), null, 'running work is never lapsed: the worker is not waiting on anyone');
+  assert.equal(pdLapsed({ ...guesthouses, status: 'done' }, today), null);
+  assert.equal(pdLapsed(c('Flights from Oct 5 to Oct 9', 'blocked'), today), null, 'the latest day named is the one that has to pass');
+  assert.equal(pdLapsed(exit, today), null, 'no day named, nothing inferred');
+  assert.deepEqual([pdSlot(guesthouses, today), pdSlot(exit, today), pdSlot({ ...exit, status: 'done' }, today)], [false, true, false]);
+
+  /* 3. The three slots, counted as the server counts them. */
+  const errands = [guesthouses, rooms, exit];
+  assert.equal(pdRoom(errands, today), true, 'two of three are past their day: room for one more');
+  const three = [exit, c('Pricing check', 'active', 'p'), c('Client onboarding', 'draft', 'o')];
+  assert.equal(pdRoom(three, today), false, `${pdMax} on the go is the cap`);
+  assert.equal(pdRoom(three, today, []), true, 'the running bet keeps a slot of its own');
+  assert.equal(pdRoom([...three, c('Interview questions', 'active', 'b1')], today, ['b1']), false, 'one at a time for the bet');
+  assert.equal(pdRoom([...three, c('Interview questions', 'done', 'b1')], today, ['b1']), true, 'a finished one frees it');
+  // Starting: the draft for the bet starts past three running; a draft that is not the bet's does not.
+  const running3 = [c('a', 'active', 'a'), c('b', 'active', 'b'), c('c', 'blocked', 'c'), c('Interview questions', 'draft', 'b1')];
+  assert.equal(pdStart(running3, 'b1', today), false);
+  assert.equal(pdStart(running3, 'b1', today, ['b1']), true);
+  assert.equal(pdStart([...running3, c('Find groups', 'active', 'b0')], 'b1', today, ['b0', 'b1']), false, 'the bet’s slot is already running');
+  assert.equal(pdStart([c('a', 'active', 'a'), c('b', 'active', 'b'), guesthouses, c('d', 'draft', 'd')], 'd', today), true, 'a lapsed question is not running work');
+
+  /* 4. Not waiting on you, not on the Path, not the Researcher's — said on its card instead. */
+  const tg = threadV2({ id: 'g', objective: guesthouses.objective, status: 'blocked', created_at: guesthouses.created_at }, [{ kind: 'needs_you', summary: 'Which of these three should I use for the next booking step?' }]);
+  const tr = threadV2({ id: 'r', objective: rooms.objective, status: 'blocked', created_at: rooms.created_at }, [{ kind: 'needs_you', summary: 'Which year should I use for October 5: 2025 or 2026?' }]);
+  const tx = threadV2({ id: 'x', status: 'blocked' }, [{ kind: 'failed', summary: 'Email cannot be sent' }]);
+  assert.equal(pdWaiting([tg, tr, tx]), 3, 'without a day, as before');
+  assert.equal(pdWaiting([tg, tr, tx], today), 1, 'the owner’s "3 waiting on you" was one');
+  const asks = pdNeeds({ commissions: [tg, tr, tx], capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false, today });
+  assert.deepEqual(asks.map((a) => a.key), ['f:x']);
+  assert.equal(pdNeeds({ commissions: [tg, tr, tx], capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false }).length, 3);
+  const roster = (t?: string) => pdRoster({
+    now: new Date('2026-10-07T01:00:00Z'), today: t, supplyLastRun: null, sourced: 0, hasTargeting: false, matchesLeft: 10, sources: [], finds: 0, offerEmpty: false, queueCount: 0, drafted: 0,
+    workerConnected: true, commissions: [tg, tr, threadV2({ id: 'y', status: 'active' })], lastCronRun: null, lastRun: null, jobsRan: null, broke: [],
+  } as Parameters<typeof pdRoster>[0]).find((a) => a.key === 'researcher')!;
+  assert.equal(roster(today).line, '1 project running');
+  assert.equal(roster(undefined).line, '3 projects running · 2 waiting on you');
+  const card = src('src/app/copilot/_components/v2/ProjectCard.tsx');
+  assert.match(card, /const lapsed = today \? lapsedOn\(c, today\) : null;/);
+  assert.match(card, /It was for \{dayWords\(lapsed\)\}, which has passed/);
+  assert.match(card, /actions\.commissionAction\(c\.id, 'stop'\)/, 'Stop on the card: inferred, never acted on for them');
+  assert.match(src('src/app/copilot/_components/v2/ProofSheets.tsx'), /<Project key=\{t\.commission\.id\} thread=\{t\} actions=\{actions\} today=\{home\.recent\.today\} \/>/);
+
+  /* 5. The bet's own project is the bet's: checked on the record, tied by the server, approved into its slot. */
+  const create = src('src/app/api/copilot/commissions/route.ts');
+  assert.match(create, /const running = home\?\.lab\?\.bets\.find\(\(x\) => x\.state === 'running' && x\.bet\.id === b\.bet\);\s*if \(!running\) return fail\('That bet is not running\.'\);/, 'a slot only for the bet that runs');
+  assert.match(create, /forBet: bet\?\.linked,/);
+  assert.match(create, /insertLabEvent\(auth\.pid, LAB_LINK, \{ bet: bet\.id, commission: commission\.id \}\)/, 'tied in the same request');
+  assert.match(src('src/app/api/copilot/commissions/[id]/route.ts'), /approveCommission\(auth\.pid, id, \{ today: before\?\.recent\.today, forBet: bet \? before\?\.lab\?\.links\?\.\[bet\.bet\.id\] \?\? \[\] : undefined \}\)/);
+  const store = src('src/lib/copilot/store.ts');
+  assert.match(store, /if \(!roomForProject\(all, today, input\.forBet\)\) \{/);
+  assert.match(store, /if \(!roomToStart\(all, id, today, opts\.forBet\)\) \{/);
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /full=\{agentIsFull\(home, lab\.links\[lab\.current\.bet\.id\] \?\? \[\]\)\}/, 'the bet’s card counts its own slot');
+  assert.match(tab, /authority: 'read', bet: view\.bet\.id \}\);/);
+  assert.match(tab, /move\.run\(m, why, tie, b\.id\)/, 'its prep goes over as the bet’s own too');
+  assert.match(src('src/lib/copilot/jobs/propose.ts'), /held: commissions\.filter\(\(c\) => takesASlot\(c, todayIso\(ctx\.profile\.timezone\)\)\)\.length,/, 'proposals count slots as the cap does');
+
+  console.log('copilot-core: projects day checks passed');
+}
+
+projectsDaySuite().catch((e) => { console.error(e); process.exit(1); });

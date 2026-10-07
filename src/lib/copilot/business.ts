@@ -55,7 +55,7 @@
 // Pure: no DB import.
 
 import type { AssetKind } from './assets';
-import { blockedOn } from './commission';
+import { blockedOn, lapsedOn } from './commission';
 import { MIN_SAMPLE } from './diagnose';
 import type { Agent, AgentKey } from './machine';
 import { FOUND_BY_LABEL, foundByOf } from './offer';
@@ -951,9 +951,13 @@ export function changeLine(c: ChainChange): string {
 
 /* ─── The rest of the tab ─────────────────────────────────────────────────── */
 
-/** Projects that cannot move without the person: a draft to approve, a question, or a breakage to retry. */
-export function waitingOnYou(threads: CommissionThread[]): number {
-  return threads.filter((t) => t.commission.status === 'draft' || blockedOn(t.commission, t.report) !== null).length;
+/**
+ * Projects that cannot move without the person: a draft to approve, a question,
+ * or a breakage to retry — less any waiting on a day that has passed
+ * (commission.ts lapsedOn), which nothing the person answers can now make useful.
+ */
+export function waitingOnYou(threads: CommissionThread[], today?: string): number {
+  return threads.filter((t) => (t.commission.status === 'draft' || blockedOn(t.commission, t.report) !== null) && !(today && lapsedOn(t.commission, today))).length;
 }
 
 /**

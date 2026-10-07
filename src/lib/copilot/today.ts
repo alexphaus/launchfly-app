@@ -18,7 +18,7 @@
 //
 // Pure: no DB import. The rows come from HomeData; the tab renders them.
 
-import { blockedOn } from './commission';
+import { blockedOn, lapsedOn } from './commission';
 import type { CaptureAsk } from './capture';
 import type { MotionRow } from './motion';
 import type { RecentOutcome } from './review';
@@ -255,6 +255,8 @@ export interface NeedsInput {
   noOffer: boolean;
   /** Introductions waiting to be followed up, oldest first. */
   intros?: IntroAsk[];
+  /** The person's day: a project waiting on a day that has passed is not asked about (commission.ts lapsedOn). */
+  today?: string;
 }
 
 /**
@@ -275,6 +277,9 @@ export function needsYou(input: NeedsInput): AskRow[] {
   const approvals: AskRow[] = [];
   for (const t of input.commissions) {
     const c = t.commission;
+    // "Which guesthouse for Oct 5?" on 7 Oct is not something the person owes:
+    // said on its card under Projects, with Stop, and not asked here.
+    if (input.today && lapsedOn(c, input.today)) continue;
     if (c.status === 'draft') {
       approvals.push({ key: `a:${c.id}`, kind: 'approve', title: c.objective, detail: 'Written and waiting — nothing runs until you approve it', id: c.id });
       continue;

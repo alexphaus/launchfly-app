@@ -454,6 +454,96 @@ export function nextStatus(current: CommissionStatus, events: Array<{ kind: Comm
   return 'active';
 }
 
+/* ─── A day that has passed ───────────────────────────────────────────────── */
+
+const MONTH_RE = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+const MONTH_AT: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const ISO_DAY = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+// "Oct 5", "October 5th", "Oct 5, 2026" — a year only when it is attached, so
+// "October 5: 2025 or 2026?" reads as October 5 and no year.
+const MONTH_DAY = new RegExp(`\\b${MONTH_RE}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?:,?\\s+(\\d{4})\\b)?`, 'gi');
+// "5 Oct", "5th of October", "5 October 2026".
+const DAY_MONTH = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+of)?\\s+${MONTH_RE}\\b\\.?(?:,?\\s+(\\d{4})\\b)?`, 'gi');
+
+const isoOf = (y: number, m: number, d: number): string | null => {
+  const t = Date.UTC(y, m - 1, d);
+  const x = new Date(t);
+  return x.getUTCFullYear() === y && x.getUTCMonth() === m - 1 && x.getUTCDate() === d ? x.toISOString().slice(0, 10) : null;
+};
+
+/**
+ * The days a project's words name, as ISO days. A day with no year is the
+ * first one on or after the day the words were written: "Oct 5" written on 28
+ * Sep is this 5 October, and written on 6 Oct it is next year's — so a project
+ * is never read as past on a date it could not have meant.
+ */
+export function datesNamed(text: string, written: string): string[] {
+  const out: string[] = [];
+  const add = (y: number | null, m: number, d: number) => {
+    if (y) { const iso = isoOf(y, m, d); if (iso) out.push(iso); return; }
+    const year = Number(written.slice(0, 4));
+    const first = isoOf(year, m, d);
+    const day = first && first >= written.slice(0, 10) ? first : isoOf(year + 1, m, d);
+    if (day) out.push(day);
+  };
+  for (const x of text.matchAll(ISO_DAY)) { const iso = isoOf(Number(x[1]), Number(x[2]), Number(x[3])); if (iso) out.push(iso); }
+  for (const x of text.matchAll(MONTH_DAY)) add(x[3] ? Number(x[3]) : null, MONTH_AT[x[1].slice(0, 3).toLowerCase()], Number(x[2]));
+  for (const x of text.matchAll(DAY_MONTH)) add(x[3] ? Number(x[3]) : null, MONTH_AT[x[2].slice(0, 3).toLowerCase()], Number(x[1]));
+  return [...new Set(out)].sort();
+}
+
+/**
+ * The day a project was for, when that day has passed and the project is
+ * waiting on the person — a draft never approved, or one stopped on a question
+ * or a breakage. Read off the objective, the person's own words for it: "List
+ * guesthouses in Manila for Oct 5" asked on 7 Oct "which of these three should I
+ * book?", and that question sat on the Path as something the person owed, and
+ * held one of their three slots, two days after the night it was about. The
+ * latest day named is the one that has to pass: "from Oct 5 to Oct 9" is still
+ * live on the 6th.
+ *
+ * Inferred from the calendar, never asked (invariant 5's reasoning) — and only
+ * inferred, never acted on: the project is not stopped for them. It stops
+ * counting as theirs to answer and as a slot taken, and says why on its card,
+ * with Stop one tap away. Running work is never lapsed: a worker on it is not
+ * waiting on anybody.
+ */
+export function lapsedOn(c: Pick<Commission, 'objective' | 'status' | 'created_at'>, today: string): string | null {
+  if (c.status !== 'draft' && c.status !== 'blocked') return null;
+  const days = datesNamed(c.objective, (c.created_at || today).slice(0, 10));
+  const last = days[days.length - 1];
+  return last && last < today ? last : null;
+}
+
+/** On the go and taking one of the three slots: not over, and not waiting on a day that has passed. */
+export const takesASlot = (c: Pick<Commission, 'objective' | 'status' | 'created_at'>, today: string): boolean =>
+  c.status !== 'done' && c.status !== 'stopped' && !lapsedOn(c, today);
+
+/**
+ * Whether another project can go on. Three on the go is the cap — but the bet
+ * running is the one piece of work Proof exists to move, and two errands handed
+ * over on a Sunday were enough to grey out "Hand part of this bet over" for its
+ * whole fortnight. So the running bet keeps one slot of its own: a project for
+ * it can go on whatever else is on the go, as long as no other project for it
+ * is. `forBet` is the projects already tied to the running bet.
+ */
+export function roomForProject(cs: Array<Pick<Commission, 'id' | 'objective' | 'status' | 'created_at'>>, today: string, forBet?: readonly string[]): boolean {
+  const held = cs.filter((c) => takesASlot(c, today));
+  if (held.length < MAX_ACTIVE_COMMISSIONS) return true;
+  return !!forBet && !held.some((c) => forBet.includes(c.id));
+}
+
+/**
+ * Whether the draft `id` can start: fewer than three running besides it, or it
+ * is the running bet's one project (roomForProject) and no other project for
+ * the bet runs. The cap at the moment work starts, where approving enforces it.
+ */
+export function roomToStart(cs: Array<Pick<Commission, 'id' | 'objective' | 'status' | 'created_at'>>, id: string, today: string, forBet?: readonly string[]): boolean {
+  const running = cs.filter((c) => c.id !== id && (c.status === 'active' || c.status === 'blocked') && !lapsedOn(c, today));
+  if (running.length < MAX_ACTIVE_COMMISSIONS) return true;
+  return !!forBet && forBet.includes(id) && !running.some((c) => forBet.includes(c.id));
+}
+
 /** Which commissions the dispatcher should hand out tonight. */
 export function dueCommissions(all: Commission[], max = MAX_ACTIVE_COMMISSIONS): Commission[] {
   return all

@@ -14,6 +14,7 @@ import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster } from '@/lib/copilot/machine';
 import { LINK_LABEL, businessChain, teamLine, waitingOnYou } from '@/lib/copilot/business';
+import { lapsedOn } from '@/lib/copilot/commission';
 import { assetGaps } from '@/lib/copilot/assets';
 import { historyOf } from '@/lib/copilot/history';
 import { labView, openIntros } from '@/lib/copilot/lab';
@@ -84,6 +85,7 @@ export function derive(home: HomeData) {
     queueIsCall: home.callMove?.job === 'send_queue',
     noOffer,
     intros,
+    today: home.recent.today,
   });
   // A brand new account: nothing to call, nothing found, nothing handed over.
   // One card that says what is happening beats five empty sections.
@@ -252,6 +254,7 @@ export function derive(home: HomeData) {
   /* The team: each agent placed on the part of the business it runs, and one line for Proof */
   const team = agentRoster({
     now,
+    today: home.recent.today,
     supplyLastRun: home.supplyLastRun,
     sourced: home.metrics.pipeline.sourced,
     // Maps targeting or a web search it can plan: either is the Scout with something to do.
@@ -315,7 +318,9 @@ export function derive(home: HomeData) {
       timezone: home.profile.timezone,
     }),
     team: teamLine(team),
-    waiting: waitingOnYou(home.commissions),
+    waiting: waitingOnYou(home.commissions, home.recent.today),
+    /** Projects waiting on a day that has passed: said under Projects with Stop, counted as neither waiting nor a slot. */
+    lapsed: home.commissions.filter((t) => !!lapsedOn(t.commission, home.recent.today)).length,
     intros,
   };
 

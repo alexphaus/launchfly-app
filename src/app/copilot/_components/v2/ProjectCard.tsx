@@ -5,7 +5,8 @@
 // the projects tied to it on its own card (ProofTab.tsx).
 import { useState } from 'react';
 import { suggestedAsks, type LinkMove } from '@/lib/copilot/business';
-import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, blockedOn, commissionChip } from '@/lib/copilot/commission';
+import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, blockedOn, commissionChip, lapsedOn } from '@/lib/copilot/commission';
+import { dayWords } from '@/lib/copilot/lab';
 import { AGENT_STATE_LABEL, type Agent } from '@/lib/copilot/machine';
 import type { CommissionThread, HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
@@ -91,11 +92,15 @@ export function Composer({ home, d, actions, brief, full }: { home: HomeData; d:
  * project wants, an answer, cost the most taps. Now the question has a box on
  * the card, and a breakage its retry; everything else is one tap into the sheet.
  */
-export function Project({ thread, actions }: { thread: CommissionThread; actions: Actions }) {
+export function Project({ thread, actions, today }: { thread: CommissionThread; actions: Actions; today?: string }) {
   const c = thread.commission;
   const r = thread.report;
-  const chip = commissionChip(c, r);
-  const waiting = blockedOn(c, r);
+  // The day it was for has passed (commission.ts lapsedOn): said instead of the
+  // question or the retry, with Stop, and nothing asked of the person. Answering
+  // stays one tap away, in the project itself.
+  const lapsed = today ? lapsedOn(c, today) : null;
+  const chip = lapsed ? { label: 'Its day has passed', tone: 'stopped' as const } : commissionChip(c, r);
+  const waiting = lapsed ? null : blockedOn(c, r);
   const ask = waiting === 'you' ? r.yours[0] ?? null : null;
   const fault = waiting === 'worker' ? r.stopped[0] ?? null : null;
   const last = r.did[0] ?? null;
@@ -122,12 +127,18 @@ export function Project({ thread, actions }: { thread: CommissionThread; actions
     setBusy(false);
     if (!run.ok) setError(run.error ?? 'Restarted, but it could not be handed over just now');
   };
+  const stop = async () => {
+    setBusy(true); setError(null);
+    const res = await actions.commissionAction(c.id, 'stop');
+    setBusy(false);
+    if (!res.ok) setError(res.error ?? 'Could not stop it');
+  };
 
   return (
     <div className={`cp2-bz-job ${chip.tone}`}>
       <button className="cp2-bz-job-head" onClick={open}>
         <span className="cp2-bz-job-top">
-          <span className={`cp2-bz-chip ${chip.tone}`}>{c.status === 'draft' ? 'Waiting for your OK' : chip.label}</span>
+          <span className={`cp2-bz-chip ${chip.tone}`}>{c.status === 'draft' && !lapsed ? 'Waiting for your OK' : chip.label}</span>
           {r.progress.total > 0 && c.status !== 'draft' && <span className="cp2-bz-job-n">{r.progress.done} of {r.progress.total} done</span>}
           {r.fresh > 0 && <span className="cp2-bz-job-new">{r.fresh} new</span>}
         </span>
@@ -156,7 +167,13 @@ export function Project({ thread, actions }: { thread: CommissionThread; actions
           <button className="cp-btn sm" disabled={busy} onClick={() => void retry()}>{busy ? 'Trying again…' : 'Try again'}</button>
         </div>
       )}
-      {c.status === 'draft' && <button className="cp2-bz-job-go" onClick={open}>Read it and approve →</button>}
+      {lapsed && (
+        <div className="cp2-bz-pastday">
+          <p>It was for {dayWords(lapsed)}, which has passed — so it is not counted as waiting on you, or as one of your {MAX_ACTIVE_COMMISSIONS}.</p>
+          <button className="cp-btn sm" disabled={busy} onClick={() => void stop()}>{busy ? 'Stopping…' : 'Stop it'}</button>
+        </div>
+      )}
+      {c.status === 'draft' && !lapsed && <button className="cp2-bz-job-go" onClick={open}>Read it and approve →</button>}
       {error && <p className="cp-help cp2-err">{error}</p>}
     </div>
   );

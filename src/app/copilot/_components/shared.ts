@@ -297,7 +297,11 @@ export interface Actions {
   settleWorking(id: string, status: 'live' | 'declined'): Promise<{ ok: boolean; error?: string }>;
   removeWorking(id: string): Promise<void>;
   /** Write a mandate. Always created as a draft — approving is a second act. */
-  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string; id?: string }>;
+  /**
+   * `bet`: the running bet's id — the project is its own, takes the slot the bet
+   * keeps, and is tied to it by the server (`tied`; `untied` says why not).
+   */
+  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number; bet?: string }): Promise<{ ok: boolean; error?: string; id?: string; tied?: boolean; untied?: string | null }>;
   /** Grant authority, carry on after answering, call it off, finish, or mark read. */
   /**
    * `answer` is the user's reply to a needs_you, and only 'unblock' carries one.

@@ -24,14 +24,22 @@
 
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
-/** The one scope: read the record. Writing waits for its own scope and its own consent. */
+/** Read the record. Every connection has it. */
 export const SCOPE_READ = 'copilot.read';
+/**
+ * Propose a conversation to log or a test for the shelf (proposals.ts): its
+ * own scope, granted only by a tick on the consent screen, so a connection made
+ * to read never starts writing. Nothing proposed counts until the person keeps it.
+ */
+export const SCOPE_PROPOSE = 'copilot.propose';
+/** What the resource can be asked for. Claude asks for what is listed; the person decides what is granted. */
+export const RESOURCE_SCOPES = [SCOPE_READ, SCOPE_PROPOSE] as const;
 /**
  * What the authorization server lists. offline_access is there because Claude
  * asks for exactly what is listed, and a refresh token is how a connection
  * outlives the hour its access token does.
  */
-export const AS_SCOPES = [SCOPE_READ, 'offline_access'] as const;
+export const AS_SCOPES = [SCOPE_READ, SCOPE_PROPOSE, 'offline_access'] as const;
 
 /** Where the MCP server answers. The resource Claude is told about is this, on the app's own origin. */
 export const MCP_PATH = '/api/copilot/mcp';
@@ -259,13 +267,18 @@ export function sameResource(a: unknown, b: unknown): boolean {
 }
 
 /**
- * The scope granted, whatever was asked. Unknown scopes grant nothing and are
- * not refused (RFC 6749 lets the server issue less than asked), so a client that
- * also asks for `openid` still connects, and the token says what it can do.
+ * The scope granted. Reading always; proposing only when the person ticked it
+ * on the consent screen — never because a client asked, since every client asks
+ * for everything listed. Unknown scopes grant nothing and are not refused (RFC
+ * 6749 lets the server issue less than asked), so a client that also asks for
+ * `openid` still connects, and the token says what it can do.
  */
-export function grantedScope(_asked: unknown): string {
-  return SCOPE_READ;
+export function grantedScope(_asked: unknown, propose = false): string {
+  return propose ? `${SCOPE_READ} ${SCOPE_PROPOSE}` : SCOPE_READ;
 }
+
+/** Whether a granted scope lets this connection propose. */
+export const canPropose = (scope: unknown): boolean => typeof scope === 'string' && scope.split(/\s+/).includes(SCOPE_PROPOSE);
 
 /* ─── The authorization request ───────────────────────────────────────────── */
 
@@ -578,7 +591,7 @@ export function protectedResourceMetadata(base: string) {
   return {
     resource: resourceUrl(b),
     authorization_servers: [b],
-    scopes_supported: [SCOPE_READ],
+    scopes_supported: [...RESOURCE_SCOPES],
     bearer_methods_supported: ['header'],
     resource_name: 'Copilot',
   };
@@ -616,7 +629,8 @@ export function resourceMetadataUrl(base: string): string {
  * takes the scope to ask for from here.
  */
 export function wwwAuthenticate(base: string, err?: { error: 'invalid_token'; description: string }): string {
-  const parts = [`resource_metadata="${resourceMetadataUrl(base)}"`, `scope="${SCOPE_READ}"`];
+  // Both, so Claude asks for both and the consent screen decides: what is granted is never wider than what was asked.
+  const parts = [`resource_metadata="${resourceMetadataUrl(base)}"`, `scope="${RESOURCE_SCOPES.join(' ')}"`];
   if (err) parts.unshift(`error="${err.error}"`, `error_description="${err.description.replace(/["\\]/g, '')}"`);
   return `Bearer ${parts.join(', ')}`;
 }

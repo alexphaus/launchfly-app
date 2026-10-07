@@ -907,6 +907,16 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         return { ok: false, error: e instanceof Error ? e.message : 'Could not gather your context' };
       }
     },
+    async answerProposal(id, action) {
+      try {
+        const r = await post<{ home: HomeData }>('/proposals', { action, id });
+        setHome(r.home);
+        say(action === 'keep' ? 'Kept. It is yours now, and it counts.' : 'Dropped. Nothing of it was kept.');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not answer that' };
+      }
+    },
     async signalLinks() {
       try {
         const r = await get<{ links: SignalLinks | null }>('/signal');

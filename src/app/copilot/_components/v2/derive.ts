@@ -17,7 +17,8 @@ import { LINK_LABEL, businessChain, teamLine, waitingOnYou } from '@/lib/copilot
 import { lapsedOn } from '@/lib/copilot/commission';
 import { assetGaps } from '@/lib/copilot/assets';
 import { historyOf } from '@/lib/copilot/history';
-import { labView, openIntros } from '@/lib/copilot/lab';
+import { betPrice, labView, openIntros } from '@/lib/copilot/lab';
+import { proposalLine } from '@/lib/copilot/proposals';
 import { chainInputOf, foundOf, proofLine, saidOf } from '@/lib/copilot/proof';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
 import { isFoundBy, offerIsEmpty } from '@/lib/copilot/offer';
@@ -86,6 +87,7 @@ export function derive(home: HomeData) {
     noOffer,
     intros,
     today: home.recent.today,
+    proposals: (home.proposals?.open ?? []).map((p) => ({ id: p.id, line: proposalLine(p, betPrice(home.profile.offer?.price_band, currency).priceLabel), why: p.why })),
   });
   // A brand new account: nothing to call, nothing found, nothing handed over.
   // One card that says what is happening beats five empty sections.

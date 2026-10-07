@@ -407,13 +407,16 @@ function SharedWords({ seed }: { seed: Seed }) {
  * and — the model's proposal, there to be changed — whether they have the
  * problem and how it ended, all as first values for the person to keep.
  */
-export function TalkSheet({ home, via: viaAsked, told, actions }: {
-  home: HomeData; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; actions: Actions;
+export function TalkSheet({ home, via: viaAsked, told, proposal: proposalId, actions }: {
+  home: HomeData; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; proposal?: string; actions: Actions;
 }) {
   const today = home.recent.today;
   const yesterday = shiftDay(today, -1);
   const record: TalkRecord = { talks: home.lab?.talks ?? [], intros: home.lab?.intros };
-  const t = told?.talk;
+  // What Claude proposed, as the sheet's first values (lib/copilot/proposals.ts):
+  // the person's to change, and kept only by this sheet's own save.
+  const [proposed] = useState(() => (proposalId ? home.proposals?.open.find((p) => p.id === proposalId && p.kind === 'talk') ?? null : null));
+  const t: Partial<ToldTalk> | undefined = told?.talk ?? (proposed?.talk ? { ...proposed.talk } : undefined);
   const [who, setWho] = useState(t?.who ?? '');
   const [role, setRole] = useState<TalkRole>(t?.role ?? 'buyer');
   const [problem, setProblem] = useState<Problem | null>(t?.problem ?? null);
@@ -444,6 +447,8 @@ export function TalkSheet({ home, via: viaAsked, told, actions }: {
         on, who: who.trim() || undefined, role, problem: asksProblem(role) ? problem ?? 'unasked' : 'unasked', commitment,
         said: said.trim() || undefined, via: through ?? undefined,
       },
+      // The first save is the proposal kept; the sheet stays open for the next conversation, which is the person's own.
+      ...(proposed && logged === 0 ? { proposal: proposed.id } : {}),
     });
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not log that');
@@ -455,6 +460,7 @@ export function TalkSheet({ home, via: viaAsked, told, actions }: {
     <>
       {/* What was said, until it is logged: the next one in the sitting is typed. */}
       {told && logged === 0 && <ToldLine meta={told.meta} kind="talk" actions={actions} />}
+      {proposed && logged === 0 && <div className="cp2-lab-sheet-book">Proposed by Claude{proposed.why ? ` — ${proposed.why}` : ''}. Change anything, then log it.</div>}
       {/* Said while it is the pick: tapped "No", or logged and reset for the next, it is just a log. */}
       {opened && through === opened.id && <div className="cp2-lab-sheet-book">Through {opened.who ? `${opened.who}’s` : 'an'} introduction</div>}
       <h3>Log a conversation</h3>

@@ -116,6 +116,8 @@ export function ClaudeSheet({ actions }: { actions: Actions }) {
               <div className="cp2-cl-main">
                 <b>{c.name}{c.host && c.name !== c.host ? <span> · {c.host}</span> : null}</b>
                 <span>
+                  {/* oauth.ts SCOPE_PROPOSE, spelled here: that module signs, and does not belong in a page's bundle. */}
+                  {c.scope.split(' ').includes('copilot.propose') ? 'Reads and proposes · ' : 'Reads · '}
                   Connected {shortDay(c.at.slice(0, 10))}
                   {c.seen
                     ? ` · last read ${relTime(c.seen.at)}${c.seen.tool ? `: ${TOOL_TITLE.get(c.seen.tool) ?? c.seen.tool}` : ''} · ${c.seen.n} ${c.seen.n === 1 ? 'read' : 'reads'}`
@@ -128,7 +130,11 @@ export function ClaudeSheet({ actions }: { actions: Actions }) {
           ))}
         </div>
       )}
-      <p className="cp-note">Your email and payment details are not in what it reads. Claude cannot save anything here: what belongs in the record, you log in the app. Said into the mic, it opens filled in.</p>
+      <p className="cp-note">
+        Your email and payment details are not in what it reads. Claude cannot save anything here. If you let it propose when you
+        connected, a conversation or a test it proposes waits under Needs you until you keep it; to change what a connection may
+        do, disconnect it and connect again.
+      </p>
     </>
   );
 }

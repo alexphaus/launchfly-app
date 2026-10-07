@@ -218,7 +218,7 @@ export function doneForYou(input: DoneInput): DoneReport {
 
 /* ─── Needs you ───────────────────────────────────────────────────────────── */
 
-export type AskKind = 'question' | 'intro' | 'fix' | 'approve' | 'confirm' | 'send';
+export type AskKind = 'question' | 'intro' | 'fix' | 'approve' | 'confirm' | 'send' | 'proposal';
 
 export const ASK_LABEL: Record<AskKind, string> = {
   question: 'Question',
@@ -227,6 +227,7 @@ export const ASK_LABEL: Record<AskKind, string> = {
   approve: 'Approve',
   confirm: 'Confirm',
   send: 'To send',
+  proposal: 'From Claude',
 };
 
 export interface AskRow {
@@ -257,6 +258,8 @@ export interface NeedsInput {
   intros?: IntroAsk[];
   /** The person's day: a project waiting on a day that has passed is not asked about (commission.ts lapsedOn). */
   today?: string;
+  /** What Claude proposed, waiting to be kept or dropped (proposals.ts), with each one's line. */
+  proposals?: Array<{ id: string; line: string; why: string | null }>;
 }
 
 /**
@@ -298,7 +301,13 @@ export function needsYou(input: NeedsInput): AskRow[] {
     detail: `${days === 1 ? 'Offered yesterday' : `Offered ${days} days ago`} — ask before they forget offering.${t.said ? ` “${t.said}”` : ''}`,
   }));
 
-  const out: AskRow[] = [...questions, ...intros, ...fixes];
+  // After what blocks work and what goes cold: a proposal is the person's own
+  // conversation or idea carried over from a chat, and waiting costs it nothing.
+  const proposed: AskRow[] = (input.proposals ?? []).map((p) => ({
+    key: `p:${p.id}`, kind: 'proposal', id: p.id, title: p.line,
+    detail: `Proposed by Claude${p.why ? ` — ${p.why}` : ''}. Not logged until you keep it.`,
+  }));
+  const out: AskRow[] = [...questions, ...intros, ...fixes, ...proposed];
   if (input.capture) out.push({ key: 'capture', kind: 'confirm', title: input.capture.headline, detail: input.capture.because });
   out.push(...approvals);
   if (input.queue.count > 0 && !input.queueIsCall && !input.noOffer) {

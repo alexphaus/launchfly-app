@@ -9145,7 +9145,7 @@ conversationsSuite().catch((e) => { console.error(e); process.exit(1); });
 
 import {
   AS_SCOPES as OC_AS_SCOPES, CODE_TTL_S as OC_CODE_TTL, MCP_GRANT as OC_GRANT, MCP_REVOKE as OC_REVOKE, MCP_SEEN as OC_SEEN,
-  REFRESH_GRACE_S as OC_GRACE, SCOPE_READ as OC_READ,
+  REFRESH_GRACE_S as OC_GRACE, SCOPE_PROPOSE as OC_PROPOSE, SCOPE_READ as OC_READ,
   askerOf as ocAsker, authServerMetadata as ocASM, authenticateClient as ocAuthClient, basicAuth as ocBasic, checkAuthorize as ocCheck,
   checkCodeGrant as ocCheckCode, checkRefreshGrant as ocCheckRefresh, clientOf as ocClientOf, clientRef as ocClientRef, clientSecret as ocSecret,
   connectionsOf as ocConnections, consentToken as ocConsent, consentTokenMatches as ocConsentOk, grantLive as ocLive, issueCode as ocIssue,
@@ -9330,7 +9330,7 @@ async function connectorSuite() {
   const prm = ocPRM(`${base}/`);
   assert.equal(prm.resource, resource, 'the resource is exactly the URL pasted into Claude');
   assert.equal(prm.authorization_servers[0], base, 'Claude reads only the first');
-  assert.deepEqual(prm.scopes_supported, [OC_READ]);
+  assert.deepEqual(prm.scopes_supported, [OC_READ, OC_PROPOSE], 'both listed: Claude asks for both, and the consent screen decides');
   const asm = ocASM(base) as Record<string, unknown>;
   assert.equal(asm.issuer, base);
   assert.equal(asm.authorization_endpoint, `${base}/copilot2/connect`);
@@ -9340,7 +9340,7 @@ async function connectorSuite() {
   assert.deepEqual(asm.scopes_supported, [...OC_AS_SCOPES], 'offline_access listed, so Claude asks for the refresh token');
   assert.equal(asm.client_id_metadata_document_supported, undefined, 'no metadata documents: they mean fetching any URL a client names');
   const www = ocWww(base);
-  assert.ok(www.startsWith('Bearer ') && www.includes(`resource_metadata="${base}/.well-known/oauth-protected-resource/api/copilot/mcp"`) && www.includes(`scope="${OC_READ}"`));
+  assert.ok(www.startsWith('Bearer ') && www.includes(`resource_metadata="${base}/.well-known/oauth-protected-resource/api/copilot/mcp"`) && www.includes(`scope="${OC_READ} ${OC_PROPOSE}"`));
   assert.ok(ocWww(base, { error: 'invalid_token', description: 'It "expired"' }).startsWith('Bearer error="invalid_token", error_description="It expired"'), 'quotes cannot break the header');
   assert.ok(ocSame('https://APP.example.com/api/copilot/mcp/', resource));
   assert.equal(ocSame('https://app.example.com/api/copilot/other', resource), false);
@@ -9479,7 +9479,8 @@ async function connectorSuite() {
     assert.ok(!/currentProfileId|profileIdOr401|cookies\(/.test(s), `${name} never reads the session: the token is the only credential, which is why any origin may call it`);
   }
   assert.match(mcpRoute, /status: 401[\s\S]*www-authenticate/, 'a 401 with the header is the only thing that starts Claude\'s sign-in');
-  assert.ok(mcpRead.indexOf('markSeen(who.pid, who.grant, name, null)') < mcpRead.indexOf('readTool(name, args, who.pid)'), 'a read is recorded before it is made');
+  assert.ok(mcpRead.indexOf('markSeen(who.pid, who.grant, name, null)') < mcpRead.indexOf('readTool(name as ReadToolName, args, who.pid)'), 'a read is recorded before it is made');
+  assert.ok(mcpRead.indexOf('markSeen(who.pid, who.grant, name, null)') < mcpRead.indexOf('proposeTool(name as ProposeToolName, args, who)'), 'and so is a proposal');
   const authorizeRoute = src('app/api/copilot/oauth/authorize/route.ts');
   assert.ok(!/export (async )?function GET/.test(authorizeRoute), 'a code is issued by the tap\'s POST, never by a GET a preview could make');
   assert.match(authorizeRoute, /consentTokenMatches\(/);
@@ -10697,3 +10698,118 @@ async function countLinkSuite() {
 }
 
 countLinkSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Claude proposes; the person keeps ───────────────────────────────────── */
+//
+// The connector read the record and wrote nothing, and the record's slowest
+// input was the person retyping what they had already told a chat. A proposal
+// carries it over and counts for nothing until their tap — on a connection they
+// let propose, by a tick, and never one made to read.
+
+import {
+  PROPOSALS_OPEN_MAX as ppMax, openProposals as ppOpen, proposalLine as ppLine, proposalRoom as ppRoom, proposeTalk as ppTalk, proposeTest as ppTest,
+  MCP_PROPOSAL as ppEvent, MCP_PROPOSAL_END as ppEnd, type Proposal as PpProposal,
+} from '../../src/lib/copilot/proposals';
+import { SCOPE_PROPOSE as ppScope, SCOPE_READ as ppRead, canPropose as ppCan, grantedScope as ppGranted } from '../../src/lib/copilot/oauth';
+import { PROPOSE_INSTRUCTIONS as ppTold, PROPOSE_TOOLS as ppTools, TOOLS as ppReadTools, handleRpc as ppRpc } from '../../src/lib/copilot/mcp';
+import { needsYou as ppNeeds } from '../../src/lib/copilot/today';
+import { pathNow as ppNow } from '../../src/lib/copilot/plan';
+
+async function proposalsSuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(p, 'utf8');
+  const today = '2026-10-07';
+  const ctx = { today, price: 29, priceLabel: '$29', foundBy: 'inbound' as const, shelf: [], open: [] as PpProposal[] };
+
+  /* 1. A conversation: held to the person's own rule, how it ended said, no introduction picked for them. */
+  const talk = ppTalk({ who: 'Maria', role: 'buyer', problem: 'yes', commitment: 'time', said: 'I never know what to do first', why: 'From the call you described' }, ctx);
+  assert.ok(talk.ok);
+  assert.deepEqual(talk.ok && talk.value.talk, { on: today, who: 'Maria', role: 'buyer', problem: 'yes', commitment: 'time', said: 'I never know what to do first', via: null });
+  assert.match((ppTalk({ who: 'Maria' }, ctx) as { error: string }).error, /Say how it ended/, 'a model that did not say how it ended does not say "nothing" for them');
+  assert.match((ppTalk({ commitment: 'none', via: '123' }, ctx) as { error: string }).error, /Leave out via/);
+  assert.equal((ppTalk({ commitment: 'none', on: '2026-10-09' }, ctx) as { ok: boolean }).ok, false, 'a day not lived yet is refused, as the sheet refuses it');
+  assert.equal(ppTalk({ commitment: 'none', role: 'seller', problem: 'yes' }, ctx).ok && (ppTalk({ commitment: 'none', role: 'seller', problem: 'yes' }, ctx) as { value: { talk: { problem: string } } }).value.talk.problem, 'unasked', 'the problem is asked only of who could have it');
+  const waitingTalk: PpProposal = { id: '1', kind: 'talk', at: '', grant: 'g', why: null, talk: (talk as { value: { talk: PpProposal['talk'] } }).value.talk, test: null };
+  assert.match((ppTalk({ who: 'maria', role: 'buyer', problem: 'yes', commitment: 'time', said: 'I never know what to do first' }, { ...ctx, open: [waitingTalk] }) as { error: string }).error, /already proposed/);
+
+  /* 2. A test: a count this business can keep, not one already kept, its play said as Claude's. */
+  const test = ppTest({ part: 'who', belief: 'People starting out have the problem I fix', metric: 'committed', target: 3, days: 14, tries: { metric: 'talks', planned: 10 }, play: 'Ten problem conversations', how: 'Ask about the last time it cost them.' }, ctx);
+  assert.ok(test.ok);
+  assert.deepEqual(test.ok && test.value.test.idea, { label: 'Ten problem conversations', how: 'Ask about the last time it cost them.', from: 'Claude, proposed' });
+  assert.match((ppTest({ part: 'reach', belief: 'They answer', metric: 'replied', target: 2, days: 7 }, ctx) as { error: string }).error, /cannot count replies/, 'sends and replies only where the app sends');
+  assert.match((ppTest({ part: 'pay', belief: 'They pay', metric: 'paid_at_price', target: 2, days: 7 }, { ...ctx, price: null }) as { error: string }).error, /needs a price/);
+  const kept = { part: 'who' as const, belief: 'People starting out have the problem I fix', metric: 'committed' as const, play: null, idea: { label: 'Ten problem conversations', how: 'x', from: 'Claude, proposed' } };
+  assert.match((ppTest({ part: 'who', belief: 'People starting out have the problem I fix', metric: 'committed', target: 3, days: 14, play: 'Ten problem conversations', how: 'y' }, { ...ctx, shelf: [kept] }) as { error: string }).error, /already on the shelf or waiting/);
+  assert.equal(ppRoom(Array.from({ length: ppMax }, (_, k) => ({ ...waitingTalk, id: String(k) }))) !== null, true, `${ppMax} waiting is the most`);
+  assert.equal(ppRoom([waitingTalk]), null);
+
+  /* 3. Read back: ended ones gone, the newest first, a draft that no longer holds dropped rather than shown half. */
+  const rows = [
+    { id: 10, event_type: ppEvent, payload: { kind: 'talk', grant: 'g', talk: { on: '2026-10-06', who: 'Ana', role: 'buyer', problem: 'yes', commitment: 'intro' } }, created_at: '2026-10-06T10:00:00Z' },
+    { id: 11, event_type: ppEvent, payload: { kind: 'test', grant: 'g', test: { part: 'pay', belief: 'They pay $29', metric: 'paid_at_price', target: 2, days: 14 } }, created_at: '2026-10-06T11:00:00Z' },
+    { id: 12, event_type: ppEvent, payload: { kind: 'talk', talk: { who: 'Ben' } }, created_at: '2026-10-06T12:00:00Z' },
+    { id: 13, event_type: ppEvent, payload: { kind: 'talk', talk: { who: 'Cy', commitment: 'none' } }, created_at: '2026-10-06T13:00:00Z' },
+    { id: 14, event_type: ppEnd, payload: { proposal: '13', outcome: 'dropped' }, created_at: '2026-10-06T14:00:00Z' },
+  ];
+  const open = ppOpen(rows, today);
+  assert.deepEqual(open.map((p) => p.id), ['12', '11', '10'], 'newest first, the dropped one gone');
+  assert.equal(ppLine(open[2]), 'A conversation with Ana: could buy, they have it, an intro');
+  assert.equal(ppLine(open[1], '$29'), 'A test on what they pay: “They pay $29” — 2 sales at your $29 within 2 weeks');
+  assert.equal(open[0].talk?.commitment, 'none', 'read back by the sheet’s own rule: a stored conversation with no ending reads as nothing, as one logged before there was a choice does');
+
+  /* 4. Its own scope, by a tick: granted only when the person widens it. */
+  assert.equal(ppGranted(`${ppRead} ${ppScope} offline_access`), ppRead, 'asked is not granted');
+  assert.equal(ppGranted(ppRead, true), `${ppRead} ${ppScope}`);
+  assert.ok(ppCan(`${ppRead} ${ppScope}`) && !ppCan(ppRead) && !ppCan(undefined));
+  const authorize = src('src/app/api/copilot/oauth/authorize/route.ts');
+  assert.match(authorize, /scope: grantedScope\(form\.scope, form\.propose === 'yes'\)/);
+  const consent = src('src/app/copilot2/connect/page.tsx');
+  assert.match(consent, /<input type="checkbox" name="propose" value="yes" \/>/, 'a tick, unticked until the person ticks it');
+  assert.ok(!/defaultChecked|checked=/.test(consent), 'never ticked for them');
+  assert.match(consent, /Nothing it proposes counts until you do\./);
+
+  /* 5. The protocol: a connection made to read lists no proposal and is refused one; one let propose is told what a proposal is. */
+  const ran: string[] = [];
+  const reader = { call: async (name: string) => { ran.push(name); return { text: `ran ${name}` }; } };
+  const proposer = { ...reader, propose: true };
+  const listed = async (c: typeof reader) => ((await ppRpc({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, c as never)) as { result: { tools: Array<{ name: string }> } }).result.tools.map((t) => t.name);
+  assert.deepEqual(await listed(reader), ppReadTools.map((t) => t.name));
+  assert.deepEqual(await listed(proposer), [...ppReadTools, ...ppTools].map((t) => t.name));
+  const refused = await ppRpc({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'propose_conversation', arguments: { commitment: 'none' } } }, reader as never) as { result: { isError: boolean; content: Array<{ text: string }> } };
+  assert.ok(refused.result.isError && /can only read/.test(refused.result.content[0].text) && !ran.length, 'refused before it runs, with the way to get it');
+  await ppRpc({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'propose_conversation', arguments: { commitment: 'none' } } }, proposer as never);
+  assert.deepEqual(ran, ['propose_conversation']);
+  const init = await ppRpc({ jsonrpc: '2.0', id: 4, method: 'initialize', params: {} }, proposer as never) as { result: { instructions: string } };
+  assert.equal(init.result.instructions, ppTold);
+  assert.ok(/not saved/.test(ppTold) && /never that it was logged or kept/.test(ppTold) && /never a number they did not give/.test(ppTold));
+  for (const t of ppTools) {
+    assert.deepEqual([t.annotations.readOnlyHint, t.annotations.destructiveHint], [false, false], `${t.name} adds to an inbox and destroys nothing`);
+    assert.ok(t.name.startsWith('propose_'), t.name);
+  }
+  for (const t of [...ppReadTools, ...ppTools]) {
+    assert.ok(/^(get|propose)_/.test(t.name), `no tool writes the record itself — logs, keeps, starts, sends: ${t.name}`);
+  }
+  assert.match(src('src/app/api/copilot/mcp/route.ts'), /const propose = canPropose\(auth\.scope\);/);
+  assert.match(src('src/app/api/copilot/mcp/read.ts'), /if \(proposing && !who\.propose\) return \{ text: 'This connection can only read\.', isError: true \};/, 'checked again where it runs');
+  assert.match(src('src/app/copilot/_components/v2/ClaudeSheet.tsx'), new RegExp(`includes\\('${ppScope.replace('.', '\\.')}'\\)`), 'the screen’s spelling of the scope is the scope');
+
+  /* 6. Waiting on the person: beside the move, never the move, and kept once. */
+  const proposals = [{ id: '10', line: 'A conversation with Ana: could buy, they have it, an intro', why: 'From the call you described' }];
+  const asks = ppNeeds({ commissions: [], capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false, proposals });
+  assert.deepEqual(asks.map((a) => [a.kind, a.id]), [['proposal', '10']]);
+  assert.equal(asks[0].detail, 'Proposed by Claude — From the call you described. Not logged until you keep it.');
+  const now = ppNow({ noOffer: false, callPending: false, queue: { count: 0, oldestDays: 0 }, asks, moves: [], capacity: 'moderate', funnel: { sent: 0, replied: 0, won: 0 } as never, freshMatches: 0 });
+  assert.notEqual(now.now.kind, 'proposal', 'a proposal blocks nothing');
+  assert.deepEqual(now.also.map((a) => a.kind), ['proposal']);
+  const keep = src('src/app/api/copilot/proposals/route.ts');
+  assert.match(keep, /if \(!\(await claimProposal\(auth\.pid, id, 'kept'\)\)\) return json\(\{ ok: true, home: await loadHome\(auth\.pid\) \}\);\s*try \{\s*await insertLabEvent\(auth\.pid, write\.type, write\.payload\);\s*\} catch \(e\) \{\s*await unclaimProposal\(auth\.pid, id\);/, 'claimed first, put back if the write fails');
+  assert.match(keep, /normalizeTalk\(\{ \.\.\.p\.talk, via: null \}, home\.recent\.today\)/, 'checked again as the person’s own, today');
+  assert.match(keep, /shelfRefusal\(home\.lab\?\.shelf \?\? \[\], v\.value\)/);
+  assert.match(src('src/app/api/copilot/lab/route.ts'), /if \(proposal && !\(await claimProposal\(auth\.pid, proposal, 'kept'\)\)\)/, 'changed first on the sheet, kept by its save, once');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /case 'proposals': return <ProposalsSheet home=\{home\} actions=\{actions\} \/>;/);
+  assert.match(src('src/app/copilot/_components/v2/LabSheets.tsx'), /\.\.\.\(proposed && logged === 0 \? \{ proposal: proposed\.id \} : \{\}\),/, 'only the first save is the proposal; the next is the person’s own');
+
+  console.log('copilot-core: proposals checks passed');
+}
+
+proposalsSuite().catch((e) => { console.error(e); process.exit(1); });

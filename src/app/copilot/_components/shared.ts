@@ -114,7 +114,7 @@ export type SheetState =
    * optionally as the one an introduction led to (`via`), or as one said into
    * the mic (`told`).
    */
-  | { kind: 'talk'; via?: string; told?: { meta: ToldMeta; talk: ToldTalk } }
+  | { kind: 'talk'; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; proposal?: string }
   /** The Path and Proof: an introduction somebody offered, by the conversation it was offered in, and what to do about it. */
   | { kind: 'intro'; talk: string }
   /** Proof: every conversation logged, with the way to log another. */
@@ -133,6 +133,8 @@ export type SheetState =
   | { kind: 'pivot' }
   /** Records: the count link — where forms and checkout send sign-ups, enquiries and sales (lib/copilot/signal.ts). */
   | { kind: 'signals' }
+  /** What Claude proposed, each to keep, change or drop (lib/copilot/proposals.ts). */
+  | { kind: 'proposals' }
   /** Proof: how buyers find the business. */
   | { kind: 'foundby' }
   /** Proof: the history, whole, by month. */
@@ -180,7 +182,8 @@ export type LabInput =
     }
   | { action: 'unshelve'; id: string }
   | { action: 'stop'; id: string; note?: string }
-  | { action: 'talk'; talk: { on?: string; who?: string; role: TalkRole; problem: Problem; commitment: Commitment; said?: string; via?: string } }
+  /** `proposal`: the proposal it was opened from (lib/copilot/proposals.ts), which this save keeps. */
+  | { action: 'talk'; talk: { on?: string; who?: string; role: TalkRole; problem: Problem; commitment: Commitment; said?: string; via?: string }; proposal?: string }
   | { action: 'intro'; intro: { talk: string; outcome: IntroOutcome } }
   | { action: 'forget'; id: string }
   | { action: 'count'; bet: string; count: { n: number; on?: string; note?: string } }
@@ -377,6 +380,8 @@ export interface Actions {
   signalLinks(): Promise<{ ok: boolean; links?: SignalLinks | null; error?: string }>;
   /** A new count link, which ends the one in use. */
   makeSignalLink(): Promise<{ ok: boolean; links?: SignalLinks; error?: string }>;
+  /** Keep what Claude proposed as it stands — logged, or on the shelf — or drop it (lib/copilot/proposals.ts). */
+  answerProposal(id: string, action: 'keep' | 'drop'): Promise<{ ok: boolean; error?: string }>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
   /**

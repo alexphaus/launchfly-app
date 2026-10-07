@@ -14,6 +14,7 @@ import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, sna
 import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
 import { randomBytes } from 'node:crypto';
 import { restartsOf } from './business';
+import { MCP_PROPOSAL, MCP_PROPOSAL_END, PROPOSAL_EVENTS, openProposals, type ProposalEventRow, type ProposalOutcome, type Proposal } from './proposals';
 import { SIGNAL_EVENTS, SIGNAL_IN, SIGNAL_LINK, SIGNALS_KEPT, signalCounts, signalsFromEvents, type SignalDraft, type SignalEventRow, type SignalHome } from './signal';
 import { erasFor } from './era';
 import { cancelOpenDrafts, channelsConfigured, countOpenDrafts, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
@@ -760,7 +761,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs, labEvents, assetEvents, signalRows] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs, labEvents, assetEvents, signalRows, proposalRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -812,6 +813,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadAssetEvents(profileId),
     // The count link's sign-ups, enquiries and sales (signal.ts). Never throws; its sheet says a failed read.
     loadSignals(profileId),
+    // What Claude proposed, waiting on the person (proposals.ts). Never throws either.
+    loadProposals(profileId),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -1106,6 +1109,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     lab,
     assets,
     signals,
+    proposals: { open: openProposals(proposalRows.rows, today), unreadable: proposalRows.unreadable },
     wins,
     /** A model to write with: Proof offers its ideas and drafts only where one can (invariant 7). */
     ai: !!resolveLlmConfig(),
@@ -2873,4 +2877,53 @@ export async function recordSignal(profileId: string, d: SignalDraft): Promise<{
   // the sheet, and failing here would make the sender send the sale again.
   if (error && !outcome) throw new Error(describeDbError(error, 'Could not count that.'));
   return { status: c.counted ? 'counted' : 'kept', why: c.why ?? (error ? `Counted, but its line on your sheet did not save: ${error.message}` : null) };
+}
+
+/* ─── What Claude proposed (proposals.ts) ─────────────────────────────────── */
+
+/** The proposals and their ends, newest first. Never throws: a failed read is `unreadable`, said where they are listed (invariant 13). */
+export async function loadProposals(profileId: string): Promise<{ rows: ProposalEventRow[]; unreadable: string | null }> {
+  try {
+    const { data, error } = await copilotDb().from('copilot_events')
+      .select('id, event_type, payload, created_at')
+      .eq('profile_id', profileId).in('event_type', [...PROPOSAL_EVENTS])
+      .order('created_at', { ascending: false }).limit(300);
+    if (error) return { rows: [], unreadable: error.message };
+    return { rows: (data ?? []) as ProposalEventRow[], unreadable: null };
+  } catch (e) {
+    return { rows: [], unreadable: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** One proposal, as validated. Returns its id. */
+export async function insertProposal(profileId: string, payload: Record<string, unknown>): Promise<string> {
+  const { data, error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: MCP_PROPOSAL, payload }).select('id').single();
+  if (error) throw new Error(describeDbError(error, 'Could not keep that proposal.'));
+  return String((data as { id: number | string }).id);
+}
+
+/**
+ * Ends a proposal — kept or dropped — once. The end is written and read back:
+ * of two taps that raced, the first end written stands and the second takes its
+ * own back, so a conversation kept twice is logged once. True when this end is
+ * the one that stands.
+ */
+export async function claimProposal(profileId: string, proposal: string, outcome: ProposalOutcome): Promise<boolean> {
+  const db = copilotDb();
+  const { data, error } = await db.from('copilot_events').insert({ profile_id: profileId, event_type: MCP_PROPOSAL_END, payload: { proposal, outcome } }).select('id').single();
+  if (error) throw new Error(describeDbError(error, 'Could not answer that proposal.'));
+  const mine = Number((data as { id: number }).id);
+  const ends = await db.from('copilot_events').select('id').eq('profile_id', profileId).eq('event_type', MCP_PROPOSAL_END).eq('payload->>proposal', proposal).order('id', { ascending: true }).limit(5);
+  if (ends.error) throw new Error(describeDbError(ends.error, 'Could not check that proposal.'));
+  const first = Number((ends.data ?? [])[0]?.id ?? mine);
+  if (first === mine) return true;
+  const undo = await db.from('copilot_events').delete().eq('profile_id', profileId).eq('id', mine);
+  if (undo.error) throw new Error(describeDbError(undo.error, 'That proposal was answered twice and the second could not be taken back.'));
+  return false;
+}
+
+/** Takes back an end whose write it was answering did not save, so the proposal waits again rather than vanishing unkept. */
+export async function unclaimProposal(profileId: string, proposal: string): Promise<void> {
+  const { error } = await copilotDb().from('copilot_events').delete().eq('profile_id', profileId).eq('event_type', MCP_PROPOSAL_END).eq('payload->>proposal', proposal);
+  if (error) throw new Error(describeDbError(error, 'The proposal could not be put back.'));
 }

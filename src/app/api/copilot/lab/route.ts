@@ -18,7 +18,7 @@ import { foundOf } from '@/lib/copilot/proof';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { isFoundBy } from '@/lib/copilot/offer';
 import { ProofModelError, ProofRefusal, writeIdeas } from '@/lib/copilot/proofai';
-import { deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, loadHome, loadLabEvents, setFoundBy, withdrawLabBet } from '@/lib/copilot/store';
+import { claimProposal, deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, loadHome, loadLabEvents, setFoundBy, unclaimProposal, withdrawLabBet } from '@/lib/copilot/store';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
@@ -136,7 +136,17 @@ export async function POST(req: Request) {
         const raw = obj(b.talk);
         const v = normalizeTalk(raw, today, raw.via ? await talksOnRecord(auth.pid) : []);
         if (!v.ok) return fail(v.error);
-        await insertLabEvent(auth.pid, LAB_TALK, { ...v.value });
+        // Opened from what Claude proposed and changed first: this save is the
+        // person keeping it, so the proposal ends with it — claimed first, so a
+        // second tap or the other phone keeps it once (lib/copilot/proposals.ts).
+        const proposal = typeof b.proposal === 'string' && b.proposal ? b.proposal : null;
+        if (proposal && !(await claimProposal(auth.pid, proposal, 'kept'))) return json({ ok: true, home: await loadHome(auth.pid) });
+        try {
+          await insertLabEvent(auth.pid, LAB_TALK, { ...v.value });
+        } catch (e) {
+          if (proposal) await unclaimProposal(auth.pid, proposal);
+          throw e;
+        }
         return json({ ok: true, home: await loadHome(auth.pid) });
       }
       case 'intro': {

@@ -118,6 +118,14 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
             <p className="cp2-cn-hint">Open Copilot on your phone, then You → Claude → Show a code.</p>
           </>
         )}
+        {/* Its own scope, ticked or not (oauth.ts SCOPE_PROPOSE): Claude asks for everything listed, so only this widens a connection past reading. */}
+        <label className="cp2-cn-propose">
+          <input type="checkbox" name="propose" value="yes" />
+          <span>
+            <b>Also let it propose</b> a conversation to log or a test for your shelf. Each waits in the app under Needs you
+            until you keep it, change it or drop it. Nothing it proposes counts until you do.
+          </span>
+        </label>
         <button className="cp-btn primary block" name="decision" value="allow">Allow</button>
         <button className="cp-btn block cp2-cn-no" name="decision" value="deny" formNoValidate>Not now</button>
       </form>

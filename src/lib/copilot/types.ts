@@ -13,6 +13,7 @@ import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, Decisi
 import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { LabHome } from './lab';
 import type { SignalHome } from './signal';
+import type { Proposal } from './proposals';
 import type { AssetsHome } from './assets';
 import type { NightlyRun } from './nightly';
 import type { PipelineStage } from './pipeline';
@@ -489,6 +490,12 @@ export interface HomeData {
    * payload cached before it existed has to render.
    */
   signals?: SignalHome;
+  /**
+   * What Claude proposed and the person has not kept or dropped (proposals.ts),
+   * newest first, with a read that failed said. Optional: a payload from before
+   * proposals has none.
+   */
+  proposals?: { open: Proposal[]; unreadable: string | null };
   /**
    * The business's assets — offer, demo, script, landing page, workflow, price
    * test — each with its versions, who made each, and the bet behind it

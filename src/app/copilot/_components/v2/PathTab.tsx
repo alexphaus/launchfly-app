@@ -404,6 +404,7 @@ function NowCard({ now, actions, openMatches }: { now: NowMove; actions: Actions
     else if (now.kind === 'step' && now.item) void actions.markRoadmap(now.item, 'done');
     else if (now.kind === 'move' && now.id) actions.openSheet({ kind: 'move', id: now.id });
     else if (now.kind === 'intro' && now.id) actions.openSheet({ kind: 'intro', talk: now.id });
+    else if (now.kind === 'proposal') actions.openSheet({ kind: 'proposals' });
     else if (now.id) actions.openSheet({ kind: 'commission', id: now.id });
   };
   return (
@@ -449,6 +450,7 @@ const CHIP: Record<AskRow['kind'], (a: AskRow) => string> = {
   approve: (a) => `Approve: ${a.title}`,
   confirm: () => 'Where did the replies get to?',
   send: (a) => a.title,
+  proposal: (a) => `Claude proposes: ${a.title}`,
 };
 
 /** Beside the move, the rest of what needs you — short, so the move stays one thing. */
@@ -457,6 +459,7 @@ function AlsoChip({ ask, actions, openMatches }: { ask: AskRow; actions: Actions
     if (ask.kind === 'confirm') actions.openSheet({ kind: 'capture' });
     else if (ask.kind === 'send') openMatches('to_send');
     else if (ask.kind === 'intro' && ask.id) actions.openSheet({ kind: 'intro', talk: ask.id });
+    else if (ask.kind === 'proposal') actions.openSheet({ kind: 'proposals' });
     else if (ask.id) actions.openSheet({ kind: 'commission', id: ask.id });
   };
   return (

@@ -11,11 +11,13 @@
 // what the people who could buy actually said.
 //
 // Read only, and the tools say so (annotations.readOnlyHint). Nothing here
-// sends, logs, changes or deletes — not "not yet" in the copy and a write in the
-// code: the tool list has no write in it, and a test fails if one appears before
-// it has its own scope and its own consent (invariant 7). What somebody tells
-// Claude that belongs in the record goes in through the app, where it is kept
-// by their tap.
+// sends, logs, changes or deletes. The one thing beyond reading is proposing
+// (proposals.ts): a conversation to log or a test for the shelf, which waits in
+// the app until the person keeps it, changes it or drops it, so nothing Claude
+// writes is a row until their tap. It has its own scope, granted only by a tick
+// on the consent screen (oauth.ts SCOPE_PROPOSE): a connection made to read
+// lists no proposal tool and is refused one, and a test fails if a tool that
+// writes the record itself — logs, keeps, starts, sends — appears (invariant 7).
 //
 // Every number a tool returns is one the app counted from the person's rows,
 // as the screens count it (invariant 2), and the instructions ask Claude to say
@@ -43,15 +45,32 @@ export const INSTRUCTIONS = [
   'Start with get_overview.',
 ].join(' ');
 
+/**
+ * Said instead, to a connection the person let propose. Proposing is not
+ * saving, and Claude is told so in those words, so it does not tell the person
+ * that something is logged that waits for their tap.
+ */
+export const PROPOSE_INSTRUCTIONS = [
+  INSTRUCTIONS.replace(' Start with get_overview.', ''),
+  'The user also let you propose two things: propose_conversation, for a conversation they describe to you, and propose_test, for a belief they want to test with a count and a line.',
+  'A proposal is not saved: it waits in their app under Needs you until they keep it, change it or drop it, and it counts for nothing until then. Propose only what they told you, in their words, never a number they did not give. Say it was proposed, never that it was logged or kept.',
+  'Start with get_overview.',
+].join(' ');
+
 export const TOOL_NAMES = ['get_overview', 'get_plan', 'get_proof', 'get_conversations', 'get_record', 'get_counted_answers'] as const;
-export type ToolName = (typeof TOOL_NAMES)[number];
+export type ReadToolName = (typeof TOOL_NAMES)[number];
+/** Only on a connection granted SCOPE_PROPOSE. */
+export const PROPOSE_TOOL_NAMES = ['propose_conversation', 'propose_test'] as const;
+export type ProposeToolName = (typeof PROPOSE_TOOL_NAMES)[number];
+export type ToolName = ReadToolName | ProposeToolName;
 
 export interface ToolDef {
   name: ToolName;
   title: string;
   description: string;
-  inputSchema: { type: 'object'; properties: Record<string, unknown>; additionalProperties?: boolean };
-  annotations: { title: string; readOnlyHint: true; destructiveHint: false; idempotentHint: true; openWorldHint: false };
+  inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: string[]; additionalProperties?: boolean };
+  /** A read is read-only and the same twice; a proposal adds one to the person's inbox, and destroys nothing. */
+  annotations: { title: string; readOnlyHint: boolean; destructiveHint: false; idempotentHint: boolean; openWorldHint: false };
 }
 
 const READ = (title: string) => ({ title, readOnlyHint: true as const, destructiveHint: false as const, idempotentHint: true as const, openWorldHint: false as const });
@@ -110,11 +129,62 @@ export const TOOLS: ToolDef[] = [
   },
 ];
 
+const PROPOSE = (title: string) => ({ title, readOnlyHint: false, destructiveHint: false as const, idempotentHint: false, openWorldHint: false as const });
+const DAY = { type: 'string', description: 'The day it happened, YYYY-MM-DD, within the last 30 days. Leave out for today.' };
+
+export const PROPOSE_TOOLS: ToolDef[] = [
+  {
+    name: 'propose_conversation',
+    title: 'Propose a conversation to log',
+    description: 'Propose logging one conversation the user had and described to you, for them to keep, change or drop in the app. It is not logged until they keep it. Use their words; leave out what they did not say.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        commitment: { type: 'string', enum: ['none', 'time', 'intro', 'money'], description: 'How it ended: none (a compliment is none), time (another call booked), intro (an introduction offered), money (paid or committed money).' },
+        role: { type: 'string', enum: ['buyer', 'seller', 'operator', 'earner', 'connector'], description: 'Who they were to the business: buyer (could buy), seller (sells to the buyers), operator (runs the work), earner (already earns in it), connector (knows people). Leave out for a buyer.' },
+        problem: { type: 'string', enum: ['yes', 'no', 'unasked'], description: 'Whether they have the problem the user solves. Only for a buyer or someone who runs the work.' },
+        who: { type: 'string', maxLength: 80, description: 'Who, as the user named them: "Maria, Sunrise Dental".' },
+        said: { type: 'string', maxLength: 300, description: 'Their words, quoted, when the user gave them.' },
+        on: DAY,
+        why: { type: 'string', maxLength: 200, description: 'Where this came from, in a line the user will read: "From the call you described".' },
+      },
+      required: ['commitment'],
+      additionalProperties: false,
+    },
+    annotations: PROPOSE('Propose a conversation to log'),
+  },
+  {
+    name: 'propose_test',
+    title: 'Propose a test for the shelf',
+    description: 'Propose a test the user wants to run, for their shelf: a belief in one sentence on one part of the business, the count that decides it, the line it has to reach and how many days it runs. It waits for them to keep it on the shelf, where they can start it as their one bet. It is not kept or started until they say.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        part: { type: 'string', enum: ['who', 'reach', 'close', 'pay', 'deliver'], description: 'Who buys, how they hear, how they say yes, what they pay, or how they deliver.' },
+        belief: { type: 'string', maxLength: 160, description: 'What the user believes, in their words, one sentence a count could prove wrong.' },
+        metric: { type: 'string', enum: ['sent', 'replied', 'meetings', 'paid', 'paid_at_price', 'talks', 'committed', 'handed', 'logged'], description: 'What decides it. sent and replied only where the app sends their outreach. logged is something the user counts and names in unit.' },
+        unit: { type: 'string', maxLength: 30, description: 'For logged only: their word for it, plural — "sign-ups", "enquiries".' },
+        target: { type: 'integer', minimum: 1, maximum: 100, description: 'The line: how many by the last day.' },
+        days: { type: 'integer', minimum: 1, maximum: 60, description: 'How many days it runs.' },
+        tries: { type: 'object', properties: { metric: { type: 'string' }, planned: { type: 'integer', minimum: 1, maximum: 500 } }, description: 'Optional: what it takes, the step before the count, said beside the result.' },
+        play: { type: 'string', maxLength: 80, description: 'What to do, as a short name: "Ten problem conversations".' },
+        how: { type: 'string', maxLength: 320, description: 'What to do, in a sentence or two.' },
+        why: { type: 'string', maxLength: 200, description: 'Where this came from, in a line the user will read.' },
+      },
+      required: ['part', 'belief', 'metric', 'target', 'days'],
+      additionalProperties: false,
+    },
+    annotations: PROPOSE('Propose a test for the shelf'),
+  },
+];
+
 export interface ToolOutcome { text: string; isError?: boolean }
 
 export interface RpcContext {
   /** Runs a tool for the signed-in person. A throw is caught here and said, never swallowed (invariant 13). */
   call: (name: ToolName, args: Record<string, unknown>) => Promise<ToolOutcome>;
+  /** The connection was granted SCOPE_PROPOSE: the proposal tools are listed and run. Absent is read-only. */
+  propose?: boolean;
 }
 
 export function negotiateVersion(asked: unknown): string {
@@ -135,6 +205,8 @@ const failure = (id: Id, code: number, message: string) => ({ jsonrpc: '2.0', id
 export function toolArgs(name: ToolName, raw: unknown): { ok: true; args: Record<string, unknown> } | { ok: false; error: string } {
   if (raw !== undefined && raw !== null && (typeof raw !== 'object' || Array.isArray(raw))) return { ok: false, error: 'arguments must be an object.' };
   const a = (raw ?? {}) as Record<string, unknown>;
+  // A proposal is checked whole by the rule the person's own entry meets (proposals.ts), and its errors come back the same way.
+  if ((PROPOSE_TOOL_NAMES as readonly string[]).includes(name)) return { ok: true, args: a };
   if (name === 'get_conversations' && a.limit !== undefined) {
     const n = a.limit;
     if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > TALKS_MAX) return { ok: false, error: `limit must be a whole number from 1 to ${TALKS_MAX}.` };
@@ -166,15 +238,20 @@ export async function handleRpc(msg: unknown, ctx: RpcContext): Promise<Record<s
         protocolVersion: negotiateVersion(params.protocolVersion),
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
-        instructions: INSTRUCTIONS,
+        instructions: ctx.propose ? PROPOSE_INSTRUCTIONS : INSTRUCTIONS,
       });
     case 'ping':
       return reply(id, {});
     case 'tools/list':
-      return reply(id, { tools: TOOLS });
+      return reply(id, { tools: ctx.propose ? [...TOOLS, ...PROPOSE_TOOLS] : TOOLS });
     case 'tools/call': {
       const name = params.name;
-      if (typeof name !== 'string' || !(TOOL_NAMES as readonly string[]).includes(name)) return failure(id, -32602, `Unknown tool: ${typeof name === 'string' ? name : '(none)'}`);
+      // A proposal tool on a connection made to read: said to Claude as a tool
+      // error with the way to get it, so it can tell the person rather than retry.
+      if (typeof name === 'string' && (PROPOSE_TOOL_NAMES as readonly string[]).includes(name) && !ctx.propose) {
+        return reply(id, { content: [{ type: 'text', text: 'This connection can only read. To let Claude propose, disconnect it under You → Claude in the app, connect again, and tick "Also let it propose".' }], isError: true });
+      }
+      if (typeof name !== 'string' || ![...TOOL_NAMES, ...PROPOSE_TOOL_NAMES].includes(name as ToolName)) return failure(id, -32602, `Unknown tool: ${typeof name === 'string' ? name : '(none)'}`);
       const checked = toolArgs(name as ToolName, params.arguments);
       if (!checked.ok) return reply(id, { content: [{ type: 'text', text: checked.error }], isError: true });
       let out: ToolOutcome;

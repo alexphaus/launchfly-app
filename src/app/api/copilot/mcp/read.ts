@@ -12,7 +12,8 @@ import { talkTotals } from '@/lib/copilot/ideas';
 import { betPrice, decisionWords, gradeWords, passLine, playLine, playOf, resultLine, talkCounts, type BetView } from '@/lib/copilot/lab';
 import { readingLine } from '@/lib/copilot/reading';
 import { answersText, conversationsText, overviewText, planText, proofText, type AskIn, type BetIn, type NowIn } from '@/lib/copilot/mcpread';
-import type { ToolName, ToolOutcome } from '@/lib/copilot/mcp';
+import { PROPOSE_TOOL_NAMES, type ProposeToolName, type ReadToolName, type ToolName, type ToolOutcome } from '@/lib/copilot/mcp';
+import { proposeTool } from './propose';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { VERDICT_WORDS } from '@/lib/copilot/outlook';
 import { answersFor, handoffFor } from '@/lib/copilot/readouts';
@@ -31,23 +32,26 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
  * person's only view of what Claude has read. A failure is said to Claude, which
  * says it to the person, and recorded beside the connection where the app shows it.
  */
-export async function runTool(name: ToolName, args: Record<string, unknown>, who: { pid: string; grant: string }): Promise<ToolOutcome> {
+export async function runTool(name: ToolName, args: Record<string, unknown>, who: { pid: string; grant: string; propose: boolean }): Promise<ToolOutcome> {
+  const proposing = (PROPOSE_TOOL_NAMES as readonly string[]).includes(name);
+  // Checked here as well as in the protocol: a proposal tool never runs on a connection made to read.
+  if (proposing && !who.propose) return { text: 'This connection can only read.', isError: true };
   try {
     await markSeen(who.pid, who.grant, name, null);
   } catch (e) {
-    return { text: `The app could not record this read, so it read nothing: ${message(e)}`, isError: true };
+    return { text: `The app could not record this ${proposing ? 'call' : 'read'}, so it ${proposing ? 'proposed' : 'read'} nothing: ${message(e)}`, isError: true };
   }
   try {
-    return { text: await readTool(name, args, who.pid) };
+    return proposing ? await proposeTool(name as ProposeToolName, args, who) : { text: await readTool(name as ReadToolName, args, who.pid) };
   } catch (e) {
     const why = message(e);
     let unrecorded = '';
     try { await markSeen(who.pid, who.grant, name, why); } catch (e2) { unrecorded = ` It could not be noted in the app either: ${message(e2)}.`; }
-    return { text: `The app could not read that: ${why}.${unrecorded}`, isError: true };
+    return { text: `The app could not ${proposing ? 'keep that proposal' : 'read that'}: ${why}.${unrecorded}`, isError: true };
   }
 }
 
-async function readTool(name: ToolName, args: Record<string, unknown>, pid: string): Promise<string> {
+async function readTool(name: ReadToolName, args: Record<string, unknown>, pid: string): Promise<string> {
   if (name === 'get_record') return handoffFor(pid);
   if (name === 'get_counted_answers') {
     // Only the person's day is needed beside the answers, and the whole home is a long way to go for it.

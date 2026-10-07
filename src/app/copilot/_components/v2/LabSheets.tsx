@@ -19,6 +19,7 @@ import {
 } from '@/lib/copilot/lab';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { FOUND_BY_PHRASE } from '@/lib/copilot/offer';
+import { unitSignal } from '@/lib/copilot/signal';
 import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
 import { hostOf, ideaOfSeed, keptOfSeed, plainLines, type Seed } from '@/lib/copilot/seed';
@@ -290,7 +291,11 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
         <div className="cp-field">
           <label className="cp-label" htmlFor="cp2-lab-unit">What you will count</label>
           <input id="cp2-lab-unit" className="cp-input sm" value={unit} maxLength={UNIT_MAX} onChange={(e) => setUnit(e.target.value)} placeholder="sign-ups" />
-          <p className="cp-help">A word or two, plural: sign-ups, enquiries, orders, walk-ins. You log them as they come in.</p>
+          <p className="cp-help">
+            {home.signals?.made && unitSignal(unit)
+              ? `Your count link records ${unit.trim()} by itself: log only the ones it cannot see.`
+              : 'A word or two, plural: sign-ups, enquiries, orders, walk-ins. You log them as they come in.'}
+          </p>
         </div>
       )}
 
@@ -335,7 +340,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
       <div className="cp2-lab-preview">
         <span className="cp2-lab-preview-k">Pass line</span>
         <b>{passLine({ metric, target, tries, priceLabel, unit: shownUnit }, shiftDay(today, days - 1))}</b>
-        <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel, shownUnit)}</span>
+        <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel, shownUnit, !!home.signals?.made)}</span>
       </div>
 
       {/* Said before the tap, with the way to fix it, rather than refused after it. */}

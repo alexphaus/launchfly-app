@@ -24,11 +24,11 @@
 import { hoursLabel } from './focus';
 import { dayLabel } from './money/ledger';
 
-export type SensorKey = 'bank' | 'owed' | 'focus' | 'feeds';
+export type SensorKey = 'bank' | 'owed' | 'focus' | 'feeds' | 'signals';
 /** How a record arrives: a file the person uploads, a line they type, something read on its own, or a linked account. */
 export type SensorHow = 'upload' | 'typed' | 'automatic' | 'link';
 /** The sheet that opens each one. Every value must be a SheetState kind the shells render. */
-export type SensorSheet = 'bank' | 'money' | 'focus' | 'watchlist';
+export type SensorSheet = 'bank' | 'money' | 'focus' | 'watchlist' | 'signals';
 
 export interface SensorDef {
   key: SensorKey;
@@ -45,6 +45,8 @@ export const SENSORS: readonly SensorDef[] = [
   { key: 'focus', label: 'Deep work', records: 'Hours on the thing that moves a goal', how: 'typed', sheet: 'focus' },
   // Not "every night": that is true only while the nightly job actually runs, and the Nightly run row is where that is said.
   { key: 'feeds', label: 'Sources you watch', records: 'Posts and listings it reads for you', how: 'automatic', sheet: 'watchlist' },
+  // A link, not an account: what the person's forms and checkout send is counted, and nothing about who sent it is kept (signal.ts).
+  { key: 'signals', label: 'Sign-ups and sales', records: 'What your forms and checkout send to your count link', how: 'link', sheet: 'signals' },
 ];
 
 export const HOW_LABEL: Record<SensorHow, string> = {
@@ -84,6 +86,8 @@ export interface SensorInput {
   owed: { open: number };
   focus: { minutesWeek: number };
   feeds: { total: number; failing: number };
+  /** The count link: whether there is one, what it counted, the newest's time, and a read that failed. Absent: as no link. */
+  signals?: { made: boolean; line: string; last: string | null; unreadable: string | null; failed: number };
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -117,6 +121,13 @@ export function sensorViews(input: SensorInput): SensorView[] {
         return f.failing
           ? { ...def, state: 'attention', line: `${f.failing} of ${f.total} failing` }
           : { ...def, state: 'on', line: `${f.total} watched` };
+      }
+      case 'signals': {
+        const s = input.signals;
+        if (s?.unreadable) return { ...def, state: 'attention', line: `Could not read your count link: ${s.unreadable}` };
+        if (!s?.made) return { ...def, state: 'off', line: 'No link yet: sign-ups are typed, if at all' };
+        if (s.failed) return { ...def, state: 'attention', line: `${plural(s.failed, 'sale')} could not be recorded` };
+        return { ...def, state: 'on', line: s.line || 'Linked · nothing sent to it yet' };
       }
     }
   });

@@ -57,6 +57,7 @@ import type { AssetKind } from './assets';
 import { LINK_KEYS, LINK_LABEL, LINK_STATES, chainChanges, evidenceState, type BusinessLink, type ChainChange, type EraCounts, type LinkKey, type LinkState } from './business';
 import { isIsoDay, shiftDay } from './focus';
 import { priceOf } from './plan';
+import { unitSignal } from './signal';
 import { moneyLabel } from './review';
 import type { FoundBy, Offer } from './types';
 
@@ -177,8 +178,10 @@ export function countRefusal(metric: LabMetric, tries: { metric: LabMetric } | n
  * reads as a measured one and nobody wonders why last month's sends are not in
  * it.
  */
-export function countedFrom(m: LabMetric, start: string, priceLabel: string | null, unit?: string | null): string {
+export function countedFrom(m: LabMetric, start: string, priceLabel: string | null, unit?: string | null, linked = false): string {
   const since = `since ${dayWords(start)}`;
+  // Measured and typed, both said: the link's rows are the app's, the tallies are the person's.
+  if (m === 'logged' && linked && unitSignal(unit)) return `From the ${unit} your count link records, and any you log, ${since}.`;
   switch (m) {
     case 'sent': return `Counted from your sends ${since}. Nothing before the bet counts.`;
     case 'replied': return `Counted from replies ${since}, once per business.`;
@@ -855,6 +858,8 @@ export interface DayRows {
   talks: Talk[];
   /** The person's own counts, by bet. */
   tallies?: Array<Pick<Tally, 'bet' | 'n' | 'on'>>;
+  /** Sign-ups and enquiries the count link recorded (signal.ts), on the person's day. */
+  signals?: Array<{ kind: 'signup' | 'enquiry'; on: string }>;
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -875,8 +880,13 @@ export function dayIn(iso: string | null | undefined, timezone: string): string 
   return f.format(new Date(t));
 }
 
-/** How many of a thing happened from one day to another, both included. `bet` names whose counts a logged metric reads. */
-export function countIn(metric: LabMetric, from: string, to: string, rows: DayRows, price: number | null, bet?: string): number {
+/**
+ * How many of a thing happened from one day to another, both included. `bet`
+ * names whose counts a logged metric reads, and `unit` its word for them: a bet
+ * counting "sign-ups" or "enquiries" counts what the count link recorded too
+ * (signal.ts unitSignal), so a person with the link does not type what it saw.
+ */
+export function countIn(metric: LabMetric, from: string, to: string, rows: DayRows, price: number | null, bet?: string, unit?: string | null): number {
   if (to < from) return 0;
   const inside = (day: string) => day >= from && day <= to;
   const won = () => rows.outcomes.filter((o) => o.kind === 'won' && inside(o.day));
@@ -904,8 +914,12 @@ export function countIn(metric: LabMetric, from: string, to: string, rows: DayRo
     case 'committed': return rows.talks.filter((t) => inside(t.on) && t.commitment !== 'none').length;
     case 'handed': return rows.finished.filter(inside).length;
     // Only this bet's own counts: two bets naming "sign-ups" a month apart are
-    // two counts, never one tally read twice.
-    case 'logged': return (rows.tallies ?? []).filter((t) => t.bet === bet && inside(t.on)).reduce((s, t) => s + t.n, 0);
+    // two counts, never one tally read twice. The link's, by the bet's own word.
+    case 'logged': {
+      const typed = (rows.tallies ?? []).filter((t) => t.bet === bet && inside(t.on)).reduce((s, t) => s + t.n, 0);
+      const kind = unitSignal(unit);
+      return typed + (kind ? (rows.signals ?? []).filter((s) => s.kind === kind && inside(s.on)).length : 0);
+    }
   }
 }
 
@@ -917,9 +931,9 @@ export function countIn(metric: LabMetric, from: string, to: string, rows: DayRo
  */
 export type Reading = Partial<Record<LabMetric, number>>;
 
-export function readingOf(bet: Pick<Bet, 'id' | 'start' | 'price'>, through: string, rows: DayRows): Reading {
+export function readingOf(bet: Pick<Bet, 'id' | 'start' | 'price'> & { unit?: string | null }, through: string, rows: DayRows): Reading {
   const out: Reading = {};
-  for (const m of LAB_METRICS) out[m] = countIn(m, bet.start, through, rows, bet.price, bet.id);
+  for (const m of LAB_METRICS) out[m] = countIn(m, bet.start, through, rows, bet.price, bet.id, bet.unit);
   return out;
 }
 
@@ -963,7 +977,7 @@ export interface BetView {
 export function betView(bet: Bet, stoppedOn: string | null, rows: DayRows, today: string): BetView {
   const last = shiftDay(bet.start, bet.days - 1);
   const through = minDay(today, last, stoppedOn ?? last);
-  const count = (m: LabMetric, to: string) => countIn(m, bet.start, to, rows, bet.price, bet.id);
+  const count = (m: LabMetric, to: string) => countIn(m, bet.start, to, rows, bet.price, bet.id, bet.unit);
   const result = count(bet.metric, through);
   const tries = bet.tries ? count(bet.tries.metric, through) : null;
   const day = Math.min(bet.days, Math.max(1, daysBetween(bet.start, minDay(today, last)) + 1));
@@ -1022,6 +1036,8 @@ export interface LabInput {
   outcomes: Array<{ kind: string; opportunity_id: string | null; occurred_at?: string | null; amount?: number | null }>;
   /** When each project handed over was finished. */
   finished: Array<string | null | undefined>;
+  /** What the count link recorded, already on the person's day (store.ts reads it). */
+  signals?: Array<{ kind: 'signup' | 'enquiry'; on: string }>;
   /**
    * The shelf's own rows (store.ts loadLabEvents): kept tests wait for weeks, and
    * a window of the newest lab events in general would drop one silently once
@@ -1053,6 +1069,7 @@ export function labHome(i: LabInput): LabHome {
     })).filter((o) => !!o.day),
     talks: ledger.talks,
     tallies: ledger.tallies,
+    signals: i.signals ?? [],
   };
   return {
     bets: bets.map((b) => {

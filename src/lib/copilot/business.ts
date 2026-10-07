@@ -116,7 +116,7 @@ export const WHO_IN_ASK = 60;
 export type MoveBy = 'you' | 'ai' | 'claude';
 
 export type MoveGo =
-  | { sheet: 'offer' | 'targeting' | 'working' | 'foundby' | 'talk' }
+  | { sheet: 'offer' | 'targeting' | 'working' | 'foundby' | 'talk' | 'signals' }
   | { outreach: 'to_send' }
   | { tab: 'swipe' }
   /** Start a bet on this part: the bet sheet, opened on it. */
@@ -209,6 +209,11 @@ export interface ChainInput {
    * A part with none is judged on everything, as before there were pivots.
    */
   eras?: Partial<Record<LinkKey, PartEra>>;
+  /**
+   * What the count link recorded (signal.ts): sign-ups and enquiries, counted,
+   * and whether there is a link at all. Absent on a payload from before it.
+   */
+  signals?: { linked: boolean; signup: number; enquiry: number };
 }
 
 /**
@@ -241,6 +246,8 @@ export interface PartEra extends EraCounts {
   pivot: LinkKey;
   /** The conversations with buyers logged since, as ChainInput's talks. */
   talks: { n: number; problem: number; committed: number };
+  /** What the count link recorded since. */
+  signals?: { signup: number; enquiry: number };
 }
 
 /**
@@ -417,6 +424,7 @@ function eraView(i: ChainInput, k: LinkKey): ChainInput {
     wins: e.wins,
     talks: e.talks,
     bets: (i.bets ?? []).filter((b) => b.start >= e.since),
+    signals: i.signals ? { linked: i.signals.linked, ...(e.signals ?? { signup: 0, enquiry: 0 }) } : undefined,
   };
 }
 
@@ -703,6 +711,15 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   const runner = { by: 'you' as const, name: 'You', problem: null };
   const more = betMore(bets);
   const landing = i.assets?.landing ?? null;
+  // What arrived through the count link: measured, so a part with it is never
+  // bare, and said beside the bet's count rather than in place of it — a number
+  // of sign-ups is not a verdict on whether they are enough; a bet is.
+  const sig = i.signals;
+  const arrived = sig ? sig.signup + sig.enquiry : 0;
+  const heard = arrived
+    ? `${[sig!.signup ? plural(sig!.signup, 'sign-up') : null, sig!.enquiry ? plural(sig!.enquiry, 'enquiry', 'enquiries') : null].filter(Boolean).join(' and ')} through your count link`
+    : null;
+  const linkMove: LinkMove | null = sig && !sig.linked ? { key: 'reach-link', label: 'Count sign-ups by themselves', by: 'you', go: { sheet: 'signals' } } : null;
   if (!c.offerSet) {
     return { key: 'reach', label: LINK_LABEL.reach, what: null, facts: '', more, state: 'missing', runner, moves: [],
       why: 'Nothing is written from a blank offer — say what you sell first.' };
@@ -714,11 +731,12 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   }
   const found = c.found as Exclude<FoundBy, 'outreach'>;
   const what = `${FOUND_BY_LABEL[found]}${landing ? ` · ${landing}` : ''}`;
-  const facts = bets[0] ? `${BET_SAID[bets[0].state]}: ${bets[0].line}` : 'No count yet';
+  const facts = [bets[0] ? `${BET_SAID[bets[0].state]}: ${bets[0].line}` : null, heard].filter(Boolean).join(' · ') || 'No count yet';
   const base = { key: 'reach' as const, label: LINK_LABEL.reach, what, facts, more, runner };
   const passed = bets.filter((b) => b.state === 'passed');
   const page: LinkMove | null = found === 'inbound' && !landing ? { key: 'reach-landing', label: 'A landing page', by: 'you', go: { asset: 'landing_page' } } : null;
   const ask = betMove('reach', 'Bet on how they hear');
+  const moves = [ask, page, linkMove].filter((m): m is LinkMove => !!m);
   if (passed.length >= 2) {
     return { ...base, state: 'works', why: `${passed.length} bets on how they hear passed. Twice is a pattern, not luck.`, moves: [] };
   }
@@ -730,18 +748,23 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   if (short) {
     return { ...base, state: 'stuck',
       why: `The last two bets on how they hear did not pass: ${short[0].line}, then ${short[1].line}.`,
-      moves: [ask, page].filter((m): m is LinkMove => !!m) };
+      moves };
   }
   if (bets.length) {
     const b = bets[0];
     return { ...base, state: 'testing',
       why: b.state === 'passed' ? `A bet passed${b.when ? ` on ${b.when}` : ''}: ${b.line}. Once more and it is a pattern.` : betSaid(b),
-      moves: [ask, page].filter((m): m is LinkMove => !!m),
-      ...(betsCounted(bets) ? {} : { bare: true }) };
+      moves,
+      ...(betsCounted(bets) || arrived ? {} : { bare: true }) };
+  }
+  if (heard) {
+    return { ...base, state: 'testing', why: `${capital(heard)}. A bet on how they hear says whether that is enough.`, moves };
   }
   return { ...base, state: 'untested',
-    why: `The app cannot see this way in, so a bet counts it: ${OWN_COUNT[found]}.`,
-    moves: [ask, page].filter((m): m is LinkMove => !!m) };
+    why: sig?.linked
+      ? `Your count link has recorded nothing yet. It counts ${OWN_COUNT[found]} as they come in; a bet says whether they are enough.`
+      : `The app cannot see this way in, so a bet counts it: ${OWN_COUNT[found]}.`,
+    moves };
 }
 
 function closeLink(i: ChainInput, c: Ctx): BusinessLink {

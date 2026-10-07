@@ -7,12 +7,14 @@ import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, 
 import { addDays, copilotDb, describeDbError, todayIso } from './db';
 import { horizonFor } from './due';
 import { FOCUS_EVENT, focusFromEvents, type FocusInput } from './focus';
-import { LAB_BET, LAB_COUNT, LAB_EVENTS, LAB_SHELF, LAB_SHELF_GONE, LAB_TALK, experimentVerdicts, labHome, type LabEventRow } from './lab';
+import { LAB_BET, LAB_COUNT, LAB_EVENTS, LAB_SHELF, LAB_SHELF_GONE, LAB_TALK, dayIn, experimentVerdicts, labHome, type LabEventRow } from './lab';
 import { ASSET_EVENTS, ASSET_VERSION, OFFER_ASSET, assetsHome, offerBody, offerFields, sameOffer, type AssetEventRow, type Maker } from './assets';
 import { RECENT_DAYS, type AnsweredMove, type RecentLedger, type RecentOutcome } from './review';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
+import { randomBytes } from 'node:crypto';
 import { restartsOf } from './business';
+import { SIGNAL_EVENTS, SIGNAL_IN, SIGNAL_LINK, SIGNALS_KEPT, signalCounts, signalsFromEvents, type SignalDraft, type SignalEventRow, type SignalHome } from './signal';
 import { erasFor } from './era';
 import { cancelOpenDrafts, channelsConfigured, countOpenDrafts, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, isFoundBy, offerChangedMaterially, offerIsEmpty } from './offer';
@@ -57,7 +59,7 @@ import { ROADMAP_COLUMNS, ROADMAP_MARK_EVENT, ROADMAP_RUN_KIND, markFromEvent, r
 import { EXPERIMENT_EVENT, experimentMarkFromEvent, type ExperimentMark } from './experiment';
 import { bookBalanceNow, loadMoneyRows, moneyGoals, ratesFor, refreshFinance, writeSettledFinance } from './money/store';
 import { financeFromRead, financeFromTyped, moneyHome } from './money/ledger';
-import { latestRate, mainCurrency } from './money/fx';
+import { latestRate, mainCurrency, toCode } from './money/fx';
 import { resolveStatementConfig } from './money/extract';
 
 export { getProfile, logEvent, setActionStatus, touchProfile };
@@ -758,7 +760,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs, labEvents, assetEvents] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs, labEvents, assetEvents, signalRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -808,6 +810,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadLabEvents(profileId),
     // The assets and their versions. Never throws either; Proof says a failed read.
     loadAssetEvents(profileId),
+    // The count link's sign-ups, enquiries and sales (signal.ts). Never throws; its sheet says a failed read.
+    loadSignals(profileId),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -996,6 +1000,20 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
 
   const diagnosis = diagnose({ ...diagRows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now: new Date() });
 
+  // What the count link recorded, on the person's own day: sign-ups and
+  // enquiries for the bets and the chain to count; sales are outcomes already.
+  const sig = signalsFromEvents(signalRows.rows);
+  const signals: SignalHome = {
+    made: sig.made,
+    recent: sig.signals.slice(0, 12),
+    days: sig.signals
+      .filter((s): s is typeof s & { kind: 'signup' | 'enquiry' } => s.counted && (s.kind === 'signup' || s.kind === 'enquiry'))
+      .map((s) => ({ kind: s.kind, on: dayIn(s.at, profile.timezone) ?? s.at.slice(0, 10) })),
+    counts: { signup: 0, enquiry: 0, sale: 0, ...Object.fromEntries((['signup', 'enquiry', 'sale'] as const).map((k) => [k, sig.signals.filter((s) => s.kind === k && s.counted).length])) },
+    failed: sig.signals.filter((s) => s.failed).length,
+    unreadable: signalRows.unreadable,
+  };
+
   // Every bet read against the rows the diagnosis already holds — every send
   // and every outcome, all time — and the projects already loaded. No read of
   // its own beyond the events, so a bet and the funnel count the same rows.
@@ -1008,6 +1026,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     sends: diagRows.executions.filter((e) => e.approval_state === 'sent').map((e) => e.sent_at),
     outcomes: diagRows.outcomes,
     finished: commissionRows.filter((c) => c.status === 'done').map((c) => c.closed_at),
+    signals: signals.days,
   });
   // What each pivot restarted is judged on the rows from its day on (era.ts):
   // counted here, where the rows are, because the payload carries totals only.
@@ -1086,6 +1105,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     built: builtOutputs,
     lab,
     assets,
+    signals,
     wins,
     /** A model to write with: Proof offers its ideas and drafts only where one can (invariant 7). */
     ai: !!resolveLlmConfig(),
@@ -2771,4 +2791,86 @@ export async function retireAutoHunts(profileId: string, why: string): Promise<v
     .update({ status: 'paused', last_error: why.slice(0, 200) })
     .eq('profile_id', profileId).eq('origin', 'suggested').eq('status', 'active');
   if (error && error.code !== '42P01' && error.code !== 'PGRST205') console.error('[copilot/hunts] could not retire on offer change:', error.message);
+}
+
+/* ─── The count link (signal.ts) ──────────────────────────────────────────── */
+
+/**
+ * The count link's rows: the links made and the signals recorded, newest first.
+ * Never throws: a failed read is `unreadable`, said where the link is rather
+ * than shown as a link that recorded nothing (invariant 13).
+ */
+export async function loadSignals(profileId: string): Promise<{ rows: SignalEventRow[]; unreadable: string | null }> {
+  try {
+    const { data, error } = await copilotDb().from('copilot_events')
+      .select('id, event_type, payload, created_at')
+      .eq('profile_id', profileId).in('event_type', [...SIGNAL_EVENTS])
+      .order('created_at', { ascending: false }).limit(SIGNALS_KEPT);
+    if (error) return { rows: [], unreadable: error.message };
+    return { rows: (data ?? []) as SignalEventRow[], unreadable: null };
+  } catch (e) {
+    return { rows: [], unreadable: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** A new count link: a new generation, which ends every older link at once. Returns the generation. */
+export async function makeSignalLink(profileId: string): Promise<string> {
+  const gen = randomBytes(12).toString('base64url');
+  const { error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: SIGNAL_LINK, payload: { gen } });
+  if (error) throw new Error(describeDbError(error, 'Could not make a link.'));
+  return gen;
+}
+
+/** The generation of the link in use, or null before one was made. Throws when it cannot be read: a link nobody can check is not one to count from. */
+export async function signalGeneration(profileId: string): Promise<string | null> {
+  const { data, error } = await copilotDb().from('copilot_events')
+    .select('payload').eq('profile_id', profileId).eq('event_type', SIGNAL_LINK)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (error) throw new Error(describeDbError(error, 'Could not read the link.'));
+  const gen = (data as { payload?: { gen?: unknown } } | null)?.payload?.gen;
+  return typeof gen === 'string' ? gen : null;
+}
+
+/**
+ * One signal, for the account a link names. A retry of the same event (`ref`)
+ * is one signal. A sale that counts is an outcome won before it is a signal —
+ * the pay part, the verdict, the goal and the history then see it as they see a
+ * sale logged by hand — and a sale that could not be recorded is kept as a
+ * failed signal and thrown, so the sender tries again and the sheet says why.
+ */
+export async function recordSignal(profileId: string, d: SignalDraft): Promise<{ status: 'counted' | 'kept' | 'duplicate'; why: string | null }> {
+  const db = copilotDb();
+  if (d.ref) {
+    const { data, error } = await db.from('copilot_events').select('payload')
+      .eq('profile_id', profileId).eq('event_type', SIGNAL_IN).eq('payload->>ref', d.ref).limit(5);
+    if (error) throw new Error(describeDbError(error, 'Could not check for a repeat.'));
+    if ((data ?? []).some((r: { payload?: { failed?: unknown } }) => r.payload?.failed !== true)) return { status: 'duplicate', why: null };
+  }
+  const [profile, goalsRead] = await Promise.all([
+    getProfile(profileId),
+    db.from('copilot_goals').select('metric, unit, priority').eq('profile_id', profileId).eq('status', 'active'),
+  ]);
+  if (!profile) throw new Error('There is no account here any more.');
+  const sales = toCode(salesCurrency(profile.finance, (goalsRead.data ?? []) as Array<{ metric: string; unit: string | null; priority?: number }>));
+  const c = signalCounts(d, sales);
+  let outcome: string | null = null;
+  if (d.kind === 'sale' && c.counted) {
+    try {
+      outcome = (await recordOutcome(profileId, {
+        kind: 'won', amount: d.amount, currency: d.currency, source: 'webhook',
+        note: d.from === 'stripe' ? 'Paid through Stripe' : 'From your count link',
+      })).id;
+    } catch (e) {
+      const why = `The sale could not be recorded: ${describeDbError(e, 'it did not save')}`;
+      // Kept so the sheet can say it, then thrown so the sender tries again. If
+      // even this write fails the sender still gets the first reason.
+      await db.from('copilot_events').insert({ profile_id: profileId, event_type: SIGNAL_IN, payload: { ...d, counted: false, failed: true, why } });
+      throw new Error(why);
+    }
+  }
+  const { error } = await db.from('copilot_events').insert({ profile_id: profileId, event_type: SIGNAL_IN, payload: { ...d, counted: c.counted, why: c.why, outcome } });
+  // The sale itself is in: a signal row that did not save loses only its line on
+  // the sheet, and failing here would make the sender send the sale again.
+  if (error && !outcome) throw new Error(describeDbError(error, 'Could not count that.'));
+  return { status: c.counted ? 'counted' : 'kept', why: c.why ?? (error ? `Counted, but its line on your sheet did not save: ${error.message}` : null) };
 }

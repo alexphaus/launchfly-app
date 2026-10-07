@@ -101,7 +101,14 @@ export function chainInputOf(home: HomeData, x: ChainExtras): ChainInput {
     talks: talkTotals(home.lab?.talks ?? []),
     assets: assetTitles(home.assets?.assets ?? []),
     eras: erasOf(home),
+    signals: home.signals ? { linked: !!home.signals.made, ...signalCount(home.signals.days) } : undefined,
   };
+}
+
+/** Sign-ups and enquiries the count link recorded, from a day on or all of them. */
+function signalCount(days: Array<{ kind: 'signup' | 'enquiry'; on: string }>, since?: string): { signup: number; enquiry: number } {
+  const from = days.filter((d) => !since || d.on >= since);
+  return { signup: from.filter((d) => d.kind === 'signup').length, enquiry: from.filter((d) => d.kind === 'enquiry').length };
 }
 
 /**
@@ -110,14 +117,18 @@ export function chainInputOf(home: HomeData, x: ChainExtras): ChainInput {
  * not in the payload — one cached from before the server counted them — leaves
  * its parts read all time, as they were, rather than read as empty.
  */
-export function erasOf(home: Pick<HomeData, 'lab'>): ChainInput['eras'] {
+export function erasOf(home: Pick<HomeData, 'lab' | 'signals'>): ChainInput['eras'] {
   const restarts = restartsOf(home.lab?.checkpoints ?? []);
   const out: NonNullable<ChainInput['eras']> = {};
   for (const k of LINK_KEYS) {
     const r = restarts[k];
     const counts = r ? home.lab?.eras?.[r.on] : undefined;
     if (!r || !counts) continue;
-    out[k] = { ...counts, since: r.on, pivot: r.pivot, talks: talkTotals((home.lab?.talks ?? []).filter((t) => t.on >= r.on)) };
+    out[k] = {
+      ...counts, since: r.on, pivot: r.pivot,
+      talks: talkTotals((home.lab?.talks ?? []).filter((t) => t.on >= r.on)),
+      signals: signalCount(home.signals?.days ?? [], r.on),
+    };
   }
   return Object.keys(out).length ? out : undefined;
 }

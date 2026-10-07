@@ -24,6 +24,7 @@ import { creditedGoalId, goalCard } from '@/lib/copilot/goalcard';
 import { currencyMark, dayLabel, recentLabel } from '@/lib/copilot/money/ledger';
 import { mainCurrency } from '@/lib/copilot/money/fx';
 import { HOW_LABEL, sensorViews } from '@/lib/copilot/sensors';
+import { signalLine } from '@/lib/copilot/signal';
 import type { Actions } from '../shared';
 import { useShell } from '../shell';
 import type { Derived } from './derive';
@@ -333,6 +334,10 @@ function Records({ home, d, actions }: { home: HomeData; d: Derived; actions: Ac
     owed: { open: home.obligations.length },
     focus: { minutesWeek: d.week.total },
     feeds: { total: home.watchSources.length, failing: home.watchSources.filter((s) => !!s.last_error).length },
+    signals: home.signals ? {
+      made: !!home.signals.made, line: signalLine(home.signals.counts ?? {}), last: home.signals.recent[0]?.at ?? null,
+      unreadable: home.signals.unreadable, failed: home.signals.failed ?? 0,
+    } : undefined,
   });
   return (
     <>

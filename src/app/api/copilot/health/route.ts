@@ -15,6 +15,7 @@ import { copilotDb } from '@/lib/copilot/db';
 import { NO_STORE, fail } from '@/lib/copilot/http';
 import { priceIdFor } from '@/lib/copilot/plans';
 import { currentProfileId } from '@/lib/copilot/session';
+import { ownLinkProblem } from '@/lib/copilot/ownsignal';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -124,7 +125,12 @@ export async function GET(req: Request) {
     mapsSupply: { ok: has('APIFY_API_TOKEN'), needs: ['APIFY_API_TOKEN'], note: 'Without it only the free adapters run.' },
   };
 
-  const missing = Object.entries(capabilities).filter(([, v]) => !v.ok).map(([k]) => k);
+  // Optional, and only when the app is what the operator sells: each new
+  // account counts as a sign-up on their own count link (ownsignal.ts). Unset is
+  // fine; set and wrong is said here, because a sign-up it missed says nothing.
+  const own = await ownLinkProblem().catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
+  const withOwn = { ...capabilities, ownCountLink: { ok: !own, needs: ['COPILOT_OWN_COUNT_LINK'], note: own || (own === null ? 'Optional: your own count link, if this app is what you sell.' : 'Each new account counts as a sign-up on it.') } };
+  const missing = Object.entries(withOwn).filter(([, v]) => !v.ok).map(([k]) => k);
 
   /**
    * Whether the loop closes, in four numbers over thirty days.
@@ -165,6 +171,6 @@ export async function GET(req: Request) {
     missingCapabilities: missing,
     unappliedMigrations: reachable ? [...new Set(schema.map((s) => s.migration))] : null,
     schema: reachable ? schema : null,
-    capabilities,
+    capabilities: withOwn,
   }, { headers: NO_STORE });
 }

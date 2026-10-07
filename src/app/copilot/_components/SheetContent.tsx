@@ -24,6 +24,7 @@ import AskSheet from './AskSheet';
 import BankSheet from './BankSheet';
 import OutreachSheet from './v2/Outreach';
 import { ClaudeSheet } from './v2/ClaudeSheet';
+import { SignalsSheet } from './v2/SignalsSheet';
 import { BetSheet, IntroSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
 import { NoteSheet, ToldChooser, ToldLine } from './v2/TellSheets';
 import type { ToldMeta, ToldOffer } from '@/lib/copilot/tell';
@@ -62,6 +63,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'working': return <WorkingSheet home={home} actions={actions} />;
     case 'ask': return <AskSheet home={home} heard={sheet.heard} actions={actions} />;
     case 'claude': return <ClaudeSheet actions={actions} />;
+    case 'signals': return <SignalsSheet home={home} actions={actions} />;
     case 'move': return <MoveSheet home={home} id={sheet.id} actions={actions} />;
     case 'capture': return <CaptureSheet home={home} actions={actions} />;
     case 'focus': return <FocusSheet home={home} actions={actions} />;

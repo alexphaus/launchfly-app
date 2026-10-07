@@ -12,6 +12,7 @@ import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { LabHome } from './lab';
+import type { SignalHome } from './signal';
 import type { AssetsHome } from './assets';
 import type { NightlyRun } from './nightly';
 import type { PipelineStage } from './pipeline';
@@ -482,6 +483,12 @@ export interface HomeData {
    * existed has to render.
    */
   lab?: LabHome;
+  /**
+   * The count link (signal.ts): when it was made, what it recorded lately, and
+   * the sign-ups and enquiries the bets and the chain count. Optional because a
+   * payload cached before it existed has to render.
+   */
+  signals?: SignalHome;
   /**
    * The business's assets — offer, demo, script, landing page, workflow, price
    * test — each with its versions, who made each, and the bet behind it

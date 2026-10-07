@@ -66,7 +66,7 @@ const ASSET_SAID: Record<AssetInput['action'], string> = {
 import { api, del, get, post, upload } from './api';
 import { urlBase64ToUint8Array } from './format';
 import { useShell } from './shell';
-import type { Actions, AssetInput, LabInput, OutcomeInput, SheetState, Tab, Tab2 } from './shared';
+import type { Actions, AssetInput, LabInput, OutcomeInput, SheetState, SignalLinks, Tab, Tab2 } from './shared';
 
 export interface CopilotConfig<T extends Tab | Tab2> {
   /** Where the app opens. */
@@ -905,6 +905,24 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         return { ok: true, text: r.text, chars: r.chars };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not gather your context' };
+      }
+    },
+    async signalLinks() {
+      try {
+        const r = await get<{ links: SignalLinks | null }>('/signal');
+        return { ok: true, links: r.links };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not read your link' };
+      }
+    },
+    async makeSignalLink() {
+      try {
+        const r = await post<{ links: SignalLinks; home: HomeData }>('/signal', { action: 'make' });
+        setHome(r.home);
+        say('Made. Anything still sending to the old link stops counting.');
+        return { ok: true, links: r.links };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not make a link' };
       }
     },
     async connections() {

@@ -7334,6 +7334,7 @@ async function moneyFromTheBank() {
     ['owed', 'off', 'Nothing logged'],
     ['focus', 'on', '3.5h this week'],
     ['feeds', 'attention', '2 of 5 failing'],
+    ['signals', 'off', 'No link yet: sign-ups are typed, if at all'],
   ]);
   assert.equal(mSensors({ bank: { ready: false, rows: 0, to: null, reading: 0, review: 0, failed: 0, unreadable: null }, owed: { open: 0 }, focus: { minutesWeek: 0 }, feeds: { total: 0, failing: 0 } })[0].line, 'Not set up on this server yet', 'an unapplied migration is not "nothing uploaded"');
   assert.equal(mSensors({ bank: { ready: true, rows: 10, to: null, reading: 0, review: 1, failed: 0, unreadable: null }, owed: { open: 0 }, focus: { minutesWeek: 0 }, feeds: { total: 0, failing: 0 } })[0].state, 'attention');
@@ -10557,3 +10558,142 @@ async function projectsDaySuite() {
 }
 
 projectsDaySuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The count link: sign-ups, enquiries and sales, measured ─────────────── */
+//
+// "How they hear" for a business its buyers find was the one part the app could
+// not see. The owner's forms and Stripe already send webhooks; the link is their
+// address, and what it keeps is the count and nothing about who.
+
+import {
+  SIGNAL_IN as sgIn, SIGNAL_LINK as sgLink, kindOf as sgKind, readSignal as sgRead, signalCounts as sgCounts, signalLine as sgLine,
+  signalsFromEvents as sgFrom, signalUrl as sgUrl, stripeAmount as sgStripeAmount, unitSignal as sgUnit,
+} from '../../src/lib/copilot/signal';
+import { readSignalToken as sgReadToken, signalToken as sgToken, tokenOfLink as sgTokenOf } from '../../src/lib/copilot/signalkey';
+import { countIn as sgCountIn, countedFrom as sgCountedFrom } from '../../src/lib/copilot/lab';
+import { businessChain as sgChain, type ChainInput as SgInput } from '../../src/lib/copilot/business';
+import { sensorViews as sgSensors } from '../../src/lib/copilot/sensors';
+
+async function countLinkSuite() {
+  const { readFileSync } = await import('node:fs');
+  const { createHash } = await import('node:crypto');
+  const src = (p: string) => readFileSync(p, 'utf8');
+
+  /* 1. What a post counts: the link's own kind first, then the body's; never a guess. */
+  assert.deepEqual(['sign-up', 'Sign Ups', 'signups', 'waitlist', 'lead', 'Enquiries', 'inquiry', 'payment', 'orders', 'walk-ins', 'hello'].map(sgKind),
+    ['signup', 'signup', 'signup', 'signup', 'enquiry', 'enquiry', 'enquiry', 'sale', 'sale', null, null]);
+  const form = { name: 'Maria Santos', email: 'maria@example.com', phone: '+63 917 000 0000', message: 'Interested', submission_id: 'sub_123' };
+  const signup = sgRead(form, 'signup');
+  assert.deepEqual(signup, { ok: true, value: { kind: 'signup', amount: null, currency: null, ref: 'sub_123', from: 'link', what: 'form' } });
+  assert.ok(!/maria|example|917|Interested/i.test(JSON.stringify(signup)), 'nothing about who filled it in is kept');
+  assert.deepEqual(sgRead({ kind: 'enquiry' }, null), { ok: true, value: { kind: 'enquiry', amount: null, currency: null, ref: null, from: 'link', what: 'form' } });
+  assert.equal(sgRead({ kind: 'sale' }, 'signup').ok, true, 'the link says what its posts count, whatever the payload says');
+  assert.equal((sgRead({ kind: 'sale' }, 'signup') as { value: { kind: string } }).value.kind, 'signup');
+  const none = sgRead({ email: 'x@y.z' }, null);
+  assert.deepEqual([none.ok, (none as { status: number }).status], [false, 400]);
+  assert.match((none as { error: string }).error, /\?kind=signup/);
+  assert.equal((sgRead({}, 'banana') as { status: number }).status, 400);
+  assert.deepEqual(sgRead({ amount: '29.00', currency: 'usd', id: 'pay_9' }, 'sale'), { ok: true, value: { kind: 'sale', amount: 29, currency: 'USD', ref: 'pay_9', from: 'link', what: 'payment' } });
+  assert.equal((sgRead({ amount: 0 }, 'sale') as { value: { amount: number | null } }).value.amount, null, 'a sale with no amount is a sale of no known amount, never of nothing');
+  assert.equal(sgRead({ amount: -5 }, 'sale').ok, false);
+
+  /* 2. Stripe: two events count, the rest echo a payment already counted. */
+  const ev = (type: string, object: Record<string, unknown>) => ({ object: 'event', id: `evt_${type}`, type, data: { object } });
+  assert.deepEqual(sgRead(ev('invoice.paid', { amount_paid: 2900, currency: 'usd' }), null), { ok: true, value: { kind: 'sale', amount: 29, currency: 'USD', ref: 'evt_invoice.paid', from: 'stripe', what: 'invoice.paid' } });
+  assert.equal((sgRead(ev('invoice.paid', { amount_paid: 3000, currency: 'jpy' }), null) as { value: { amount: number } }).value.amount, 3000, 'yen has no cents');
+  assert.equal(sgStripeAmount(29500, 'KWD'), 29.5);
+  assert.equal((sgRead(ev('checkout.session.completed', { mode: 'payment', payment_status: 'paid', amount_total: 15000, currency: 'php' }), null) as { value: { amount: number } }).value.amount, 150);
+  assert.equal(sgRead(ev('checkout.session.completed', { mode: 'subscription', payment_status: 'paid', amount_total: 2900, currency: 'usd' }), null).ok, 'skip', 'its first invoice counts it');
+  assert.equal(sgRead(ev('checkout.session.completed', { mode: 'payment', payment_status: 'unpaid', amount_total: 2900, currency: 'usd' }), null).ok, 'skip');
+  assert.equal(sgRead(ev('charge.succeeded', { amount: 2900, currency: 'usd' }), null).ok, 'skip', 'a charge echoes the invoice: counted, one payment would be two sales');
+  assert.equal(sgRead(ev('invoice.paid', { amount_paid: 0, currency: 'usd' }), null).ok, 'skip');
+
+  /* 3. Another currency is kept and said, never added as the same money. */
+  assert.deepEqual(sgCounts({ kind: 'sale', currency: 'EUR' }, 'USD'), { counted: false, why: 'In EUR, and your sales are counted in USD, so it is not added to them.' });
+  assert.deepEqual(sgCounts({ kind: 'sale', currency: null }, 'USD'), { counted: true, why: null });
+  assert.deepEqual(sgCounts({ kind: 'signup', currency: 'EUR' }, 'USD'), { counted: true, why: null });
+
+  /* 4. The token: the account and the link's generation, signed; anything else is not a link. */
+  const key = createHash('sha256').update('test-secret').digest();
+  const tok = sgToken('2b0c9f1e-0000-4000-8000-000000000001', 'gen_abcdefgh', key);
+  assert.deepEqual(sgReadToken(tok, key), { pid: '2b0c9f1e-0000-4000-8000-000000000001', gen: 'gen_abcdefgh' });
+  assert.equal(sgReadToken(tok.replace('gen_abcdefgh', 'gen_abcdefgx'), key), null, 'another generation is another link');
+  assert.equal(sgReadToken(tok, createHash('sha256').update('other').digest()), null);
+  assert.equal(sgReadToken(`${tok}x`, key), null);
+  assert.equal(sgReadToken('a.b', key), null);
+  assert.equal(sgTokenOf(`https://launchfly.ai/api/copilot/signal/${encodeURIComponent(tok)}?kind=signup`), tok);
+  assert.equal(sgTokenOf(tok), tok);
+  assert.equal(sgUrl('https://launchfly.ai/', tok, 'signup'), `https://launchfly.ai/api/copilot/signal/${encodeURIComponent(tok)}?kind=signup`);
+
+  /* 5. What was stored: the newest link names the one that works; a failed sale a retry settled is one sale. */
+  const rows = [
+    { id: 1, event_type: sgLink, payload: { gen: 'old_generation' }, created_at: '2026-10-01T00:00:00Z' },
+    { id: 2, event_type: sgLink, payload: { gen: 'new_generation' }, created_at: '2026-10-05T00:00:00Z' },
+    { id: 3, event_type: sgIn, payload: { kind: 'signup', from: 'link', counted: true }, created_at: '2026-10-06T00:00:00Z' },
+    { id: 4, event_type: sgIn, payload: { kind: 'sale', amount: 29, currency: 'USD', ref: 'evt_1', from: 'stripe', counted: false, failed: true, why: 'The sale could not be recorded: timeout' }, created_at: '2026-10-06T01:00:00Z' },
+    { id: 5, event_type: sgIn, payload: { kind: 'sale', amount: 29, currency: 'USD', ref: 'evt_1', from: 'stripe', counted: true }, created_at: '2026-10-06T01:05:00Z' },
+    { id: 6, event_type: sgIn, payload: { kind: 'sale', amount: 29, currency: 'EUR', ref: 'evt_2', from: 'stripe', counted: false, why: 'In EUR' }, created_at: '2026-10-06T02:00:00Z' },
+    { id: 7, event_type: sgIn, payload: { kind: 'nonsense' }, created_at: '2026-10-06T03:00:00Z' },
+  ];
+  const read = sgFrom(rows);
+  assert.deepEqual([read.gen, read.made], ['new_generation', '2026-10-05T00:00:00Z']);
+  assert.deepEqual(read.signals.map((s) => [s.id, s.kind, s.counted, s.failed]), [['6', 'sale', false, false], ['5', 'sale', true, false], ['3', 'signup', true, false]]);
+  assert.equal(sgLine({ signup: 12, enquiry: 0, sale: 1 }), '12 sign-ups · 1 sale');
+  assert.equal(sgLine({}), '');
+
+  /* 6. A bet counting "sign-ups" counts what the link recorded, and says so. */
+  assert.deepEqual(['sign-ups', 'Signups', 'enquiries', 'leads', 'walk-ins', 'orders', null].map(sgUnit), ['signup', 'signup', 'enquiry', 'enquiry', null, null, null]);
+  const day = (on: string, kind: 'signup' | 'enquiry' = 'signup') => ({ kind, on });
+  const dayRows = { sends: [], outcomes: [], finished: [], talks: [], tallies: [{ bet: 'b1', n: 2, on: '2026-10-08' }], signals: [day('2026-10-07'), day('2026-10-08'), day('2026-10-08', 'enquiry'), day('2026-10-01')] };
+  assert.equal(sgCountIn('logged', '2026-10-07', '2026-10-20', dayRows, null, 'b1', 'sign-ups'), 4, 'two typed and two the link recorded since the bet began');
+  assert.equal(sgCountIn('logged', '2026-10-07', '2026-10-20', dayRows, null, 'b1', 'enquiries'), 3);
+  assert.equal(sgCountIn('logged', '2026-10-07', '2026-10-20', dayRows, null, 'b1', 'walk-ins'), 2, 'a word the link does not send stays the person’s to log');
+  assert.equal(sgCountedFrom('logged', '2026-10-07', null, 'sign-ups', true), 'From the sign-ups your count link records, and any you log, since 7 Oct.');
+  assert.equal(sgCountedFrom('logged', '2026-10-07', null, 'sign-ups', false), 'From the sign-ups you log since 7 Oct: your count, not the app\'s.');
+
+  /* 7. How they hear, read through the link. */
+  const quiet: SgInput = {
+    offer: { sells: 'Founder OS Copilot App', for_who: 'People starting out', price_band: '$29/month' }, said: {}, segments: [], area: null, web: false,
+    funnel: { matched: 0, sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, worthAMessage: 0, bySegment: [], byChannel: [], wins: [], queue: 0,
+    wonRecent: { amount: 0, days: 30 }, goal: null, currency: '$', workerConnected: false, agents: [], topOpening: null, foundBy: 'inbound',
+  };
+  const reach = (x: Partial<SgInput>) => sgChain({ ...quiet, ...x }).links.find((l) => l.key === 'reach')!;
+  assert.ok(reach({ signals: { linked: false, signup: 0, enquiry: 0 } }).moves.some((m) => m.key === 'reach-link' && m.by === 'you'), 'no link yet: the way to make one is on the part');
+  assert.ok(!reach({ signals: { linked: true, signup: 0, enquiry: 0 } }).moves.some((m) => m.key === 'reach-link'));
+  assert.match(reach({ signals: { linked: true, signup: 0, enquiry: 0 } }).why, /^Your count link has recorded nothing yet\./);
+  const heard = reach({ signals: { linked: true, signup: 12, enquiry: 3 } });
+  assert.deepEqual([heard.state, heard.facts], ['testing', '12 sign-ups and 3 enquiries through your count link']);
+  assert.equal(heard.why, '12 sign-ups and 3 enquiries through your count link. A bet on how they hear says whether that is enough.', 'a count is not a verdict: a bet is');
+  const withBet = reach({ signals: { linked: true, signup: 2, enquiry: 0 }, bets: [{ part: 'reach', state: 'running', start: '2026-10-07', line: '0 of 5 sign-ups', when: null, result: 0 }] });
+  assert.equal(withBet.bare, undefined, 'something arrived: not a bet opened over nothing');
+  assert.equal(withBet.facts, 'Running: 0 of 5 sign-ups · 2 sign-ups through your count link');
+  assert.equal(reach({}).why, 'The app cannot see this way in, so a bet counts it: the enquiries and sign-ups that come in.', 'a payload from before the link reads as it did');
+
+  /* 8. Records says it, and the sheet exists. */
+  const views = (signals?: Parameters<typeof sgSensors>[0]['signals']) => sgSensors({ bank: null, owed: { open: 0 }, focus: { minutesWeek: 0 }, feeds: { total: 0, failing: 0 }, signals }).find((v) => v.key === 'signals')!;
+  assert.deepEqual([views().state, views().line], ['off', 'No link yet: sign-ups are typed, if at all']);
+  assert.deepEqual([views({ made: true, line: '', last: null, unreadable: null, failed: 0 }).line], ['Linked · nothing sent to it yet']);
+  assert.deepEqual([views({ made: true, line: '12 sign-ups · 1 sale', last: null, unreadable: null, failed: 0 }).state, views({ made: true, line: '12 sign-ups · 1 sale', last: null, unreadable: null, failed: 0 }).line], ['on', '12 sign-ups · 1 sale']);
+  assert.equal(views({ made: true, line: 'x', last: null, unreadable: null, failed: 1 }).line, '1 sale could not be recorded');
+  assert.equal(views({ made: true, line: 'x', last: null, unreadable: 'timeout', failed: 0 }).state, 'attention');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /case 'signals': return <SignalsSheet home=\{home\} actions=\{actions\} \/>;/);
+
+  /* 9. The door: a GET never counts, a replaced link is refused, and nothing reads a cookie. */
+  const door = src('src/app/api/copilot/signal/[token]/route.ts');
+  const getFn = door.slice(door.indexOf('export function GET'), door.indexOf('async function bodyOf'));
+  assert.ok(!/recordSignal|rateLimit/.test(getFn), 'invariant 8: opening the link counts nothing');
+  assert.match(door, /if \(gen !== who\.gen\) return answer\(\{ ok: false, error: 'This link was replaced by a newer one in the app, so it no longer counts\.' \}, 410\);/);
+  assert.match(door, /rateLimit\(`signal:\$\{who\.pid\}`, SIGNALS_PER_HOUR, 60 \* 60\)/);
+  assert.match(door, /if \(then && \/\^https\?:\\\/\\\/\/i\.test\(then\)\)/, 'only a web address to send a visitor on to');
+  assert.ok(!/cookies\(|currentProfileId|profileIdOr401/.test(door), 'the link is the credential');
+  const store = src('src/lib/copilot/store.ts');
+  assert.match(store, /\.eq\('payload->>ref', d\.ref\)/, 'a retry of one event is one signal');
+  assert.match(store, /kind: 'won', amount: d\.amount, currency: d\.currency, source: 'webhook',/, 'a sale is a sale the whole app already reads');
+  assert.match(src('src/app/api/copilot/onboard/route.ts'), /after\(async \(\) => \{\s*await countOwnSignup\(pid\)/, 'the app’s own sign-ups, for its operator, after the answer');
+  assert.match(src('src/app/api/copilot/health/route.ts'), /ownCountLink: \{ ok: !own,/);
+  assert.match(src('src/lib/copilot/ownsignal.ts'), /ref: `account:\$\{newAccount\}`, from: 'app'/, 'counted under the account id, and nothing else about it');
+
+  console.log('copilot-core: count link checks passed');
+}
+
+countLinkSuite().catch((e) => { console.error(e); process.exit(1); });

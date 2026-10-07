@@ -131,6 +131,8 @@ export type SheetState =
   | { kind: 'chain' }
   /** Proof: pivot one part now, without waiting for the checkpoint to come due. The parts it changes count from today. */
   | { kind: 'pivot' }
+  /** Records: the count link — where forms and checkout send sign-ups, enquiries and sales (lib/copilot/signal.ts). */
+  | { kind: 'signals' }
   /** Proof: how buyers find the business. */
   | { kind: 'foundby' }
   /** Proof: the history, whole, by month. */
@@ -151,6 +153,9 @@ export interface BetFromExperiment {
   days: number;
   part: LinkKey;
 }
+
+/** The count link's addresses: each kind's, and the plain one Stripe sends to. */
+export type SignalLinks = { signup: string; enquiry: string; sale: string; stripe: string };
 
 /** What a bet can be told. A verdict is not among them: it is the rows'. */
 export type LabInput =
@@ -368,6 +373,10 @@ export interface Actions {
   disconnect(grant: string): Promise<{ ok: boolean; connections?: Connection[]; error?: string }>;
   /** A code to type on Claude's sign-in screen, good once for ten minutes. */
   pairCode(): Promise<{ ok: boolean; code?: string; expiresAt?: string; error?: string }>;
+  /** The count link's addresses, one per kind and Stripe's; `links` null before one was made (lib/copilot/signal.ts). */
+  signalLinks(): Promise<{ ok: boolean; links?: SignalLinks | null; error?: string }>;
+  /** A new count link, which ends the one in use. */
+  makeSignalLink(): Promise<{ ok: boolean; links?: SignalLinks; error?: string }>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
   /**

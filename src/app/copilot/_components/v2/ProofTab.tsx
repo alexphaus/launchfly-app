@@ -370,7 +370,7 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         </div>
       )}
       <p className="cp2-lab-pass"><b>Pass line:</b> {passLine(b, view.last)}.</p>
-      <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit)}</p>
+      <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit, !!home.signals?.made)}</p>
       {over && <p className="cp2-lab-over">{over}</p>}
 
       {play && (

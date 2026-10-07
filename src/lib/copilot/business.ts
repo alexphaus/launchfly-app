@@ -457,15 +457,25 @@ function beforeLine(i: ChainInput, e: PartEra, k: LinkKey, outbound: boolean): s
     replied: Math.max(0, f.replied - e.funnel.replied),
     meetings: Math.max(0, f.meetings - e.funnel.meetings),
     talks: outbound ? 0 : Math.max(0, t.n - e.talks.n),
+    // An era with no count of its own says nothing came before, rather than every sign-up did.
+    signup: e.signals ? Math.max(0, (i.signals?.signup ?? 0) - e.signals.signup) : 0,
+    enquiry: e.signals ? Math.max(0, (i.signals?.enquiry ?? 0) - e.signals.enquiry) : 0,
   };
   // Said as the pay part says a sale, without the price: the price is the new one's.
   const paid = winsBefore ? winsLine({ count: winsBefore, known: paidBefore, atPrice: 0, price: null }, i.currency) : null;
   const betsBefore = (i.bets ?? []).filter((b) => b.part === k && b.start < e.since).length;
+  const sent = n.sent && `${plural(n.sent, 'message')} sent`;
+  const replies = n.replied && plural(n.replied, 'reply', 'replies');
+  const talks = n.talks && plural(n.talks, 'conversation');
+  const meetings = n.meetings && plural(n.meetings, 'meeting');
+  // Only what the part reads where the business is: a business found online
+  // never counted a send on How they hear, so "27 messages sent" before its
+  // pivot is a number about some other way in, said as if it were this one's.
   const parts = ({
-    who: [n.sent && plural(n.sent, 'message') + ' sent', n.replied && plural(n.replied, 'reply', 'replies'), n.talks && plural(n.talks, 'conversation') + ' with buyers', paid],
-    reach: [n.sent && plural(n.sent, 'message') + ' sent', n.replied && plural(n.replied, 'reply', 'replies')],
-    close: [n.talks && plural(n.talks, 'conversation'), n.meetings && plural(n.meetings, 'meeting'), paid],
-    pay: [n.talks && plural(n.talks, 'conversation'), n.meetings && plural(n.meetings, 'meeting'), paid],
+    who: outbound ? [sent, replies, paid] : [talks && `${talks} with buyers`, paid],
+    reach: outbound ? [sent, replies] : [n.signup && plural(n.signup, 'sign-up'), n.enquiry && plural(n.enquiry, 'enquiry', 'enquiries')],
+    close: outbound ? [replies, meetings, paid] : [talks, meetings, paid],
+    pay: [talks, meetings, paid],
     deliver: [],
   } as Record<LinkKey, Array<string | 0 | null>>)[k].filter((x): x is string => !!x);
   if (betsBefore) parts.push(plural(betsBefore, 'bet'));

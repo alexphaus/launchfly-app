@@ -10345,7 +10345,17 @@ async function proofHonestSuite() {
   assert.equal(now.pay.before, 'Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
   assert.equal(now.pay.more[0], now.pay.before, 'said first when the part is open');
   assert.equal(now.close.before, 'Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
-  assert.equal(now.reach.before, 'Before 7 Oct: 27 messages sent · 2 replies. Not counted here, and kept in History.');
+  // Only what each part would have counted: found online, How they hear never read a send, so the 27 are not its "before".
+  assert.equal(now.reach.before, undefined);
+  assert.equal(now.who.before, 'Before 7 Oct: 2 paid, at $1 each. Not counted here, and kept in History.');
+  const linked = parts({ ...after, signals: { linked: true, signup: 5, enquiry: 1 }, eras: { ...after.eras, reach: { ...era('reach'), signals: { signup: 2, enquiry: 0 } } } });
+  assert.equal(linked.reach.before, 'Before 7 Oct: 3 sign-ups · 1 enquiry. Not counted here, and kept in History.');
+  assert.equal(parts({ ...after, signals: { linked: true, signup: 5, enquiry: 1 } }).reach.before, undefined, 'an era with no count of its own does not call every sign-up older');
+  // Outreach: the sends are How they hear's, and the replies are where How they say yes starts.
+  const sent = parts({ ...after, foundBy: 'outreach' });
+  assert.equal(sent.reach.before, 'Before 7 Oct: 27 messages sent · 2 replies. Not counted here, and kept in History.');
+  assert.equal(sent.close.before, 'Before 7 Oct: 2 replies · 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
+  assert.equal(sent.who.before, 'Before 7 Oct: 27 messages sent · 2 replies · 2 paid, at $1 each. Not counted here, and kept in History.');
   assert.equal(now.deliver.since, undefined, 'delivery was not pivoted');
   assert.deepEqual(pfChain(after).verdict, { proven: false, title: 'Not proven yet', line: 'Proven at 3 paid at your $29. So far: 0.', since: 'Counted since 7 Oct, when you pivoted who buys.' });
   // A sale at the new price after the pivot counts, and the old ones still do not.

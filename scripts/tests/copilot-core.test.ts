@@ -10227,7 +10227,7 @@ async function shelfSuite() {
   assert.match(store, /read\(\[LAB_SHELF, LAB_SHELF_GONE, LAB_BET\], SHELF_EVENT_LIMIT\)/, 'the shelf has a window of its own');
   assert.match(store, /shelfEvents: labEvents\.shelfRows,/);
   assert.match(route, /if \(shelf && !home\.lab\?\.shelf\?\.some\(\(e\) => e\.id === shelf\)\) return fail\('That test is no longer on your shelf\.'\);/, 'a bet cannot name a test nobody kept');
-  assert.match(route, /LAB_BET, \{ \.\.\.v\.value, shelf \}/, 'and the bet names the one it came from, which is how the entry leaves');
+  assert.match(route, /LAB_BET, \{ \.\.\.v\.value, shelf, /, 'and the bet names the one it came from, which is how the entry leaves');
   const iface = src('src/lib/copilot/lab.ts').match(/export interface ShelfEntry \{[\s\S]*?\n\}/)![0];
   assert.ok(!/score|market|viab|rank/i.test(iface), 'a kept idea is a test with a line: nothing in it estimates its worth');
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
@@ -10270,3 +10270,189 @@ async function sharedFileConfirmSuite() {
 }
 
 sharedFileConfirmSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Proof, honest about what it counts ──────────────────────────────────── */
+//
+// The live account, read through the connector on 7 Oct, showed four ways the
+// chain told a founder more than its rows held: a new offer judged by the old
+// one's sales, a bet opened read back as progress, six meetings called six
+// conversations, and one tap opening the same bet twice.
+
+import {
+  PIVOT_REACH as pfReach, businessChain as pfChain, chainChanges as pfChanges, evidenceState as pfEvidence, restartsOf as pfRestarts,
+  snapshotChain as pfSnapshot, triedWords as pfTried, type ChainInput as PfInput,
+} from '../../src/lib/copilot/business';
+import { erasOf as pfErasOf, pivotWords as pfPivotWords } from '../../src/lib/copilot/proof';
+import { eraCounts as pfEraCounts } from '../../src/lib/copilot/era';
+import { checkpointView as pfCheckpoint, gradeWords as pfGradeWords, isOpenNonce as pfNonce, openRace as pfRace } from '../../src/lib/copilot/lab';
+import { FOUND_BY as pfFoundBy } from '../../src/lib/copilot/types';
+import { FOUND_BY_PHRASE as pfPhrase } from '../../src/lib/copilot/offer';
+import { goalOutlook as pfOutlook } from '../../src/lib/copilot/outlook';
+
+async function proofHonestSuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(p, 'utf8');
+  // The account on 7 Oct: the app it sells now, found online, and September's two $1 tests and six meetings from selling to trades.
+  const founder: PfInput = {
+    offer: { sells: 'Founder OS Copilot App', for_who: "People who want a business but don't know how to start", problem: 'Not knowing what to do that moves the needle', price_band: '$29/month' },
+    said: {}, segments: [], area: 'Manila', web: false,
+    funnel: { matched: 116, sent: 27, replied: 2, meetings: 6, won: 2, outside: 0 },
+    worthAMessage: 0, bySegment: [], byChannel: [{ channel: 'whatsapp', sent: 27 }],
+    wins: [1, 1], queue: 0, wonRecent: { amount: 1, days: 30 },
+    goal: { title: 'Save Exit PH [NOV]', target: 1500, current: 0 }, currency: '$', workerConnected: true, agents: [], topOpening: null,
+    foundBy: 'inbound', talks: { n: 0, problem: 0, committed: 0 },
+    bets: [{ part: 'who', state: 'running', start: '2026-10-07', line: '0 of 3 commitments', when: null, result: 0 }],
+  };
+  const parts = (i: PfInput) => Object.fromEntries(pfChain(i).links.map((l) => [l.key, l]));
+
+  /* 1. Before: the new offer judged on the old one's rows — the screen the owner saw. */
+  const was = parts(founder);
+  assert.equal(was.pay.state, 'stuck');
+  assert.equal(was.pay.why, '6 meetings and 2 paid, none at your $29. From 5 on, that says more about the price or the proof than about luck.',
+    'six meetings are six meetings: no logged conversation is summed into "6 conversations"');
+  assert.equal(was.close.why, '2 won so far. At 3 it stops being luck.');
+  assert.equal(pfTried(0, 6), '6 meetings');
+  assert.equal(pfTried(2, 6), '2 conversations and 6 meetings');
+  assert.equal(pfTried(1, 0), '1 conversation');
+  assert.equal(pfTried(0, 0), '0 conversations');
+
+  /* 2. A pivot restarts the part it changed and every part measured after it; delivery only on its own. */
+  assert.deepEqual(pfReach.who, ['who', 'reach', 'close', 'pay']);
+  assert.deepEqual(pfReach.pay, ['pay']);
+  assert.deepEqual(pfReach.deliver, ['deliver']);
+  const cp = (on: string, decision: 'pivot' | 'persevere', part: 'who' | 'reach' | 'close' | 'pay' | 'deliver' | null) => ({ id: on, on, decision, part, note: null, chain: {}, at: `${on}T10:00:00Z` });
+  assert.deepEqual(pfRestarts([cp('2026-10-07', 'pivot', 'who')]), {
+    who: { on: '2026-10-07', pivot: 'who' }, reach: { on: '2026-10-07', pivot: 'who' }, close: { on: '2026-10-07', pivot: 'who' }, pay: { on: '2026-10-07', pivot: 'who' },
+  });
+  // A later pivot on the price restarts the price alone; persevere restarts nothing.
+  const two = pfRestarts([cp('2026-10-21', 'pivot', 'pay'), cp('2026-10-14', 'persevere', null), cp('2026-10-07', 'pivot', 'who')]);
+  assert.deepEqual([two.who?.on, two.close?.on, two.pay?.on, two.pay?.pivot, two.deliver], ['2026-10-07', '2026-10-07', '2026-10-21', 'pay', undefined]);
+  // On one day, a part's own pivot names it.
+  assert.equal(pfRestarts([cp('2026-10-07', 'pivot', 'who'), cp('2026-10-07', 'pivot', 'pay')]).pay?.pivot, 'pay');
+  assert.equal(pfPivotWords('who'), 'Who buys, how they hear, how they say yes and what they pay');
+  assert.equal(pfPivotWords('deliver'), 'How you deliver');
+
+  /* 3. After the pivot: judged on what came after it, with what came before said and not counted. */
+  const zero = { funnel: { sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, bySegment: [], byChannel: [], wins: [], talks: { n: 0, problem: 0, committed: 0 } };
+  const era = (part: 'who' | 'reach' | 'close' | 'pay') => ({ ...zero, since: '2026-10-07', pivot: 'who' as const, ...(part ? {} : {}) });
+  const after: PfInput = { ...founder, eras: { who: era('who'), reach: era('reach'), close: era('close'), pay: era('pay') } };
+  const now = parts(after);
+  assert.deepEqual(pfChain(after).links.map((l) => l.state), ['testing', 'untested', 'untested', 'untested', 'missing']);
+  assert.equal(now.pay.facts, 'Nothing paid yet');
+  assert.equal(now.pay.since, 'Counted since 7 Oct, when you pivoted who buys.');
+  assert.equal(now.pay.before, 'Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
+  assert.equal(now.pay.more[0], now.pay.before, 'said first when the part is open');
+  assert.equal(now.close.before, 'Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
+  assert.equal(now.reach.before, 'Before 7 Oct: 27 messages sent · 2 replies. Not counted here, and kept in History.');
+  assert.equal(now.deliver.since, undefined, 'delivery was not pivoted');
+  assert.deepEqual(pfChain(after).verdict, { proven: false, title: 'Not proven yet', line: 'Proven at 3 paid at your $29. So far: 0.', since: 'Counted since 7 Oct, when you pivoted who buys.' });
+  // A sale at the new price after the pivot counts, and the old ones still do not.
+  const sold = parts({ ...after, wins: [1, 1, 29], funnel: { ...after.funnel, won: 3 }, eras: { ...after.eras, pay: { ...era('pay'), funnel: { ...zero.funnel, won: 1 }, wins: [29] } } });
+  assert.equal(sold.pay.facts, '1 paid, $29 — all at your $29 or more');
+  assert.equal(sold.pay.before, 'Before 7 Oct: 6 meetings · 2 paid, at $1 each. Not counted here, and kept in History.');
+  // Bets from before the pivot are not the new business's evidence either.
+  const oldBet = { part: 'reach' as const, state: 'passed' as const, start: '2026-09-20', line: '5 of 5 enquiries', when: '25 Sep', result: 5 };
+  assert.equal(parts({ ...after, bets: [oldBet] }).reach.state, 'untested');
+  assert.match(parts({ ...after, bets: [oldBet] }).reach.before ?? '', /1 bet\./);
+  assert.equal(parts({ ...founder, bets: [oldBet] }).reach.state, 'works', 'with no pivot, every bet still counts — and the $1 sales with it');
+  // No pivot, no change: the chain reads exactly as it did.
+  assert.deepEqual(pfChain(founder).links.map((l) => [l.state, l.why]), pfChain({ ...founder, eras: undefined }).links.map((l) => [l.state, l.why]));
+  assert.equal(pfChain(founder).verdict.since, undefined);
+
+  /* 4. The counts are the funnel's own, from the person's day on, and a payload without them reads as before. */
+  const rows = {
+    opportunities: [{ id: 'o1', status: 'won', source: 'maps', source_kind: 'business', data: {}, reason: null, title: 'A & D Plumbing' }],
+    executions: [
+      { approval_state: 'sent' as const, channel: 'whatsapp' as const, opportunity_id: 'o1', sent_at: '2026-09-01T02:00:00Z' },
+      // 01:30 on 7 Oct in Manila: on the pivot's day there, though it is the 6th in UTC.
+      { approval_state: 'sent' as const, channel: 'whatsapp' as const, opportunity_id: null, sent_at: '2026-10-06T17:30:00Z' },
+      { approval_state: 'sent' as const, channel: 'whatsapp' as const, opportunity_id: null, sent_at: null },
+    ],
+    outcomes: [
+      { kind: 'won' as const, opportunity_id: 'o1', occurred_at: '2026-09-12T03:00:00Z', amount: 1 },
+      // A reply after the pivot to a message the app sent before it is still the app's send, not one logged outside.
+      { kind: 'reply' as const, opportunity_id: 'o1', occurred_at: '2026-10-08T03:00:00Z', amount: null },
+      { kind: 'won' as const, opportunity_id: null, occurred_at: '2026-10-08T05:00:00Z', amount: 29 },
+    ],
+  } as unknown as Parameters<typeof pfEraCounts>[0];
+  const counted = pfEraCounts(rows, '2026-10-07', 'Asia/Manila', founder.offer);
+  assert.deepEqual(counted.funnel, { sent: 1, replied: 1, meetings: 0, won: 1, outside: 0 });
+  assert.deepEqual(counted.wins, [29]);
+  assert.equal(pfEraCounts(rows, '2026-10-07', 'UTC', founder.offer).funnel.sent, 0, 'the same send is the 6th in UTC');
+  const lab = (eras?: Record<string, unknown>) => ({ lab: { bets: [], talks: [{ id: 't1', on: '2026-10-08', who: null, role: 'buyer', problem: 'yes', commitment: 'time', said: null, via: null, at: '' }, { id: 't0', on: '2026-10-01', who: null, role: 'buyer', problem: 'yes', commitment: 'none', said: null, via: null, at: '' }], checkpoints: [cp('2026-10-07', 'pivot', 'who')], unreadable: null, eras } }) as unknown as Parameters<typeof pfErasOf>[0];
+  const fromPayload = pfErasOf(lab({ '2026-10-07': counted }));
+  assert.deepEqual(Object.keys(fromPayload ?? {}), ['who', 'reach', 'close', 'pay']);
+  assert.deepEqual(fromPayload?.who?.talks, { n: 1, problem: 1, committed: 1 }, 'only the conversations since the pivot');
+  assert.equal(pfErasOf(lab(undefined)), undefined, 'a payload cached before the server counted reads all time, never as empty');
+  const store = src('src/lib/copilot/store.ts');
+  assert.match(store, /const pivotDays = Object\.values\(restartsOf\(lab\.checkpoints\)\)\.map\(\(r\) => r!\.on\);\s*if \(pivotDays\.length\) lab\.eras = erasFor\(pivotDays, diagRows,/, 'counted where the rows are, from the rows the funnel counts');
+
+  /* 5. A bet opened is a test begun, not progress. */
+  const bare = now.who;
+  assert.equal(bare.state, 'testing');
+  assert.equal(bare.bare, true);
+  assert.equal(bare.why, 'A bet on it is running. Nothing counted yet.');
+  assert.equal(pfEvidence(bare), 'untested');
+  const counting = parts({ ...after, bets: [{ ...founder.bets![0], line: '1 of 3 commitments', result: 1 }] }).who;
+  assert.deepEqual([counting.bare, pfEvidence(counting)], [undefined, 'testing'], 'one commitment counted is something');
+  assert.equal(parts({ ...after, eras: { ...after.eras, who: { ...era('who'), talks: { n: 1, problem: 1, committed: 0 } } } }).who.bare, undefined, 'a conversation logged is something');
+  // Called off before it counted anything: said as what it was.
+  assert.equal(parts({ ...after, bets: [{ ...founder.bets![0], state: 'stopped', when: '7 Oct' }] }).who.why, 'The last bet on it was called off: 0 of 3 commitments.');
+  // "Since you last looked": a device that saw Untested is told nothing when a bet opens, and something when it counts.
+  const saw = { at: '2026-10-07T01:00:00Z', states: { who: 'untested' as const } };
+  assert.deepEqual(pfChanges(saw, pfChain(after).links), []);
+  assert.deepEqual(pfChanges(saw, pfChain({ ...after, bets: [{ ...founder.bets![0], line: '1 of 3 commitments', result: 1 }] }).links).map((c) => [c.key, c.from, c.to]), [['who', 'untested', 'testing']]);
+  // A snapshot from before `bare` kept the label: not news either way.
+  assert.deepEqual(pfChanges({ at: saw.at, states: { who: 'testing' } }, pfChain(after).links), []);
+  assert.equal(pfSnapshot('2026-10-07T02:00:00Z', pfChain(after).links).states.who, 'untested', 'kept as evidence');
+  // The checkpoint's read-back: the owner's "Who buys has moved forward since" over an empty log.
+  const links = pfChain(after).links;
+  const pivotBack = (who: 'untested' | 'testing') => pfCheckpoint({ checkpoints: [{ ...cp('2026-10-07', 'pivot', 'who'), chain: { who } }], bets: [], links, today: '2026-10-07' }).grade;
+  assert.equal(pivotBack('untested'), 'same');
+  assert.equal(pfGradeWords({ decision: 'pivot', part: 'who' }, pivotBack('untested')), 'Who buys has not moved since.');
+  assert.equal(pivotBack('testing'), 'same', 'a checkpoint from before `bare` kept the label: not read as a slip');
+  const realLinks = pfChain({ ...after, eras: { ...after.eras, who: { ...era('who'), talks: { n: 2, problem: 2, committed: 1 } } } }).links;
+  assert.equal(pfCheckpoint({ checkpoints: [{ ...cp('2026-10-07', 'pivot', 'who'), chain: { who: 'untested' } }], bets: [], links: realLinks, today: '2026-10-10' }).grade, 'better', 'two conversations logged is a step');
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /chain: Object\.fromEntries\(links\.map\(\(l\) => \[l\.key, evidenceState\(l\)\]\)\)/, 'the checkpoint keeps the chain as evidence');
+  const sheets = src('src/app/copilot/_components/v2/ProofSheets.tsx');
+  assert.match(sheets, /chain: Object\.fromEntries\(links\.map\(\(l\) => \[l\.key, evidenceState\(l\)\]\)\)/, 'and so does a pivot made from the chain');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /case 'pivot': return <PivotSheet home=\{home\} actions=\{actions\} \/>;/);
+  assert.match(sheets, /actions\.openSheet\(\{ kind: 'pivot' \}\)/, 'a pivot does not wait for the checkpoint to come due');
+
+  /* 6. "How buyers find you" in a sentence, never the label spliced in. */
+  for (const f of pfFoundBy) assert.ok(!/^(they|you)\b/i.test(pfPhrase[f]) || f === 'outreach', `${f}: "buyers ${pfPhrase[f]}" has no second subject`);
+  assert.equal(`Sends and replies are left out: buyers ${pfPhrase.inbound}, not through what the app sends.`, 'Sends and replies are left out: buyers find you online, not through what the app sends.');
+  const labSheets = src('src/app/copilot/_components/v2/LabSheets.tsx');
+  assert.match(labSheets, /buyers \{FOUND_BY_PHRASE\[found\]\}, not through what the app sends\./);
+  assert.ok(!/buyers find you \{FOUND_BY_LABEL/.test(labSheets), 'the stutter is gone');
+
+  /* 7. One tap, one bet. The second of two that raced is withdrawn; a retry of the same tap is answered as the tap was. */
+  assert.ok(pfNonce('6b0f3c1e-2a4d-4c8e-9f10-123456789abc') && !pfNonce('x') && !pfNonce('a b c d e f g h') && !pfNonce(7));
+  const v = (id: string, state: 'running' | 'stopped' | 'passed', openedAt: string, nonce: string | null = null) => ({ state, bet: { id, openedAt, nonce } });
+  assert.equal(pfRace([v('10', 'running', '2026-10-07T09:00:00Z')], '10'), null, 'alone: kept');
+  assert.deepEqual(pfRace([v('11', 'running', '2026-10-07T09:00:01Z', 'n-aaaaaaaa'), v('10', 'running', '2026-10-07T09:00:00Z', 'n-aaaaaaaa')], '11'), { first: '10', same: true }, 'the same tap twice: the second answers as the first');
+  assert.deepEqual(pfRace([v('11', 'running', '2026-10-07T09:00:01Z', 'n-bbbbbbbb'), v('10', 'running', '2026-10-07T09:00:00Z', 'n-aaaaaaaa')], '11'), { first: '10', same: false }, 'two taps: the second is refused');
+  assert.equal(pfRace([v('11', 'running', '2026-10-07T09:00:01Z'), v('10', 'running', '2026-10-07T09:00:00Z')], '10'), null, 'the first written stays');
+  assert.deepEqual(pfRace([v('11', 'running', '2026-10-07T09:00:00Z'), v('10', 'running', '2026-10-07T09:00:00Z')], '11'), { first: '10', same: false }, 'one instant: the table’s order decides');
+  assert.equal(pfRace([v('11', 'running', '2026-10-07T09:00:01Z'), v('10', 'passed', '2026-10-07T09:00:00Z'), v('9', 'stopped', '2026-10-07T08:59:00Z')], '11'), null, 'a bet that passed or was called off freed the slot');
+  const route = src('src/app/api/copilot/lab/route.ts');
+  assert.match(route, /if \(nonce && home\.lab\?\.bets\.some\(\(x\) => x\.bet\.nonce === nonce\)\) return json\(\{ ok: true, home \}\);/, 'a retry of a tap that opened its bet is not refused');
+  assert.match(route, /const id = await insertLabEvent\(auth\.pid, LAB_BET,[\s\S]*?const race = after\?\.lab && !after\.lab\.unreadable \? openRace\(after\.lab\.bets, id\) : null;\s*if \(race\) \{\s*await withdrawLabBet\(auth\.pid, id\);/, 'the write is read back, and the second withdrawn');
+  assert.match(labSheets, /if \(starting\.current\) return;\s*starting\.current = true;/, 'a second tap before the render does nothing');
+  assert.match(labSheets, /action: 'open',\s*nonce,/);
+
+  /* 8. A goal is not walked back to sends for a business whose buyers do not come through them. */
+  const exit = { id: 'g1', title: 'Save Exit PH [NOV]', metric: 'currency' as const, unit: '$', target_value: 1500, current_value: 0, horizon_days: 62, created_at: '2026-10-07T01:00:00Z' };
+  const base = { today: '2026-10-07', price: 29, selling: true, currency: '$', capacity: 'moderate' as const, funnel: { windowDays: 30, sent: 27, won: 1, wonAmount: 1 } };
+  assert.match(pfOutlook(exit, base).line, /sends at what yours have earned/, 'nobody said: as it always read');
+  const online = pfOutlook(exit, { ...base, viaSends: false });
+  assert.ok(!/send/.test(online.line), online.line);
+  assert.equal(online.line, '52 sales at your $29 in 62 days: about $169 a week. You were paid $1 in the last 30 days, about $0 a week.');
+  assert.equal(online.verdict, 'off_track');
+  assert.match(pfOutlook(exit, { ...base, viaSends: true }).line, /sends at what yours have earned/, 'outreach walks the chain from sends, as before');
+
+  console.log('copilot-core: proof honest checks passed');
+}
+
+proofHonestSuite().catch((e) => { console.error(e); process.exit(1); });

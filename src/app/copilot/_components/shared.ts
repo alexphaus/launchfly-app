@@ -129,6 +129,8 @@ export type SheetState =
   | { kind: 'told'; meta: ToldMeta }
   /** Proof: the chain, whole — each part's rule, its evidence and what would move it. */
   | { kind: 'chain' }
+  /** Proof: pivot one part now, without waiting for the checkpoint to come due. The parts it changes count from today. */
+  | { kind: 'pivot' }
   /** Proof: how buyers find the business. */
   | { kind: 'foundby' }
   /** Proof: the history, whole, by month. */
@@ -154,6 +156,8 @@ export interface BetFromExperiment {
 export type LabInput =
   | {
       action: 'open';
+      /** This sheet's own word for its Start tap (lab.ts isOpenNonce): a retry of it answers as the tap did, never with a second bet. */
+      nonce?: string;
       bet: {
         part: LinkKey; belief: string; play: string | null; idea?: BetIdea | null; metric: LabMetric; unit?: string | null; target: number;
         tries: { metric: LabMetric; planned: number } | null; days: number; experiment?: string | null;

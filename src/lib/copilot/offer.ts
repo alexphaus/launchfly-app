@@ -29,6 +29,19 @@ export const FOUND_BY_LABEL: Record<FoundBy, string> = {
   local: 'In person',
 };
 
+/**
+ * How buyers arrive, as the end of a sentence that starts "Buyers…". The labels
+ * are answers to a question, and spliced into a sentence they read as a stutter:
+ * "buyers find you they find you online".
+ */
+export const FOUND_BY_PHRASE: Record<FoundBy, string> = {
+  outreach: 'hear from you first',
+  inbound: 'find you online',
+  referrals: 'come by word of mouth',
+  marketplace: 'find you on a marketplace',
+  local: 'meet you in person',
+};
+
 /** What each covers, so the choice is not a guess. */
 export const FOUND_BY_HINT: Record<FoundBy, string> = {
   outreach: 'Messages, calls and emails you send first',

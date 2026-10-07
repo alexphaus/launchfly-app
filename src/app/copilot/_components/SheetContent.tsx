@@ -27,7 +27,7 @@ import { ClaudeSheet } from './v2/ClaudeSheet';
 import { BetSheet, IntroSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
 import { NoteSheet, ToldChooser, ToldLine } from './v2/TellSheets';
 import type { ToldMeta, ToldOffer } from '@/lib/copilot/tell';
-import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, FoundBySheet, HistorySheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
+import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, FoundBySheet, HistorySheet, PivotSheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
 import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
 import { dayLabel } from '@/lib/copilot/money/ledger';
 
@@ -76,6 +76,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'count': return <CountSheet home={home} betId={sheet.bet} actions={actions} />;
     case 'sale': return <SaleSheet home={home} outcome={sheet.outcome} told={sheet.told} actions={actions} />;
     case 'chain': return <ChainSheet home={home} actions={actions} />;
+    case 'pivot': return <PivotSheet home={home} actions={actions} />;
     case 'foundby': return <FoundBySheet home={home} actions={actions} />;
     case 'history': return <HistorySheet home={home} actions={actions} />;
     case 'asset': return <AssetSheet home={home} id={sheet.id} assetKind={sheet.assetKind} bet={sheet.bet} actions={actions} />;

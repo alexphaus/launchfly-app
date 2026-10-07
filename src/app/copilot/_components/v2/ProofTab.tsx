@@ -29,7 +29,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ASSET_LABEL, OFFER_ASSET, type Asset, type AssetGap, type AssetKind } from '@/lib/copilot/assets';
 import {
-  LINK_LABEL, LINK_STATE_LABEL, changeLine, chainChanges, parseSeenChain, snapshotChain,
+  LINK_LABEL, LINK_STATE_LABEL, changeLine, chainChanges, evidenceState, parseSeenChain, snapshotChain,
   type ChainChange, type LinkKey, type LinkMove, type SeenChain,
 } from '@/lib/copilot/business';
 import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } from '@/lib/copilot/commission';
@@ -40,7 +40,7 @@ import {
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
-import { assetMakers, betNext, betWork, ideasStale, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
+import { assetMakers, betNext, betWork, ideasStale, pivotWords, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
 import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
@@ -159,6 +159,8 @@ function Verdict({ home, d, actions, changes }: { home: HomeData; d: Derived; ac
       <div className={`cp2-bz-verdict ${v.proven ? 'proven' : ''}`}>
         <span className="cp2-bz-verdict-t">{v.title}</span>
         <span className="cp2-bz-verdict-s">{v.line}</span>
+        {/* Said where the count is: "So far: 0" the day after a pivot is the new business's 0, not the old one's. */}
+        {v.since && <span className="cp2-pf-countfrom">{v.since}</span>}
       </div>
       <button
         className="cp2-pf-chain" onClick={() => actions.openSheet({ kind: 'chain' })}
@@ -229,8 +231,9 @@ function Checkpoint({ d, actions }: { d: Derived; actions: Actions }) {
     const r = await actions.lab({
       action: 'checkpoint',
       // The chain as it stands, kept with the answer: the next checkpoint
-      // reads the decision back against what the chain did after it.
-      checkpoint: { decision, part: decision === 'pivot' ? part : null, note: note.trim() || undefined, chain: Object.fromEntries(links.map((l) => [l.key, l.state])) },
+      // reads the decision back against what the chain did after it — as
+      // evidence, so a bet opened since is not read back as a step forward.
+      checkpoint: { decision, part: decision === 'pivot' ? part : null, note: note.trim() || undefined, chain: Object.fromEntries(links.map((l) => [l.key, evidenceState(l)])) },
     });
     setBusy(false);
     if (!r.ok) setError(r.error ?? 'Could not save that');
@@ -281,6 +284,7 @@ function Checkpoint({ d, actions }: { d: Derived; actions: Actions }) {
               <button key={l.key} className={`cp-fchip ${part === l.key ? 'active' : ''}`} aria-pressed={part === l.key} onClick={() => setPart(l.key)}>{l.label}</button>
             ))}
           </div>
+          {part && <p className="cp-help">{pivotWords(part)} count from today. What came before stays in History and is said on its part.</p>}
         </div>
       )}
       {decision && (

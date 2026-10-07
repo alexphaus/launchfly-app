@@ -54,7 +54,7 @@
 // work and the plan's ticks are. Pure: no DB import.
 
 import type { AssetKind } from './assets';
-import { LINK_KEYS, LINK_LABEL, LINK_STATES, chainChanges, type BusinessLink, type ChainChange, type LinkKey, type LinkState } from './business';
+import { LINK_KEYS, LINK_LABEL, LINK_STATES, chainChanges, evidenceState, type BusinessLink, type ChainChange, type EraCounts, type LinkKey, type LinkState } from './business';
 import { isIsoDay, shiftDay } from './focus';
 import { priceOf } from './plan';
 import { moneyLabel } from './review';
@@ -241,9 +241,11 @@ export interface Bet {
   experiment: string | null;
   /** The shelf entry it was started from, which leaves the shelf with it. Optional: bets before the shelf have none. */
   shelf?: string | null;
+  /** The tap that opened it (isOpenNonce): a retry of that tap is answered as the tap was, not with a second bet. */
+  nonce?: string | null;
   openedAt: string;
 }
-export type BetDraft = Omit<Bet, 'id' | 'openedAt' | 'shelf'>;
+export type BetDraft = Omit<Bet, 'id' | 'openedAt' | 'shelf' | 'nonce'>;
 
 /**
  * A test kept for later: everything a bet is but the day it starts and the price
@@ -752,7 +754,39 @@ function storedBet(p: Record<string, unknown>, id: string, at: string): Bet | nu
     price, priceLabel: price != null ? text(p.priceLabel, 24) : null,
     experiment: experimentId(p.experiment),
     shelf: experimentId(p.shelf),
+    nonce: isOpenNonce(p.nonce) ? p.nonce : null,
   };
+}
+
+/** A tap's own word, sent with "Start the bet": the same on a retry of that tap, new on the next one. */
+export const isOpenNonce = (v: unknown): v is string => typeof v === 'string' && /^[\w-]{8,64}$/.test(v);
+
+/** Written first: by when it was opened, then by the table's own order for two opened in the same instant. */
+function openedBefore(a: Pick<Bet, 'id' | 'openedAt'>, b: Pick<Bet, 'id' | 'openedAt'>): boolean {
+  if (a.openedAt !== b.openedAt) return a.openedAt < b.openedAt;
+  const [x, y] = [Number(a.id), Number(b.id)];
+  return Number.isFinite(x) && Number.isFinite(y) ? x < y : a.id < b.id;
+}
+
+/**
+ * Whether the bet `mine`, just opened, lost a race to open. The route refuses
+ * a second bet while one runs, but it reads the record before it writes: a
+ * double tap, or a request the phone sent again, passes that read twice before
+ * either write lands. The live account ended a day with the same bet opened
+ * twice and one of the pair called off. So the write is read back, as the rows
+ * judge it: when another bet runs that was opened before this one, this one is
+ * the second and is withdrawn by the request that wrote it. `same` says the one
+ * that stays came from the same tap — the second answer is then the first one's,
+ * not a refusal.
+ */
+export function openRace(bets: Array<Pick<BetView, 'state'> & { bet: Pick<Bet, 'id' | 'openedAt' | 'nonce'> }>, mine: string): { first: string; same: boolean } | null {
+  const own = bets.find((v) => v.bet.id === mine);
+  if (!own || own.state !== 'running') return null;
+  const first = bets
+    .filter((v) => v.state === 'running' && v.bet.id !== mine && openedBefore(v.bet, own.bet))
+    .sort((a, b) => (openedBefore(a.bet, b.bet) ? -1 : 1))[0];
+  if (!first) return null;
+  return { first: first.bet.id, same: !!own.bet.nonce && first.bet.nonce === own.bet.nonce };
 }
 
 export function labFromEvents(rows: LabEventRow[]): LabLedger {
@@ -968,6 +1002,12 @@ export interface LabHome {
   intros?: Record<string, IntroClose>;
   /** Tests kept for later, newest first. Optional: a payload from before the shelf has none. */
   shelf?: ShelfEntry[];
+  /**
+   * The funnel's counts from each pivot's day on (era.ts), keyed by the day:
+   * what the chain judges a restarted part on. Optional: a payload from before
+   * pivots restarted anything has none, and its chain reads all time, as it did.
+   */
+  eras?: Record<string, EraCounts>;
   /** The read's failure, said on the tab — never shown as an empty Lab (invariant 13). */
   unreadable: string | null;
 }
@@ -1126,7 +1166,14 @@ export function checkpointView(input: { checkpoints: Checkpoint[]; bets: BetView
   if (last) {
     const keys = last.decision === 'pivot' && last.part ? [last.part] : LINK_KEYS.filter((k) => last.chain[k]);
     const was = keys.reduce((n, k) => n + (last.chain[k] ? RANK[last.chain[k]!] : 0), 0);
-    const now = keys.reduce((n, k) => n + RANK[input.links.find((l) => l.key === k)?.state ?? 'missing'], 0);
+    // As evidence: a bet opened on a part since is not the part moving forward
+    // (business.ts evidenceState). A part bare now that was kept as Testing
+    // reads as it was kept — a checkpoint from before `bare` kept the label.
+    const now = keys.reduce((n, k) => {
+      const l = input.links.find((x) => x.key === k);
+      if (!l) return n + RANK.missing;
+      return n + (l.bare && last.chain[k] === 'testing' ? RANK.testing : RANK[evidenceState(l)]);
+    }, 0);
     if (keys.some((k) => last.chain[k])) grade = now > was ? 'better' : now < was ? 'worse' : 'same';
   }
   return { due, last, ended, moved, grade, nextOn: last ? shiftDay(last.on, CHECKPOINT_DAYS) : null };

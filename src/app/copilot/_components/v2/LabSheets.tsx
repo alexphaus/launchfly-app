@@ -7,7 +7,7 @@
 // it has to reach, what it counts and its last day are said back in one
 // sentence before the button — the pass line — because a line set after the
 // result is in is not a test, it is a description.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { LINK_KEYS, LINK_LABEL, type LinkKey } from '@/lib/copilot/business';
 import { shiftDay } from '@/lib/copilot/focus';
 import {
@@ -18,7 +18,7 @@ import {
   type Commitment, type IntroClose, type IntroOutcome, type LabMetric, type Problem, type Talk, type TalkRole,
 } from '@/lib/copilot/lab';
 import { salesCurrency } from '@/lib/copilot/metrics';
-import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
+import { FOUND_BY_PHRASE } from '@/lib/copilot/offer';
 import { foundOf } from '@/lib/copilot/proof';
 import { whenLabel } from '@/lib/copilot/review';
 import { hostOf, ideaOfSeed, keptOfSeed, plainLines, type Seed } from '@/lib/copilot/seed';
@@ -26,6 +26,7 @@ import type { ToldMeta, ToldTalk } from '@/lib/copilot/tell';
 import { derive } from './derive';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions, BetFromExperiment } from '../shared';
+import { newMoveId } from './bookLocal';
 import { ToldLine } from './TellSheets';
 
 /** A custom bet's first count, by the part it is about: the number that part lives or dies by. */
@@ -171,6 +172,12 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
   const [days, setDays] = useState(basis?.days ?? experiment?.days ?? DEFAULT_BET_DAYS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // One word for this sheet's Start, sent with every try of it: the server
+  // answers a retry as it answered the tap, and withdraws a second bet that two
+  // taps raced to open (lab.ts openRace). Disabling the button is not enough —
+  // it is disabled by a render, and a second tap can land before the render.
+  const [nonce] = useState(newMoveId);
+  const starting = useRef(false);
 
   const running = home.lab?.bets.find((b) => b.state === 'running') ?? null;
   const needsPrice = !!METRIC[metric].priced && price == null;
@@ -195,11 +202,15 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
     ? { label: idea.label, how: idea.how, from: idea.book ? `AI, after ${idea.book}` : 'AI, from your record', prep: idea.prep }
     : experiment ? { label: experiment.title, how: experiment.test, from: 'Your plan' } : seed ? ideaOfSeed(seed) : keptIdea);
   const start = async () => {
+    if (starting.current) return;
+    starting.current = true;
     setBusy(true); setError(null);
     const r = await actions.lab({
       action: 'open',
+      nonce,
       bet: { part, belief: belief.trim(), play: play?.key ?? null, idea: playFrom(), metric, unit: shownUnit, target, tries, days, experiment: experiment?.id ?? null, shelf: shelfId ?? null },
     });
+    starting.current = false;
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not start it');
     actions.closeSheet();
@@ -271,7 +282,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
             ))}
           </div>
           {/* Where buyers do not come through the app's sends, its sends cannot decide anything: said, not hidden. */}
-          {found && found !== 'outreach' && <p className="cp-help">Sends and replies are left out: buyers find you {FOUND_BY_LABEL[found].toLowerCase()}, not through what the app sends.</p>}
+          {found && found !== 'outreach' && <p className="cp-help">Sends and replies are left out: buyers {FOUND_BY_PHRASE[found]}, not through what the app sends.</p>}
         </div>
       )}
 

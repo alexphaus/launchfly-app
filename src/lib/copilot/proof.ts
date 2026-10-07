@@ -22,7 +22,7 @@
 import { ASSET_KINDS, type Asset, type AssetKind } from './assets';
 import { talkTotals } from './ideas';
 import { CHECKPOINT_DAYS, daysBetween, dayWords, resultLine, type BetView, type IdeaSet, type LabMetric, type Talk, type Tally } from './lab';
-import type { Chain, ChainBet, ChainInput, LinkKey } from './business';
+import { LINK_KEYS, LINK_LABEL, PIVOT_REACH, restartsOf, type Chain, type ChainBet, type ChainInput, type LinkKey } from './business';
 import type { Angle } from './experiment';
 import type { Agent } from './machine';
 import { foundByOf, isFoundBy } from './offer';
@@ -43,7 +43,7 @@ export function saidOf(home: Pick<HomeData, 'working'>): Partial<Record<WorkingS
 export function chainBets(bets: BetView[]): ChainBet[] {
   return bets.map((v) => ({
     part: v.bet.part, state: v.state, start: v.bet.start,
-    line: resultLine(v), when: v.ended ? dayWords(v.ended) : null,
+    line: resultLine(v), when: v.ended ? dayWords(v.ended) : null, result: v.result,
   }));
 }
 
@@ -100,7 +100,32 @@ export function chainInputOf(home: HomeData, x: ChainExtras): ChainInput {
     bets: chainBets(home.lab?.bets ?? []),
     talks: talkTotals(home.lab?.talks ?? []),
     assets: assetTitles(home.assets?.assets ?? []),
+    eras: erasOf(home),
   };
+}
+
+/**
+ * Each part a pivot restarted, with the rows since its day: the funnel's from
+ * the server (era.ts), the conversations from the log. A pivot whose counts are
+ * not in the payload — one cached from before the server counted them — leaves
+ * its parts read all time, as they were, rather than read as empty.
+ */
+export function erasOf(home: Pick<HomeData, 'lab'>): ChainInput['eras'] {
+  const restarts = restartsOf(home.lab?.checkpoints ?? []);
+  const out: NonNullable<ChainInput['eras']> = {};
+  for (const k of LINK_KEYS) {
+    const r = restarts[k];
+    const counts = r ? home.lab?.eras?.[r.on] : undefined;
+    if (!r || !counts) continue;
+    out[k] = { ...counts, since: r.on, pivot: r.pivot, talks: talkTotals((home.lab?.talks ?? []).filter((t) => t.on >= r.on)) };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** "Who buys, how they hear, how they say yes and what they pay": the parts a pivot restarts, said before it is made. */
+export function pivotWords(part: LinkKey): string {
+  const names = PIVOT_REACH[part].map((k, n) => (n ? LINK_LABEL[k].toLowerCase() : LINK_LABEL[k]));
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
 }
 
 /** How buyers find the business, and whether the person said so or the rows did. */

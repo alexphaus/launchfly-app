@@ -20,7 +20,7 @@ import { DEFAULT_HORIZON_DAYS, goalDue } from '../due';
 import { loadSendQueue } from '../execution';
 import { angleLines, isOpen, ledgerLines, paused, staleOffer, stateOf, type Experiment } from '../experiment';
 import { availableJobs } from '../jobs';
-import { offerIsEmpty } from '../offer';
+import { isFoundBy, offerIsEmpty } from '../offer';
 import { carriedSteps, goalOutlooks, outlookLine, outlookSignals } from '../outlook';
 import { PROPOSE_JOB } from '../propose';
 import { oldestWaitDays } from '../triage';
@@ -185,6 +185,7 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
       today,
       price: priceOf(profile.offer?.price_band),
       selling: !offerIsEmpty(profile.offer),
+      viaSends: isFoundBy(profile.offer?.found_by) ? profile.offer!.found_by === 'outreach' : undefined,
       currency,
       capacity: profile.capacity,
       funnel: { windowDays: metrics.window_days, sent: metrics.sent, won: metrics.won, wonAmount: metrics.won_amount },

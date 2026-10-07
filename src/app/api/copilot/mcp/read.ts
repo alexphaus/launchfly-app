@@ -159,7 +159,7 @@ function proofOf(home: HomeData, d: Derived): string {
   return proofText({
     today: home.recent.today,
     verdict: chain.verdict,
-    links: chain.links.map((l) => ({ label: l.label, state: LINK_STATE_LABEL[l.state], what: l.what, facts: l.facts, why: l.why })),
+    links: chain.links.map((l) => ({ label: l.label, state: LINK_STATE_LABEL[l.state], what: l.what, facts: l.facts, why: l.why, since: l.since, before: l.before })),
     weak: chain.weak ? LINK_LABEL[chain.weak] : null,
     bets: d.proof.bets.map((b) => betOf(b, d.proof.found.value)),
     checkpoint: { due: cp.due, last: cp.last ? { on: cp.last.on, decision: decisionWords(cp.last), grade: gradeWords(cp.last, cp.grade) } : null },

@@ -12,6 +12,8 @@ import { ASSET_EVENTS, ASSET_VERSION, OFFER_ASSET, assetsHome, offerBody, offerF
 import { RECENT_DAYS, type AnsweredMove, type RecentLedger, type RecentOutcome } from './review';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
+import { restartsOf } from './business';
+import { erasFor } from './era';
 import { cancelOpenDrafts, channelsConfigured, countOpenDrafts, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, isFoundBy, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
@@ -1007,6 +1009,10 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     outcomes: diagRows.outcomes,
     finished: commissionRows.filter((c) => c.status === 'done').map((c) => c.closed_at),
   });
+  // What each pivot restarted is judged on the rows from its day on (era.ts):
+  // counted here, where the rows are, because the payload carries totals only.
+  const pivotDays = Object.values(restartsOf(lab.checkpoints)).map((r) => r!.on);
+  if (pivotDays.length) lab.eras = erasFor(pivotDays, diagRows, profile.timezone, profile.offer ?? {}, profile.target_segments);
   const assets = assetsHome({ events: assetEvents.rows, unreadable: assetEvents.unreadable, offer: profile.offer });
   // Every sale, all time, for Proof's history — from the diagnosis's own rows,
   // with the business named where the sale was logged against one.
@@ -2239,10 +2245,30 @@ export async function loadLabEvents(profileId: string): Promise<{ rows: LabEvent
   }
 }
 
-/** One Lab event, written as it was validated (lab.ts). Throws with a reason the route can say. */
-export async function insertLabEvent(profileId: string, type: (typeof LAB_EVENTS)[number], payload: Record<string, unknown>): Promise<void> {
-  const { error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: type, payload });
+/**
+ * One Lab event, written as it was validated (lab.ts). Throws with a reason the
+ * route can say. Returns the row's id, so a write that has to be read back — a
+ * bet opened twice by one tap (lab.ts openRace) — can tell which one it wrote.
+ */
+export async function insertLabEvent(profileId: string, type: (typeof LAB_EVENTS)[number], payload: Record<string, unknown>): Promise<string> {
+  const { data, error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: type, payload }).select('id').single();
   if (error) throw new Error(describeDbError(error, 'Could not save that.'));
+  return String((data as { id: number | string }).id);
+}
+
+/**
+ * Withdraw a bet this request opened and then found was the second of two that
+ * raced (lab.ts openRace). Only a bet, only this profile's, only by its id. A
+ * delete that matched nothing throws: the person would otherwise be told one bet
+ * runs while two do.
+ */
+export async function withdrawLabBet(profileId: string, id: string): Promise<void> {
+  const n = Number(id);
+  if (!Number.isSafeInteger(n) || n <= 0) throw new Error('Not a bet.');
+  const { data, error } = await copilotDb().from('copilot_events').delete()
+    .eq('profile_id', profileId).eq('event_type', LAB_BET).eq('id', n).select('id');
+  if (error) throw new Error(describeDbError(error, 'A second bet was opened by the same tap and could not be withdrawn. Call one of them off.'));
+  if (!data?.length) throw new Error('A second bet was opened by the same tap and could not be found to withdraw. Call one of them off.');
 }
 
 /**

@@ -19,7 +19,7 @@ import { historyOf } from '@/lib/copilot/history';
 import { labView, openIntros } from '@/lib/copilot/lab';
 import { chainInputOf, foundOf, proofLine, saidOf } from '@/lib/copilot/proof';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
-import { offerIsEmpty } from '@/lib/copilot/offer';
+import { isFoundBy, offerIsEmpty } from '@/lib/copilot/offer';
 import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
 import { pathAhead, pathHere, pathNow, planStatus, priceOf } from '@/lib/copilot/plan';
 import { SIZE_LABEL, goalMarkers, markMap, moneyWaiting, replacesCall, roadmapDue, roadmapFirstStep, roadmapLeadGoal, roadmapSignature, roadmapView } from '@/lib/copilot/roadmap';
@@ -141,6 +141,7 @@ export function derive(home: HomeData) {
     today: home.recent.today,
     price: priceOf(home.profile.offer?.price_band),
     selling: !noOffer,
+    viaSends: isFoundBy(home.profile.offer?.found_by) ? home.profile.offer!.found_by === 'outreach' : undefined,
     currency,
     capacity: home.profile.capacity,
     funnel: { windowDays: home.metrics.window_days, sent: home.metrics.sent, won: home.metrics.won, wonAmount: home.metrics.won_amount },

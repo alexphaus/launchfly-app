@@ -50,6 +50,9 @@ const LAB_SAID: Record<LabInput['action'], string> = {
   checkpoint: 'Decided. The next checkpoint reads it back.',
 };
 
+/** A pivot, said back: what it did to the count, which is what the person will see change. */
+const PIVOTED = 'Pivoted. What it changed counts from today; what came before stays in History.';
+
 /** What each asset write did, said back. */
 const ASSET_SAID: Record<AssetInput['action'], string> = {
   add: 'Added to your assets.',
@@ -979,7 +982,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
       try {
         const r = await post<{ home: HomeData }>('/lab', input);
         setHome(r.home);
-        say(LAB_SAID[input.action]);
+        say(input.action === 'checkpoint' && input.checkpoint.decision === 'pivot' ? PIVOTED : LAB_SAID[input.action]);
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };

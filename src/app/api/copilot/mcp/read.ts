@@ -6,7 +6,7 @@
 // the Path and Proof show, not a second count of them.
 
 import { derive } from '@/app/copilot/_components/v2/derive';
-import { LINK_LABEL, LINK_STATE_LABEL } from '@/lib/copilot/business';
+import { LINK_LABEL, linkStatus } from '@/lib/copilot/business';
 import { markSeen } from '@/lib/copilot/connector';
 import { talkTotals } from '@/lib/copilot/ideas';
 import { betPrice, decisionWords, gradeWords, passLine, playLine, playOf, resultLine, talkCounts, type BetView } from '@/lib/copilot/lab';
@@ -70,7 +70,7 @@ type Derived = ReturnType<typeof derive>;
 /** Reads the home made and could not finish, said by name with their reasons. */
 function missingOf(home: HomeData, parts: Array<'lab' | 'plan' | 'assets' | 'recent'>): string[] {
   return [
-    parts.includes('lab') && home.lab?.unreadable ? `bets and conversations (${home.lab.unreadable})` : null,
+    parts.includes('lab') && home.lab?.unreadable ? `tests and conversations (${home.lab.unreadable})` : null,
     parts.includes('plan') && home.roadmap?.unreadable ? `the plan (${home.roadmap.unreadable})` : null,
     parts.includes('assets') && home.assets?.unreadable ? `assets (${home.assets.unreadable})` : null,
     ...(parts.includes('recent') ? (home.recent.unreadable ?? []).map((u) => `recent activity (${u})`) : []),
@@ -115,7 +115,7 @@ function overviewOf(home: HomeData, d: Derived): string {
     outlook: v ? { title: v.title, verdict: VERDICT_WORDS[v.verdict], line: v.line } : null,
     runwayMonths: home.metrics.runway_months,
     verdict: chain.verdict,
-    links: chain.links.map((l) => ({ label: l.label, state: LINK_STATE_LABEL[l.state], why: l.why })),
+    links: chain.links.map((l) => ({ label: l.label, state: linkStatus(l), why: l.why })),
     weak: chain.weak ? LINK_LABEL[chain.weak] : null,
     bet: d.proof.lab.current ? betOf(d.proof.lab.current, d.proof.found.value) : null,
     checkpointDue: d.proof.lab.checkpoint.due,
@@ -159,7 +159,7 @@ function proofOf(home: HomeData, d: Derived): string {
   return proofText({
     today: home.recent.today,
     verdict: chain.verdict,
-    links: chain.links.map((l) => ({ label: l.label, state: LINK_STATE_LABEL[l.state], what: l.what, facts: l.facts, why: l.why })),
+    links: chain.links.map((l) => ({ label: l.label, state: linkStatus(l), what: l.what, facts: l.facts, why: l.why })),
     weak: chain.weak ? LINK_LABEL[chain.weak] : null,
     bets: d.proof.bets.map((b) => betOf(b, d.proof.found.value)),
     checkpoint: { due: cp.due, last: cp.last ? { on: cp.last.on, decision: decisionWords(cp.last), grade: gradeWords(cp.last, cp.grade) } : null },

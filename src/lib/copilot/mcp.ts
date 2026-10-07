@@ -36,7 +36,7 @@ export const SERVER_INFO = { name: 'copilot', title: 'Copilot', version: '1.0.0'
  * that belongs in it — so Claude does not tell them it saved what it cannot.
  */
 export const INSTRUCTIONS = [
-  'This is the user\'s own business record, from their Copilot app: what they sell and to whom, their goals, the plan, the bets they are running, the conversations they logged, and what their rows count.',
+  'This is the user\'s own business record, from their Copilot app: what they sell and to whom, their goals, the plan, the tests they are running, the conversations they logged, and what their rows count.',
   'Every number in it was counted by the app from rows the user created. When you estimate, project or compute a rate yourself, say it is your estimate and not the app\'s.',
   'The tools speak to the user as the app does, so "you" in them is the user. Lines the user wrote are marked as theirs, and a plan or draft a model wrote is marked as one; keep the two apart from what the rows show.',
   'It is read-only: these tools cannot send, log, change or delete anything. When the user tells you something that belongs in the record — a conversation, a sale, a meeting, a new price — tell them to log it in their Copilot app, where saying it into the mic opens it filled in for them to keep, and never say it was saved.',
@@ -65,7 +65,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'get_overview',
     title: 'The business at a glance',
-    description: 'Start here. What the user sells, to whom and at what price; their goals and whether each is on track; where the business stands, part by part, as the rows read it and which part is weakest; the bet they are running; and the one move the app says is next.',
+    description: 'Start here. What the user sells, to whom and at what price; their goals and whether each is on track; where the business stands, part by part, as the rows read it and which part is weakest; the test they are running; and the one move the app says is next.',
     inputSchema: NO_ARGS,
     annotations: READ('The business at a glance'),
   },
@@ -79,7 +79,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'get_proof',
     title: 'Is it proven',
-    description: 'Whether the business is proven: each part (who buys, how they hear, how they say yes, what they pay, how it is delivered) with its state and the counts behind it; every bet run, with its pass line and how the rows judged it; the last pivot-or-persevere decision; and the history of what was tried.',
+    description: 'Whether the business is proven: each part (who buys, how they hear, how they say yes, what they pay, how it is delivered) with its state and the counts behind it; every test run, with its pass line and how the rows judged it; the last checkpoint decision (keep going, or change one part); and the history of what was tried.',
     inputSchema: NO_ARGS,
     annotations: READ('Is it proven'),
   },

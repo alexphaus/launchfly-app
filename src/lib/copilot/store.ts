@@ -1016,6 +1016,14 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     .map((o) => ({ at: o.occurred_at as string, amount: typeof o.amount === 'number' && Number.isFinite(o.amount) ? o.amount : null, who: (o.opportunity_id ? oppTitle.get(o.opportunity_id) : null) ?? o.note?.trim().slice(0, 80) ?? null }))
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, 100);
+  // Every meeting's day, from the same rows: what a price was put to is
+  // counted from the day the price began (business.ts priceSince), and the
+  // funnel's counts carry no days.
+  const meetingsAt = diagRows.outcomes
+    .filter((o) => o.kind === 'meeting' && !!o.occurred_at)
+    .map((o) => o.occurred_at as string)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, 300);
 
   // The record is what makes "you keep doing this and it does not work"
   // possible; nothing else in the app can see it.
@@ -1081,6 +1089,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     lab,
     assets,
     wins,
+    meetingsAt,
     /** A model to write with: Proof offers its ideas and drafts only where one can (invariant 7). */
     ai: !!resolveLlmConfig(),
     /**
@@ -2272,7 +2281,7 @@ export async function settleBetExperiments(profileId: string, timezone: string):
     loadCommissions(profileId),
     loadRoadmapMarks(profileId),
   ]);
-  if (events.unreadable) throw new Error(`bets unreadable: ${events.unreadable}`);
+  if (events.unreadable) throw new Error(`tests unreadable: ${events.unreadable}`);
   if (marks.unreadable) throw new Error(`experiment marks unreadable: ${marks.unreadable}`);
   const lab = labHome({
     events: events.rows, unreadable: null, timezone, today: todayIso(timezone),

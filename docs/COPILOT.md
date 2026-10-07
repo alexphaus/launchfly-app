@@ -322,9 +322,9 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
-| Proof | is the business proven, and what is being bet to find out | what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play, the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet · the history, everything above dated · conversations, projects and agents, a line each | `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts` |
+| Proof | is the business proven, and what is being tested to find out | **the next move first**: one action, why now, what is ready for it, what counts as done, "I'm stuck", and a box to paste a reply · what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play, the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet · the history, everything above dated · conversations and agents, a line each (projects are under You) | `mission.ts`, `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move | `money/book.ts` |
-| You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
+| You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with every project handed over and the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
 `derive.ts` computes all of it once per `HomeData`, from `generatedAt` rather
 than the clock, so the header's status line and the tab under it cannot disagree
@@ -392,7 +392,7 @@ log of what already happened", in its owner's words). The rules are in `plan.ts`
   (`WORKER_CLOSE_MS`); hours you logged, on the day worked; a step reached. Not
   what the app did — finds, drafts, a project's steps, a Move ticked off — and not
   a send on its own, which teaches nothing until something comes back. What the
-  app did is under Projects and Agents on Proof. Days before this week carry their date ("Sat 12 Sep"): a
+  app did is under You → Projects, and Agents on Proof. Days before this week carry their date ("Sat 12 Sep"): a
   weekday alone named two Saturdays. An empty fortnight says so, with the sends
   that explain it.
 - **A step reached is a moment where it happened**, directly under the answer or
@@ -759,8 +759,15 @@ app's usual one: **a model proposes, the rows judge**. A model writes ideas for 
 bet and drafts of an asset; nothing it writes decides a verdict, and nothing it
 writes is the person's until they keep it.
 
+**The screen says test; the code says bet.** A bet is jargon to someone who has
+never run a business, and "checkpoint: pivot or persevere" more so. The screen,
+Ask, Claude's tools and the route errors say *test*, *keep going* and *change one
+part*; the code, the stored events (`lab_bet`, `lab_bet_stopped`) and this
+document keep `bet`, so no row and no reader of the code had to move.
+
 On the screen, top to bottom:
 
+- **The next move** — one action, before the map (below).
 - **The verdict.** What you sell, how buyers find you, proven or not — "Proven at
   3 paid at your $150. So far: 0." — and the chain as five dots in a row, each with
   its state's word, the weak link named under them with its rule. A tap opens the
@@ -770,12 +777,15 @@ On the screen, top to bottom:
 - **The bet**, one at a time — or the checkpoint, or the way to pick one.
 - **Assets**, the gaps first, each with who made the version in use.
 - **History**, the four newest; all of it, by month and kind, behind a tap.
-- **Behind it**: conversations, projects and agents, a line each.
+- **Behind it**: conversations and agents, a line each. Projects are under You.
 
 **Five parts, each a bet with a rule** (`business.ts`). Who buys, how they hear,
 how they say yes, what they pay, how you deliver. Each carries what it is in the
 person's words, what the rows show, who runs it, and a state by a rule written out
-beside it with its numbers: works · testing · not working · untested · missing.
+beside it with its numbers: works · testing · stalled · untested · missing. A
+stalled part's dot says which way (`status`, `linkStatus`): "No replies", "Few
+replies", "No meetings", "No yes yet", "Not at $150" — "Not working" told a
+beginner that something was wrong with them and not what to change.
 The thresholds are the app's own: `WORKING_REPLIES` replies in every
 `RATE_SAMPLE` sends (the funnel checkpoint), counted per whole batch so two by
 twenty-five clears it and two by a hundred does not; `REPEAT_WINS` wins is
@@ -807,6 +817,65 @@ the screen says when the channel was read rather than said. The owner's account
 reads exactly as it did. It is set on its own sheet or on the offer sheet, kept
 when the offer is saved without it, and is not part of the offer's history: no
 message says it.
+
+**A price is judged since it began** (`priceSince`, `pricedEvidence`,
+`proof.ts pricedOf`). Its owner changed what they sold and its price, and the pay
+part went on reading six meetings at the old price as six people who would not
+pay the new one — stalled, on a price nobody had been asked. The day the price in
+use began is read off the offer's versions: the oldest of the newest run at the
+same price ("$20/month" after "$20" is the same price; back to an old price is a
+new run). From that day the pay part and the verdict count wins, meetings
+(`HomeData.meetingsAt`, the meeting rows' days, newest 300) and conversations with
+buyers. Wins from before are said beside the count — "· 2 paid before it was your
+price" — and never counted. With no day to count from (the offer as it stood
+before its history began is undated, and a date it does not have would be
+invented) there is no boundary and every row counts, as before; so does a payload
+from before `meetingsAt`.
+
+**The next move** (`mission.ts`, `MissionCard` in `ProofTab.tsx`). Proof opened
+on the verdict: five parts, each with a state, the weak one named. True, and it
+asked a beginner to read a model of a business before it said what to do. Two
+outside critiques its owner pasted in said the same thing: lead with the next
+achievable move, and keep the model under it as the map. So a card comes first —
+one action, why now, what is ready for it, what counts as done — and every word
+of it is read off what Proof already works out: never written by a model, never
+from a fixed list. In order (`missionOf`): the checkpoint when it is due, since
+the next test waits on the decision; the test running, said as the action that
+moves its count ("Ask for payment"), its button the test's own `betNext`, with
+day n of m and the bar; **the weak part's own first step while nothing on it is
+said or tried** ("Say what it costs", "Send the 21 waiting", "Log a
+conversation") — a test of a price nobody set counts nothing, and a new channel
+is not the move while this one's drafts sit unsent; a test the person kept for
+that part; the play for it (on getting paid, one counted in money); its first
+move. Nothing without an offer: the card above asks for it, and a mission saying
+the same would say it twice. The play the card shows is left out of the list of
+plays under it. An agent move goes to Claude when the agent is full, as the
+chain's rows do (`orChat`).
+
+**Ready for it** is what is there or one tap away: the asset the play's prep
+makes — had only once a version names the test running (`made`, as the test's
+card counts its work), because every business keeps an offer and "The offer,
+rewritten" read "In your assets" before anything was rewritten; a kept one of its
+kind is "there to start from", and none is "the app can draft it" where a model
+is configured — drafts waiting only where the move counts sends — offered beside "a channel you have not
+tried", the stalled channel's queue read as the way to do it — and an
+introduction waiting where the move is about people. **I'm stuck** swaps the
+move, never the mood, and each answer is a different move from the one on screen
+with its own reason: don't know what to say → the words the move has a draft
+for, else a script; nervous → people who already know you, then a conversation
+about their problem with nothing to sell; can't reach them → where they already
+gather, or a room of buyers where that fits how they find you; not sure I can
+deliver → by hand once, and the steps on paper when that is already the move;
+five minutes → one waiting draft, or a conversation you had and never logged
+(dated the day it happened, as every count reads it, so it does not move a test
+that began after it). The way back is one tap. **Got a reply? Paste it** opens
+the conversation sheet with their words as written (`ToldMeta.by: 'pasted'`), for
+the person to say who they were and how it ended; no model reads it on the way
+in. **Declined on purpose:** a step counter, chapters or locked stages — a
+business does not go through its parts in order, and a curriculum would hold
+back the person who already has a customer — and points, streaks or a score:
+DIRECTION.md declined a score on an idea, and a missed day reads as failing to
+somebody already anxious. The milestones that count are rows.
 
 **One bet at a time, judged by the rows** (`lab.ts`). A part, a belief in a
 sentence, something countable, a line and a last day, said back as the pass line
@@ -1029,12 +1098,26 @@ the person's own rows, so a number in it is one they gave and passes
 `numberOutside`; the prompt says one person's number is not a rate. Nothing here
 keeps a file on anyone, sets a quota, or messages people for you (DIRECTION.md).
 
+**Commitments are said by kind** (`CommittedKinds`, `committedLine`, `kindsOf`).
+The Mom Test's commitments are not one count: "2 committed" summed a second
+call, an intro and money, and read like demand. Wherever a count of them was
+said — the who part, the conversations line on Proof, a running test on
+commitments, the ideas prompt, Claude's `get_conversations` — they are said
+apart: "1 call · 1 intro · no money yet".
+
 **Behind it**: the conversation log, with an introduction that waits said on
-its line, the projects — the box to hand anything over or
-copy it for Claude, the projects on the go with a question answered or a
+its line and what was committed said by kind, and the agents as one line, the
+roster folded under it.
+
+**Projects live under You** (Settings → Projects): the box to hand anything over
+or copy it for Claude, the projects on the go with a question answered or a
 breakage retried on the card, what the app offers to take on, and what finished,
-with the bet each was for — and the agents as one line, the roster folded under
-it.
+with the test each was for. Proof is the business, and its Projects row was
+everything handed over: a search for a guesthouse and a plan to leave the country
+sat in its history and its "waiting on you" beside the business's own work. So
+Proof's history and its waiting count read only the projects tied to a test
+(`lab.links`, in `derive.ts`); a test's card still shows its own, and the Path
+still asks a worker's questions whatever they are for.
 
 **The Path keeps its job** — the plan, the call, the day's move — with three
 links to Proof: the bet running (or a checkpoint due) as one line under "you are

@@ -451,7 +451,7 @@ export function assetDraftPrompt(c: AssetDraftContext): string {
     c.foundBy ? `- How buyers find them: ${c.foundBy}` : null,
     c.working ? `\nWhat the owner wrote about how they work:\n${c.working}` : null,
     c.part ? `\nThe part of the business this is for: ${c.part.label} — ${c.part.state}. ${c.part.why}` : null,
-    c.bet ? `\nThe bet it is for: "${c.bet.belief}". ${c.bet.play ? `The play: ${c.bet.play}. ` : ''}Pass line: ${c.bet.line}.` : null,
+    c.bet ? `\nThe test it is for: "${c.bet.belief}". ${c.bet.play ? `The play: ${c.bet.play}. ` : ''}Pass line: ${c.bet.line}.` : null,
     ...(c.heard?.length ? ['\nWhat people told the owner, newest first:', ...c.heard.map((h) => `- ${h}`), HEARD_ROLES_NOTE] : []),
     c.previous ? `\nThe current version, to improve rather than start over:\nTitle: ${c.previous.title}\n${c.previous.body ?? ''}` : null,
     c.ask ? `\nWhat the owner asked for: ${c.ask}` : null,

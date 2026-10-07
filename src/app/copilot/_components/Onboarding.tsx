@@ -83,7 +83,7 @@ export default function Onboarding() {
     const e = q.get('email'); if (e) { setEmail(e); setIntro(false); }
     if (q.get('start') === '1') setIntro(false);
     const shared = q.get('shared');
-    if (shared === 'text') setArrived('Sign in first. What you shared waits on this phone for half an hour and opens as a bet once you are in.');
+    if (shared === 'text') setArrived('Sign in first. What you shared waits on this phone for half an hour and opens as a test once you are in.');
     else if (shared === 'error' && q.get('why')) setArrived(q.get('why'));
   }, []);
   useEffect(() => { if (!area && location) setArea(location); }, [location, area]);

@@ -55,8 +55,8 @@ export async function POST(req: Request) {
         if (!home) return fail('Not found', 404);
         // Refused rather than guessed: with the bets unreadable, a second bet
         // could open beside one already running, and both would share every send.
-        if (home.lab?.unreadable) return fail(`Your bets could not be read just now, so a new one cannot be opened safely: ${home.lab.unreadable}`);
-        if (home.lab?.bets.some((x) => x.state === 'running')) return fail('A bet is running. Let it finish, or call it off, before the next one.');
+        if (home.lab?.unreadable) return fail(`Your tests could not be read just now, so a new one cannot be opened safely: ${home.lab.unreadable}`);
+        if (home.lab?.bets.some((x) => x.state === 'running')) return fail('A test is running. Let it finish, or call it off, before the next one.');
         // The offer's price as it stands now, kept on the bet: a price changed
         // next week must not rewrite whether this one passed.
         const v = normalizeBet(obj(b.bet), { today, ...betPrice(home.profile.offer?.price_band, salesCurrency(home.profile.finance, home.goals)) });
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
         const id = str(b.id);
         const home = await loadHome(auth.pid);
         const bet = home?.lab?.bets.find((x) => x.bet.id === id);
-        if (!bet || bet.state !== 'running') return fail('That bet is not running.');
+        if (!bet || bet.state !== 'running') return fail('That test is not running.');
         const note = typeof b.note === 'string' && b.note.trim() ? b.note.trim().slice(0, NOTE_MAX) : null;
         await insertLabEvent(auth.pid, LAB_STOP, { bet: id, note });
         return json({ ok: true, home: await loadHome(auth.pid) });
@@ -139,7 +139,7 @@ export async function POST(req: Request) {
       case 'count': {
         const home = await loadHome(auth.pid);
         const bet = home?.lab?.bets.find((x) => x.bet.id === str(b.bet))?.bet;
-        if (!bet) return fail('That bet is not in your record.');
+        if (!bet) return fail('That test is not in your record.');
         const v = normalizeTally(obj(b.count), bet, today);
         if (!v.ok) return fail(v.error);
         await insertLabEvent(auth.pid, LAB_COUNT, { ...v.value });
@@ -153,7 +153,7 @@ export async function POST(req: Request) {
         const home = await loadHome(auth.pid);
         const bet = home?.lab?.bets.find((x) => x.bet.id === str(b.bet));
         const project = home?.commissions.find((t) => t.commission.id === str(b.commission));
-        if (!bet || !project) return fail('That bet or that project is not in your record.');
+        if (!bet || !project) return fail('That test or that project is not in your record.');
         await insertLabEvent(auth.pid, LAB_LINK, { bet: bet.bet.id, commission: project.commission.id });
         return json({ ok: true, home: await loadHome(auth.pid) });
       }

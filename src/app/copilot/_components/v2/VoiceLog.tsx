@@ -40,6 +40,9 @@ function recognition(): RecognitionCtor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+/** Whether this browser can hear at all, for copy that points at the mic. Read after mount: the server cannot know. */
+export const canHear = (): boolean => recognition() !== null;
+
 /** The phone stops by itself after a pause; this is for one that does not. A mic nobody closed is a mic left open. */
 const LISTEN_MS = 12_000;
 

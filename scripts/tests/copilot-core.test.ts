@@ -8315,7 +8315,7 @@ async function businessChainSuite() {
   const seen = parseSeenChain(JSON.parse(JSON.stringify(snapshotChain('2026-10-01T00:00:00Z', businessChain({ ...alex, funnel: { ...alex.funnel, replied: 1 } }).links))));
   const moved = chainChanges(seen, c.links);
   assert.deepEqual(moved.map((m) => m.key), ['reach']);
-  assert.equal(changeLine(moved[0]), 'How they hear went from Not working to Works', 'one more reply crossed the bar');
+  assert.equal(changeLine(moved[0]), 'How they hear went from Stalled to Works', 'one more reply crossed the bar');
   assert.equal(parseSeenChain({ at: 'yesterday', states: {} }), null, 'storage is reshaped, not trusted');
   assert.deepEqual(parseSeenChain({ at: '2026-10-01T00:00:00Z', states: { who: 'great', reach: 'works' } })?.states, { reach: 'works' });
 
@@ -8329,7 +8329,7 @@ async function businessChainSuite() {
   // Said: inbound. The app cannot see them arrive, so a bet counts it.
   const inbound = (x: Partial<ChainInput> = {}) => by({ ...quiet, foundBy: 'inbound', ...x });
   assert.equal(inbound().reach.state, 'untested');
-  assert.equal(inbound().reach.why, 'The app cannot see this way in, so a bet counts it: the enquiries and sign-ups that come in.');
+  assert.equal(inbound().reach.why, 'The app cannot see this way in, so a test counts it: the enquiries and sign-ups that come in.');
   assert.deepEqual(inbound().reach.moves.map((m) => m.key), ['reach-bet', 'reach-landing'], 'a bet, and the page buyers would find');
   assert.deepEqual(inbound({ assets: { demo: null, script: null, landing: 'Booking page', workflow: null } }).reach.moves.map((m) => m.key), ['reach-bet']);
   assert.equal(inbound({ assets: { demo: null, script: null, landing: 'Booking page', workflow: null } }).reach.what, 'They find you online · Booking page');
@@ -8381,8 +8381,8 @@ async function businessChainSuite() {
   assert.equal(waitingOnYou(threads), 3);
   // Proof's line under the greeting: the verdict, the bet or the checkpoint, and what waits on the person.
   const noBet = { current: null, checkpoint: { due: false }, part: null };
-  assert.equal(proofLineBz(c, noBet, 3), 'Not proven · no bet running · 3 waiting on you');
-  assert.equal(proofLineBz(proven, noBet, 0), 'Proven · no bet running');
+  assert.equal(proofLineBz(c, noBet, 3), 'Not proven · no test running · 3 waiting on you');
+  assert.equal(proofLineBz(proven, noBet, 0), 'Proven · no test running');
   assert.equal(proofLineBz(blank, { ...noBet, checkpoint: { due: true } }, 0), 'Not started · checkpoint due');
 
   /* 15. The rows behind it: per kind of business, per channel, and every win's amount, from the funnel's own rows. */
@@ -8449,8 +8449,8 @@ async function labSuite() {
   assert.equal(refused({ ...base, part: 'everything' }), 'Which part of the business is it about?');
   assert.equal(refused({ ...base, belief: '   ' }), 'Say what you believe, in one sentence.');
   assert.equal(refused({ ...base, metric: 'vibes' }), 'What should it count?');
-  for (const target of [0, TARGET_MAX + 1, 'lots', null]) assert.equal(refused({ ...base, target }), `The pass line is a count from 1 to ${TARGET_MAX}.`);
-  for (const days of [0, BET_DAYS_MAX + 1]) assert.equal(refused({ ...base, days }), `A bet runs from 1 to ${BET_DAYS_MAX} days.`);
+  for (const target of [0, TARGET_MAX + 1, 'lots', null]) assert.equal(refused({ ...base, target }), `What counts is a number from 1 to ${TARGET_MAX}.`);
+  for (const days of [0, BET_DAYS_MAX + 1]) assert.equal(refused({ ...base, days }), `A test runs from 1 to ${BET_DAYS_MAX} days.`);
   assert.equal(refused({ ...base, tries: { metric: 'replied', planned: 10 } }), 'What it takes is a different count, from 1 to 500.', 'a count out of itself is no plan');
   assert.equal(refused({ ...base, tries: { metric: 'sent', planned: 0 } }), 'What it takes is a different count, from 1 to 500.');
   // A sale at your price with no price would pass on any payment: the one-dollar test.
@@ -8469,7 +8469,7 @@ async function labSuite() {
   assert.ok(shrug.ok && shrug.value.problem === 'unasked' && shrug.value.commitment === 'none', 'an answer it does not know is the honest default, not a yes');
 
   // The checkpoint: a pivot names the part it changes; the chain is kept only as it can be read back.
-  assert.deepEqual(normalizeCheckpoint({ decision: 'maybe' }, today), { ok: false, error: 'Pivot or persevere?' });
+  assert.deepEqual(normalizeCheckpoint({ decision: 'maybe' }, today), { ok: false, error: 'Keep going, or change one part?' });
   assert.deepEqual(normalizeCheckpoint({ decision: 'pivot' }, today), { ok: false, error: 'Which part are you changing?' });
   assert.deepEqual(
     normalizeCheckpoint({ decision: 'persevere', part: 'pay', note: ' Keep going ', chain: { who: 'testing', pay: 'great', reach: 'works', other: 'works' } }, today),
@@ -8598,8 +8598,8 @@ async function labSuite() {
   assert.equal(pivot({ pay: 'testing', reach: 'stuck' }), 'worse', 'a pivot is read back on the part it changed, and only that part');
   assert.equal(pivot({ pay: 'stuck' }), 'same');
   assert.equal(pivot({ reach: 'stuck' }), null, 'no reading of the part kept, nothing to read back against');
-  assert.equal(decisionWords({ decision: 'pivot', part: 'pay' }), 'Pivot what they pay');
-  assert.equal(decisionWords({ decision: 'persevere', part: null }), 'Persevere');
+  assert.equal(decisionWords({ decision: 'pivot', part: 'pay' }), 'Changed what they pay');
+  assert.equal(decisionWords({ decision: 'persevere', part: null }), 'Kept going');
   assert.equal(gradeWords({ decision: 'pivot', part: 'pay' }, 'worse'), 'What they pay has slipped since.');
   assert.equal(gradeWords({ decision: 'persevere', part: null }, 'better'), 'The chain has moved forward since.');
   assert.equal(gradeWords({ decision: 'persevere', part: null }, null), null);
@@ -8615,8 +8615,8 @@ async function labSuite() {
   assert.deepEqual([1, 7, 10, 14, 21, 30].map(spanWords), ['1 day', '1 week', '10 days', '2 weeks', '3 weeks', '30 days']);
   const day6 = betView(g, null, { ...none, sends: ['2026-09-29', '2026-09-30'] }, today);
   assert.equal(labLine(day6, false), 'Day 6 of 14 · 0 of 1 sale at your $150');
-  assert.equal(labLine(day6, true), 'Checkpoint · pivot or persevere');
-  assert.equal(labLine(null, false), 'No bet running');
+  assert.equal(labLine(day6, true), 'Checkpoint · keep going, or change one part');
+  assert.equal(labLine(null, false), 'No test running');
   // A logged number never reads as a measured one: the app's own counts are "Counted from", the person's "From".
   for (const m of LAB_METRICS) {
     const said = countedFrom(m, '2026-09-29', '$150', 'sign-ups');
@@ -8625,7 +8625,7 @@ async function labSuite() {
   }
   assert.equal(countedFrom('logged', '2026-09-29', null, 'sign-ups'), 'From the sign-ups you log since 29 Sep: your count, not the app\'s.');
   assert.match(countedFrom('paid_at_price', '2026-09-29', '$150'), /\$150 or more/);
-  assert.deepEqual(talkCounts([talk('2026-10-04', 'money'), talk('2026-09-05', 'none', 'no'), talk('2026-09-04', 'time')], today), { n: 2, committed: 1, have: 1, by: { buyer: 2, seller: 0, operator: 0, earner: 0, connector: 0 }, introduced: 0 }, 'the last thirty days, today included');
+  assert.deepEqual(talkCounts([talk('2026-10-04', 'money'), talk('2026-09-05', 'none', 'no'), talk('2026-09-04', 'time')], today), { n: 2, committed: 1, kinds: { time: 0, intro: 0, money: 1 }, have: 1, by: { buyer: 2, seller: 0, operator: 0, earner: 0, connector: 0 }, introduced: 0 }, 'the last thirty days, today included, with what each committed');
 
   /* 9. A first draft of the belief: one buyer, one thing sold, and a number only when the person said one. */
   const offer = { sells: 'Booking automation, custom AI workflows, no website', for_who: 'Staycation & resorts, Pest control, plumbing', problem: 'Save time', price_band: '$150' };
@@ -8659,8 +8659,8 @@ async function labSuite() {
   const shown = labView(home, { runwayMonths: 3.4, links: now, today });
   assert.equal(shown.unreadable, 'relation "copilot_events" timed out');
   const lab = labView({ bets: [running, failed, passed], talks: [], checkpoints: [], unreadable: null }, { runwayMonths: null, links: now, today });
-  assert.deepEqual([lab.current?.bet.id, lab.learned.map((b) => b.bet.id), lab.line, lab.clock.betsLeft], ['r', ['f', 'p'], 'Checkpoint · pivot or persevere', null]);
-  assert.deepEqual(labView(undefined, { runwayMonths: null, links: now, today }).line, 'No bet running', 'a server without the Lab is an empty one');
+  assert.deepEqual([lab.current?.bet.id, lab.learned.map((b) => b.bet.id), lab.line, lab.clock.betsLeft], ['r', ['f', 'p'], 'Checkpoint · keep going, or change one part', null]);
+  assert.deepEqual(labView(undefined, { runwayMonths: null, links: now, today }).line, 'No test running', 'a server without the Lab is an empty one');
 
   /* 12. Nobody marks a bet passed (invariant 10): the route has no way to post a verdict. */
   const route = readLabFile(new URL('../../src/app/api/copilot/lab/route.ts', import.meta.url), 'utf8');
@@ -8876,8 +8876,8 @@ async function proofSuite() {
     talks: [rico, { id: 'old', on: '2026-09-20', who: null, problem: 'no', commitment: 'none', said: null, at: '2026-09-20T00:00:00Z' }],
     tallies: [],
   });
-  assert.deepEqual([work.projects.map((t) => t.commission.id), work.assets.map((a) => a.id), work.talks, work.tallies], [['c1'], ['sc'], { n: 1, last: rico }, null],
-    'its projects, its assets, and only the conversations since it began');
+  assert.deepEqual([work.projects.map((t) => t.commission.id), work.assets.map((a) => a.id), work.talks, work.tallies], [['c1'], ['sc'], { n: 1, last: rico, kinds: { time: 1, intro: 0, money: 0 } }, null],
+    'its projects, its assets, and only the conversations since it began, with what they committed');
 
   /* 10. Ideas are written again when the record moves: a bet ended since, or two weeks went by. */
   assert.equal(pfIdeasStale(null, [], today), true, 'none yet');
@@ -8911,10 +8911,10 @@ async function proofSuite() {
   assert.ok(badExp.ok && badExp.value.experiment === null, 'an experiment id is a slug or nothing');
   const tallyBet = { id: '9', start: '2026-09-28', days: 14, metric: 'logged' as const };
   assert.deepEqual(pfNormTally({ n: 3 }, tallyBet, today), { ok: true, value: { bet: '9', n: 3, on: today, note: null } });
-  assert.deepEqual(pfNormTally({ n: 3, on: '2026-09-27' }, tallyBet, today), { ok: false, error: 'The bet ran from 28 Sep to 11 Oct; only those days count.' });
+  assert.deepEqual(pfNormTally({ n: 3, on: '2026-09-27' }, tallyBet, today), { ok: false, error: 'The test ran from 28 Sep to 11 Oct; only those days count.' });
   assert.deepEqual(pfNormTally({ n: 3, on: '2026-10-05' }, tallyBet, today), { ok: false, error: 'That day has not happened yet.' });
   assert.deepEqual(pfNormTally({ n: 0 }, tallyBet, today), { ok: false, error: 'Log a count from 1 to 1000.' });
-  assert.deepEqual(pfNormTally({ n: 3 }, { ...tallyBet, metric: 'sent' }, today), { ok: false, error: 'That bet counts something the app keeps itself.' });
+  assert.deepEqual(pfNormTally({ n: 3 }, { ...tallyBet, metric: 'sent' }, today), { ok: false, error: 'That test counts something the app keeps itself.' });
   const led = pfLabFromEvents([
     ev(40, PF_LAB_BET, '2026-09-28T01:00:00Z', { part: 'reach', belief: 'Enquiries come in', metric: 'logged', unit: 'enquiries', target: 5, days: 14, start: '2026-09-28' }),
     ev(41, PF_LAB_COUNT, '2026-09-29T01:00:00Z', { bet: '40', n: 2, on: '2026-09-29' }),
@@ -9047,7 +9047,7 @@ async function conversationsSuite() {
     tk('c', '2026-10-03', { role: 'connector', commitment: 'intro', via: '11' }),
     tk('d', '2026-08-01', { problem: 'yes' }),
   ];
-  assert.deepEqual(cvTalkTotals(month), { n: 2, problem: 2, committed: 1 }, 'two buyers, all time; the supplier and the connector are heard, not counted');
+  assert.deepEqual(cvTalkTotals(month), { n: 2, problem: 2, committed: 1, kinds: { time: 1, intro: 0, money: 0 } }, 'two buyers, all time; the supplier and the connector are heard, not counted');
   const counts = cvTalkCounts(month, today);
   assert.deepEqual([counts.n, counts.committed, counts.have, counts.introduced, counts.by], [3, 3, 1, 1, { buyer: 1, seller: 1, operator: 0, earner: 0, connector: 1 }]);
   const legacy = { id: 'x', on: '2026-10-05', who: null, problem: 'yes', commitment: 'none', said: null, at: '2026-10-05T00:00:00Z' } as unknown as CvTalk;
@@ -9399,7 +9399,7 @@ async function connectorSuite() {
   };
   const ov = mrOverview(blankOverview);
   assert.match(ov, /You have not written down what you sell yet/);
-  assert.match(ov, /No bet running\./);
+  assert.match(ov, /No test running\./);
   assert.ok(!/Not in this read/.test(ov));
   const ovGoal = mrOverview({
     ...blankOverview,
@@ -9407,8 +9407,8 @@ async function connectorSuite() {
     outlook: { title: 'Exit fund', verdict: 'Off track', line: '$1,500 in 55 days is 5 sales at your $150 a month.' },
   });
   assert.match(ovGoal, /- Exit fund · \$0 of \$1,500 · By 30 Nov · 55 days left · Off track\n {2}\$1,500 in 55 days/, 'the verdict once, with its sentence under the goal it is about');
-  const ovFailed = mrOverview({ ...blankOverview, missing: ['bets and conversations (timeout)'] });
-  assert.match(ovFailed, /Not in this read, because the app could not load it just now: bets and conversations \(timeout\)/, '"No bet running" is never what a failed read looks like');
+  const ovFailed = mrOverview({ ...blankOverview, missing: ['tests and conversations (timeout)'] });
+  assert.match(ovFailed, /Not in this read, because the app could not load it just now: tests and conversations \(timeout\)/, '"No test running" is never what a failed read looks like');
   const ovBet = mrOverview({
     ...blankOverview, offer: { sells: 'Booking automation', price_band: '$150' },
     bet: { belief: 'Dentists pay $150 for this', part: 'What they pay', state: 'running', result: '1 of 3 sales at your $150', pass: '3 sales at your $150 by 20 Oct', start: '2026-10-04', ended: null, day: 3, days: 14, note: null, play: null },
@@ -9621,11 +9621,11 @@ async function askItSuite() {
   assert.ok(unstarted.thin && /no starting balance/i.test(unstarted.say));
 
   /* 8. The record's own answers: the bet, the goal, runway, the move. */
-  assert.equal(akAnswer(ask('bet'), { today, timezone: 'UTC', bet: null }).title, 'No bet running.');
+  assert.equal(akAnswer(ask('bet'), { today, timezone: 'UTC', bet: null }).title, 'No test running.');
   assert.match(akAnswer(ask('bet'), { today, timezone: 'UTC', bet: null, checkpointDue: true }).say, /checkpoint is due/);
   const bet = akAnswer(ask('bet'), { today, timezone: 'UTC', bet: { belief: 'Clinics pay $150 for this', part: 'What they pay', day: 6, days: 14, result: '1 of 3 commitments', pass: '3 commitments by 12 Oct' } });
   assert.equal(bet.title, 'Day 6 of 14: 1 of 3 commitments');
-  assert.equal(bet.say, 'Your bet, Clinics pay $150 for this: day 6 of 14, 1 of 3 commitments. It passes at 3 commitments by 12 Oct.');
+  assert.equal(bet.say, 'Your test, Clinics pay $150 for this: day 6 of 14, 1 of 3 commitments. It passes at 3 commitments by 12 Oct.');
   assert.ok(akAnswer(ask('goal'), { today, timezone: 'UTC', goals: [] }).thin);
   const goal = akAnswer(ask('goal'), { today, timezone: 'UTC', goals: [{ title: 'Exit fund', status: '$0 of $1,500', horizon: 'By 9 Nov · 36 days left', verdict: 'Off track' }], outlook: { title: 'Exit fund', line: '10 sales at your $150 in 36 days.' } });
   assert.equal(goal.say, 'Exit fund: $0 of $1,500, By 9 Nov, 36 days left. Off track. 10 sales at your $150 in 36 days.');
@@ -9643,7 +9643,7 @@ async function askItSuite() {
   assert.equal(t30.title, '3 conversations in the last 30 days', 'conversations default to the thirty days the app counts them over');
   assert.match(t30.say, /1 could buy, 1 runs the work, 1 knows people\. 2 ended in a commitment\./);
   assert.equal(akAnswer(ask('talks', 'month'), { today, timezone: 'UTC', talks }).title, '2 conversations this month');
-  const tFailed = akAnswer(ask('talks'), { today, timezone: 'UTC', talks: [], unreadable: ['bets and conversations (timeout)'] });
+  const tFailed = akAnswer(ask('talks'), { today, timezone: 'UTC', talks: [], unreadable: ['tests and conversations (timeout)'] });
   assert.ok(tFailed.thin && !/No conversations/.test(tFailed.title), 'a failed read is not "no conversations"');
   const wins = [{ at: '2026-10-01T16:30:00Z', amount: 150, who: 'Bright Smiles' }, { at: '2026-09-30T16:30:00Z', amount: null, who: 'Pia' }, { at: '2026-09-12T03:00:00Z', amount: 300, who: 'Lakeview' }];
   // 30 Sep 16:30 UTC is 1 Oct 00:30 in Manila: the sale is the person's October.
@@ -10270,3 +10270,232 @@ async function sharedFileConfirmSuite() {
 }
 
 sharedFileConfirmSuite().catch((e) => { console.error(e); process.exit(1); });
+
+// The next move on Proof (mission.ts), and the evidence under it: a price judged
+// only since it began, commitments said by kind, and a stalled part saying which way.
+import {
+  businessChain as msChain, committedLine as msCommitted, linkStatus as msStatus, priceSince as msPriceSince, pricedEvidence as msPriced,
+  type ChainInput as MsChainInput,
+} from '../../src/lib/copilot/business';
+import { STUCK as MS_STUCK, missionOf as msMissionOf, progressLine as msProgress, stuckMission as msStuck, type MissionInput as MsInput } from '../../src/lib/copilot/mission';
+import { betNext as msBetNext, pricedOf as msPricedOf } from '../../src/lib/copilot/proof';
+import { PLAY_BY_KEY as MS_PLAYS, kindsOf as msKindsOf, type Bet as MsBet, type BetView as MsView } from '../../src/lib/copilot/lab';
+import type { HomeData as MsHome } from '../../src/lib/copilot/types';
+import { readFileSync as readMissionFile } from 'node:fs';
+
+async function missionSuite() {
+  const src = (p: string) => readMissionFile(new URL(`../../${p}`, import.meta.url), 'utf8');
+  const offer = (price_band: string) => ({ sells: 'Booking automation', for_who: 'Pest control, plumbing', problem: 'Save time', price_band });
+  const v = (at: string | null, price: string) => ({ at, offer: offer(price) });
+
+  /* 1. The day the price began: the oldest of the newest run at that price. No day, no boundary — every row counts, as before. */
+  assert.equal(msPriceSince([v('2026-10-01T09:00:00Z', '$20/month'), v('2026-09-20T09:00:00Z', '$20'), v('2026-09-01T09:00:00Z', '$150')], 20), '2026-09-20', 'a reworded price is the same price');
+  assert.equal(msPriceSince([v('2026-10-01T09:00:00Z', '$150'), v('2026-09-20T09:00:00Z', '$20'), v('2026-09-01T09:00:00Z', '$150')], 150), '2026-10-01', 'back to an old price starts a new run');
+  assert.equal(msPriceSince([v('2026-10-01T09:00:00Z', '$20'), v(null, '$20')], 20), null, 'as old as the history: no day to count from');
+  assert.equal(msPriceSince([v('2026-10-01T09:00:00Z', '$150')], 20), null, 'the newest version asks another price');
+  assert.equal(msPriceSince([], 20), null);
+  assert.equal(msPriceSince([v('2026-10-01T09:00:00Z', '$20')], null), null);
+
+  /* 2. What counts since that day: wins and meetings by when they happened, buyer conversations by their day. Earlier wins are said, not counted. */
+  assert.deepEqual(msPriced('2026-09-20', {
+    wins: [{ at: '2026-09-19T23:00:00Z', amount: 1 }, { at: '2026-09-20T08:00:00Z', amount: 20 }, { at: '2026-10-02T08:00:00Z', amount: null }],
+    meetings: ['2026-09-10T10:00:00Z', '2026-09-25T10:00:00Z'],
+    talks: ['2026-09-19', '2026-09-20', '2026-10-01'],
+  }), { since: '2026-09-20', wins: [20, null], meetings: 1, talks: 2, earlier: 1 });
+
+  // Proof reads it off the offer's own versions; without the dated meetings (a payload from before them) there is no boundary.
+  const home = (extra: Partial<MsHome> = {}) => ({
+    profile: { offer: offer('$20') },
+    assets: { assets: [{ id: 'offer', versions: [v('2026-10-01T09:00:00Z', '$20'), v('2026-09-01T09:00:00Z', '$150')] }], unreadable: null },
+    wins: [{ at: '2026-09-15T09:00:00Z', amount: 150 }, { at: '2026-10-03T09:00:00Z', amount: 20 }],
+    meetingsAt: ['2026-10-02T09:00:00Z', '2026-09-12T09:00:00Z'],
+    lab: { talks: [{ on: '2026-10-04', role: 'buyer' }, { on: '2026-10-05', role: 'peer' }, { on: '2026-09-02', role: 'buyer' }] },
+    ...extra,
+  }) as unknown as MsHome;
+  assert.deepEqual(msPricedOf(home()), { since: '2026-10-01', wins: [20], meetings: 1, talks: 1, earlier: 1 }, 'only buyers’ conversations are put to a price');
+  assert.equal(msPricedOf(home({ meetingsAt: undefined })), undefined);
+  assert.equal(msPricedOf(home({ assets: { assets: [], unreadable: null } } as Partial<MsHome>)), undefined, 'no offer history, no boundary');
+
+  /* 3. The pay part reads the price's own window: six meetings at the old price do not stall the new one, and the old wins are said beside it. */
+  const alex: MsChainInput = {
+    offer: offer('$150'), said: { price: ['$150 — Growth'] }, segments: ['Pest control', 'plumbing'], area: 'Manila', web: true,
+    funnel: { matched: 321, sent: 25, replied: 2, meetings: 6, won: 2, outside: 8 }, worthAMessage: 40,
+    bySegment: [{ segment: 'pest control', sent: 9, replied: 1, won: 1, paid: [1] }, { segment: 'plumbing', sent: 12, replied: 1, won: 1, paid: [1] }],
+    byChannel: [{ channel: 'whatsapp', sent: 25 }], wins: [1, 1], queue: 21, wonRecent: { amount: 2, days: 30 },
+    goal: null, currency: '$', workerConnected: true, agents: [], topOpening: null,
+  };
+  const pay = (i: MsChainInput) => msChain(i).links.find((l) => l.key === 'pay')!;
+  const before = pay(alex);
+  assert.equal(before.state, 'stuck');
+  assert.equal(msStatus(before), 'Not at $150', 'a stalled part says which way, not "Stuck"');
+  const fresh = { ...alex, priced: { since: '2026-10-01', wins: [], meetings: 0, talks: 0, earlier: 2 } };
+  assert.equal(pay(fresh).state, 'untested', 'nobody has been asked the new price');
+  assert.equal(pay(fresh).facts, 'Nothing paid yet since 1 Oct · 2 paid before it was your price');
+  assert.equal(pay(fresh).why, 'Your price since 1 Oct. Nothing logged since then, so nobody has said yes or no to $150 yet.');
+  assert.equal(msChain(fresh).weak, 'close', 'the weak part moves on when the price has not been tried');
+  assert.equal(pay({ ...alex, priced: { since: '2026-10-01', wins: [], meetings: 2, talks: 0, earlier: 2 } }).why, '2 meetings since your price became $150 on 1 Oct, and nothing paid yet.');
+  const stalled = pay({ ...alex, priced: { since: '2026-10-01', wins: [1], meetings: 6, talks: 0, earlier: 1 } });
+  assert.equal(stalled.state, 'stuck');
+  assert.equal(stalled.facts, '1 paid, $1 — none at your $150 since 1 Oct · 1 paid before it was your price');
+  assert.equal(stalled.why, '6 meetings since 1 Oct and 1 paid, none at your $150. From 5 on, that says more about the price or the proof than about luck.');
+  // The verdict counts the same window: three at the price since it began is proven, whatever came before.
+  const proven = msChain({ ...alex, priced: { since: '2026-10-01', wins: [150, 150, 150], meetings: 3, talks: 0, earlier: 2 } });
+  assert.equal(proven.verdict.proven, true);
+  assert.equal(msChain({ ...alex, wins: [150, 150, 150], priced: { since: '2026-10-01', wins: [], meetings: 0, talks: 0, earlier: 3 } }).verdict.line, 'Proven at 3 paid at your $150. So far: 0.', 'sales before the price are not sales at it');
+
+  /* 4. Commitments by kind: a call and an intro are not money, and the line never sums them into one count. */
+  assert.equal(msCommitted({ time: 0, intro: 0, money: 0 }), 'nothing committed');
+  assert.equal(msCommitted({ time: 2, intro: 1, money: 0 }), '2 calls · 1 intro · no money yet');
+  assert.equal(msCommitted({ time: 0, intro: 0, money: 1 }), '1 put money down');
+  assert.deepEqual(msKindsOf([{ commitment: 'time' }, { commitment: 'time' }, { commitment: 'intro' }, { commitment: 'none' }, { commitment: 'money' }]), { time: 2, intro: 1, money: 1 });
+  const local: MsChainInput = {
+    ...alex, foundBy: 'local', funnel: { ...alex.funnel, sent: 0, replied: 0, meetings: 0, won: 0 }, bySegment: [], byChannel: [], queue: 0,
+    talks: { n: 4, problem: 3, committed: 2, kinds: { time: 1, intro: 1, money: 0 } },
+  };
+  assert.match(msChain(local).links[0].why, /and 2 committed to something \(1 call · 1 intro · no money yet\)\.$/);
+
+  /* 5. A stalled part names the way it is stuck; the others keep their state's word. */
+  const reach = (sent: number, replied: number) => msChain({ ...alex, funnel: { ...alex.funnel, sent, replied, meetings: 0, won: 0 }, wins: [], bySegment: [] }).links.find((l) => l.key === 'reach')!;
+  assert.equal(msStatus(reach(20, 0)), 'No replies');
+  assert.equal(msStatus(reach(20, 1)), 'Few replies');
+  assert.equal(msStatus({ state: 'works' }), 'Works');
+  assert.equal(msStatus({ state: 'stuck' }), 'Stalled', 'a beginner told "Stuck" reads it as about them');
+
+  /* 6. The one move, in order. */
+  const input = (i: MsChainInput, extra: Partial<MsInput> = {}): MsInput => {
+    const c = msChain(i);
+    return { offerSet: true, links: c.links, weak: c.weak, current: null, checkpoint: { due: false, ended: 0 }, shelf: [], foundBy: i.foundBy ?? 'outreach', priceLabel: '$150', queue: i.queue, assets: [], made: [], intros: [], ...extra };
+  };
+  assert.equal(msMissionOf({ ...input(alex), offerSet: false }), null, 'without an offer Proof’s first card asks for it, once');
+  assert.equal(msMissionOf({ ...input(alex), weak: null }), null);
+
+  // Pay is stalled: the test that needs money, said as a mission, with what is ready for it.
+  const m = msMissionOf(input(alex))!;
+  assert.equal(m.kind, 'play');
+  assert.equal(m.stage, 'Get paid');
+  assert.equal(m.title, 'A guarantee, and the price up front');
+  assert.ok(['paid', 'paid_at_price'].includes(MS_PLAYS.get(m.play!)!.metric), 'on getting paid, a test counted in money');
+  assert.equal(m.why, 'What they pay is the weak part. 6 meetings and 2 paid, none at your $150. From 5 on, that says more about the price or the proof than about luck.');
+  assert.equal(m.size, 'Runs 2 weeks');
+  assert.equal(m.done, 'Done when: 1 sale at your $150 within 2 weeks, from 10 messages sent.');
+  assert.deepEqual(m.ready, [{ kind: 'asset', asset: 'offer', label: 'The offer, rewritten', have: null, base: false }, { kind: 'drafts', n: 21 }], 'it counts sends, so the drafts are ready for it');
+  assert.deepEqual(m.go, { bet: { play: 'guarantee' } });
+  // Every business keeps an offer, and the offer is not "the offer, rewritten": a kept one is where to start, never the prep done.
+  assert.deepEqual(msMissionOf(input(alex, { assets: ['offer'] }))!.ready[0], { kind: 'asset', asset: 'offer', label: 'The offer, rewritten', have: null, base: true });
+
+  // Nothing said or nothing tried has a step before any test: a test of a price nobody set counts nothing.
+  const noPrice = msMissionOf(input({ ...alex, offer: offer('') }))!;
+  assert.equal(noPrice.kind, 'move');
+  assert.equal(noPrice.title, 'Say what it costs');
+  assert.equal(noPrice.done, 'Done when it is saved.');
+  assert.deepEqual(noPrice.go, { move: { key: 'pay-say', label: 'Say what it costs', by: 'you', go: { sheet: 'offer' } } });
+  const unsent = msMissionOf(input({ ...alex, funnel: { ...alex.funnel, sent: 0, replied: 0, meetings: 0, won: 0 }, wins: [], bySegment: [], byChannel: [] }))!;
+  assert.equal(unsent.title, 'Send the 21 waiting', 'not a new channel while this one’s drafts sit unsent');
+  assert.equal(unsent.done, 'Done when the first one is sent.');
+  // A part's "start a test" move is not a first step: the play says more than the bet sheet opened blank.
+  const walkIn = msMissionOf(input(local, { foundBy: 'local', queue: 0, intros: [{ talk: 't1', who: 'Ana' }] }))!;
+  assert.equal(walkIn.kind, 'play');
+  assert.equal(walkIn.play, 'bullseye');
+  assert.deepEqual(walkIn.ready, [{ kind: 'intro', talk: 't1', who: 'Ana' }], 'an intro waiting is ready for reaching people');
+
+  // A new channel is not offered the stalled channel's drafts as its way in.
+  const stuckReach = msMissionOf(input({ ...alex, funnel: { ...alex.funnel, sent: 20, replied: 0, meetings: 0, won: 0 }, wins: [], bySegment: [] }))!;
+  assert.equal(stuckReach.play, 'bullseye');
+  assert.deepEqual(stuckReach.ready, []);
+
+  // A test the person kept for the weak part comes before a play from a book; one for another part does not.
+  const kept = msMissionOf(input(alex, { shelf: [{ id: 's0', belief: 'Plumbers answer on Facebook', part: 'reach' }, { id: 's1', belief: 'Pest control pays $150 with a guarantee', part: 'pay' }] }))!;
+  assert.equal(kept.kind, 'kept');
+  assert.equal(kept.title, 'Start the test you kept: “Pest control pays $150 with a guarantee”');
+  assert.deepEqual(kept.go, { bet: { shelf: 's1' } });
+
+  // A test running is the move, by the action that moves its count.
+  const bet: MsBet = {
+    id: 'b1', part: 'pay', belief: 'Pest control pays $150', play: 'paid-48h', idea: null, metric: 'paid', unit: null, target: 3, tries: null,
+    days: 2, start: '2026-10-06', price: 150, priceLabel: '$150', experiment: null, openedAt: '2026-10-06T01:00:00Z',
+  };
+  const view: MsView = { bet, state: 'running', result: 1, tries: null, last: '2026-10-07', day: 2, ended: null, note: null };
+  const running = msMissionOf(input(alex, { current: { view, next: msBetNext('paid', 'outreach', null) } }))!;
+  assert.equal(running.kind, 'test');
+  assert.equal(running.title, 'Ask for payment');
+  assert.equal(running.why, 'Day 2 of 2 on “Pest control pays $150”, the last day.');
+  assert.deepEqual(running.progress, { n: 1, of: 3 });
+  assert.equal(msProgress(running, view), '1 of 3 payments');
+  assert.equal(running.cta, 'Who replied', 'outreach: the money comes through the people who answered');
+  assert.deepEqual(running.go, { next: 'replied', bet: 'b1' });
+  assert.equal(running.play, 'paid-48h', 'the list of plays under it does not offer it twice');
+  // A prep is had once a version names the test running, and only then.
+  const guaranteed = { ...view, bet: { ...bet, play: 'guarantee', metric: 'paid_at_price' as const, target: 1, tries: { metric: 'sent' as const, planned: 10 } } };
+  const onGuarantee = (made: Array<'offer'>) => msMissionOf(input(alex, { current: { view: guaranteed, next: msBetNext('paid_at_price', 'outreach', null) }, assets: ['offer'], made }))!;
+  assert.deepEqual(onGuarantee([]).ready[0], { kind: 'asset', asset: 'offer', label: 'The offer, rewritten', have: null, base: true });
+  assert.deepEqual(onGuarantee(['offer']).ready[0], { kind: 'asset', asset: 'offer', label: 'The offer, rewritten', have: 'made', base: true });
+  assert.equal(msStuck('words', onGuarantee(['offer']), input(alex, { assets: ['offer'], made: ['offer'] })).title, 'Read it first: the offer, rewritten');
+  // Said as the button under it does it: no reply to turn where buyers walk in.
+  const meetingView: MsView = { ...view, bet: { ...bet, metric: 'meetings', play: null } };
+  assert.equal(msMissionOf(input(alex, { current: { view: meetingView, next: msBetNext('meetings', 'outreach', null) } }))!.title, 'Turn a reply into a meeting');
+  const walkInMeeting = msMissionOf(input(local, { foundBy: 'local', current: { view: meetingView, next: msBetNext('meetings', 'local', null) } }))!;
+  assert.deepEqual([walkInMeeting.title, walkInMeeting.cta], ['Book a meeting with someone who could buy', 'Log a meeting']);
+  // The checkpoint outranks it: the next test waits on the decision.
+  const due = msMissionOf(input(alex, { current: { view, next: msBetNext('paid', 'outreach', null) }, checkpoint: { due: true, ended: 2 } }))!;
+  assert.equal(due.kind, 'checkpoint');
+  assert.equal(due.why, '2 tests ended since the last decision. Deciding first keeps the next test honest.');
+  assert.deepEqual(due.go, { checkpoint: true });
+
+  /* 7. "I'm stuck" changes the move, never the mood: each reason answers with a different thing to do, and the way back. */
+  const at = input(alex, { assets: ['offer'] });
+  for (const r of MS_STUCK) {
+    const s = msStuck(r, m, at);
+    assert.equal(s.kind, 'stuck', r);
+    assert.notEqual(s.title, m.title, `${r}: a different move, not the same one again`);
+    assert.ok(s.why && s.done.startsWith('Done when'), r);
+  }
+  const words = msStuck('words', m, at);
+  assert.equal(words.title, 'Get the words written first: the offer, rewritten', 'the words the move has a prep for, kept offer or not');
+  assert.deepEqual(words.go, { asset: 'offer' });
+  assert.equal(words.ready[0].kind === 'asset' && words.ready[0].base, true, 'the kept offer is where the rewrite starts');
+  assert.equal(msStuck('words', unsent, at).title, 'Get the words written first: a sales script', 'no prep for this move: a script');
+  assert.equal(msStuck('words', unsent, { ...at, assets: ['script'] }).title, 'Read it first: a sales script', 'a kept script is the script');
+  assert.equal(msStuck('nervous', m, at).play, 'warm-first');
+  // Already on the warm play, "nervous" is answered another way, with its own reason.
+  const warm = msStuck('nervous', m, at);
+  const warmer = msStuck('nervous', warm, at);
+  assert.equal(warmer.play, 'mom-test');
+  assert.notEqual(warmer.why, warm.why);
+  assert.equal(msStuck('reach', m, at).play, 'bullseye');
+  assert.equal(msStuck('reach', stuckReach, at).play, 'warm-first', 'already on a new channel, and a room of buyers does not fit outreach');
+  assert.equal(msStuck('reach', stuckReach, { ...at, foundBy: 'local' }).play, 'one-event', 'where it fits, a room they are already in');
+  assert.equal(msStuck('deliver', m, at).play, 'concierge');
+  const byHand = msStuck('deliver', msStuck('deliver', m, at), at);
+  assert.equal(byHand.play, null, 'already delivering by hand: the steps written down, not another play');
+  assert.deepEqual(byHand.go, { asset: 'workflow' });
+  assert.deepEqual(msStuck('time', m, at).go, { tab: 'swipe' });
+  assert.equal(msStuck('time', m, at).why, '21 drafts are already written. One send is five minutes and still counts.');
+  const nothingQueued = msStuck('time', m, { ...at, queue: 0 });
+  assert.deepEqual(nothingQueued.go, { sheet: 'talk' });
+  assert.equal(nothingQueued.why, 'Five minutes is enough to log a conversation you had and never wrote down. It counts on the day it happened.', 'dated the day it happened, as every count reads it');
+
+  /* 8. The screens. */
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /\{mission && <MissionCard key=\{missionKey\(mission\)\} home=\{home\} d=\{d\} actions=\{actions\} brief=\{brief\} \/>\}\s*<Verdict/, 'the move first; the verdict under it is the map');
+  assert.match(tab, /meta: \{ heard: text, by: 'pasted', why: null \}/, 'a pasted reply opens the conversation sheet, said as pasted');
+  assert.match(tab, /else if \('move' in g\) void move\.run\(orChat\(g\.move, agentIsFull\(home\)\), m\.why\);/, 'a full agent hands the move to Claude, as the chain’s rows do');
+  assert.match(tab, /except=\{mission\?\.kind === 'play' \? mission\.play : null\}/);
+  // Keyed by what the move opens: an "I'm stuck" swap kept past the test it started would hide the test running.
+  assert.match(tab, /<MissionCard key=\{missionKey\(mission\)\}/);
+  assert.match(tab, /: 'next' in g \? `test-\$\{g\.bet\}`/);
+  assert.match(tab, /Their words go in as written\.\{hears \? ' Or say what happened into the mic\.' : ''\}/, 'no line pointing at a mic the browser does not have (invariant 7)');
+  assert.ok(!/kind: 'projects' \}\)\}>\s*<span className="cp2-row-m">\s*<span className="t">Projects/.test(tab), 'every project lives under You → Projects, not on Proof');
+  assert.match(src('src/app/copilot/_components/v2/YouTab.tsx'), /offered \? `\$\{offered\} offered` : null,/, 'what Proof\u2019s row said, all of it');
+  assert.match(src('src/app/copilot/_components/v2/YouTab.tsx'), /\{ key: 'projects', l: 'Projects', s: projects \|\| 'Research, comparisons and drafts, handed over', onClick: \(\) => actions\.openSheet\(\{ kind: 'projects' \}\) \}/);
+  const derived = src('src/app/copilot/_components/v2/derive.ts');
+  assert.match(derived, /const forTests = new Set\(Object\.values\(lab\.links\)\.flat\(\)\);/);
+  assert.match(derived, /waiting: waitingOnYou\(testProjects\),/, 'a guesthouse search is not the business waiting on you');
+  assert.match(src('src/lib/copilot/tell.ts'), /by: 'model' \| 'rules' \| 'you' \| 'pasted'/);
+  assert.match(src('src/app/copilot/_components/v2/TellSheets.tsx'), /meta\.by === 'pasted' \? <PathGlyph icon="reply" \/> : <IconMic \/>/);
+  assert.match(src('src/app/copilot/copilot.css'), /\.cp-root\[data-theme="soft"\] \.cp2-ms \{/);
+  assert.match(src('src/lib/copilot/store.ts'), /const meetingsAt = diagRows\.outcomes\s*\.filter\(\(o\) => o\.kind === 'meeting' && !!o\.occurred_at\)/);
+
+  console.log('copilot-core: mission checks passed');
+}
+
+missionSuite().catch((e) => { console.error(e); process.exit(1); });

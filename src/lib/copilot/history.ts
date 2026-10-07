@@ -79,8 +79,8 @@ export function historyOf(i: HistoryInput): HistoryEntry[] {
     const play = playOf(b);
     out.push({
       key: `bet-start-${b.id}`, kind: 'bet_start', day: b.start, at: b.openedAt, by: 'you', tone: null, open: { bet: b.id },
-      title: `Bet on ${LINK_LABEL[b.part].toLowerCase()}: “${b.belief}”`,
-      line: [play ? `${play.label} · ${play.from}` : null, `Pass line ${passLine(b, v.last)}`].filter(Boolean).join(' · '),
+      title: `Test on ${LINK_LABEL[b.part].toLowerCase()}: “${b.belief}”`,
+      line: [play ? `${play.label} · ${play.from}` : null, `What counts: ${passLine(b, v.last)}`].filter(Boolean).join(' · '),
     });
     if (v.state !== 'running' && v.ended) {
       out.push({

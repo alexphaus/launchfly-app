@@ -54,7 +54,7 @@
 // work and the plan's ticks are. Pure: no DB import.
 
 import type { AssetKind } from './assets';
-import { LINK_KEYS, LINK_LABEL, LINK_STATES, chainChanges, type BusinessLink, type ChainChange, type LinkKey, type LinkState } from './business';
+import { LINK_KEYS, LINK_LABEL, LINK_STATES, chainChanges, type BusinessLink, type ChainChange, type CommittedKinds, type LinkKey, type LinkState } from './business';
 import { isIsoDay, shiftDay } from './focus';
 import { priceOf } from './plan';
 import { moneyLabel } from './review';
@@ -180,7 +180,7 @@ export function countRefusal(metric: LabMetric, tries: { metric: LabMetric } | n
 export function countedFrom(m: LabMetric, start: string, priceLabel: string | null, unit?: string | null): string {
   const since = `since ${dayWords(start)}`;
   switch (m) {
-    case 'sent': return `Counted from your sends ${since}. Nothing before the bet counts.`;
+    case 'sent': return `Counted from your sends ${since}. Nothing before the test counts.`;
     case 'replied': return `Counted from replies ${since}, once per business.`;
     case 'meetings': return `Counted from the meetings you log ${since}.`;
     case 'paid': return `Counted from the sales you log ${since}. A promise to pay is not one.`;
@@ -507,9 +507,9 @@ export function normalizeBet(raw: Record<string, unknown>, ctx: { today: string;
   const unit = raw.metric === 'logged' ? unitOf(raw.unit) : null;
   if (raw.metric === 'logged' && !unit) return { ok: false, error: 'Say what you will count, in a word or two: "sign-ups", "enquiries", "orders".' };
   const target = int(raw.target);
-  if (!(target >= 1 && target <= TARGET_MAX)) return { ok: false, error: `The pass line is a count from 1 to ${TARGET_MAX}.` };
+  if (!(target >= 1 && target <= TARGET_MAX)) return { ok: false, error: `What counts is a number from 1 to ${TARGET_MAX}.` };
   const days = int(raw.days);
-  if (!(days >= 1 && days <= BET_DAYS_MAX)) return { ok: false, error: `A bet runs from 1 to ${BET_DAYS_MAX} days.` };
+  if (!(days >= 1 && days <= BET_DAYS_MAX)) return { ok: false, error: `A test runs from 1 to ${BET_DAYS_MAX} days.` };
   let tries: Bet['tries'] = null;
   if (raw.tries != null) {
     const t = obj(raw.tries);
@@ -619,19 +619,19 @@ export function normalizeIntroClose(raw: Record<string, unknown>, talks: Array<P
  * refused rather than counted early.
  */
 export function normalizeTally(raw: Record<string, unknown>, bet: Pick<Bet, 'id' | 'start' | 'days' | 'metric'>, today: string): Result<TallyDraft> {
-  if (bet.metric !== 'logged') return { ok: false, error: 'That bet counts something the app keeps itself.' };
+  if (bet.metric !== 'logged') return { ok: false, error: 'That test counts something the app keeps itself.' };
   const n = int(raw.n);
   if (!(n >= 1 && n <= TALLY_MAX)) return { ok: false, error: `Log a count from 1 to ${TALLY_MAX}.` };
   const on = raw.on == null || raw.on === '' ? today : raw.on;
   if (!isIsoDay(on)) return { ok: false, error: 'That is not a day.' };
   if (on > today) return { ok: false, error: 'That day has not happened yet.' };
   const last = shiftDay(bet.start, bet.days - 1);
-  if (on < bet.start || on > last) return { ok: false, error: `The bet ran from ${dayWords(bet.start)} to ${dayWords(last)}; only those days count.` };
+  if (on < bet.start || on > last) return { ok: false, error: `The test ran from ${dayWords(bet.start)} to ${dayWords(last)}; only those days count.` };
   return { ok: true, value: { bet: bet.id, n, on, note: text(raw.note, NOTE_MAX) } };
 }
 
 export function normalizeCheckpoint(raw: Record<string, unknown>, today: string): Result<CheckpointDraft> {
-  if (!(LAB_DECISIONS as readonly string[]).includes(raw.decision as string)) return { ok: false, error: 'Pivot or persevere?' };
+  if (!(LAB_DECISIONS as readonly string[]).includes(raw.decision as string)) return { ok: false, error: 'Keep going, or change one part?' };
   const decision = raw.decision as LabDecision;
   const part = isPart(raw.part) ? raw.part : null;
   if (decision === 'pivot' && !part) return { ok: false, error: 'Which part are you changing?' };
@@ -1132,9 +1132,9 @@ export function checkpointView(input: { checkpoints: Checkpoint[]; bets: BetView
   return { due, last, ended, moved, grade, nextOn: last ? shiftDay(last.on, CHECKPOINT_DAYS) : null };
 }
 
-/** "Pivot what they pay", "Persevere". */
+/** "Changed what they pay", "Kept going". */
 export function decisionWords(c: Pick<Checkpoint, 'decision' | 'part'>): string {
-  return c.decision === 'pivot' && c.part ? `Pivot ${LINK_LABEL[c.part].toLowerCase()}` : 'Persevere';
+  return c.decision === 'pivot' && c.part ? `Changed ${LINK_LABEL[c.part].toLowerCase()}` : 'Kept going';
 }
 
 /** The decision read back, in a sentence: what it was about, and which way it went since. */
@@ -1147,11 +1147,22 @@ export function gradeWords(c: Pick<Checkpoint, 'decision' | 'part'>, grade: Grad
 export interface TalkCounts {
   n: number;
   committed: number;
+  /** The committed ones by kind: a call and a deposit are not one number (business.ts committedLine). */
+  kinds: CommittedKinds;
   have: number;
   /** Who they were with: the gap a founder alone cannot see is the kind of person never asked. */
   by: Record<TalkRole, number>;
   /** How many came through somebody's introduction. */
   introduced: number;
+}
+
+/** How many of these conversations ended in each kind of commitment. */
+export function kindsOf(talks: Array<Pick<Talk, 'commitment'>>): CommittedKinds {
+  return {
+    time: talks.filter((t) => t.commitment === 'time').length,
+    intro: talks.filter((t) => t.commitment === 'intro').length,
+    money: talks.filter((t) => t.commitment === 'money').length,
+  };
 }
 
 /** The last month of conversations, counted: how many, how many ended in a commitment, how many had the problem, with whom, and through whom. */
@@ -1161,6 +1172,7 @@ export function talkCounts(talks: Talk[], today: string): TalkCounts {
   return {
     n: recent.length,
     committed: recent.filter((t) => t.commitment !== 'none').length,
+    kinds: kindsOf(recent),
     have: recent.filter((t) => t.problem === 'yes').length,
     by,
     introduced: recent.filter((t) => t.via).length,
@@ -1299,8 +1311,8 @@ export function resultLine(v: Pick<BetView, 'bet' | 'result'>): string {
 
 /** The line under the greeting while a bet runs, or why none does. */
 export function labLine(current: BetView | null, due: boolean): string {
-  if (due) return 'Checkpoint · pivot or persevere';
-  if (!current) return 'No bet running';
+  if (due) return 'Checkpoint · keep going, or change one part';
+  if (!current) return 'No test running';
   return `Day ${current.day} of ${current.bet.days} · ${resultLine(current)}`;
 }
 

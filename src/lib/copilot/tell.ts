@@ -86,7 +86,12 @@ export type Told =
  */
 export interface ToldMeta {
   heard: string;
-  by: 'model' | 'rules' | 'you';
+  /**
+   * Who read the words: a model, the app's rules, the person picking a kind —
+   * or nobody, because they were pasted: somebody else's words, from a chat,
+   * kept as written (Proof's "Got a reply? Paste it").
+   */
+  by: 'model' | 'rules' | 'you' | 'pasted';
   why: string | null;
 }
 

@@ -8,7 +8,7 @@
 // sentence before the button — the pass line — because a line set after the
 // result is in is not a test, it is a description.
 import { useState } from 'react';
-import { LINK_KEYS, LINK_LABEL, type LinkKey } from '@/lib/copilot/business';
+import { LINK_KEYS, LINK_LABEL, committedLine, type LinkKey } from '@/lib/copilot/business';
 import { shiftDay } from '@/lib/copilot/focus';
 import {
   BELIEF_MAX, COMMITMENTS, COMMITMENT_LABEL, DEFAULT_BET_DAYS, INTRO_DAYS, INTRO_LINK_DAYS, INTRO_STATE_LABEL, METRIC, PLANNED_MAX, PLAY_BY_KEY, PROBLEMS, PROBLEM_LABEL,
@@ -224,10 +224,10 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
       {seed && <div className="cp2-lab-sheet-book">From another app</div>}
       {keptIdea && <div className="cp2-lab-sheet-book">{keptIdea.from}</div>}
       {shelved && !play && !keptIdea && <div className="cp2-lab-sheet-book">From your shelf</div>}
-      <h3>{play?.label ?? idea?.label ?? keptIdea?.label ?? experiment?.title ?? (seed ? 'An idea you shared' : shelved ? 'A test you kept' : 'Your own bet')}</h3>
+      <h3>{play?.label ?? idea?.label ?? keptIdea?.label ?? experiment?.title ?? (seed ? 'An idea you shared' : shelved ? 'A test you kept' : 'Your own test')}</h3>
       <p className="desc">
         {play?.how ?? idea?.how ?? keptIdea?.how ?? (experiment
-          ? `${experiment.test} It worked if: ${experiment.watch.replace(/[.!?\s]+$/, '')}. As a bet, the rows judge it instead of a tap, and the plan hears the verdict.`
+          ? `${experiment.test} It worked if: ${experiment.watch.replace(/[.!?\s]+$/, '')}. As a test, the rows judge it instead of a tap, and the plan hears the verdict.`
           : seed
           ? 'Say what you believe, pick the count that would show it, and set the line. Nothing starts until you tap.'
           : 'A belief, a count that could prove it wrong, and a day. Written before it starts, so the result cannot move the line.')}
@@ -322,7 +322,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
       </div>
 
       <div className="cp2-lab-preview">
-        <span className="cp2-lab-preview-k">Pass line</span>
+        <span className="cp2-lab-preview-k">What counts</span>
         <b>{passLine({ metric, target, tries, priceLabel, unit: shownUnit }, shiftDay(today, days - 1))}</b>
         <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel, shownUnit)}</span>
       </div>
@@ -336,13 +336,13 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
       )}
       {running && (
         <div className="cp-note cp2-lab-warn">
-          One bet at a time: &ldquo;{running.bet.belief}&rdquo; runs until {dayWords(running.last)}. Let it finish, or call it off on Proof, first — two at once would share every count.
+          One test at a time: &ldquo;{running.bet.belief}&rdquo; runs until {dayWords(running.last)}. Let it finish, or call it off on Proof, first — two at once would share every count.
         </div>
       )}
       {error && <div className="cp-error">{error}</div>}
 
       <button className="cp-btn primary block" disabled={busy || !belief.trim() || needsPrice || needsUnit || !!running} onClick={() => void start()}>
-        {busy ? 'Starting…' : 'Start the bet'}
+        {busy ? 'Starting…' : 'Start the test'}
       </button>
       {/* The plan's experiment already waits in the plan, and a kept test already waits on the shelf: neither needs keeping twice. */}
       {!experiment && !shelfId && (
@@ -350,7 +350,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
           <button className="cp-btn block cp2-lab-keep" disabled={busy || !belief.trim() || needsPrice || needsUnit} onClick={() => void keep()}>
             Keep for later
           </button>
-          <p className="cp-help">Kept as written, on your shelf. Nothing counts until you start it, and one bet runs at a time.</p>
+          <p className="cp-help">Kept as written, on your shelf. Nothing counts until you start it, and one test runs at a time.</p>
         </>
       )}
       <p className="cp-help">Only what happens from today counts. Nobody marks it passed: it passes when the count reaches the line.</p>
@@ -368,8 +368,8 @@ function SharedWords({ seed }: { seed: Seed }) {
   // Said as it is kept (seed.ts keptOfSeed): all of it or the first lines, and the link or not.
   const kept = keptOfSeed(seed);
   const said = !lines.length
-    ? 'The link stays with the bet as its play.'
-    : `${kept.whole ? 'It stays' : 'Its first lines stay'} with the bet as its play${kept.link ? ', with the link' : ''}.${seed.url && !kept.link ? ' The link is too long to keep with it.' : ''}`;
+    ? 'The link stays with the test as its play.'
+    : `${kept.whole ? 'It stays' : 'Its first lines stay'} with the test as its play${kept.link ? ', with the link' : ''}.${seed.url && !kept.link ? ' The link is too long to keep with it.' : ''}`;
   return (
     <div className="cp2-seed">
       <span className="cp2-seed-k">What you shared</span>
@@ -629,7 +629,7 @@ export function TalksSheet({ home, actions }: { home: HomeData; actions: Actions
       <h3>Conversations</h3>
       <p className="desc">
         {c.n
-          ? `${c.n} in the last ${TALK_BACK_DAYS} days: ${c.committed} ended in a commitment, ${c.have} had the problem${c.introduced ? `, ${c.introduced} came through an introduction` : ''}.`
+          ? `${c.n} in the last ${TALK_BACK_DAYS} days: ${committedLine(c.kinds)}, ${c.have} had the problem${c.introduced ? `, ${c.introduced} came through an introduction` : ''}.`
           : `None in the last ${TALK_BACK_DAYS} days.`}
         {' '}Yours, as you logged them — the app counts none of these itself.
       </p>
@@ -645,7 +645,7 @@ export function TalksSheet({ home, actions }: { home: HomeData; actions: Actions
       {onlyBuyers && (
         <p className="cp-help cp2-pf-whohelp">
           All with people who could buy. Who sells to them, runs the work or already earns in it knows what a buyer will not say.
-          {!betRunning && <>{' '}<button className="cp2-link" onClick={() => actions.openSheet({ kind: 'bet', play: 'money-five' })}>Bet on five of them</button></>}
+          {!betRunning && <>{' '}<button className="cp2-link" onClick={() => actions.openSheet({ kind: 'bet', play: 'money-five' })}>Test five of them</button></>}
         </p>
       )}
       <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'talk' })}>Log a conversation</button>

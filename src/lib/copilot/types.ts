@@ -495,6 +495,12 @@ export interface HomeData {
    * the diagnosis's, so the two cannot disagree about how many.
    */
   wins?: Array<{ at: string; amount: number | null; who: string | null }>;
+  /**
+   * Every meeting's day, newest first, from the same rows: the pay part counts
+   * what a price was put to from the day it began, and the funnel's counts
+   * carry no days. Absent from a payload built before it existed.
+   */
+  meetingsAt?: string[];
   /** Whether this server has a model, so Proof offers what a model writes only where one can. Invariant 7. */
   ai?: boolean;
   /** False when no worker is configured, so a mandate would never be picked up. */

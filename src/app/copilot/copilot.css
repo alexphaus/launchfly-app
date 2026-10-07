@@ -2416,3 +2416,30 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-askit-line { color: var(--muted); }
 .cp-root[data-theme="soft"] .cp-askit-counted { color: var(--dim); }
 .cp-root[data-theme="soft"] .cp-askit-chip { border: 0; background: var(--surface); box-shadow: var(--shadow-sm); font-weight: 500; }
+
+/* ── The next move (v2/ProofTab.tsx MissionCard, lib/copilot/mission.ts): one action first, in plain words, with
+   what is ready for it and what counts as done. Its own prefix on purpose: .cp2-pf-* and .cp2-lab-* already size
+   rows and bars on this tab, and a shared name would restyle the card from the other end of the file. */
+.cp-root[data-theme="soft"] .cp2-ms { box-shadow: inset 0 0 0 1.5px var(--blue); }
+.cp-root[data-theme="soft"] .cp2-ms-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-ms-size { flex: none; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--line); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-ms-title { font-family: var(--display); font-size: 20px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; margin: 2px 0 8px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-ms-how { font-size: 13.5px; line-height: 1.5; color: var(--ink); margin-bottom: 8px; }
+.cp-root[data-theme="soft"] .cp2-ms-why { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-ms-why b { color: var(--ink); font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-ms-ready { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.cp-root[data-theme="soft"] .cp2-ms-rd { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 11px; border-radius: 12px; background: var(--tint); color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-ms-rd-i { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--surface); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-ms-rd.have .cp2-ms-rd-i { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-ms-rd-i svg { width: 15px; height: 15px; }
+.cp-root[data-theme="soft"] .cp2-ms-rd-m { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cp-root[data-theme="soft"] .cp2-ms-rd-m b { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.cp-root[data-theme="soft"] .cp2-ms-rd-m span { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-ms-rd > svg { flex: none; width: 14px; height: 14px; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-ms-done { font-size: 13px; line-height: 1.5; font-weight: 600; color: var(--ink); margin-top: 12px; }
+.cp-root[data-theme="soft"] .cp2-ms-do { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+.cp-root[data-theme="soft"] .cp2-ms-do .cp2-link { padding: 8px 2px; }
+.cp-root[data-theme="soft"] .cp2-ms-stuck { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cp-root[data-theme="soft"] .cp2-ms-paste { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; }
+.cp-root[data-theme="soft"] .cp2-ms-paste textarea { resize: none; font-family: inherit; line-height: 1.45; min-height: 52px; }
+.cp-root[data-theme="soft"] .cp2-ms-paste .cp-btn { align-self: flex-start; }

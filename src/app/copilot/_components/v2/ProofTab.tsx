@@ -29,18 +29,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { ASSET_LABEL, OFFER_ASSET, type Asset, type AssetGap, type AssetKind } from '@/lib/copilot/assets';
 import {
-  LINK_LABEL, LINK_STATE_LABEL, changeLine, chainChanges, parseSeenChain, snapshotChain,
+  LINK_LABEL, changeLine, chainChanges, committedLine, linkStatus, parseSeenChain, snapshotChain,
   type ChainChange, type LinkKey, type LinkMove, type SeenChain,
 } from '@/lib/copilot/business';
-import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } from '@/lib/copilot/commission';
+import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip } from '@/lib/copilot/commission';
 import { historyDay, type HistoryEntry } from '@/lib/copilot/history';
 import {
-  BET_STATE_LABEL, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS,
+  BET_STATE_LABEL, NOTE_MAX, PLAY_BY_KEY, SAID_MAX, TALK_BACK_DAYS,
   betPrice, countedFrom, dayWords, decisionWords, gradeWords, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
-import { assetMakers, betNext, betWork, ideasStale, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
+import { assetKindsOf, assetMakers, betNext, betWork, ideasStale, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
+import { STUCK, STUCK_LABEL, missionOf, progressLine, stuckMission, type Mission, type MissionInput, type MissionReady, type Stuck } from '@/lib/copilot/mission';
 import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
@@ -48,22 +49,26 @@ import type { Derived } from './derive';
 import { AssetGlyph, IconCheck, IconChevron, IconCross, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph } from './icons2';
 import { MoveNote, MoveRow, agentIsFull, orChat, useBrief, useMove, type Brief } from './MoveKit';
 import { Agents } from './ProjectCard';
+import { canHear } from './VoiceLog';
 
 export default function ProofTab({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
   const changes = useSeen(home, d);
   const brief = useBrief(actions);
   const full = agentIsFull(home);
   const lab = d.proof.lab;
+  const mission = lab.unreadable ? null : missionOf(missionInputOf(home, d));
   return (
     <>
+      {/* The next move first; the verdict, the test and the shelf under it are the map and the record. */}
+      {mission && <MissionCard key={missionKey(mission)} home={home} d={d} actions={actions} brief={brief} />}
       <Verdict home={home} d={d} actions={actions} changes={changes} />
       {lab.unreadable ? (
         // Refused rather than shown empty: an unread record drawn as "no bet
         // running" would invite a second bet beside the one running (invariant 13).
         <div className="cp-card">
-          <div className="cp-eyebrow">Your bets</div>
-          <div className="cp-error">Could not read your bets just now: {lab.unreadable}</div>
-          <p className="cp-help">Nothing is shown rather than an empty record, and a new bet cannot start until it reads. Open the tab again in a minute.</p>
+          <div className="cp-eyebrow">Your tests</div>
+          <div className="cp-error">Could not read your tests just now: {lab.unreadable}</div>
+          <p className="cp-help">Nothing is shown rather than an empty record, and a new test cannot start until it reads. Open the tab again in a minute.</p>
         </div>
       ) : (
         <>
@@ -79,7 +84,7 @@ export default function ProofTab({ home, d, actions, briefing }: { home: HomeDat
               // The person's own kept tests before the generic ones: what they wrote down to run next is what they came back for.
               <>
                 <Shelf home={home} d={d} actions={actions} />
-                <PickABet home={home} d={d} actions={actions} />
+                <PickABet home={home} d={d} actions={actions} except={mission?.kind === 'play' ? mission.play : null} />
               </>
             )}
         </>
@@ -123,6 +128,179 @@ function useSeen(home: HomeData, d: Derived): ChainChange[] {
   return changes;
 }
 
+/* ─── The next move ───────────────────────────────────────────────────────── */
+
+const CHECKPOINT_ID = 'cp2-pf-checkpoint';
+
+/**
+ * Which move it is, by what it opens rather than its words (a count in a title
+ * changes with every send). The card's own state goes when the move does: an
+ * "I'm stuck" swap kept past the test it led to would hide the test running.
+ */
+const missionKey = (m: Mission): string => {
+  const g = m.go;
+  return 'checkpoint' in g ? 'checkpoint'
+    : 'next' in g ? `test-${g.bet}`
+    : 'bet' in g ? `bet-${g.bet.shelf ?? g.bet.play ?? ''}`
+    : 'move' in g ? `move-${g.move.key}`
+    : m.kind;
+};
+
+/** What the move is read from: everything Proof already works out (lib/copilot/mission.ts). */
+function missionInputOf(home: HomeData, d: Derived): MissionInput {
+  const { chain, lab, found } = d.proof;
+  return {
+    offerSet: !!home.profile.offer?.sells?.trim(),
+    links: chain.links,
+    weak: chain.weak,
+    current: lab.current ? { view: lab.current, next: betNext(lab.current.bet.metric, found.value, lab.current.bet.unit) } : null,
+    checkpoint: { due: lab.checkpoint.due, ended: lab.checkpoint.ended.length },
+    shelf: lab.shelf.map((e) => ({ id: e.id, belief: e.belief, part: e.part })),
+    foundBy: found.value,
+    priceLabel: betPrice(home.profile.offer?.price_band, d.currency).priceLabel,
+    queue: d.noOffer ? 0 : home.queue.length,
+    assets: assetKindsOf(d.proof.assets),
+    // As the test's card counts its work (proof.ts betWork): a version that names the test.
+    made: lab.current ? assetKindsOf(d.proof.assets.filter((a) => a.versions.some((v) => v.bet === lab.current!.bet.id))) : [],
+    intros: d.proof.intros.map((x) => ({ talk: x.talk.id, who: x.talk.who })),
+  };
+}
+
+/**
+ * One move, first: what to do, why now, what is ready for it, and what counts
+ * as done. "I'm stuck" swaps in the move that answers the reason, with the way
+ * back; "Got a reply?" puts somebody's words into a conversation log without
+ * retyping them, for the person to say who they were and how it ended.
+ */
+function MissionCard({ home, d, actions, brief }: { home: HomeData; d: Derived; actions: Actions; brief: Brief }) {
+  const input = missionInputOf(home, d);
+  const base = missionOf(input);
+  const move = useMove(actions, brief);
+  const [stuck, setStuck] = useState<Stuck | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [pasted, setPasted] = useState('');
+  // Where the browser cannot hear, the header's mic is a + and a line pointing at the mic would point at nothing.
+  const [hears, setHears] = useState(false);
+  useEffect(() => setHears(canHear()), []);
+  if (!base) return null;
+  const m = stuck ? stuckMission(stuck, base, input) : base;
+  const can = !!home.ai && !d.noOffer;
+  const progress = m.kind === 'test' ? progressLine(m, d.proof.lab.current) : null;
+  // As the chain's own rows say it: a project being written, or the record being gathered for a chat.
+  const busyWords = 'move' in m.go && orChat(m.go.move, agentIsFull(home)).by === 'ai' ? 'Writing it…' : 'Gathering…';
+
+  const openAsset = (kind: AssetKind) => {
+    const kept = d.proof.assets.find((a) => a.kind === kind && !a.retired);
+    actions.openSheet(kept ? { kind: 'asset', id: kept.id } : { kind: 'asset', assetKind: kind });
+  };
+  const go = () => {
+    const g = m.go;
+    if ('checkpoint' in g) document.getElementById(CHECKPOINT_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else if ('next' in g) goTo(g.next, actions, g.bet);
+    else if ('bet' in g) actions.openSheet(g.bet.shelf ? { kind: 'bet', shelf: g.bet.shelf } : { kind: 'bet', play: g.bet.play });
+    else if ('move' in g) void move.run(orChat(g.move, agentIsFull(home)), m.why);
+    else if ('asset' in g) openAsset(g.asset);
+    else if ('sheet' in g) actions.openSheet({ kind: 'talk' });
+    else actions.setTab(g.tab);
+  };
+  // Their words as written, into the conversation sheet: who they were and how it ended are the person's to say.
+  const logPasted = () => {
+    const text = pasted.trim();
+    if (!text) return;
+    actions.openSheet({
+      kind: 'talk',
+      told: { meta: { heard: text, by: 'pasted', why: null }, talk: { who: null, role: null, problem: null, commitment: null, said: text.slice(0, SAID_MAX), on: null } },
+    });
+    setPasted('');
+  };
+
+  return (
+    <div className="cp-card cp2-ms">
+      <div className="cp2-ms-top">
+        <div className="cp-eyebrow">{stuck ? 'Instead' : 'Your next move'}{m.stage ? ` · ${m.stage}` : ''}</div>
+        {m.size && <span className="cp2-ms-size">{m.size}</span>}
+      </div>
+      <h2 className="cp2-ms-title">{m.title}</h2>
+      {m.how && <p className="cp2-ms-how">{m.how}</p>}
+      <p className="cp2-ms-why"><b>Why now:</b> {m.why}</p>
+      {m.ready.length > 0 && (
+        <div className="cp2-ms-ready">
+          <span className="cp2-pf-k">Ready for it</span>
+          {m.ready.map((r) => <ReadyRow key={readyKey(r)} r={r} can={can} actions={actions} openAsset={openAsset} />)}
+        </div>
+      )}
+      <p className="cp2-ms-done">{m.done}</p>
+      {m.progress && (
+        <>
+          <div className="cp2-lab-bar" role="progressbar" aria-label={progress ?? 'So far'} aria-valuemin={0} aria-valuemax={m.progress.of} aria-valuenow={Math.min(m.progress.n, m.progress.of)}>
+            <i style={{ width: `${pctOf(m.progress.n, m.progress.of)}%` }} />
+          </div>
+          {progress && <p className="cp2-lab-src">{progress} so far.</p>}
+        </>
+      )}
+      <div className="cp2-ms-do">
+        <button className="cp-btn primary" disabled={move.busy !== null} onClick={go}>{move.busy ? busyWords : m.cta}</button>
+        {stuck
+          ? <button className="cp2-link" onClick={() => { setStuck(null); setAsking(false); }}>Back to the first move</button>
+          : <button className="cp2-link" aria-expanded={asking} onClick={() => setAsking((x) => !x)}>I’m stuck</button>}
+      </div>
+      {asking && !stuck && (
+        <div className="cp2-ms-stuck" role="group" aria-label="What is in the way">
+          {STUCK.map((r) => (
+            <button key={r} className="cp-fchip" onClick={() => { setStuck(r); setAsking(false); }}>{STUCK_LABEL[r]}</button>
+          ))}
+        </div>
+      )}
+      {move.note && <MoveNote note={move.note} />}
+      <div className="cp2-ms-paste">
+        <label className="cp2-pf-k" htmlFor="cp2-ms-paste-in">Got a reply? Paste it</label>
+        <textarea
+          id="cp2-ms-paste-in" className="cp-input sm" rows={2} value={pasted} maxLength={2000}
+          onChange={(e) => setPasted(e.target.value)} placeholder="“Sounds useful — how much is it?”"
+        />
+        {pasted.trim() && <button className="cp-btn sm" onClick={logPasted}>Log it as a conversation</button>}
+        <p className="cp-help">Their words go in as written.{hears ? ' Or say what happened into the mic.' : ''}</p>
+      </div>
+    </div>
+  );
+}
+
+const readyKey = (r: MissionReady) => (r.kind === 'asset' ? `a-${r.asset}` : r.kind === 'drafts' ? 'drafts' : `i-${r.talk}`);
+
+/** One thing ready for the move, or one tap from ready. */
+function ReadyRow({ r, can, actions, openAsset }: { r: MissionReady; can: boolean; actions: Actions; openAsset: (k: AssetKind) => void }) {
+  if (r.kind === 'asset') {
+    // A kept one of its kind is where to start, not the thing done: the offer is not "the offer, rewritten".
+    const sub = r.have === 'made' ? 'Made for this test'
+      : r.have === 'kept' ? 'In your assets'
+      : r.base ? `Your ${ASSET_LABEL[r.asset].toLowerCase()} is there to start from`
+      : can ? 'Not written yet. The app can draft it' : 'Not written yet';
+    return (
+      <button className={`cp2-ms-rd${r.have ? ' have' : ''}`} onClick={() => openAsset(r.asset)}>
+        <span className="cp2-ms-rd-i">{r.have ? <IconCheck /> : <AssetGlyph kind={r.asset} />}</span>
+        <span className="cp2-ms-rd-m"><b>{r.label}</b><span>{sub}</span></span>
+        <IconChevron />
+      </button>
+    );
+  }
+  if (r.kind === 'drafts') {
+    return (
+      <button className="cp2-ms-rd have" onClick={() => actions.openSheet({ kind: 'queue' })}>
+        <span className="cp2-ms-rd-i"><IconCheck /></span>
+        <span className="cp2-ms-rd-m"><b>{r.n} {r.n === 1 ? 'draft' : 'drafts'} written</b><span>Waiting for you to send</span></span>
+        <IconChevron />
+      </button>
+    );
+  }
+  return (
+    <button className="cp2-ms-rd" onClick={() => actions.openSheet({ kind: 'intro', talk: r.talk })}>
+      <span className="cp2-ms-rd-i"><PathGlyph icon="reply" /></span>
+      <span className="cp2-ms-rd-m"><b>The intro from {r.who || 'someone'}</b><span>Offered, and waiting on you</span></span>
+      <IconChevron />
+    </button>
+  );
+}
+
 /* ─── The verdict ─────────────────────────────────────────────────────────── */
 
 /** The parts' names in a row of five on a phone. The chain sheet uses the whole ones. */
@@ -162,12 +340,12 @@ function Verdict({ home, d, actions, changes }: { home: HomeData; d: Derived; ac
       </div>
       <button
         className="cp2-pf-chain" onClick={() => actions.openSheet({ kind: 'chain' })}
-        aria-label={`How it makes money: ${chain.links.map((l) => `${l.label}, ${LINK_STATE_LABEL[l.state]}`).join('; ')}. Open each part.`}
+        aria-label={`How it makes money: ${chain.links.map((l) => `${l.label}, ${linkStatus(l)}`).join('; ')}. Open each part.`}
       >
         <span className="cp2-pf-dots" aria-hidden>
           {chain.links.map((l) => (
             <span key={l.key} className={`cp2-pf-dot ${l.state}${l.key === chain.weak ? ' weak' : ''}`}>
-              <i /><b>{SHORT[l.key]}</b><em>{LINK_STATE_LABEL[l.state]}</em>
+              <i /><b>{SHORT[l.key]}</b><em>{linkStatus(l)}</em>
             </span>
           ))}
         </span>
@@ -198,11 +376,11 @@ function Clock({ d, actions }: { d: Derived; actions: Actions }) {
       <span className="cp2-pf-clock-t">
         {c.betsLeft != null ? (
           <span>
-            {c.betsLeft > 0 ? <b>{c.betsLeft} {c.betsLeft === 1 ? 'bet' : 'bets'} left</b> : <b className="cp2-err">Less than a bet left</b>}
-            {' · '}{c.runwayMonths} months of runway at {c.betDays} days a bet{c.measured ? ', your pace' : ''}
+            {c.betsLeft > 0 ? <b>{c.betsLeft} {c.betsLeft === 1 ? 'test' : 'tests'} left</b> : <b className="cp2-err">Less than a test left</b>}
+            {' · '}{c.runwayMonths} months of runway at {c.betDays} days a test{c.measured ? ', your pace' : ''}
           </span>
         ) : (
-          <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'finance' })}>Add your runway, and this counts the bets it pays for</button>
+          <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'finance' })}>Add your runway, and this counts the tests it pays for</button>
         )}
         {cp.last && !cp.due && <span className="cp2-pf-clock-s">Last checkpoint, {dayWords(cp.last.on)}: {decisionWords(cp.last)}.{back ? ` ${back}` : ''}</span>}
       </span>
@@ -237,11 +415,11 @@ function Checkpoint({ d, actions }: { d: Derived; actions: Actions }) {
   };
 
   return (
-    <div className="cp-card cp2-lab-check">
+    <div className="cp-card cp2-lab-check" id={CHECKPOINT_ID}>
       <div className="cp-eyebrow">Checkpoint</div>
-      <h2 className="cp2-lab-q">Pivot or persevere?</h2>
+      <h2 className="cp2-lab-q">Keep going, or change one part?</h2>
       <p className="cp2-lede">
-        {cp.last ? `Since ${dayWords(cp.last.on)}` : 'So far'}, {cp.ended.length} {cp.ended.length === 1 ? 'bet' : 'bets'} ended and {passed} passed.
+        {cp.last ? `Since ${dayWords(cp.last.on)}` : 'So far'}, {cp.ended.length} {cp.ended.length === 1 ? 'test' : 'tests'} ended and {passed} passed.
       </p>
       <div className="cp2-lab-check-list">
         {cp.ended.map((v) => (
@@ -265,12 +443,12 @@ function Checkpoint({ d, actions }: { d: Derived; actions: Actions }) {
 
       <div className="cp2-lab-decide">
         <button className={`cp2-lab-opt${decision === 'persevere' ? ' on' : ''}`} aria-pressed={decision === 'persevere'} onClick={() => setDecision('persevere')}>
-          <b>Persevere</b>
-          <span>Keep the belief. The next bet tests it harder.</span>
+          <b>Keep going</b>
+          <span>Keep the belief. The next test pushes it harder.</span>
         </button>
         <button className={`cp2-lab-opt${decision === 'pivot' ? ' on' : ''}`} aria-pressed={decision === 'pivot'} onClick={() => setDecision('pivot')}>
-          <b>Pivot</b>
-          <span>Change one part, and the next bet tests the change.</span>
+          <b>Change one part</b>
+          <span>The next test checks whether the change works.</span>
         </button>
       </div>
       {decision === 'pivot' && (
@@ -292,7 +470,7 @@ function Checkpoint({ d, actions }: { d: Derived; actions: Actions }) {
       {error && <div className="cp-error">{error}</div>}
       {decision && (
         <button className="cp-btn primary block" disabled={busy || (decision === 'pivot' && !part)} onClick={() => void decide()}>
-          {busy ? 'Saving…' : decision === 'persevere' ? 'Persevere' : part ? `Pivot ${LINK_LABEL[part].toLowerCase()}` : 'Pick the part'}
+          {busy ? 'Saving…' : decision === 'persevere' ? 'Keep going' : part ? `Change ${LINK_LABEL[part].toLowerCase()}` : 'Pick the part'}
         </button>
       )}
     </div>
@@ -344,7 +522,7 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   return (
     <div className="cp-card cp2-lab-bet">
       <div className="cp-call-top">
-        <div className="cp-eyebrow">This bet · day {view.day} of {b.days}{view.last === today ? ' · last day' : ''}</div>
+        <div className="cp-eyebrow">This test · day {view.day} of {b.days}{view.last === today ? ' · last day' : ''}</div>
         <span className="cp2-lab-partname">{LINK_LABEL[b.part]}</span>
       </div>
       <h2 className="cp2-lab-belief">&ldquo;{b.belief}&rdquo;</h2>
@@ -353,7 +531,7 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         <span className="cp2-lab-n"><b>{view.result}</b> of {b.target}</span>
         <span className="cp2-lab-unit">{metricWords(b.metric, b.target, b.priceLabel, b.unit)}</span>
       </div>
-      <div className="cp2-lab-bar" role="progressbar" aria-label="Toward the pass line" aria-valuemin={0} aria-valuemax={b.target} aria-valuenow={Math.min(view.result, b.target)}>
+      <div className="cp2-lab-bar" role="progressbar" aria-label="Toward what counts" aria-valuemin={0} aria-valuemax={b.target} aria-valuenow={Math.min(view.result, b.target)}>
         <i style={{ width: `${pctOf(view.result, b.target)}%` }} />
       </div>
       {rungs.length > 1 && <Reading view={view} rungs={rungs} found={found} />}
@@ -364,7 +542,9 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
           <span className="cp2-pf-tries-bar" aria-hidden><i style={{ width: `${pctOf(view.tries, b.tries.planned)}%` }} /></span>
         </div>
       )}
-      <p className="cp2-lab-pass"><b>Pass line:</b> {passLine(b, view.last)}.</p>
+      {/* A commitment is a call, an intro or money, and the count adds them: the kinds are said so "3" is not read as three sales. */}
+      {b.metric === 'committed' && work.talks && view.result > 0 && <p className="cp2-lab-src">So far: {committedLine(work.talks.kinds)}.</p>}
+      <p className="cp2-lab-pass"><b>What counts:</b> {passLine(b, view.last)}.</p>
       <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit)}</p>
       {over && <p className="cp2-lab-over">{over}</p>}
 
@@ -391,7 +571,8 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         </div>
       ) : (
         <div className="cp2-lab-actions">
-          <button className="cp-btn primary" onClick={() => goTo(next.go, actions, b.id)}>{next.label}</button>
+          {/* Secondary: the move card above leads with the same action. */}
+          <button className="cp-btn" onClick={() => goTo(next.go, actions, b.id)}>{next.label}</button>
           {logToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'talk' })}>Log a conversation</button>}
           {saleToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'sale', outcome: 'won' })}>Log a sale</button>}
           <button className="cp2-link muted" onClick={() => setStopping(true)}>Call it off</button>
@@ -408,7 +589,7 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
  */
 function Reading({ view, rungs, found }: { view: BetView; rungs: Rung[]; found: FoundBy | null }) {
   return (
-    <ol className="cp2-rd" aria-label={readingLine(view, found) ?? 'Counted since the bet began'}>
+    <ol className="cp2-rd" aria-label={readingLine(view, found) ?? 'Counted since the test began'}>
       {rungs.map((r) => (
         <li key={r.metric} className={`cp2-rd-step ${r.state}${r.line ? ' line' : ''}`}>
           <b>{r.n}{r.target != null ? <i>/{r.target}</i> : r.planned != null ? <i>/{r.planned}</i> : null}</b>
@@ -427,7 +608,7 @@ function BetWorkList({ view, work, home, actions }: { view: BetView; work: BetWo
   if (!work.projects.length && !work.assets.length && !work.talks && !work.tallies) return null;
   return (
     <div className="cp2-pf-work">
-      <span className="cp2-pf-k">Working on this bet</span>
+      <span className="cp2-pf-k">Working on this test</span>
       {work.projects.map((t) => {
         const chip = commissionChip(t.commission, t.report);
         const p = t.report.progress;
@@ -513,7 +694,7 @@ function Prep({ home, view, work, actions, brief, full, canDraft }: { home: Home
           <span className="cp2-pf-glyph"><AssetGlyph kind={asset} /></span>
           <span className="cp2-pf-wmain">
             <b>{label}</b>
-            <span>{asset === 'offer' ? 'A version of your offer for this bet, kept in its history' : `${ASSET_LABEL[asset]}, made for this bet and kept with it`}</span>
+            <span>{asset === 'offer' ? 'A version of your offer for this test, kept in its history' : `${ASSET_LABEL[asset]}, made for this test and kept with it`}</span>
           </span>
         </div>
         <div className="cp2-pf-prep-do">
@@ -531,10 +712,10 @@ function Prep({ home, view, work, actions, brief, full, canDraft }: { home: Home
   if (ask && home.commissions.some((t) => t.commission.objective === ask && t.commission.status !== 'stopped')) return null;
   const raw: LinkMove = { key: `prep-${b.id}`, label, by: cat?.prep?.by === 'ai' && home.workerConnected ? 'ai' : 'claude', ask: ask ?? label };
   const m = orChat(raw, full);
-  const why = `For the bet "${b.belief}"${playOf(b) ? `, run as ${playOf(b)!.label} (${playOf(b)!.from})` : ''}.`;
+  const why = `For the test "${b.belief}"${playOf(b) ? `, run as ${playOf(b)!.label} (${playOf(b)!.from})` : ''}.`;
   const tie = async (id: string) => {
     const r = await actions.lab({ action: 'link', bet: b.id, commission: id });
-    if (!r.ok) setError(`Handed over, but not tied to this bet: ${r.error ?? 'it did not save'}. It is under Projects.`);
+    if (!r.ok) setError(`Handed over, but not tied to this test: ${r.error ?? 'it did not save'}. It is under You → Projects.`);
   };
   return (
     <div className="cp2-lab-prep">
@@ -546,7 +727,7 @@ function Prep({ home, view, work, actions, brief, full, canDraft }: { home: Home
   );
 }
 
-/** Part of the bet, handed to the agent as a project tied to it. Only where a worker can pick it up; the full box is under Projects. */
+/** Part of the bet, handed to the agent as a project tied to it. Only where a worker can pick it up; the full box is under You → Projects. */
 function HandOver({ view, actions, full }: { view: BetView; actions: Actions; full: boolean }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -555,20 +736,20 @@ function HandOver({ view, actions, full }: { view: BetView; actions: Actions; fu
     const objective = text.trim();
     if (!objective) return;
     setBusy(true); setError(null);
-    const r = await actions.createCommission({ objective, why: `For the bet "${view.bet.belief}".`.slice(0, 300), authority: 'read' });
+    const r = await actions.createCommission({ objective, why: `For the test "${view.bet.belief}".`.slice(0, 300), authority: 'read' });
     if (!r.ok || !r.id) { setBusy(false); return setError(r.error ?? 'Could not hand that over'); }
     const tied = await actions.lab({ action: 'link', bet: view.bet.id, commission: r.id });
     setBusy(false);
     setText('');
-    // Said, not swallowed: a project the bet does not know about is still a project, under Projects.
-    if (!tied.ok) return setError(`Handed over, but not tied to this bet: ${tied.error ?? 'it did not save'}. It is under Projects.`);
+    // Said, not swallowed: a project the bet does not know about is still a project, under You → Projects.
+    if (!tied.ok) return setError(`Handed over, but not tied to this test: ${tied.error ?? 'it did not save'}. It is under You → Projects.`);
     actions.openSheet({ kind: 'commission', id: r.id });
   };
   return (
     <div className="cp2-pf-hand">
       <div className="cp2-pf-hand-row">
         <input
-          className="cp-input sm" value={text} maxLength={OBJECTIVE_MAX} placeholder="Hand part of this bet over…" aria-label="Hand part of this bet over"
+          className="cp-input sm" value={text} maxLength={OBJECTIVE_MAX} placeholder="Hand part of this test over…" aria-label="Hand part of this test over"
           onChange={(e) => { setText(e.target.value); setError(null); }}
           onKeyDown={(e) => { if (e.key === 'Enter') void go(); }}
         />
@@ -619,7 +800,7 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
     <div className="cp-card cp2-shelf">
       <div className="cp-eyebrow">On your shelf · {shelf.length}</div>
       <p className="cp2-shelf-s">
-        {running ? 'Each waits with its test written. One bet runs at a time, so the next starts when this one ends.' : 'Each waits with its test written. Start one, or write another below.'}
+        {running ? 'Each waits with its test written. One test runs at a time, so the next starts when this one ends.' : 'Each waits with its test written. Start one, or write another below.'}
       </p>
       {shelf.map((e) => {
         const play = playOf(e);
@@ -651,7 +832,7 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
  */
 const PLAYS_SHOWN = 2;
 
-function PickABet({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+function PickABet({ home, d, actions, except }: { home: HomeData; d: Derived; actions: Actions; except: string | null }) {
   const { chain, found, lab } = d.proof;
   const [picked, setPicked] = useState<LinkKey | null>(null);
   const [more, setMore] = useState(false);
@@ -659,12 +840,13 @@ function PickABet({ home, d, actions }: { home: HomeData; d: Derived; actions: A
   const link = chain.links.find((l) => l.key === part) ?? null;
   const last = lab.learned[0] ?? null;
   const { priceLabel } = betPrice(home.profile.offer?.price_band, d.currency);
-  const plays = playsFor(part, found.value);
+  // The play the move card already offers is not offered twice.
+  const plays = playsFor(part, found.value).filter((p) => p.key !== except);
   const folded = lab.ideas[part]?.ideas.length ? 0 : PLAYS_SHOWN;
   const shown = more ? plays : plays.slice(0, folded);
   return (
     <div className="cp-card cp2-pf-pick">
-      <div className="cp-eyebrow">No bet running</div>
+      <div className="cp-eyebrow">No test running</div>
       <h2 className="cp2-lab-q">What do you believe that you have not tested?</h2>
       <p className="cp2-lede">
         {chain.weak ? `Your weak link is ${LINK_LABEL[chain.weak].toLowerCase()}, so these start there.` : 'Pick a part, and a play for it.'}
@@ -673,7 +855,7 @@ function PickABet({ home, d, actions }: { home: HomeData; d: Derived; actions: A
       {last && (
         <p className="cp2-lab-lastbet">
           <span className={`cp2-lab-verdict ${last.state}`}>{BET_STATE_LABEL[last.state]}</span>
-          <span>Last bet: {last.result} of {last.bet.target} {metricWords(last.bet.metric, last.bet.target, last.bet.priceLabel, last.bet.unit)}{last.ended ? `, ${dayWords(last.ended)}` : ''}</span>
+          <span>Last test: {last.result} of {last.bet.target} {metricWords(last.bet.metric, last.bet.target, last.bet.priceLabel, last.bet.unit)}{last.ended ? `, ${dayWords(last.ended)}` : ''}</span>
         </p>
       )}
       <div className="cp2-pf-parts" role="group" aria-label="Part of the business">
@@ -685,7 +867,7 @@ function PickABet({ home, d, actions }: { home: HomeData; d: Derived; actions: A
       </div>
       {link && (
         <p className="cp2-pf-partwhy">
-          <b>{LINK_STATE_LABEL[link.state]}{chain.weak === link.key ? ', and the weak link' : ''}.</b> {link.why}
+          <b>{linkStatus(link)}{chain.weak === link.key ? ', and the weak link' : ''}.</b> {link.why}
         </p>
       )}
       <Ideas home={home} d={d} actions={actions} part={part} priceLabel={priceLabel} />
@@ -701,7 +883,7 @@ function PickABet({ home, d, actions }: { home: HomeData; d: Derived; actions: A
         </button>
       )}
       <button className="cp2-lab-own" onClick={() => actions.openSheet({ kind: 'bet', part })}>
-        <span>Write your own bet on {LINK_LABEL[part].toLowerCase()}</span>
+        <span>Write your own test on {LINK_LABEL[part].toLowerCase()}</span>
         <IconChevron />
       </button>
     </div>
@@ -714,8 +896,8 @@ function PlayCard({ play: p, priceLabel, actions }: { play: Play; priceLabel: st
       <span className="cp2-lab-book">{p.book}</span>
       <b className="cp2-lab-play-t">{p.label}</b>
       <p className="cp2-lab-play-how">{p.how}</p>
-      <p className="cp2-lab-play-pass">Pass line: {playLine(p, priceLabel)}</p>
-      <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', play: p.key })}>Make it my bet</button>
+      <p className="cp2-lab-play-pass">What counts: {playLine(p, priceLabel)}</p>
+      <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', play: p.key })}>Run this test</button>
     </div>
   );
 }
@@ -761,7 +943,7 @@ function Ideas({ home, d, actions, part, priceLabel }: { home: HomeData; d: Deri
       {set?.ideas.map((idea) => <IdeaCard key={idea.key} idea={idea} priceLabel={priceLabel} actions={actions} />)}
       {set && (
         <p className="cp2-pf-ideas-s">
-          By AI from your record, {dayWords(set.at)}. The pass lines are its proposal: you set yours before the bet starts.
+          By AI from your record, {dayWords(set.at)}. What counts is its proposal: you set your own before the test starts.
         </p>
       )}
     </div>
@@ -775,8 +957,8 @@ function IdeaCard({ idea, priceLabel, actions }: { idea: Idea; priceLabel: strin
       <b className="cp2-lab-play-t">{idea.label}</b>
       <p className="cp2-lab-play-how">{idea.how}</p>
       {idea.why && <p className="cp2-pf-why">{idea.why}</p>}
-      <p className="cp2-lab-play-pass">Pass line: {playLine(idea, priceLabel)}</p>
-      <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', idea: idea.key, part: idea.part })}>Make it my bet</button>
+      <p className="cp2-lab-play-pass">What counts: {playLine(idea, priceLabel)}</p>
+      <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', idea: idea.key, part: idea.part })}>Run this test</button>
     </div>
   );
 }
@@ -868,8 +1050,8 @@ export function AssetRow({ a, bets, actions }: { a: Asset; bets: BetView[]; acti
       <span className="cp2-row-main">
         <span className="t cp2-clamp2">{a.title}</span>
         <span className="s">{sub}</span>
-        {bet && <span className={`cp2-pf-betlink ${bet.state}`}>{bet.state === 'running' ? 'For your bet' : `For a bet · ${BET_STATE_LABEL[bet.state]}`}: “{bet.bet.belief}”</span>}
-        {waiting && <span className="cp2-pf-waiting">v{newest.n} by AI{waitingFor?.state === 'running' ? ', for your bet,' : ''} is waiting for you to keep or leave</span>}
+        {bet && <span className={`cp2-pf-betlink ${bet.state}`}>{bet.state === 'running' ? 'For your test' : `For a test · ${BET_STATE_LABEL[bet.state]}`}: “{bet.bet.belief}”</span>}
+        {waiting && <span className="cp2-pf-waiting">v{newest.n} by AI{waitingFor?.state === 'running' ? ', for your test,' : ''} is waiting for you to keep or leave</span>}
       </span>
       <span className={`cp2-owner ${v.by}`}>{v.by === 'ai' ? 'By AI' : 'By you'}</span>
     </button>
@@ -896,7 +1078,7 @@ function History({ home, d, actions }: { home: HomeData; d: Derived; actions: Ac
           {entries.slice(0, HISTORY_SHOWN).map((e) => <HistoryRow key={e.key} e={e} today={home.recent.today} actions={actions} />)}
         </div>
       ) : (
-        <p className="cp2-bz-quiet">Every bet and how it ended, every version of an asset, every sale and every decision lands here as it happens.</p>
+        <p className="cp2-bz-quiet">Every test and how it ended, every version of an asset, every sale and every decision lands here as it happens.</p>
       )}
     </>
   );
@@ -942,14 +1124,6 @@ function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; ac
   const talks = d.proof.lab.talks;
   const c = talkCounts(talks, home.recent.today);
   const intros = d.proof.intros;
-  const jobs = splitThreads(home.commissions ?? []);
-  const offered = home.moves.filter((m) => m.artifact?.kind === 'plan').length;
-  const projects = [
-    d.proof.waiting ? `${d.proof.waiting} ${d.proof.waiting === 1 ? 'needs' : 'need'} you` : null,
-    jobs.running.length ? `${jobs.running.length} running` : null,
-    offered ? `${offered} offered` : null,
-    jobs.finished.length ? `${jobs.finished.length} finished` : null,
-  ].filter(Boolean).join(' · ');
   return (
     <>
       <div className="cp-section"><span className="lead">Behind it</span></div>
@@ -959,7 +1133,7 @@ function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; ac
             <span className="t">Conversations</span>
             <span className="s">
               {c.n
-                ? `${c.n} in ${TALK_BACK_DAYS} days · ${c.committed} committed · ${c.have} have the problem`
+                ? `${c.n} in ${TALK_BACK_DAYS} days · ${committedLine(c.kinds)} · ${c.have} have the problem`
                 : talks.length ? `None in the last ${TALK_BACK_DAYS} days` : 'Who you talked to, and what they committed'}
             </span>
             {/* Said where the conversations are, as well as on the Path: an introduction is lost by waiting. */}
@@ -971,13 +1145,7 @@ function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; ac
           </span>
           <IconChevron />
         </button>
-        <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'projects' })}>
-          <span className="cp2-row-main">
-            <span className="t">Projects</span>
-            <span className={`s${d.proof.waiting ? ' cp2-pf-needs' : ''}`}>{projects || 'Research, comparisons and drafts, handed over'}</span>
-          </span>
-          <IconChevron />
-        </button>
+        {/* No row of every project: a test's own are on its card, and the rest — a guesthouse search, a plan to move — are not the business. They are under You. */}
         <Agents agents={d.team} line={d.proof.team} actions={actions} briefing={briefing} />
       </div>
     </>

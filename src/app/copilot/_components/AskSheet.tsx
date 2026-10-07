@@ -58,7 +58,7 @@ function homeInput(home: HomeData, d: Derived): AskedInput {
     replies: home.recent.outcomes.filter((o) => o.kind === 'reply').map((o) => o.occurred_at),
     metrics: { windowDays: home.metrics.window_days, sent: home.metrics.sent, replies: home.metrics.replies },
     focus: home.recent.focus,
-    unreadable: [...home.recent.unreadable, ...(home.lab?.unreadable ? [`bets and conversations (${home.lab.unreadable})`] : [])],
+    unreadable: [...home.recent.unreadable, ...(home.lab?.unreadable ? [`tests and conversations (${home.lab.unreadable})`] : [])],
   };
 }
 

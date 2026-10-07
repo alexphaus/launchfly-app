@@ -79,7 +79,7 @@ function Privacy() {
         <li><b>Stripe</b> — takes payment, if you upgrade.</li>
         <li><b>Your browser&apos;s push service</b> (Google, Apple or Mozilla, depending on your device) — delivers notifications, if you turn them on.</li>
         <li><b>Sites you ask it to watch</b> — their servers see a request from this app, not from you.</li>
-        <li><b>Claude (Anthropic)</b> — only if you connect it under You → Claude: it reads your record when you ask it something — your offer, goals, plan, bets, the conversations you logged and what your rows count. It cannot change anything, every read is listed on that screen, and Disconnect stops it. Your email and payment details are never included.</li>
+        <li><b>Claude (Anthropic)</b> — only if you connect it under You → Claude: it reads your record when you ask it something — your offer, goals, plan, tests, the conversations you logged and what your rows count. It cannot change anything, every read is listed on that screen, and Disconnect stops it. Your email and payment details are never included.</li>
       </ul>
 
       <h2>How long</h2>

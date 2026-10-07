@@ -1,8 +1,8 @@
 'use client';
 // Work handed over, as Proof shows it: the box to hand something over, one
 // project small enough that three fit on a screen, and the agents as one line.
-// They were Work's; Proof keeps them under Projects and Agents, and a bet shows
-// the projects tied to it on its own card (ProofTab.tsx).
+// They were Work's; You keeps them under Projects (Proof keeps Agents), and a
+// test shows the projects tied to it on its own card (ProofTab.tsx).
 import { useState } from 'react';
 import { suggestedAsks, type LinkMove } from '@/lib/copilot/business';
 import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, blockedOn, commissionChip } from '@/lib/copilot/commission';

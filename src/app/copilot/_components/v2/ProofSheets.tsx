@@ -8,7 +8,7 @@ import {
   ASSET_BLURB, ASSET_KINDS, ASSET_LABEL, BODY_MAX, DRAFT_ASK_MAX, NOTE_MAX as ASSET_NOTE_MAX, OFFER_ASSET, TITLE_MAX, URL_MAX,
   type Asset, type AssetKind, type AssetVersion,
 } from '@/lib/copilot/assets';
-import { LINK_STATE_LABEL, type BusinessLink, type LinkKey } from '@/lib/copilot/business';
+import { linkStatus, type BusinessLink, type LinkKey } from '@/lib/copilot/business';
 import { splitThreads } from '@/lib/copilot/commission';
 import { shiftDay } from '@/lib/copilot/focus';
 import { historyMonths, type HistoryKind } from '@/lib/copilot/history';
@@ -45,7 +45,7 @@ export function ChainSheet({ home, actions }: { home: HomeData; actions: Actions
   return (
     <>
       <h3>How it makes money</h3>
-      <p className="desc">Each part is a bet, judged by your rows by a rule the app keeps, never by a model. The weak one is where the next bet goes.</p>
+      <p className="desc">Each part is judged by your rows by a rule the app keeps, never by a model. The weak one is where the next test goes.</p>
       <button className="cp2-pf-foundrow" onClick={() => actions.openSheet({ kind: 'foundby' })}>
         <span className="cp2-row-main">
           <span className="t">How buyers find you</span>
@@ -63,7 +63,7 @@ export function ChainSheet({ home, actions }: { home: HomeData; actions: Actions
                   <span className="cp2-bz-top">
                     <span className="cp2-bz-name">{l.label}</span>
                     {/* The word travels with the dot — a colour alone is not a verdict. */}
-                    <span className={`cp2-bz-state ${l.state}`}><i />{LINK_STATE_LABEL[l.state]}</span>
+                    <span className={`cp2-bz-state ${l.state}`}><i />{linkStatus(l)}</span>
                   </span>
                   {l.what && <span className={`cp2-bz-what${open === l.key ? '' : ' cp2-clamp2'}`}>{l.what}</span>}
                   {l.facts && <span className="cp2-bz-facts">{l.facts}</span>}
@@ -97,8 +97,8 @@ function Part({ link: l, weak, bet, move, full, actions }: { link: BusinessLink;
       {l.runner.problem && <p className="cp2-bz-problem">{l.runner.problem}</p>}
       {bet && (
         <div className="cp2-pf-onpart">
-          <span><b>Your bet is on this part.</b> Day {bet.day} of {bet.bet.days}, {resultLine(bet)}.</span>
-          <button className="cp-btn sm" onClick={actions.closeSheet}>See the bet</button>
+          <span><b>Your test is on this part.</b> Day {bet.day} of {bet.bet.days}, {resultLine(bet)}.</span>
+          <button className="cp-btn sm" onClick={actions.closeSheet}>See the test</button>
         </div>
       )}
       {l.moves.length > 0 && (
@@ -135,7 +135,7 @@ export function FoundBySheet({ home, actions }: { home: HomeData; actions: Actio
     <>
       <h3>How do buyers find you?</h3>
       <p className="desc">
-        The main way. When you reach out, the app counts the businesses it finds, the sends and the replies itself. Every other way, it cannot see them arrive, so your bets count what comes in — enquiries, introductions, walk-ins.
+        The main way. When you reach out, the app counts the businesses it finds, the sends and the replies itself. Every other way, it cannot see them arrive, so your tests count what comes in — enquiries, introductions, walk-ins.
       </p>
       <div className="cp2-pf-options">
         {FOUND_BY.map((f) => (
@@ -180,7 +180,7 @@ const betOf = (home: HomeData, id: string | null) => (id ? home.lab?.bets.find((
 function BetLine({ bet }: { bet: BetView }) {
   return (
     <p className={`cp2-pf-betlink ${bet.state}`}>
-      {bet.state === 'running' ? 'Made for your bet' : 'Made for a bet that'} &ldquo;{bet.bet.belief}&rdquo;
+      {bet.state === 'running' ? 'Made for your test' : 'Made for a test that'} &ldquo;{bet.bet.belief}&rdquo;
       {bet.state !== 'running' && <> · <i className={`cp2-lab-verdict ${bet.state}`}>{BET_STATE_LABEL[bet.state]}</i></>}
     </p>
   );
@@ -401,7 +401,7 @@ function NewAsset({ home, kind: asked, betId, actions }: { home: HomeData; kind?
     return (
       <>
         <h3>Your offer</h3>
-        <p className="desc">There is one offer, and every message is written from it, so it is changed on its own sheet. Each save is a new version in its history{bet ? `, kept as written for the bet “${bet.bet.belief}”` : ''}.</p>
+        <p className="desc">There is one offer, and every message is written from it, so it is changed on its own sheet. Each save is a new version in its history{bet ? `, kept as written for the test “${bet.bet.belief}”` : ''}.</p>
         {error && <div className="cp-error">{error}</div>}
         <div className="cp-btn-row">
           <button className="cp-btn primary" onClick={() => actions.openSheet({ kind: 'offer', bet: bet?.bet.id })}>Edit your offer</button>
@@ -416,7 +416,7 @@ function NewAsset({ home, kind: asked, betId, actions }: { home: HomeData; kind?
       <h3>{kind ? `A new ${ASSET_LABEL[kind].toLowerCase()}` : 'A new asset'}</h3>
       <p className="desc">
         {kind ? ASSET_BLURB[kind] : 'Something the business sells with.'}
-        {bet ? ` Kept with the bet “${bet.bet.belief}”.` : ''}
+        {bet ? ` Kept with the test “${bet.bet.belief}”.` : ''}
       </p>
       {!asked && (
         <div className="cp-field">
@@ -459,7 +459,7 @@ export function AssetsSheet({ home, actions }: { home: HomeData; actions: Action
   return (
     <>
       <h3>Assets</h3>
-      <p className="desc">What the business sells with. Every change is a new version, by AI or by you, and each says the bet it was made for.</p>
+      <p className="desc">What the business sells with. Every change is a new version, by AI or by you, and each says the test it was made for.</p>
       <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'asset' })}>Add an asset</button>
       {home.assets?.unreadable && <div className="cp-error">Could not read your assets just now: {home.assets.unreadable}</div>}
       <div className="cp-sheet-embed cp2-pf-sheetlist">
@@ -479,7 +479,7 @@ export function AssetsSheet({ home, actions }: { home: HomeData; actions: Action
 
 const FILTERS: Array<{ key: string; label: string; kinds: HistoryKind[] | null }> = [
   { key: 'all', label: 'All', kinds: null },
-  { key: 'bets', label: 'Bets', kinds: ['bet_start', 'bet_end', 'checkpoint', 'experiment'] },
+  { key: 'bets', label: 'Tests', kinds: ['bet_start', 'bet_end', 'checkpoint', 'experiment'] },
   { key: 'assets', label: 'Assets', kinds: ['asset'] },
   { key: 'sales', label: 'Sales', kinds: ['win'] },
   { key: 'talks', label: 'Conversations', kinds: ['talk'] },
@@ -498,7 +498,7 @@ export function HistorySheet({ home, actions }: { home: HomeData; actions: Actio
   return (
     <>
       <h3>History</h3>
-      <p className="desc">What was tried, made, decided and paid, newest first — from your own rows, nothing summarised by a model. Bets that did not pass stay: they are the cheapest lessons the business gets.</p>
+      <p className="desc">What was tried, made, decided and paid, newest first — from your own rows, nothing summarised by a model. Tests that did not pass stay: they are the cheapest lessons the business gets.</p>
       <div className="cp-chips">
         {FILTERS.filter((x) => x.key === 'all' || count(x) > 0).map((x) => (
           <button key={x.key} className={`cp-fchip ${f === x.key ? 'active' : ''}`} aria-pressed={f === x.key} onClick={() => setF(x.key)}>{x.label} {count(x)}</button>
@@ -511,7 +511,7 @@ export function HistorySheet({ home, actions }: { home: HomeData; actions: Actio
             <div className="cp-list cp2-rows cp2-pf-history">{m.entries.map((e) => <HistoryRow key={e.key} e={e} today={home.recent.today} actions={actions} />)}</div>
           </div>
         ))}
-        {!entries.length && <p className="cp-help">Nothing here yet. It fills as you bet, make, decide and sell.</p>}
+        {!entries.length && <p className="cp-help">Nothing here yet. It fills as you test, make, decide and sell.</p>}
         {before.length > 0 && (f === 'all' || f === 'bets') && (
           <>
             <div className="cp-section"><span className="lead">Before the app</span></div>
@@ -605,7 +605,7 @@ export function CountSheet({ home, betId, actions }: { home: HomeData; betId: st
   if (!view) {
     return (
       <>
-        <h3>That bet is gone</h3>
+        <h3>That test is gone</h3>
         <p className="desc">It is not in your record any more.</p>
         <div className="cp-btn-row"><button className="cp-btn" onClick={actions.closeSheet}>Back</button></div>
       </>
@@ -630,7 +630,7 @@ export function CountSheet({ home, betId, actions }: { home: HomeData; betId: st
     <>
       <h3>Log {b.unit ?? 'a count'}</h3>
       <p className="desc">
-        For the bet &ldquo;{b.belief}&rdquo;: {resultLine(view)} so far. The app cannot see these arrive, so the count is yours, kept apart from the ones it takes itself.
+        For the test &ldquo;{b.belief}&rdquo;: {resultLine(view)} so far. The app cannot see these arrive, so the count is yours, kept apart from the ones it takes itself.
       </p>
       <div className="cp-field">
         <label className="cp-label">How many</label>
@@ -649,7 +649,7 @@ export function CountSheet({ home, betId, actions }: { home: HomeData; betId: st
         {other && (
           <input type="date" className="cp-input sm cp2-lab-date" aria-label="The day they came in" value={on} min={b.start} max={lastDay} onChange={(e) => e.target.value && setOn(e.target.value)} />
         )}
-        <p className="cp-help">Only the bet&rsquo;s own days count: {dayWords(b.start)} to {dayWords(view.last)}.</p>
+        <p className="cp-help">Only the test&rsquo;s own days count: {dayWords(b.start)} to {dayWords(view.last)}.</p>
       </div>
       <div className="cp-field">
         <label className="cp-label" htmlFor="cp2-pf-cn">Note — optional</label>
@@ -716,8 +716,8 @@ export function SaleSheet({ home, outcome, told, actions }: { home: HomeData; ou
       <h3>{won ? 'Log a sale' : 'Log a meeting'}</h3>
       <p className="desc">
         {won
-          ? 'A sale from anyone — a walk-in, a referral, a listing. It counts toward your bet from today, and the amount lands on your money goal. A promise to pay is not one yet.'
-          : 'A meeting with someone who could buy, booked or held today. It counts toward your bet from today.'}
+          ? 'A sale from anyone — a walk-in, a referral, a listing. It counts toward your test from today, and the amount lands on your money goal. A promise to pay is not one yet.'
+          : 'A meeting with someone who could buy, booked or held today. It counts toward your test from today.'}
       </p>
       {won && (
         <div className="cp-field">

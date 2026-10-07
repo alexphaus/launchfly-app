@@ -64,7 +64,7 @@ interface CatalogueEntry {
  */
 export const ASKED: Record<AskedId, CatalogueEntry> = {
   next: { q: 'What should I do next?', period: null, help: 'what to do next, the one move the app says now' },
-  bet: { q: 'How is my bet going?', period: null, help: 'the experiment they are running and its count against its pass line' },
+  bet: { q: 'How is my test going?', period: null, help: 'the experiment they are running and its count against its pass line' },
   goal: { q: 'Am I on track for my goal?', period: null, help: 'their goals, how far along, and whether each is on track' },
   safe: { q: 'How much can I spend today?', period: null, help: 'what is safe to spend today from their balance' },
   spent: { q: 'How much did I spend this month?', period: 'month', help: 'money spent over some days, optionally on one category or thing' },
@@ -360,14 +360,14 @@ export function answerAsked(a: Asked, i: AskedInput): Answer {
     }
     case 'bet': {
       if (!i.bet) {
-        const due = i.checkpointDue ? ' A checkpoint is due: decide whether to pivot or persevere.' : '';
-        return answer(a, today, 'No bet running.', `No bet is running.${due || ' Start one on Proof.'}`, [due.trim()], 'From Proof.');
+        const due = i.checkpointDue ? ' A checkpoint is due: decide whether to keep going or change one part.' : '';
+        return answer(a, today, 'No test running.', `No test is running.${due || ' Start one on Proof.'}`, [due.trim()], 'From Proof.');
       }
       const b = i.bet;
       return answer(a, today, `Day ${b.day} of ${b.days}: ${b.result}`,
-        `Your bet, ${b.belief.replace(/\.$/, '')}: day ${b.day} of ${b.days}, ${b.result}. It passes at ${b.pass}.`,
+        `Your test, ${b.belief.replace(/\.$/, '')}: day ${b.day} of ${b.days}, ${b.result}. It passes at ${b.pass}.`,
         [`“${b.belief}” — on ${b.part.toLowerCase()}.`, `It passes at ${b.pass}.`, i.checkpointDue ? 'A checkpoint is due as well.' : ''],
-        'Counted from the bet’s own rows, as Proof counts it.');
+        'Counted from the test’s own rows, as Proof counts it.');
     }
     case 'goal': {
       const goals = i.goals ?? [];

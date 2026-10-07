@@ -23,10 +23,10 @@
 // Pure: no DB import, no model call. proofai.ts makes the call.
 
 import { ASSET_KINDS, numberOutside, type AssetKind } from './assets';
-import { LINK_LABEL, type BusinessLink, type LinkKey } from './business';
+import { LINK_LABEL, committedLine, type BusinessLink, type CommittedKinds, type LinkKey } from './business';
 import {
   BET_DAYS_MAX, HEARD_ROLES_NOTE, IDEA_HOW_MAX, IDEA_LABEL_MAX, LAB_METRICS, PLANNED_MAX, PLAY_BOOKS, TALK_BACK_DAYS, TALK_ROLES, TALK_ROLE_LABEL,
-  TARGET_MAX, TRIES_FOR, isBuyer, metricsFor, unitOf, type BetView, type Idea, type LabMetric, type Talk, type TalkRole,
+  TARGET_MAX, TRIES_FOR, isBuyer, kindsOf, metricsFor, unitOf, type BetView, type Idea, type LabMetric, type Talk, type TalkRole,
 } from './lab';
 import { FOUND_BY_LABEL } from './offer';
 import type { FoundBy, Offer } from './types';
@@ -52,7 +52,7 @@ export interface IdeasContext {
   /** Bets already run, newest first: what was tried and how the rows judged it. */
   bets: Array<Pick<BetView, 'state' | 'result'> & { belief: string; part: LinkKey; line: string }>;
   /** Conversations with possible buyers, all time (talkTotals). */
-  talks: { n: number; problem: number; committed: number };
+  talks: { n: number; problem: number; committed: number; kinds?: CommittedKinds };
   /** The last month's conversations by who they were with (lab.ts talkCounts). */
   coverage?: Record<TalkRole, number> | null;
   /** What people said, newest first, as lab.ts heardLine writes it. */
@@ -98,7 +98,7 @@ export function ideasPrompt(c: IdeasContext): string {
     c.working ? `\nWhat the owner wrote about how they work:\n${c.working}` : null,
     '\nThe whole chain, as the app reads it from the rows:',
     ...c.links.map((l) => `- ${l.label}: ${l.state}. ${l.why}`),
-    c.talks.n ? `\nConversations with possible buyers: ${c.talks.n}; ${c.talks.problem} had the problem; ${c.talks.committed} committed to something.` : null,
+    c.talks.n ? `\nConversations with possible buyers: ${c.talks.n}; ${c.talks.problem} had the problem; ${c.talks.committed} committed to something${c.talks.kinds ? ` (${committedLine(c.talks.kinds)})` : ''}.` : null,
     coverageLine(c.coverage),
     ...(c.heard?.length ? ['\nWhat people said, in their words, newest first:', ...c.heard.map((h) => `- ${h}`), HEARD_ROLES_NOTE] : []),
     c.bets.length ? '\nExperiments already run, newest first:' : '\nNo experiments run yet.',
@@ -233,8 +233,8 @@ export function ideaSources(c: IdeasContext): string[] {
  * — their words go to the model — but is not a buyer, and counted as one would
  * make "who buys" look tested by people who never could.
  */
-export function talkTotals(talks: Talk[]): { n: number; problem: number; committed: number } {
+export function talkTotals(talks: Talk[]): { n: number; problem: number; committed: number; kinds: CommittedKinds } {
   const buyers = talks.filter(isBuyer);
-  return { n: buyers.length, problem: buyers.filter((t) => t.problem === 'yes').length, committed: buyers.filter((t) => t.commitment !== 'none').length };
+  return { n: buyers.length, problem: buyers.filter((t) => t.problem === 'yes').length, committed: buyers.filter((t) => t.commitment !== 'none').length, kinds: kindsOf(buyers) };
 }
 

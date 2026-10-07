@@ -182,6 +182,15 @@ new.
   The app's answer to "will people want it" is a count — from the rows, or the
   person's own log — against a line written before it started; an idea waits on
   the shelf with its test, never with a verdict on its worth.
+- **Points, streaks, levels or a curriculum of missions.** Considered in October
+  2026, when two critiques of Proof asked for it to feel like a game to a
+  beginner. Declined: a streak turns a missed day into a failure for somebody
+  already anxious about whether this works, points reward taps rather than a
+  sale, and "Mission 3 of 12" assumes a business goes through its parts in
+  order — it would hold back the person who already has a customer from the part
+  they need. The game kept is the one with a real score: one next move, what
+  counts as done, and a count only the rows move. See COPILOT.md → **The next
+  move**.
 - **Competing on the morning message.** A self-hosted harness already delivers a
   daily brief over WhatsApp with better memory and a better model. A nicer
   version of that is the one thing the competition gives away. The **send queue**
@@ -465,6 +474,29 @@ belief — or reach a model, which would read them as the person's. See COPILOT.
 Sources, as of this revision: [validators compared](https://preuve.ai/blog/best-startup-validation-tools-2026)
 (a competitor's own ranking, used for names and prices only) ·
 [AI Sycophancy and Decisions](https://arxiv.org/pdf/2607.28133)
+
+---
+
+**Then** — the move first. Its owner asked how to make Proof the tab for someone
+who wants a business and has never run one: engaging like a game, and better
+than prompting ChatGPT or Claude. They pasted two critiques of the tab that AI
+research tools had written, and both said three things. Lead with the next
+achievable move, not a model of the business. The labels were for people who
+already know the model — bet, checkpoint, pivot or persevere, not working. And
+the evidence had holes: a new price judged on meetings held at the old one, a
+call and an intro summed with money as "committed", and a search for a
+guesthouse sitting in the business's history and its "waiting on you". All three
+were taken. Proof opens on one move read off what it already works out — the
+weak part, the test running, the checkpoint, the plays — with what is ready for
+it, what counts as done, "I'm stuck" answered by a different move rather than
+encouragement, and a box to paste a reply into a conversation log; the screen
+says test, keep going and change one part; and each hole was closed where the
+rows were read. Declined: the game (above), and a mission a model writes — the
+move is read, not composed, so it cannot say something the rows do not. It passes
+the survival test on the rows: a chat can tell a beginner to talk to customers;
+it cannot say that the six meetings were at the old price, that this channel's
+drafts sit unsent, or which count the next conversation moves. See COPILOT.md →
+**The next move**.
 
 ---
 

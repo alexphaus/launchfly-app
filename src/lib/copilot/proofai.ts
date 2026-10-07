@@ -19,7 +19,7 @@ import {
   ASSET_DRAFT_SYSTEM, ASSET_LABEL, ASSET_PART, ASSET_VERSION, DRAFT_ASK_MAX, OFFER_ASSET,
   assetDraftPrompt, checkAssetDraft, type AssetDraftContext, type AssetKind,
 } from './assets';
-import { LINK_STATE_LABEL, businessChain, type LinkKey } from './business';
+import { businessChain, linkStatus, type LinkKey } from './business';
 import { IDEAS_SYSTEM, ideaSources, ideasPrompt, normalizeIdeas, talkTotals, type IdeasContext } from './ideas';
 import { LAB_IDEAS, heardFrom, heardLine, passLine, playForModel, resultLine, talkCounts } from './lab';
 import { rateLimit } from './limits';
@@ -115,7 +115,7 @@ export async function writeIdeas(pid: string, part: LinkKey): Promise<{ count: n
   let parsed: unknown;
   try { parsed = extractJson(text); } catch { throw new ProofModelError('No new ideas: the model did not answer in the shape asked for. Try again.'); }
   const ideas = normalizeIdeas(parsed, { part, foundBy: found.value, sources: ideaSources(ctx) });
-  if (!ideas.length) throw new ProofModelError('No new ideas: none of the model\'s held to what a bet needs — a count this business can keep and a line in range. Try again.');
+  if (!ideas.length) throw new ProofModelError('No new ideas: none of the model\'s held to what a test needs — a count this business can keep and a line in range. Try again.');
   await insertLabEvent(pid, LAB_IDEAS, { part, ideas, model: cfg.model });
   return { count: ideas.length };
 }
@@ -146,7 +146,7 @@ export async function draftAsset(pid: string, input: DraftAsk): Promise<{ asset:
   const kind = target?.kind ?? input.kind;
   if (!kind) throw new ProofRefusal('What should it draft?');
   const bet = input.bet ? (home.lab?.bets ?? []).find((v) => v.bet.id === input.bet) ?? null : null;
-  if (input.bet && !bet) throw new ProofRefusal('That bet is not in your record.');
+  if (input.bet && !bet) throw new ProofRefusal('That test is not in your record.');
   const rl = await rateLimit(`copilot:assetdraft:${pid}`, ASSET_DRAFTS_PER_DAY, 86_400);
   if (!rl.ok) throw new ProofRefusal(`${ASSET_DRAFTS_PER_DAY} drafts written today. Write this one yourself, or copy it for Claude.`);
 
@@ -155,7 +155,7 @@ export async function draftAsset(pid: string, input: DraftAsk): Promise<{ asset:
   const ctx: AssetDraftContext = {
     kind, offer: home.profile.offer ?? {}, foundBy: foundOf(home).value, working,
     bet: bet ? { belief: bet.bet.belief, line: passLine(bet.bet, bet.last), play: playForModel(bet.bet) } : null,
-    part: part ? { label: part.label, state: LINK_STATE_LABEL[part.state], why: part.why } : null,
+    part: part ? { label: part.label, state: linkStatus(part), why: part.why } : null,
     previous: target ? { title: target.current.title, body: target.current.body } : null,
     ask,
     // Nameless: an asset is read by strangers, and a name in it would read as

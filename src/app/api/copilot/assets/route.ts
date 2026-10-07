@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   if (home.assets?.unreadable) return fail(`Your assets could not be read just now, so nothing new is written over them: ${home.assets.unreadable}`, 503);
   const assets = home.assets?.assets ?? [];
   const betId = str(b.bet);
-  if (betId && !(home.lab?.bets ?? []).some((v) => v.bet.id === betId)) return fail('That bet is not in your record.');
+  if (betId && !(home.lab?.bets ?? []).some((v) => v.bet.id === betId)) return fail('That test is not in your record.');
 
   try {
     switch (b.action) {

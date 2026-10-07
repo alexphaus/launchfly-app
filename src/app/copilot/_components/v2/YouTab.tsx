@@ -13,6 +13,8 @@
 import { useEffect, useState } from 'react';
 import { PLANS } from '@/lib/copilot/plans';
 import { hoursLabel } from '@/lib/copilot/focus';
+import { waitingOnYou } from '@/lib/copilot/business';
+import { splitThreads } from '@/lib/copilot/commission';
 import { agoLabel } from '@/lib/copilot/machine';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView, type NightlyLine } from '@/lib/copilot/nightly';
@@ -359,10 +361,21 @@ function Settings({ home, d, actions }: { home: HomeData; d: Derived; actions: A
   const shell = useShell();
   const p = home.profile;
   const b = home.billing;
+  // Every project, wherever it came from: Proof shows only a test's own, so this is where the rest live.
+  const jobs = splitThreads(home.commissions ?? []);
+  const waiting = waitingOnYou(home.commissions ?? []);
+  const offered = (home.moves ?? []).filter((m) => m.artifact?.kind === 'plan').length;
+  const projects = [
+    waiting ? `${waiting} ${waiting === 1 ? 'needs' : 'need'} you` : null,
+    jobs.running.length ? `${jobs.running.length} running` : null,
+    offered ? `${offered} offered` : null,
+    jobs.finished.length ? `${jobs.finished.length} finished` : null,
+  ].filter(Boolean).join(' · ');
   const rows: Array<{ key: string; l: string; s: string; onClick?: () => void; href?: string; right?: string }> = [
     { key: 'offer', l: 'Your offer', s: p.offer?.sells || 'Not set — nothing is drafted without it', onClick: () => actions.openSheet({ kind: 'offer' }) },
     { key: 'targeting', l: 'Who it looks for', s: p.target_segments.length ? `${p.target_segments.join(', ')}${p.target_area || p.location ? ` · ${p.target_area || p.location}` : ''}` : 'Not set', onClick: () => actions.openSheet({ kind: 'targeting' }) },
     { key: 'working', l: 'How you work', s: `${home.workingProgress?.filled ?? 0} of ${home.workingProgress?.total ?? 6} written${home.workingProgress?.proposals ? ` · ${home.workingProgress.proposals} to check` : ''}`, onClick: () => actions.openSheet({ kind: 'working' }) },
+    { key: 'projects', l: 'Projects', s: projects || 'Research, comparisons and drafts, handed over', onClick: () => actions.openSheet({ kind: 'projects' }) },
     // The currency every figure is counted in; statements in others are converted into it.
     { key: 'currency', l: 'Currency', s: 'Everything is counted in it · other currencies converted', onClick: () => actions.openSheet({ kind: 'currency' }), right: mainCurrency(p.finance, home.goals) },
     { key: 'capacity', l: 'Capacity', s: CAPACITY_META[p.capacity].sub, onClick: () => actions.openSheet({ kind: 'capacity' }), right: CAPACITY_META[p.capacity].label },

@@ -85,10 +85,14 @@ export type LinkState = (typeof LINK_STATES)[number];
 export const LINK_STATE_LABEL: Record<LinkState, string> = {
   works: 'Works',
   testing: 'Testing',
-  stuck: 'Not working',
+  // "Not working" read as a verdict on the person; the part's own status (BusinessLink.status) says which way it is stuck.
+  stuck: 'Stalled',
   untested: 'Untested',
   missing: 'Missing',
 };
+
+/** What a part's dot says: its own status where the rows give one ("Not at $20"), else its state's word. */
+export const linkStatus = (l: Pick<BusinessLink, 'state' | 'status'>): string => l.status ?? LINK_STATE_LABEL[l.state];
 
 /**
  * Conversations before "none of them paid" says something about the ask or the
@@ -144,6 +148,13 @@ export interface BusinessLink {
   /** Shown only when the part is open: more of the rows, never a restatement of `facts`. */
   more: string[];
   state: LinkState;
+  /**
+   * What the part's dot says when its state's word would say less than its rows:
+   * "No replies", "Not at $20". Only on a stalled part: a beginner told "Not
+   * working" learns nothing about which way it is stuck, and the five dots are
+   * the first thing Proof says.
+   */
+  status?: string;
   /** The rule behind the state, with its numbers. */
   why: string;
   /**
@@ -171,6 +182,14 @@ export interface ChainInput {
   byChannel: Array<{ channel: string; sent: number }>;
   /** Every win's amount, all time, in the sales currency; null where none was logged. */
   wins: Array<number | null>;
+  /**
+   * The pay part's evidence counted from the day the price in use began
+   * (priceSince), when that was after the offer's history began. Present, the
+   * pay part and the verdict read these instead of all time: six meetings about
+   * a $150 service say nothing about a $20 app, and called the $20 "not
+   * working". Absent, every row counts, as it always has.
+   */
+  priced?: PricedEvidence;
   /** Drafts written and waiting to be sent. */
   queue: number;
   /** Money won over the metrics window. */
@@ -191,9 +210,69 @@ export interface ChainInput {
    * Mom Test's log): how many, how many had the problem, how many committed.
    * The people around the money are not in it (ideas.ts talkTotals).
    */
-  talks?: { n: number; problem: number; committed: number };
+  talks?: { n: number; problem: number; committed: number; kinds?: CommittedKinds };
   /** The assets that stand for a part, by title: a demo (pay), a script (close), a landing page (reach), a workflow (deliver). */
   assets?: { demo: string | null; script: string | null; landing: string | null; workflow: string | null };
+}
+
+/** What a price was put to since it began: the wins, and the meetings and logged conversations it could have been asked in. */
+export interface PricedEvidence {
+  /** The day the price began, YYYY-MM-DD. */
+  since: string;
+  /** Each win's amount since that day; null where none was logged. */
+  wins: Array<number | null>;
+  meetings: number;
+  /** Conversations logged with possible buyers since that day. */
+  talks: number;
+  /** Wins from before the price began: said beside the count, never in it. */
+  earlier: number;
+}
+
+/**
+ * The day the price in use began: walking the offer's versions back from the
+ * newest, the oldest of the run that asked this same price. Null when the run
+ * reaches the offer as it stood before its history began (it has no day), when
+ * the newest version asks another price, or when no price can be read — and
+ * then every row counts, as it did before there was a boundary.
+ */
+export function priceSince(versions: Array<{ at: string | null; offer: Offer | null }>, price: number | null): string | null {
+  if (price == null || !versions.length) return null;
+  let since: string | null = null;
+  for (const v of versions) {
+    if (priceOf(v.offer?.price_band) !== price) break;
+    if (!v.at) return null;
+    since = v.at.slice(0, 10);
+  }
+  return since;
+}
+
+/**
+ * The pay part's evidence since a day, from dated rows: wins and meetings by
+ * when they happened, conversations by the day they were logged for. Pure, so
+ * the boundary is tested where it is drawn.
+ */
+export function pricedEvidence(since: string, rows: {
+  wins: Array<{ at: string; amount: number | null }>;
+  meetings: string[];
+  /** Days of the conversations with possible buyers. */
+  talks: string[];
+}): PricedEvidence {
+  const after = (iso: string) => iso.slice(0, 10) >= since;
+  const wins = rows.wins.filter((w) => after(w.at));
+  return {
+    since,
+    wins: wins.map((w) => w.amount),
+    meetings: rows.meetings.filter(after).length,
+    talks: rows.talks.filter(after).length,
+    earlier: rows.wins.length - wins.length,
+  };
+}
+
+// business.ts cannot import lab.ts's dayWords: lab.ts imports this module.
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function dayShort(day: string): string {
+  const [, m, d] = day.slice(0, 10).split('-').map(Number);
+  return m && d ? `${d} ${MONTH_SHORT[m - 1]}` : day;
 }
 
 /** A bet, as the chain reads it: which part, how it stands, and its count said in a line ("3 of 3 commitments"). */
@@ -252,6 +331,24 @@ export function readWins(wins: Array<number | null>, priceBand: string | null | 
   return { count: wins.length, known, atPrice: price != null ? known.filter((a) => a >= price).length : known.length, price };
 }
 
+/** How many conversations ended in each of The Mom Test's three currencies: another call, an introduction, money. */
+export interface CommittedKinds { time: number; intro: number; money: number }
+
+/**
+ * "2 calls · 1 intro · no money yet": the commitments by kind. One total added
+ * a second call to a deposit as if they weighed the same, and a beginner read
+ * "3 committed" as three sales. Money is always said, because it is the one a
+ * first sale needs.
+ */
+export function committedLine(k: CommittedKinds): string {
+  if (!k.time && !k.intro && !k.money) return 'nothing committed';
+  return [
+    k.time ? plural(k.time, 'call') : null,
+    k.intro ? plural(k.intro, 'intro') : null,
+    k.money ? `${k.money} put money down` : 'no money yet',
+  ].filter(Boolean).join(' · ');
+}
+
 /** "2 paid, at $1 each — none at your $150". Every figure off a row; a win with no amount is counted and not priced. */
 export function winsLine(w: WinRead, currency: string): string {
   const m = (n: number) => moneyLabel(n, currency);
@@ -275,7 +372,9 @@ export function winsLine(w: WinRead, currency: string): string {
 
 export function businessChain(i: ChainInput): Chain {
   const offerSet = !!i.offer.sells?.trim();
-  const wins = readWins(i.wins, i.offer.price_band);
+  // Since the price began when it changed after the history did: the verdict's
+  // "paid at your price" and the pay part read one count, never two.
+  const wins = readWins(i.priced?.wins ?? i.wins, i.offer.price_band);
   const ai: MoveBy = i.workerConnected ? 'ai' : 'claude';
   // Who the business sells to, in their words first. An ask carries the
   // instruction and not a second copy of the offer: the worker is sent the offer
@@ -328,7 +427,7 @@ function betMore(bets: ChainBet[]): string[] {
   const running = bets.find((b) => b.state === 'running');
   const last = bets.find((b) => b.state !== 'running');
   return [
-    running ? `A bet is running: ${running.line} so far` : null,
+    running ? `A test is running: ${running.line} so far` : null,
     last ? `${BET_SAID[last.state]}${last.when ? `, ${last.when}` : ''}: ${last.line}` : null,
   ].filter((x): x is string => !!x);
 }
@@ -400,7 +499,7 @@ function whoLink(i: ChainInput, c: Ctx): BusinessLink {
   // the funnel had not shown one yet, and the bet did.
   if (passed) {
     return { key: 'who', label: LINK_LABEL.who, what, facts, more, state: 'works', runner,
-      why: `A bet on who buys passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}.`, moves: demand ? [demand] : [] };
+      why: `A test on who buys passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}.`, moves: demand ? [demand] : [] };
   }
   if (!sent) {
     return { key: 'who', label: LINK_LABEL.who, what, facts, more, state: 'untested', runner,
@@ -431,18 +530,18 @@ function whoByOwnCount(i: ChainInput, c: Ctx, what: string | null, bets: ChainBe
   ].filter(Boolean).join(' · ') || 'Nothing logged yet';
   const more = betMore(bets);
   const base = { key: 'who' as const, label: LINK_LABEL.who, what, facts, more, runner };
-  const ask = c.offerSet ? betMove('who', 'Bet on who buys') : null;
+  const ask = c.offerSet ? betMove('who', 'Test who buys') : null;
   if (!what) {
     return { ...base, state: 'missing', why: 'Nobody has said who buys.', moves: [{ key: 'who-say', label: 'Say who buys', by: 'you', go: { sheet: 'offer' } }] };
   }
   const passed = passedOf(bets);
-  if (passed) return { ...base, state: 'works', why: `A bet on who buys passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}.`, moves: [] };
+  if (passed) return { ...base, state: 'works', why: `A test on who buys passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}.`, moves: [] };
   if (w.price != null && w.atPrice > 0) {
     return { ...base, state: 'works', why: `${plural(w.atPrice, 'sale')} at your ${moneyLabel(w.price, i.currency)}: somebody who buys at the price exists.`, moves: [] };
   }
   if (t.n || bets.length) {
     return { ...base, state: 'testing',
-      why: t.n ? `${t.problem} of the ${plural(t.n, 'possible buyer')} you talked to have the problem${t.committed ? `, and ${t.committed} committed to something` : ''}.` : `A bet on it is ${bets[0].state === 'running' ? 'running' : 'done, and did not pass'}.`,
+      why: t.n ? `${t.problem} of the ${plural(t.n, 'possible buyer')} you talked to have the problem${t.committed ? `, and ${t.committed} committed to something${t.kinds ? ` (${committedLine(t.kinds)})` : ''}` : ''}.` : `A test on it is ${bets[0].state === 'running' ? 'running' : 'done, and did not pass'}.`,
       moves: ask ? [ask] : [] };
   }
   return { ...base, state: 'untested', why: 'No possible buyer has been asked yet. Ten conversations about the problem is the quickest way to know.', moves: ask ? [ask] : [] };
@@ -486,7 +585,7 @@ function reachLink(i: ChainInput, c: Ctx): BusinessLink {
   if (sent >= RATE_SAMPLE) {
     // Not "send the waiting ones": they were written with the opener that is
     // not being answered, and more of it is the expensive way to learn nothing.
-    return { key: 'reach', label: LINK_LABEL.reach, what, facts, more, state: 'stuck', runner,
+    return { key: 'reach', label: LINK_LABEL.reach, what, facts, more, state: 'stuck', status: replied ? 'Few replies' : 'No replies', runner,
       why: `${sent} sent and ${plural(replied, 'reply', 'replies')}. The app plans on ${WORKING_REPLIES} in every ${RATE_SAMPLE}, so this many sends wanted ${need}.`,
       moves: [{
         key: 'reach-openers', label: 'Three new openers', by: c.ai,
@@ -523,7 +622,7 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   }
   if (!c.found) {
     return { key: 'reach', label: LINK_LABEL.reach, what: null, facts: 'Nothing sent through the app', more, state: 'missing', runner,
-      why: 'Nobody has said how buyers find you. The app counts outreach itself; every other way, your bets count.',
+      why: 'Nobody has said how buyers find you. The app counts outreach itself; every other way, your tests count.',
       moves: [{ key: 'reach-how', label: 'Say how buyers find you', by: 'you', go: { sheet: 'foundby' } }] };
   }
   const found = c.found as Exclude<FoundBy, 'outreach'>;
@@ -532,28 +631,28 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   const base = { key: 'reach' as const, label: LINK_LABEL.reach, what, facts, more, runner };
   const passed = bets.filter((b) => b.state === 'passed');
   const page: LinkMove | null = found === 'inbound' && !landing ? { key: 'reach-landing', label: 'A landing page', by: 'you', go: { asset: 'landing_page' } } : null;
-  const ask = betMove('reach', 'Bet on how they hear');
+  const ask = betMove('reach', 'Test how they hear');
   if (passed.length >= 2) {
-    return { ...base, state: 'works', why: `${passed.length} bets on how they hear passed. Twice is a pattern, not luck.`, moves: [] };
+    return { ...base, state: 'works', why: `${passed.length} tests on how they hear passed. Twice is a pattern, not luck.`, moves: [] };
   }
   if (passed.length && c.wins.count) {
     return { ...base, state: 'works',
-      why: `A bet on how they hear passed${passed[0].when ? ` on ${passed[0].when}` : ''}, and ${plural(c.wins.count, 'sale')} came in.`, moves: [] };
+      why: `A test on how they hear passed${passed[0].when ? ` on ${passed[0].when}` : ''}, and ${plural(c.wins.count, 'sale')} came in.`, moves: [] };
   }
   const short = twoShort(bets);
   if (short) {
-    return { ...base, state: 'stuck',
-      why: `The last two bets on how they hear did not pass: ${short[0].line}, then ${short[1].line}.`,
+    return { ...base, state: 'stuck', status: 'Two tests failed',
+      why: `The last two tests on how they hear did not pass: ${short[0].line}, then ${short[1].line}.`,
       moves: [ask, page].filter((m): m is LinkMove => !!m) };
   }
   if (bets.length) {
     const b = bets[0];
     return { ...base, state: 'testing',
-      why: b.state === 'running' ? `A bet is running: ${b.line} so far.` : b.state === 'passed' ? `A bet passed${b.when ? ` on ${b.when}` : ''}: ${b.line}. Once more and it is a pattern.` : `The last bet did not pass: ${b.line}.`,
+      why: b.state === 'running' ? `A test is running: ${b.line} so far.` : b.state === 'passed' ? `A test passed${b.when ? ` on ${b.when}` : ''}: ${b.line}. Once more and it is a pattern.` : `The last test did not pass: ${b.line}.`,
       moves: [ask, page].filter((m): m is LinkMove => !!m) };
   }
   return { ...base, state: 'untested',
-    why: `The app cannot see this way in, so a bet counts it: ${OWN_COUNT[found]}.`,
+    why: `The app cannot see this way in, so a test counts it: ${OWN_COUNT[found]}.`,
     moves: [ask, page].filter((m): m is LinkMove => !!m) };
 }
 
@@ -574,9 +673,9 @@ function closeLink(i: ChainInput, c: Ctx): BusinessLink {
     if (!conv && !won) return { ...base, state: 'untested', why: 'Nothing can close before a conversation. Log the ones you have.', moves: [log] };
     if (won >= REPEAT_WINS) return { ...base, state: 'works', why: `${won} won. At ${REPEAT_WINS} it is something you can repeat, not luck.`, moves: [] };
     if (conv >= CLOSE_SAMPLE && !won) {
-      return { ...base, state: 'stuck',
+      return { ...base, state: 'stuck', status: 'No yes yet',
         why: `${plural(conv, 'conversation')} and nobody paid. From ${CLOSE_SAMPLE} on, that says more about the ask than about luck.`,
-        moves: [scriptMove, betMove('close', 'Bet on how they say yes')].filter((m): m is LinkMove => !!m) };
+        moves: [scriptMove, betMove('close', 'Test how they say yes')].filter((m): m is LinkMove => !!m) };
     }
     return { ...base, state: 'testing',
       why: won ? `${won} won so far. At ${REPEAT_WINS} it stops being luck.` : `${plural(conv, 'conversation')} and nothing won yet.`,
@@ -591,12 +690,12 @@ function closeLink(i: ChainInput, c: Ctx): BusinessLink {
   if (!replied && !meetings && !won) return { ...base, state: 'untested', why: 'Nothing can close before somebody answers.', moves: [] };
   if (won >= REPEAT_WINS) return { ...base, state: 'works', why: `${won} won. At ${REPEAT_WINS} it is something you can repeat, not luck.`, moves: [] };
   if (meetings >= CLOSE_SAMPLE && !won) {
-    return { ...base, state: 'stuck',
+    return { ...base, state: 'stuck', status: 'No yes yet',
       why: `${meetings} meetings and nobody paid. From ${CLOSE_SAMPLE} on, that says more about the ask than about luck.`,
       moves: [{ key: 'close-ask', label: 'Ask what stopped them', by: c.ai, ask: `Write one short question to send the ${meetings} people I met who did not buy, to learn what stopped them` }, onePager] };
   }
   if (replied >= CLOSE_SAMPLE && !meetings && !won) {
-    return { ...base, state: 'stuck', why: `${replied} replies and no meeting. The gap is between interest and the ask.`, moves: [onePager] };
+    return { ...base, state: 'stuck', status: 'No meetings', why: `${replied} replies and no meeting. The gap is between interest and the ask.`, moves: [onePager] };
   }
   return { ...base, state: 'testing',
     why: won ? `${won} won so far. At ${REPEAT_WINS} it stops being luck.` : meetings ? `${plural(meetings, 'meeting')} and nothing won yet.` : `${plural(replied, 'reply', 'replies')} and no meeting yet.`,
@@ -606,8 +705,11 @@ function closeLink(i: ChainInput, c: Ctx): BusinessLink {
 function payLink(i: ChainInput, w: WinRead, c: Ctx): BusinessLink {
   const m = (n: number) => moneyLabel(n, i.currency);
   // The conversations a price was put to: meetings where the app sent, and the
-  // ones the person logged where it did not.
-  const conv = i.funnel.meetings + (c.outbound ? 0 : (i.talks?.n ?? 0));
+  // ones the person logged where it did not — since the price began, when it
+  // began after the history did. A price nobody was asked is not stalled.
+  const p = i.priced ?? null;
+  const conv = p ? p.meetings + (c.outbound ? 0 : p.talks) : i.funnel.meetings + (c.outbound ? 0 : (i.talks?.n ?? 0));
+  const since = p ? ` since ${dayShort(p.since)}` : '';
   const what = i.offer.price_band?.trim() || null;
   const bets = betsOn(i, 'pay');
   const more = [
@@ -617,7 +719,10 @@ function payLink(i: ChainInput, w: WinRead, c: Ctx): BusinessLink {
     ...betMore(bets),
   ].filter((x): x is string => !!x);
   const runner = { by: 'you' as const, name: 'You', problem: null };
-  const base = { key: 'pay' as const, label: LINK_LABEL.pay, what, facts: winsLine(w, i.currency), more, runner };
+  // Paid before the price began: said beside the count, so a $1 test from the
+  // last offer is neither lost nor counted against this one.
+  const earlier = p?.earlier ? ` · ${p.earlier} paid before it was your price` : '';
+  const base = { key: 'pay' as const, label: LINK_LABEL.pay, what, facts: `${winsLine(w, i.currency)}${since}${earlier}`, more, runner };
   // Proof is what a price is believed on. A demo script is within any worker's
   // reach — writing — where a built demo is not, and the person records it. A
   // demo kept as an asset is proof too, link or not.
@@ -635,11 +740,19 @@ function payLink(i: ChainInput, w: WinRead, c: Ctx): BusinessLink {
     return { ...base, state: 'works', why: `${w.atPrice} paid at your ${m(w.price)} or more. ${REPEAT_WINS} is the bar.`, moves: [] };
   }
   if (w.count && !w.atPrice && conv >= CLOSE_SAMPLE) {
-    return { ...base, state: 'stuck',
-      why: `${c.outbound ? `${conv} meetings` : plural(conv, 'conversation')} and ${w.count} paid, none at your ${m(w.price)}. From ${CLOSE_SAMPLE} on, that says more about the price or the proof than about luck.`,
+    return { ...base, state: 'stuck', status: `Not at ${m(w.price)}`,
+      why: `${c.outbound ? `${conv} meetings` : plural(conv, 'conversation')}${since} and ${w.count} paid, none at your ${m(w.price)}. From ${CLOSE_SAMPLE} on, that says more about the price or the proof than about luck.`,
       moves: [proof, pricing].filter((x): x is LinkMove => !!x) };
   }
-  if (!w.count) return { ...base, state: 'untested', why: 'Nothing paid yet.', moves: proof ? [proof] : [] };
+  if (!w.count) {
+    return { ...base, state: 'untested',
+      why: p
+        ? conv
+          ? `${c.outbound ? plural(conv, 'meeting') : plural(conv, 'conversation')} since your price became ${m(w.price)} on ${dayShort(p.since)}, and nothing paid yet.`
+          : `Your price since ${dayShort(p.since)}. Nothing logged since then, so nobody has said yes or no to ${m(w.price)} yet.`
+        : 'Nothing paid yet.',
+      moves: proof ? [proof] : [] };
+  }
   return { ...base, state: 'testing',
     why: w.atPrice ? `${w.atPrice} paid at your ${m(w.price)}. ${REPEAT_WINS} is the bar.` : `${w.count} paid, none yet at your ${m(w.price)}.`,
     moves: [proof, pricing].filter((x): x is LinkMove => !!x) };
@@ -654,7 +767,7 @@ function deliverLink(i: ChainInput, c: Ctx): BusinessLink {
   const more = [...lines.slice(workflow ? 0 : 1, 3), ...betMore(bets)];
   if (!lines.length && !workflow) {
     return { key: 'deliver', label: LINK_LABEL.deliver, what: null, facts: 'Not written', more: betMore(bets), state: passed ? 'testing' : 'missing', runner,
-      why: passed ? `A bet on delivery passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}. Nothing is written down yet.` : 'Nobody has written how a client goes from yes to delivered.',
+      why: passed ? `A test on delivery passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}. Nothing is written down yet.` : 'Nobody has written how a client goes from yes to delivered.',
       moves: [
         { key: 'deliver-write', label: 'Write how you deliver', by: 'you', go: { sheet: 'working' } },
         { key: 'deliver-onboard', label: 'Client onboarding', by: c.ai, ask: 'Plan how I take a new client from the first yes to delivered, step by step' },
@@ -664,10 +777,10 @@ function deliverLink(i: ChainInput, c: Ctx): BusinessLink {
   // over, or clients served by hand, counted. What is written is a claim.
   if (passed) {
     return { key: 'deliver', label: LINK_LABEL.deliver, what: workflow ?? lines[0], facts: '', more, state: 'works', runner,
-      why: `A bet on delivery passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}.`, moves: [] };
+      why: `A test on delivery passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}.`, moves: [] };
   }
   return { key: 'deliver', label: LINK_LABEL.deliver, what: workflow ?? lines[0], facts: '', more, state: 'untested', runner,
-    why: workflow ? 'Written down as a workflow. Nothing in the app measures delivery; a bet can.' : 'What you wrote. Nothing in the app measures delivery yet.',
+    why: workflow ? 'Written down as a workflow. Nothing in the app measures delivery; a test can.' : 'What you wrote. Nothing in the app measures delivery yet.',
     moves: [{ key: 'deliver-automate', label: 'Automate a step', by: 'claude', ask: 'Find the step in how I deliver that costs me the most time, and design a simple automation for it.' }] };
 }
 

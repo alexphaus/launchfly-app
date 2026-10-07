@@ -70,7 +70,7 @@ export function ClaudeSheet({ actions }: { actions: Actions }) {
     <>
       <h3>Claude</h3>
       <p className="desc">
-        Talk things over in Claude with your record in front of it: your offer, goals, plan, bets, the conversations you
+        Talk things over in Claude with your record in front of it: your offer, goals, plan, tests, the conversations you
         logged and what your rows count. It reads. It cannot send, log, change or delete anything.
       </p>
       {error && <div className="cp-error">{error}</div>}

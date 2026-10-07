@@ -466,7 +466,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         setHome(r.home);
         // Said as what happened: started now, or written and waiting on an approval
         // that could not be given (three already running) — never "done".
-        say(r.started ? 'Handed over. It is starting now.' : 'Written. Approve it under Projects on Proof to start it.');
+        say(r.started ? 'Handed over. It is starting now.' : 'Written. Approve it under You → Projects to start it.');
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };

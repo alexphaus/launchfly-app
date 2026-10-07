@@ -19,13 +19,14 @@
 //
 // Pure: no DB import.
 
-import { ASSET_KINDS, type Asset, type AssetKind } from './assets';
+import { ASSET_KINDS, OFFER_ASSET, type Asset, type AssetKind } from './assets';
 import { talkTotals } from './ideas';
-import { CHECKPOINT_DAYS, daysBetween, dayWords, resultLine, type BetView, type IdeaSet, type LabMetric, type Talk, type Tally } from './lab';
-import type { Chain, ChainBet, ChainInput, LinkKey } from './business';
+import { CHECKPOINT_DAYS, daysBetween, dayWords, isBuyer, kindsOf, resultLine, type BetView, type IdeaSet, type LabMetric, type Talk, type Tally } from './lab';
+import { priceSince, pricedEvidence, type Chain, type ChainBet, type ChainInput, type CommittedKinds, type LinkKey, type PricedEvidence } from './business';
 import type { Angle } from './experiment';
 import type { Agent } from './machine';
 import { foundByOf, isFoundBy } from './offer';
+import { priceOf } from './plan';
 import { SECTIONS, type WorkingSection } from './working';
 import type { CommissionThread, FoundBy, HomeData } from './types';
 
@@ -100,7 +101,28 @@ export function chainInputOf(home: HomeData, x: ChainExtras): ChainInput {
     bets: chainBets(home.lab?.bets ?? []),
     talks: talkTotals(home.lab?.talks ?? []),
     assets: assetTitles(home.assets?.assets ?? []),
+    priced: pricedOf(home),
   };
+}
+
+/**
+ * What the price in use was put to, counted from the day it began — or nothing,
+ * and the pay part reads all time as before, when the price is as old as the
+ * offer's history or the history cannot say. A payload from before meeting days
+ * were sent counts meetings since as none, so the boundary is drawn only where
+ * every row it needs is here.
+ */
+export function pricedOf(home: Pick<HomeData, 'profile' | 'assets' | 'wins' | 'meetingsAt' | 'lab'>): PricedEvidence | undefined {
+  if (!home.meetingsAt) return undefined;
+  const offer = home.assets?.assets.find((a) => a.id === OFFER_ASSET) ?? null;
+  if (!offer) return undefined;
+  const since = priceSince(offer.versions.map((v) => ({ at: v.at, offer: v.offer })), priceOf(home.profile.offer?.price_band));
+  if (!since) return undefined;
+  return pricedEvidence(since, {
+    wins: home.wins ?? [],
+    meetings: home.meetingsAt,
+    talks: (home.lab?.talks ?? []).filter(isBuyer).map((t) => t.on),
+  });
 }
 
 /** How buyers find the business, and whether the person said so or the rows did. */
@@ -117,7 +139,7 @@ export function proofLine(chain: Pick<Chain, 'verdict'>, lab: { current: BetView
     ? 'checkpoint due'
     : lab.current
     ? `day ${lab.current.day} of ${lab.current.bet.days}${lab.part ? ` on ${lab.part}` : ''}`
-    : 'no bet running';
+    : 'no test running';
   return [verdict, bet, waiting ? `${waiting} waiting on you` : null].filter(Boolean).join(' · ');
 }
 
@@ -158,8 +180,8 @@ export interface BetWork {
   projects: CommissionThread[];
   /** Assets with a version made for it. */
   assets: Asset[];
-  /** The conversations logged since it began, when it counts conversations. */
-  talks: { n: number; last: Talk | null } | null;
+  /** The conversations logged since it began, when it counts conversations — with what they committed, by kind. */
+  talks: { n: number; last: Talk | null; kinds: CommittedKinds } | null;
   /** The counts logged for it, when it counts something the person logs. */
   tallies: { n: number; total: number; last: Tally | null } | null;
 }
@@ -181,7 +203,7 @@ export function betWork(v: BetView, i: { links: Record<string, string[]>; commis
   return {
     projects,
     assets,
-    talks: countsTalks ? { n: since.length, last: since[0] ?? null } : null,
+    talks: countsTalks ? { n: since.length, last: since[0] ?? null, kinds: kindsOf(since) } : null,
     tallies: b.metric === 'logged' ? { n: mine.length, total: mine.reduce((s, t) => s + t.n, 0), last: mine[0] ?? null } : null,
   };
 }

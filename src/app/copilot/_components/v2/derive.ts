@@ -292,6 +292,12 @@ export function derive(home: HomeData) {
   const lab = labView(home.lab, { runwayMonths: home.metrics.runway_months, links: chain.links, today: home.recent.today });
   const assets = home.assets?.assets ?? [];
   const states = Object.fromEntries(chain.links.map((l) => [l.key, l.state]));
+  // Proof is the business, so the projects on it are the ones tied to a test.
+  // A search for a guesthouse and a plan to leave the country sat in its
+  // history and its "waiting on you" beside the business's own work. Every
+  // project is still under You → Projects, and its questions on the Path.
+  const forTests = new Set(Object.values(lab.links).flat());
+  const testProjects = home.commissions.filter((t) => forTests.has(t.commission.id));
   const proof = {
     chain,
     said,
@@ -307,14 +313,14 @@ export function derive(home: HomeData) {
       checkpoints: home.lab?.checkpoints ?? [],
       talks: home.lab?.talks ?? [],
       assets,
-      projects: home.commissions.map((t) => ({ id: t.commission.id, objective: t.commission.objective, status: t.commission.status, outcome: t.commission.outcome, closedAt: t.commission.closed_at })),
+      projects: testProjects.map((t) => ({ id: t.commission.id, objective: t.commission.objective, status: t.commission.status, outcome: t.commission.outcome, closedAt: t.commission.closed_at })),
       wins: home.wins ?? [],
       experiments: home.roadmap?.experiments ?? [],
       currency,
       timezone: home.profile.timezone,
     }),
     team: teamLine(team),
-    waiting: waitingOnYou(home.commissions),
+    waiting: waitingOnYou(testProjects),
     intros,
   };
 

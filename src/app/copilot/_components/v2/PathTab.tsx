@@ -235,12 +235,12 @@ function BetHere({ d, actions }: { d: Derived; actions: Actions }) {
   if (lab.unreadable || (!cur && !lab.checkpoint.due)) return null;
   const line = cur
     ? [`Day ${cur.day} of ${cur.bet.days}`, resultLine(cur), cur.bet.tries && cur.tries != null ? `${cur.tries} of ${cur.bet.tries.planned} planned` : null, lab.checkpoint.due ? 'checkpoint due' : null].filter(Boolean).join(' · ')
-    : 'Pivot or persevere: the bets that ended, read back';
+    : 'Keep going or change one part: the tests that ended, read back';
   return (
     <button className="cp2-way-bet" onClick={() => actions.setTab('proof')}>
       <span className="cp2-way-bet-i"><IconProof /></span>
       <span className="cp2-way-bet-m">
-        <b className="cp2-clamp1">{cur ? `Your bet: “${cur.bet.belief}”` : 'A checkpoint is due'}</b>
+        <b className="cp2-clamp1">{cur ? `Your test: “${cur.bet.belief}”` : 'A checkpoint is due'}</b>
         <span>{line}</span>
       </span>
       <IconChevron />

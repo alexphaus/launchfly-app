@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { NOTE_MAX, TOLD_LABEL, toldAs, type Reading, type ToldKind, type ToldMeta } from '@/lib/copilot/tell';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Actions, SheetState } from '../shared';
-import { IconMic } from './icons2';
+import { IconMic, PathGlyph } from './icons2';
 
 /**
  * The sheet a sort opens. Money is the book's own sheet, which the shell
@@ -38,6 +38,7 @@ export function openReading(r: Reading, o: { actions: Actions; openMoney: (heard
 function byLine(meta: ToldMeta): string | null {
   if (meta.by === 'model') return 'Sorted by AI from what you said. Check it before you keep it.';
   if (meta.by === 'you') return null;
+  if (meta.by === 'pasted') return 'Pasted from a chat: their words, kept as they wrote them. Say who they were and how it ended.';
   return meta.why ?? 'Sorted by the app’s own rules.';
 }
 
@@ -51,7 +52,7 @@ export function ToldLine({ meta, kind, actions }: { meta: ToldMeta; kind: ToldKi
   // The money sheet's own "what it heard" box, so the mic reads the same whatever it opened.
   return (
     <div className="cp2-tl">
-      <IconMic />
+      {meta.by === 'pasted' ? <PathGlyph icon="reply" /> : <IconMic />}
       <div>
         <q>{meta.heard}</q>
         <span>

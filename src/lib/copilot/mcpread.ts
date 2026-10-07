@@ -23,6 +23,7 @@ import {
   asksProblem, dayWords, roleOf, type Talk, type TalkCounts,
 } from './lab';
 import type { AskAnswer } from './ask';
+import { committedLine, type CommittedKinds } from './business';
 
 const bullet = (s: string) => `- ${s}`;
 const clean = (s: string | null | undefined) => (s ?? '').trim();
@@ -35,7 +36,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /**
  * Sections with nothing in them are left out rather than printed empty: a
  * heading over nothing reads as "none". What could not be read is said first,
- * so "No bet running" is never what a failed read looks like (invariant 13).
+ * so "No test running" is never what a failed read looks like (invariant 13).
  */
 function doc(title: string, today: string, sections: Array<[string, string[]] | null>, foot?: string, missing: string[] = []): string {
   const out = [`# ${title}`, `As of ${today}. Counted by your Copilot app from your own rows; a line says when it is something you wrote or a model drafted.`, ''];
@@ -144,12 +145,12 @@ export function overviewText(i: OverviewIn): string {
       ...i.links.map((l) => bullet(`${l.label}: ${l.state}. ${l.why}`)),
       ...lines(i.weak && `Weakest part: ${i.weak}.`),
     ]],
-    ['The bet you are running', lines(
-      i.bet ? runningLine(i.bet) : 'No bet running.',
-      i.checkpointDue && 'A checkpoint is due: a bet has ended since the last one, and it is time to decide whether to pivot or persevere.',
+    ['The test you are running', lines(
+      i.bet ? runningLine(i.bet) : 'No test running.',
+      i.checkpointDue && 'A checkpoint is due: a test has ended since the last one, and it is time to decide whether to keep going or change one part.',
     )],
     ['Next', nextLines(i.now, i.asks)],
-  ], 'More: get_plan for the whole plan, get_proof for every part and bet, get_conversations for who you talked to and what they said, get_record for everything as one document, get_counted_answers for what your rows say about replies and what worked.', i.missing);
+  ], 'More: get_plan for the whole plan, get_proof for every part and test, get_conversations for who you talked to and what they said, get_record for everything as one document, get_counted_answers for what your rows say about replies and what worked.', i.missing);
 }
 
 /* ─── get_plan ────────────────────────────────────────────────────────────── */
@@ -238,8 +239,8 @@ export function proofText(i: ProofIn): string {
       ...i.links.map((l) => bullet(lines(`${l.label}: ${l.state}.`, l.what && `What it is, in your words: ${l.what}.`, clean(l.facts) && !sameAs(l.facts, l.why) && `Counted: ${clean(l.facts)}.`, l.why).join(' '))),
       ...lines(i.weak && `Weakest part: ${i.weak}.`),
     ]],
-    ['Bets', blocks(
-      [running ? `Running: ${runningLine(running)}` : 'No bet running.'],
+    ['Tests', blocks(
+      [running ? `Running: ${runningLine(running)}` : 'No test running.'],
       past.length ? ['Earlier, newest first:', ...past.map((b) => bullet(`${b.start} · "${b.belief}" — on ${b.part.toLowerCase()}: ${BET_STATE[b.state]}${b.ended ? ` on ${b.ended}` : ''}, ${b.result} against ${b.pass}.${b.note ? ` You wrote: "${b.note}"` : ''}`))] : [],
     )],
     // doc() leaves out a section with no lines, so a record with no shelf reads as it always did.
@@ -263,7 +264,7 @@ export interface ConversationsIn extends Missing {
   /** The last month, counted (lab.ts talkCounts). */
   counts: TalkCounts;
   /** All time, people who could buy only (ideas.ts talkTotals). */
-  totals: { n: number; problem: number; committed: number };
+  totals: { n: number; problem: number; committed: number; kinds?: CommittedKinds };
   limit: number;
 }
 
@@ -291,9 +292,9 @@ export function conversationsText(i: ConversationsIn): string {
       'Only the conversations you logged by hand: the app cannot hear calls or read chats.',
       c.n
         // Every kind, the empty ones too: who was never asked is the point.
-        ? `Last ${TALK_BACK_DAYS} days: ${plural(c.n, 'conversation')} — ${TALK_ROLES.map((r) => `${c.by[r]} ${TALK_ROLE_LABEL[r].toLowerCase()}`).join(', ')}. ${c.committed} ended in a commitment (another call, an introduction or money). ${c.have} had the problem.${c.introduced ? ` ${c.introduced} came through an introduction.` : ''}`
+        ? `Last ${TALK_BACK_DAYS} days: ${plural(c.n, 'conversation')} — ${TALK_ROLES.map((r) => `${c.by[r]} ${TALK_ROLE_LABEL[r].toLowerCase()}`).join(', ')}. ${c.committed} ended in a commitment: ${committedLine(c.kinds)}. ${c.have} had the problem.${c.introduced ? ` ${c.introduced} came through an introduction.` : ''}`
         : `None logged in the last ${TALK_BACK_DAYS} days.`,
-      i.totals.n > 0 && `All time, with people who could buy: ${i.totals.n}; ${i.totals.problem} had the problem; ${i.totals.committed} committed to something.`,
+      i.totals.n > 0 && `All time, with people who could buy: ${i.totals.n}; ${i.totals.problem} had the problem; ${i.totals.committed} committed to something${i.totals.kinds ? ` (${committedLine(i.totals.kinds)})` : ''}.`,
     )],
     ['Introductions offered and not followed up yet', i.intros.map((x) =>
       bullet(`${clean(x.talk.who) || 'Someone'} offered one ${plural(x.days, 'day')} ago (${dayWords(x.talk.on)})${x.talk.said ? `: “${x.talk.said}”` : ''}`))],

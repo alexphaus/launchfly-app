@@ -163,7 +163,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
   };
 
   return (
-    <div className={`cp-frame cp2-frame${tab === 'swipe' ? ' cp2-swiping' : ''}`}>
+    <div className={`cp-frame cp2-frame${tab === 'swipe' ? ' cp2-swiping' : ''}${tab === 'money' ? ' cp2-booking' : ''}`}>
       {/* No header on Swipe: the card is the screen, as a deck of cards has to be to be read at a glance. */}
       {tab !== 'swipe' && <header className="cp-header">
         <div className="cp2-header-text">
@@ -214,7 +214,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
         })}
       </nav>
 
-      {tab === 'money' && <BookFab book={book} />}
+      {tab === 'money' && <BookFab book={book} scroller={mainRef} />}
 
       <Sheet open={sheetOpen} onClose={dismissSheets}>
         {sheet && <SheetContent key={sheetKey(sheet)} sheet={sheet} home={home} actions={actions} briefing={briefing} openMoney={openMoney} />}

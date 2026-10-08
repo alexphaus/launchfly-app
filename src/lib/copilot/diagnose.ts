@@ -465,7 +465,8 @@ export function growthEdge(
       // one. Count what is stuck rather than what got through: it is the same
       // fact said from the side that needs the work.
       because: [prev
-        ? `${prev.count - stage.count} of ${prev.count} stopped at ${prev.label.toLowerCase()}.`
+        // "So far", because the card it is read on is headed This week and the funnel is every row.
+        ? `${prev.count - stage.count} of ${prev.count} stopped at ${prev.label.toLowerCase()} so far.`
         : `${stage.count} at ${stage.label.toLowerCase()}.`],
       experiment: EXPERIMENT[stage.key],
       ...(MEASURE[stage.key] ? { measure: MEASURE[stage.key] } : {}),

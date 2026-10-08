@@ -335,6 +335,10 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   // Reached by outreach, a sale still comes in from outside the app sometimes — a referral, a walk-in.
   const saleToo = next.go === 'replied' && (b.metric === 'paid' || b.metric === 'paid_at_price');
   const [stopping, setStopping] = useState(false);
+  // How it is counted, the play's method and the hand-over box: read once, and
+  // between them the card ran two screens tall on a phone, with what to do next
+  // at the very bottom. Folded under one line that names the play.
+  const [more, setMore] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -372,19 +376,28 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         </div>
       )}
       <p className="cp2-lab-pass"><b>Pass line:</b> {passLine(b, view.last)}.</p>
-      <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit, !!home.signals?.made)}</p>
       {over && <p className="cp2-lab-over">{over}</p>}
 
-      {play && (
-        <div className="cp2-lab-playing">
-          <span className="cp2-lab-book">{play.from} · {play.label}</span>
-          <p>{play.how}</p>
+      <button className="cp2-lab-more" onClick={() => setMore((v) => !v)} aria-expanded={more}>
+        {/* The play's own name, which fits a line; its book is said inside. */}
+        <span className="cp2-clamp1">{play ? play.label : 'How it is counted'}</span>
+        <span className={`cp2-plan-chev${more ? ' open' : ''}`}><IconChevron /></span>
+      </button>
+      {more && (
+        <div className="cp2-lab-morebody">
+          <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit, !!home.signals?.made)}</p>
+          {play && (
+            <div className="cp2-lab-playing">
+              <span className="cp2-lab-book">From {play.from}</span>
+              <p>{play.how}</p>
+            </div>
+          )}
+          {home.workerConnected && <HandOver view={view} actions={actions} full={full} />}
         </div>
       )}
 
       <BetWorkList view={view} work={work} home={home} actions={actions} />
       <Prep home={home} view={view} work={work} actions={actions} brief={brief} full={full} canDraft={!!home.ai && !d.noOffer} />
-      {home.workerConnected && <HandOver view={view} actions={actions} full={full} />}
 
       {stopping ? (
         <div className="cp2-lab-stop">
@@ -431,7 +444,10 @@ const ENDED_AS = { none: 'no commitment', time: 'another call', intro: 'an intro
 /** The work done for the bet, from the rows that say so. Nothing here is a claim the app made about itself. */
 function BetWorkList({ view, work, home, actions }: { view: BetView; work: BetWork; home: HomeData; actions: Actions }) {
   const b = view.bet;
-  if (!work.projects.length && !work.assets.length && !work.talks && !work.tallies) return null;
+  // No conversations yet is not work on the bet: the score above says 0 and the
+  // button under it is "Log a conversation". The row only repeated both.
+  const talks = work.talks && work.talks.n > 0 ? work.talks : null;
+  if (!work.projects.length && !work.assets.length && !talks && !work.tallies) return null;
   return (
     <div className="cp2-pf-work">
       <span className="cp2-pf-k">Working on this bet</span>
@@ -463,12 +479,12 @@ function BetWorkList({ view, work, home, actions }: { view: BetView; work: BetWo
           </button>
         );
       })}
-      {work.talks && (
+      {talks && (
         <button className="cp2-pf-wrow" onClick={() => actions.openSheet({ kind: 'talks' })}>
           <span className="cp2-pf-glyph"><PathGlyph icon="reply" /></span>
           <span className="cp2-pf-wmain">
-            <b>{work.talks.n ? `${work.talks.n} ${work.talks.n === 1 ? 'conversation' : 'conversations'} since it began` : 'No conversations logged since it began'}</b>
-            <span>{work.talks.last ? `${work.talks.last.who || 'Someone'} · ${ENDED_AS[work.talks.last.commitment]}` : `The app cannot hear your calls: log each the day it happens`}</span>
+            <b>{`${talks.n} ${talks.n === 1 ? 'conversation' : 'conversations'} since it began`}</b>
+            <span>{talks.last ? `${talks.last.who || 'Someone'} · ${ENDED_AS[talks.last.commitment]}` : 'The app cannot hear your calls: log each the day it happens'}</span>
           </span>
           <IconChevron />
         </button>

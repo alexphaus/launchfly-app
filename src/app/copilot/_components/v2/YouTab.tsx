@@ -129,7 +129,6 @@ function Week({ home, d, actions, openMatches }: { home: HomeData; d: Derived; a
   const r = d.review;
   const go = (t: ReviewTarget) => {
     if (t === 'queue') actions.openSheet({ kind: 'queue' });
-    else if (t === 'sources') actions.openSheet({ kind: 'watchlist' });
     else if (t === 'projects') actions.openSheet({ kind: 'projects' });
     else if (t === 'focus') actions.openSheet({ kind: 'focus' });
     else if (t === 'matches') actions.setTab('swipe');
@@ -161,7 +160,7 @@ function Week({ home, d, actions, openMatches }: { home: HomeData; d: Derived; a
         <div className="cp2-review-head"><span className="cp2-mark warn"><IconAlert /></span>What was wasted</div>
         {r.waste.length
           ? <ReviewRows lines={r.waste} go={go} tone="waste" />
-          : <p className="cp2-review-empty">Nothing counted as wasted: no stale drafts, no dead sources, no project closed with nothing to show.</p>}
+          : <p className="cp2-review-empty">Nothing counted as wasted: no stale drafts, no ignored calls, no project closed with nothing to show.</p>}
       </div>
 
       <ChangeCard change={r.change} go={go} />
@@ -172,12 +171,12 @@ function Week({ home, d, actions, openMatches }: { home: HomeData; d: Derived; a
 /** One glyph per kind of line, so the card reads at a glance: money, a reply, a thing done, hours. */
 const GLYPH: Record<ReviewKind, PathIcon> = {
   money: 'money', worth: 'research', reply: 'reply', meeting: 'meeting', did: 'done', focus: 'focus',
-  queue: 'send', calls: 'call', projects: 'research', sources: 'watcher', binned: 'lost',
+  queue: 'send', calls: 'call', projects: 'research', binned: 'lost',
 };
 
 /** Where an opened line leads, said at its foot. */
 const OPEN_LABEL: Record<Exclude<ReviewTarget, null>, string> = {
-  queue: 'Open the queue', sources: 'Open your sources', projects: 'Open Work', matches: 'Open Swipe',
+  queue: 'Open the queue', projects: 'Open your projects', matches: 'Open Swipe',
   focus: 'Log time', record: 'Ask your record about it', won: 'See every win', replied: 'Open your replies', waiting: 'See who you are waiting on',
 };
 

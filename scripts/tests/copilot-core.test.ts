@@ -4572,7 +4572,7 @@ focusLog().catch((e) => { console.error(e); process.exit(1); });
 // currencies, calling a fresh queue waste, a blank block, a binned suggestion
 // counted as the user's failure when it was the app's.
 // ---------------------------------------------------------------------------
-import { COLD_DRAFT_DAYS, MAX_DID_LINES, MAX_ITEMS, MIN_BINNED, STALE_DRAFT_DAYS, localDay, weekReview, whenLabel, type ReviewInput, type RecentOutcome as RecentOutcomeV2 } from '../../src/lib/copilot/review';
+import { COLD_DRAFT_DAYS, MAX_DID_LINES, MAX_ITEMS, MIN_BINNED, STALE_DRAFT_DAYS, localDay, sameWork, weekReview, whenLabel, type ReviewInput, type RecentOutcome as RecentOutcomeV2 } from '../../src/lib/copilot/review';
 
 async function weekInReview() {
   const now = new Date('2026-09-24T10:00:00Z');
@@ -4583,7 +4583,7 @@ async function weekInReview() {
   const base: ReviewInput = {
     now, today: '2026-09-24', timezone: 'Asia/Manila',
     outcomes: [], answered: [], focus: [], commissions: [],
-    queue: { count: 0, oldestDays: 0 }, sources: { total: 0, failing: 0 },
+    queue: { count: 0, oldestDays: 0 },
     decisions: [], edge: null, bottleneck: null, runwayMonths: null, currency: '$',
   };
   const call = (for_date: string, o: Partial<ReviewInput['decisions'][number]> = {}): ReviewInput['decisions'][number] => ({
@@ -4666,17 +4666,12 @@ async function weekInReview() {
   assert.equal(deep.waste[0].items.length, MAX_ITEMS);
   assert.equal(deep.waste[0].more, 57 - MAX_ITEMS);
 
-  const failing = weekReview({ ...base, sources: { total: 12, failing: 4 } });
-  assert.match(failing.waste[0].text, /^4 of 12 sources failed/);
-  const named = weekReview({ ...base, sources: { total: 12, failing: 2, failed: [
-    { label: 'Freelancer', error: 'HTTP 403', checkedAt: '2026-09-24T01:00:00Z' },
-    { label: 'r/indiebiz', error: 'Timed out after 10s', checkedAt: null },
-  ] } });
-  assert.deepEqual(named.waste[0].items, [
-    { text: 'Freelancer', when: 'today', note: 'HTTP 403' },
-    { text: 'r/indiebiz', when: null, note: 'Timed out after 10s' },
-  ], 'each failing source by name, with the reason it gave: what to fix, or to drop');
-  assert.equal(named.waste[0].more, 0);
+  // A failing source is the app's input broken, not the person's effort wasted:
+  // Records and the Path say it, and the week does not say it a third time.
+  assert.ok(!('sources' in base), 'the review is not handed the sources at all');
+  const you = readFileSync('src/app/copilot/_components/v2/YouTab.tsx', 'utf8');
+  assert.ok(!/failed their last read/.test(readFileSync('src/lib/copilot/review.ts', 'utf8')), 'no waste line for failing sources');
+  assert.match(you, /\{v\.state === 'attention' && <span className="cp2-recs-state attention">Look<\/span>\}/, 'Records keeps it, as the one row that asks you to look');
 
   // A handful of binned suggestions is taste; it only becomes a line past the floor.
   const bins = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `d${i}`, job: 'watch', kind: 'learn' as const, headline: 'h', status: 'dismissed' as const, acted_at: '2026-09-22T10:00:00Z' }));
@@ -4803,6 +4798,40 @@ async function weekInReview() {
   ] });
   assert.deepEqual(ticked.value.filter((l) => l.kind === 'did').map((l) => l.text), ['Apply to the Maintenance Coordinator role', 'Reset the revenue target', 'Research the overstay fine']);
   assert.deepEqual(ticked.value.find((l) => l.text === 'Research the overstay fine')?.detail, ['Ticked off on your plan']);
+
+  // A plan redrawn overnight hands back a step it already had, reworded, and the
+  // person ticks it again. One move was three lines of value; now it is one,
+  // named by its newest wording, with every wording behind it.
+  const moved = weekReview({ ...base, marks: [
+    mark('a', 'Move your things to the Intramuros room', '2026-09-20T11:00:00Z'),
+    mark('b', 'Move your things to Intramuros', '2026-09-21T00:30:00Z'),
+    mark('c', 'Moved into the Intramuros room', '2026-09-21T01:50:00Z'),
+    mark('d', 'Send the Back Office reply', '2026-09-22T01:00:00Z'),
+  ] });
+  const movedDid = moved.value.filter((l) => l.kind === 'did');
+  assert.deepEqual(movedDid.map((l) => l.text), ['Send the Back Office reply', 'Moved into the Intramuros room']);
+  assert.deepEqual(movedDid[1].detail, ['Counted once: you ticked the same step 3 times, worded differently']);
+  assert.deepEqual(movedDid[1].items.map((i) => `${i.when} ${i.text}`), ['Mon Moved into the Intramuros room', 'Mon Move your things to Intramuros', 'Sun Move your things to the Intramuros room']);
+  assert.deepEqual(movedDid[0].items, [], 'a line said once opens to its note, not to a list of itself');
+  // The call keeps its words and what came of it; a reworded tick of it is said under it.
+  const callAndTick = weekReview({ ...base, decisions: busyDecisions, answered: [], marks: [mark('s1', 'Applied to the Maintenance Coordinator role', '2026-09-24T03:00:00Z')] });
+  const callLine = callAndTick.value.filter((l) => l.kind === 'did');
+  assert.equal(callLine.length, 1);
+  assert.equal(callLine[0].text, 'Apply to the Maintenance Coordinator role');
+  assert.equal(callLine[0].detail[0], 'Today’s call — you answered “I did it”');
+  assert.equal(callLine[0].detail.at(-1), 'Counted once: the same work is in your record 2 times, worded differently');
+  assert.deepEqual(callLine[0].items.map((i) => i.note), ['Today’s call — you answered “I did it”', 'Ticked off on your plan']);
+
+  // What counts as the same work, and what does not.
+  assert.ok(sameWork('Move your things to Intramuros', 'Move your things to the Intramuros room'));
+  assert.ok(sameWork('Moved into the Intramuros room', 'Move your things to the Intramuros room'));
+  assert.ok(!sameWork('Move your things to Intramuros', 'Moved into the Intramuros room'), 'not directly: the third ties them, and the grouping follows the tie');
+  assert.ok(sameWork('Apply to the Maintenance Coordinator role', 'Applied to the Maintenance Coordinator role'));
+  assert.ok(!sameWork('Call Ana', 'Call Ben'), 'one word that means anything is matched only exactly');
+  assert.ok(!sameWork('Thing 1', 'Thing 2'));
+  assert.ok(!sameWork('Send the reply', 'Send the Back Office reply with your earliest start date in line one'), 'one says all the other does, but at four times the length it is not the same step');
+  assert.ok(!sameWork('Send 10 drafts to plumbers', 'Send 10 drafts to resorts'));
+  assert.ok(sameWork('Book one night at the top link', 'Book one night at the top link, nothing more'));
 
   // A busy week stays a card, not a wall: past MAX_DID_LINES the rest are one line that opens.
   const many = weekReview({ ...base, answered: Array.from({ length: 6 }, (_, i) => ({ id: `m${i}`, job: 'goal_gap', kind: 'decide' as const, headline: `Thing ${i}`, status: 'done' as const, acted_at: daysAgo(i) })) });
@@ -5837,7 +5866,7 @@ async function pathPlan() {
   const ladderOf = (o: { offerSet?: boolean; sent: number; replied: number; won: number }, g: { current: number; target: number } | null = { current: 0, target: 1500 }) =>
     pathLadder({ offerSet: o.offerSet ?? true, sent: o.sent, replied: o.replied, won: o.won, goal: g ? { title: 'Save Exit PH [NOV]', target: g.target, current: g.current, money: true, unit: '$' } : null, currency: '$' });
   const f = { sent: 9, replied: 2, won: 2 };
-  assert.deepEqual(pathHere(ladderOf(f), f), { title: '2 paying clients', line: '9 sent · 2 replied · 2 paid' });
+  assert.deepEqual(pathHere(ladderOf(f), f), { title: '2 paying clients', line: '9 sent · 2 replied · 2 paid so far' }, 'every send since the start, said so beside the 30-day tiles');
   assert.equal(pathHere(ladderOf({ offerSet: false, sent: 0, replied: 0, won: 0 }), { sent: 0, replied: 0, won: 0 }).title, 'Nothing to send yet');
   assert.equal(pathHere(ladderOf({ sent: 0, replied: 0, won: 0 }), { sent: 0, replied: 0, won: 0 }).title, 'Nothing sent yet');
   assert.equal(pathHere(ladderOf({ sent: 12, replied: 0, won: 0 }), { sent: 12, replied: 0, won: 0 }).title, '12 messages out, no reply yet');
@@ -6750,7 +6779,7 @@ async function willItWork() {
   // 3. A real rate: money per send, from what the sends actually earned.
   const rated = (days: number) => goalOutlook({ ...exit, horizon_days: days }, { ...base, funnel: { windowDays: 30, sent: 40, won: 2, wonAmount: 300 } });
   assert.equal(rated(63).verdict, 'on_track', '200 sends is 8 days of Deep focus, well inside 63');
-  assert.equal(rated(63).line, '10 sales at your $150 in 63 days: about 200 sends at what yours have earned ($300 from 40 sends), 8 days of sending at Deep focus.');
+  assert.equal(rated(63).line, '10 sales at your $150 in 63 days. Last 30 days: 40 sends, $300 earned. At that rate it takes about 200 sends, 8 days of sending at Deep focus.');
   assert.equal(rated(10).verdict, 'tight', 'eight of ten days is no room for a bad week');
   assert.equal(rated(5).verdict, 'off_track');
 
@@ -6758,7 +6787,9 @@ async function willItWork() {
   //    by what they earned, the same sends are a plan that never gets there.
   const junk = goalOutlook(exit, { ...base, funnel: { windowDays: 30, sent: 20, won: 2, wonAmount: 2 } });
   assert.equal(junk.verdict, 'off_track');
-  assert.match(junk.line, /\$2 from 20 sends/);
+  assert.match(junk.line, /Last 30 days: 20 sends, \$2 earned\./);
+  // Wins logged with no amount are counted as sales at the price, and said as sales.
+  assert.match(goalOutlook(exit, { ...base, funnel: { windowDays: 30, sent: 40, won: 2, wonAmount: 0 } }).line, /Last 30 days: 40 sends, 2 sales\. At that rate it takes about 200 sends/);
 
   // 5. The order of the early answers.
   assert.equal(goalOutlook({ ...exit, current_value: 1500 }, base).verdict, 'reached');
@@ -7825,6 +7856,9 @@ async function moneyBookFaster() {
   assert.equal(out(null, 'GrabFood order'), 'dining', 'GrabFood is food');
   assert.equal(out(null, 'Grab to Makati'), 'transport', 'Grab is a ride');
   assert.equal(out('Misc', 'thing'), 'out', 'nothing matches: a plain one, not a wrong one');
+  assert.equal(out('Business', 'Claude Pro'), 'out', 'Business is not a bus');
+  assert.equal(out('Business', 'Contabo VPS'), 'bills', 'its words still count once the category has no picture');
+  assert.equal(out(null, 'Bus to Baguio'), 'transport');
   assert.equal(fIcon('Misc', 'thing', 50), 'in');
 
   /* 3. A repeat counts from the day it was written for, not a date it was moved to. */
@@ -8196,7 +8230,6 @@ import {
   ASK_MAX, CLOSE_SAMPLE, LINK_KEYS, LINK_STATE_LABEL, businessChain, chainChanges, changeLine, parseSeenChain,
   readWins, snapshotChain, suggestedAsks, teamLine, waitingOnYou, weakLink, winsLine, type ChainInput,
 } from '../../src/lib/copilot/business';
-import { proofLine as proofLineBz } from '../../src/lib/copilot/proof';
 import { diagnose as diagnoseBz } from '../../src/lib/copilot/diagnose';
 import type { Agent as AgentBz } from '../../src/lib/copilot/machine';
 
@@ -8380,11 +8413,8 @@ async function businessChainSuite() {
     threadV2({ id: 'd', status: 'active' }),
   ];
   assert.equal(waitingOnYou(threads), 3);
-  // Proof's line under the greeting: the verdict, the bet or the checkpoint, and what waits on the person.
-  const noBet = { current: null, checkpoint: { due: false }, part: null };
-  assert.equal(proofLineBz(c, noBet, 3), 'Not proven · no bet running · 3 waiting on you');
-  assert.equal(proofLineBz(proven, noBet, 0), 'Proven · no bet running');
-  assert.equal(proofLineBz(blank, { ...noBet, checkpoint: { due: true } }, 0), 'Not started · checkpoint due');
+  // No line under Proof's name: everything it said is the first two cards, and what waits on you is the Path's badge.
+  assert.match(readFileSync('src/app/copilot/_components/v2/derive.ts', 'utf8'), /\n    proof: null,\n/);
 
   /* 15. The rows behind it: per kind of business, per channel, and every win's amount, from the funnel's own rows. */
   const dz = diagnoseBz({
@@ -10458,12 +10488,12 @@ async function proofHonestSuite() {
   /* 8. A goal is not walked back to sends for a business whose buyers do not come through them. */
   const exit = { id: 'g1', title: 'Save Exit PH [NOV]', metric: 'currency' as const, unit: '$', target_value: 1500, current_value: 0, horizon_days: 62, created_at: '2026-10-07T01:00:00Z' };
   const base = { today: '2026-10-07', price: 29, selling: true, currency: '$', capacity: 'moderate' as const, funnel: { windowDays: 30, sent: 27, won: 1, wonAmount: 1 } };
-  assert.match(pfOutlook(exit, base).line, /sends at what yours have earned/, 'nobody said: as it always read');
+  assert.match(pfOutlook(exit, base).line, /At that rate it takes about [\d,]+ sends/, 'nobody said: as it always read');
   const online = pfOutlook(exit, { ...base, viaSends: false });
   assert.ok(!/send/.test(online.line), online.line);
-  assert.equal(online.line, '52 sales at your $29 in 62 days: about $169 a week. You were paid $1 in the last 30 days, about $0 a week.');
+  assert.equal(online.line, '52 sales at your $29 in 62 days: about $169 a week. You were paid $1 in the last 30 days, under $1 a week.', 'a pace that rounds to nothing is not "about $0"');
   assert.equal(online.verdict, 'off_track');
-  assert.match(pfOutlook(exit, { ...base, viaSends: true }).line, /sends at what yours have earned/, 'outreach walks the chain from sends, as before');
+  assert.match(pfOutlook(exit, { ...base, viaSends: true }).line, /At that rate it takes about [\d,]+ sends/, 'outreach walks the chain from sends, as before');
 
   console.log('copilot-core: proof honest checks passed');
 }

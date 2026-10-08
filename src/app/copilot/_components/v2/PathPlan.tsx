@@ -48,16 +48,21 @@ export function DrawnPlanHead({ view, now, onRedraw, unreadable, actions }: { vi
     <>
       <div className="cp2-way-head">
         <span>The plan</span>
-        <button className="cp2-plan-redraw" onClick={onRedraw} disabled={drawing}>
-          <IconRedraw />{drawing ? 'Redrawing…' : view.state === 'ready' ? `Drawn ${agoLabel(view.drawnAt, now)}` : 'Draw it'}
-        </button>
+        {/* Only over a plan there is to redraw. Before the first one, the row under
+            this draws it and says so: the head said "Draw it" beside a row with its
+            own Draw it, and "Redrawing…" over "Drawing your plan". */}
+        {view.state === 'ready' && (
+          <button className="cp2-plan-redraw" onClick={onRedraw} disabled={drawing}>
+            <IconRedraw />{drawing ? 'Redrawing…' : `Drawn ${agoLabel(view.drawnAt, now)}`}
+          </button>
+        )}
       </div>
       {view.state === 'ready' && view.direction && <Direction text={view.direction} />}
       {/* Said beside the plan it could not replace, so an old plan is never read as a fresh one (invariant 13).
           The reason is in view, two lines of it; a model's parse error runs to a paragraph, and the rest is a tap. */}
-      {failed && (view.state === 'ready'
-        ? <WarnRow title="The last redraw failed, so this is the plan from before" detail={sentence(failed)} onRetry={drawing ? undefined : onRedraw} />
-        : <WarnRow title="Could not draw your plan" detail={sentence(failed)} />)}
+      {failed && view.state === 'ready' && (
+        <WarnRow title="The last redraw failed, so this is the plan from before" detail={sentence(failed)} onRetry={drawing ? undefined : onRedraw} />
+      )}
       {unreadable && <WarnRow title="Could not read your plan" detail={`${unreadable}. Ticks may be missing below.`} />}
       {/* The plan saved and the call could not follow it: said, so a card over the plan that disagrees with it is explained (invariant 13). */}
       {view.state === 'ready' && view.callError && <WarnRow title="Today's call was not updated for this plan" detail={sentence(view.callError)} />}
@@ -283,6 +288,9 @@ function ChangesRow({ changes }: { changes: NonNullable<Ready['changes']> }) {
 
 /** Before the first plan lands: drawing, or the one tap that draws it. */
 export function PlanPending({ view, onDraw }: { view: Extract<RoadmapView, { state: 'none' }>; onDraw: () => void }) {
+  // A first draw that failed is this row, with its reason and the retry — not a
+  // warning above an invitation to draw, which said the one state twice.
+  if (view.failed && !view.drawing) return <WarnRow title="Could not draw your plan" detail={sentence(view.failed)} onRetry={onDraw} />;
   return (
     <div className="cp2-way-row">
       <span className={`cp2-way-node sm redraw ${view.drawing ? 'cp2-plan-spin' : ''}`}><IconRedraw /></span>

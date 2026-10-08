@@ -21,7 +21,7 @@
 // swipe and a tap on the list are one tally.
 
 import { generateText } from 'ai';
-import { maxOutputTokens, providerFor, resolveLlmConfig } from './agent/llm';
+import { maxOutputTokens, modelErrorText, providerFor, resolveLlmConfig } from './agent/llm';
 import { extractJson } from './agent/schema';
 import { openerTemplate } from './agent/starter';
 import { getProfile, logEvent } from './base';
@@ -185,7 +185,7 @@ export async function writeDeckDraft(pid: string, kind: DeckKind, id: string, vi
     if (checked.ok) return { body: checked.body, subject: checked.subject ?? (via === 'email' ? `Quick note for ${card.title}` : null), from: 'model', note: null };
     return { ...offer(), note: `Written from your offer: the model's version was set aside because ${checked.why}.` };
   } catch (e) {
-    const why = e instanceof Error ? (e.name === 'TimeoutError' || /abort/i.test(e.message) ? `it took longer than ${DRAFT_TIMEOUT_MS / 1000}s` : e.message) : String(e);
+    const why = e instanceof Error && (e.name === 'TimeoutError' || /abort/i.test(e.message)) ? `it took longer than ${DRAFT_TIMEOUT_MS / 1000}s` : modelErrorText(e);
     return { ...offer(), note: `Written from your offer: the model did not answer (${why.slice(0, 120)}).` };
   }
 }

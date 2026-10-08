@@ -122,8 +122,12 @@ export interface MoneyRead {
   payers: PartyLine[];
   /** Who was paid, biggest first — the person's own accounts left out. */
   payees: PartyLine[];
-  /** Averaged over the last `over` days of rows; null under MIN_SPAN_DAYS of history. */
-  perMonth: { in: number; out: number; over: number } | null;
+  /**
+   * Averaged over the latest whole calendar months on file (`months`, oldest
+   * first, at most WHOLE_MONTHS), or with none whole yet over the last `over`
+   * days of rows; null under MIN_SPAN_DAYS of history.
+   */
+  perMonth: { in: number; out: number; over: number; months?: string[] } | null;
   /**
    * The last RECENT_DAYS of rows, ending on the last row — not on today: a
    * statement that ends on 30 Jun has nothing in "the last 30 days" in
@@ -293,6 +297,8 @@ export function recurringOut(txs: LedgerTx[], nameOf: (key: string) => string, t
 export const MIN_SPAN_DAYS = 20;
 /** Monthly figures are averaged over at most this many of the latest days: recent enough to be now. */
 export const AVERAGE_DAYS = 90;
+/** With whole calendar months on file, the monthly figures are their average: at most this many, the latest. */
+export const WHOLE_MONTHS = 3;
 /** Past this, "nobody has paid you" is worth saying; under it, the last payment is. */
 export const QUIET_DAYS = 14;
 /** A statement older than this is said to be old. */
@@ -327,6 +333,26 @@ export interface MoneyReadInput {
   fx?: FxTable;
   /** Why a currency has no rate (fxstore.ts), said beside the rows it leaves out. Lower case, no full stop. */
   fxMissing?: Record<string, string>;
+}
+
+/**
+ * The calendar months the rows cover from their first day to their last, newest
+ * first: a month whose rows start after its 1st, or stop before its last day,
+ * is part of a month and not in the list.
+ */
+export function wholeMonths(from: string, to: string): string[] {
+  const out: string[] = [];
+  let [y, m] = to.slice(0, 7).split('-').map(Number);
+  for (;;) {
+    const month = `${y}-${String(m).padStart(2, '0')}`;
+    const first = `${month}-01`;
+    if (first < from) break;
+    const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    if (last <= to) out.push(month);
+    m -= 1;
+    if (m === 0) { m = 12; y -= 1; }
+  }
+  return out;
 }
 
 /** Null when there are no rows: an empty read is not a read. */
@@ -438,7 +464,6 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
     else byRole.unnamed += p.total;
   }
 
-  // Averages over the latest AVERAGE_DAYS, or the whole span when it is shorter.
   // Averaged over the accounts still being written. One whose rows stop a
   // month before the newest does not speak for this month: a Wise quarter
   // ending 30 Jun beside a budget export starting 15 Jul averaged 90 days across
@@ -453,14 +478,27 @@ export function moneyRead(input: MoneyReadInput): MoneyRead | null {
   const live = new Set([...lastBy.entries()].filter(([, last]) => daysBetween(last, to) <= LIVE_ACCOUNT_DAYS).map(([a]) => a));
   const liveFrom = [...live].reduce((d, a) => (firstBy.get(a)! < d ? firstBy.get(a)! : d), to);
   const liveDays = daysBetween(liveFrom, to) + 1;
+  // Over those accounts, the latest whole calendar months, or before one month
+  // is whole the latest AVERAGE_DAYS (the whole span when it is shorter).
+  // Whole months first because, averaged over the latest 90 days of rows, a
+  // fortnight of moving in at the start of the statement and a rent paid on the
+  // 1st at the end both counted as if they were every month: $1,736 over 86
+  // days read as $614 a month, when August was $504 and September $478. The
+  // latest whole months — up to WHOLE_MONTHS of them — are what a month costs
+  // now; the span is the fallback until one whole month is on file.
   let perMonth: MoneyRead['perMonth'] = null;
   let spend: MoneyRead['spend'] = [];
-  if (liveDays >= MIN_SPAN_DAYS) {
-    const over = Math.min(liveDays, AVERAGE_DAYS);
-    const start = addDay(to, -(over - 1));
-    const inWindow = txs.filter((t) => t.on >= start && live.has(t.accountId ?? ''));
+  const whole = wholeMonths(liveFrom, to).slice(0, WHOLE_MONTHS);
+  const averaged = whole.length
+    ? { start: `${whole[whole.length - 1]}-01`, end: new Date(Date.UTC(Number(whole[0].slice(0, 4)), Number(whole[0].slice(5, 7)), 0)).toISOString().slice(0, 10), months: [...whole].reverse() }
+    : liveDays >= MIN_SPAN_DAYS
+    ? { start: addDay(to, -(Math.min(liveDays, AVERAGE_DAYS) - 1)), end: to, months: undefined }
+    : null;
+  if (averaged) {
+    const over = daysBetween(averaged.start, averaged.end) + 1;
+    const inWindow = txs.filter((t) => t.on >= averaged.start && t.on <= averaged.end && live.has(t.accountId ?? ''));
     const scale = 30.44 / over;
-    perMonth = { in: sumIn(inWindow) * scale, out: sumOut(inWindow) * scale, over };
+    perMonth = { in: sumIn(inWindow) * scale, out: sumOut(inWindow) * scale, over, ...(averaged.months ? { months: averaged.months } : {}) };
     spend = partiesOf(inWindow, -1).slice(0, SPEND_SHOWN).map((p) => ({ key: p.key, name: p.name, perMonth: p.total * scale, share: p.share }));
   }
 
@@ -590,7 +628,18 @@ export function financeFromRead(
   prev: Finance,
   read: MoneyRead | null,
   nowIso: string,
-  opts: { main?: string; latest?: LatestRate; book?: number | null } = {},
+  opts: {
+    main?: string; latest?: LatestRate; book?: number | null;
+    /**
+     * When the newest statement was read in (statementAt), or null for none.
+     * Given, a monthly spend the person typed is replaced only by a statement
+     * read in after they typed it — never by the Money tab's own rows, which
+     * are dated today every time a coffee is logged, so the "newer rows replace
+     * what was typed" rule wiped a typed number on the very next load. Absent,
+     * the rows' own dates decide, as they did.
+     */
+    statementAt?: string | null;
+  } = {},
 ): Finance {
   const main = opts.main ?? toCode(prev.currency) ?? (read ? toCode(read.currency) : null) ?? 'USD';
   const prevCode = toCode(prev.currency) ?? main;
@@ -633,7 +682,10 @@ export function financeFromRead(
       next.source!.cash = 'statement';
       delete next.typed_in?.cash;
     }
-    if (read.perMonth && read.perMonth.out > 0 && newer('monthly_burn', read.to)) {
+    const burnNewer = opts.statementAt === undefined
+      ? newer('monthly_burn', read.to)
+      : next.source?.monthly_burn !== 'typed' || !prev.typed_at || (!!opts.statementAt && opts.statementAt > prev.typed_at);
+    if (read.perMonth && read.perMonth.out > 0 && burnNewer) {
       next.monthly_burn = Math.round(read.perMonth.out);
       next.burn_to = read.to;
       next.source!.monthly_burn = 'statement';
@@ -654,6 +706,26 @@ function sameFinance(a: Finance, b: Finance): boolean {
     f.source?.cash ?? null, f.source?.monthly_burn ?? null, f.typed_in ?? null, f.main_currency ?? null, f.book ?? null,
   ]);
   return shape(a) === shape(b);
+}
+
+/**
+ * The monthly spend handed back to the rows: a number typed on the Runway sheet
+ * forgotten, so the next settle (financeFromRead) writes the estimate in its
+ * place. A typed number otherwise stood until a newer statement arrived, and
+ * the sheet had no way back to the app's own figure short of waiting for one.
+ * Cash is left as it is, typed or not.
+ */
+export function burnFromRows(prev: Finance, nowIso: string): Finance {
+  const next: Finance = { ...prev, source: { ...(prev.source ?? {}) }, updated_at: nowIso };
+  delete next.monthly_burn;
+  delete next.burn_to;
+  delete next.source!.monthly_burn;
+  if (next.typed_in?.monthly_burn) {
+    next.typed_in = { ...next.typed_in };
+    delete next.typed_in.monthly_burn;
+    if (!Object.keys(next.typed_in).length) delete next.typed_in;
+  }
+  return next;
 }
 
 /**
@@ -836,6 +908,14 @@ export interface MoneyImport {
   note: string | null;
   startedAt: string;
   finishedAt: string | null;
+}
+
+/** When the newest statement was read in: the last import whose rows are on file. Null with none. */
+export function statementAt(imports: MoneyImport[]): string | null {
+  return imports
+    .filter((i) => i.status === 'ready')
+    .map((i) => i.finishedAt ?? i.startedAt)
+    .reduce<string | null>((a, b) => (!a || b > a ? b : a), null);
 }
 
 /**

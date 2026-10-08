@@ -7291,7 +7291,9 @@ async function moneyFromTheBank() {
   assert.deepEqual(read.toName.map((p) => p.key), ['CORON REEF', 'SHOP'], 'only payers nobody named, biggest first');
   assert.equal(read.byRole.employer, 4500);
   assert.equal(read.lastIn?.name, 'Shop');
-  assert.ok(read.perMonth && read.perMonth.over === 90);
+  // Rows from 1 Jun to 14 Sep: June, July and August are whole, September is part of one.
+  assert.deepEqual(read.perMonth?.months, ['2026-06', '2026-07', '2026-08'], 'the latest whole months, not the last 90 days');
+  assert.equal(read.perMonth?.over, 92);
   assert.equal(read.runwayMonths, Math.round((1800 / read.perMonth!.out) * 10) / 10);
   assert.equal(read.lines[0], 'Since 1 Jun: $4,840 in from 3 payers.');
   assert.ok(read.lines.includes('Acme LTD was 93% of it.'));
@@ -7554,7 +7556,8 @@ async function moneyFromMessyFiles() {
     payees: [], today: '2026-09-29', currency: 'USD', main: 'USD', fx: fxAll,
     accounts: [{ id: 'wise', label: 'Wise', currency: 'EUR', balance: 5, on: '2026-06-30' }, { id: 'budget', label: 'Budget', currency: 'PHP', balance: null, on: null }],
   })!;
-  assert.equal(twoAccounts.perMonth?.over, 82, 'averaged over the account still being written, from its first row: not 90 days across a gap nobody recorded');
+  assert.deepEqual(twoAccounts.perMonth?.months, ['2026-07', '2026-08'], 'averaged over the account still being written, from its first row: not across a gap nobody recorded');
+  assert.equal(twoAccounts.perMonth?.over, 62);
   assert.equal(twoAccounts.runwayMonths, null, 'one account’s balance is not all the money there is');
   assert.ok(twoAccounts.lines.some((l) => l.startsWith('Balance: $5.50 on 30 Jun in 1 of 2 accounts')));
   assert.equal(bFinance({ currency: '$' }, twoAccounts, 'now', { main: 'USD' }).cash, undefined, 'so runway does not take it');
@@ -10854,3 +10857,229 @@ async function proposalsSuite() {
 }
 
 proposalsSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Model calls that never got an answer are asked again ────────────────── */
+//
+// Ideas and the plan failed one tap and worked the next. Two kinds of failure
+// hid under that: a model too slow for the budget, and a connection that
+// closed before any answer ("Cannot connect to API: Request was cancelled.").
+// Every call was one attempt, so the second kind was a failure too. These check
+// that it is now sent again, inside the caller's own budget, and that a timeout
+// is never retried and still reads as one.
+import { MODEL_RETRIES, modelErrorText, modelFetch } from '../../src/lib/copilot/agent/llm';
+
+async function modelRetrySuite() {
+  const sent: Array<{ body: unknown }> = [];
+  // A scripted endpoint, handed to modelFetch rather than put on globalThis:
+  // other suites stub the global fetch, and two stubs at once would cross.
+  let send: typeof fetch = async () => { throw new Error('no script yet'); };
+  const script = (steps: Array<() => Response | Promise<Response>>) => {
+    let i = 0;
+    send = (async (_input: unknown, init?: RequestInit) => {
+      sent.push({ body: init?.body });
+      const step = steps[Math.min(i++, steps.length - 1)];
+      return step();
+    }) as typeof fetch;
+  };
+  const via = (waits: number[], extra: Record<string, unknown> | null = null) => modelFetch(extra, waits, ((...a: Parameters<typeof fetch>) => send(...a)) as typeof fetch);
+  const dropped = () => {
+    const socket = Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' });
+    throw Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('Request was cancelled.'), { cause: socket }) });
+  };
+  const ok = () => new Response('{"ok":true}', { status: 200 });
+
+  // 1. A dropped connection is sent again, and the answer that follows is the one returned.
+  sent.length = 0;
+  script([dropped, ok]);
+  const r1 = await via([0])('https://x/v1/responses', { method: 'POST', body: '{"a":1}' });
+  assert.equal(r1.status, 200);
+  assert.equal(sent.length, 2, 'asked twice: once dropped, once answered');
+
+  // 2. Busy answers are asked again; at most MODEL_RETRIES times, then the last one is returned.
+  sent.length = 0;
+  script([() => new Response('busy', { status: 503 }), () => new Response('slow down', { status: 429, headers: { 'retry-after': '0' } }), ok]);
+  assert.equal((await via([0])('https://x', { method: 'POST', body: '{}' })).status, 200);
+  assert.equal(sent.length, 3);
+  sent.length = 0;
+  script([() => new Response('busy', { status: 502 })]);
+  assert.equal((await via([0])('https://x', { method: 'POST', body: '{}' })).status, 502, 'past the retries, the refusal is the answer');
+  assert.equal(sent.length, MODEL_RETRIES + 1);
+
+  // 3. A model that answered is never asked again, whatever it said.
+  sent.length = 0;
+  script([() => new Response('bad request', { status: 400 }), ok]);
+  assert.equal((await via([0])('https://x', { method: 'POST', body: '{}' })).status, 400);
+  assert.equal(sent.length, 1);
+
+  // 4. The caller's budget bounds every attempt: once it is spent, nothing is sent again.
+  sent.length = 0;
+  script([dropped, ok]);
+  const spent = AbortSignal.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+  await assert.rejects(via([0])('https://x', { method: 'POST', body: '{}', signal: spent }), (e: unknown) => e instanceof TypeError);
+  assert.equal(sent.length, 1, 'no second attempt after the budget');
+  // A wait between attempts ends when the budget does, and fails the way the budget does.
+  sent.length = 0;
+  script([dropped, ok]);
+  await assert.rejects(via([5_000])('https://x', { method: 'POST', body: '{}', signal: AbortSignal.timeout(30) }), (e: unknown) => e instanceof DOMException && e.name === 'TimeoutError');
+  assert.equal(sent.length, 1);
+
+  // 5. The endpoint's knobs ride on every attempt.
+  sent.length = 0;
+  script([dropped, ok]);
+  await via([0], { reasoning: { effort: 'low' } })('https://x', { method: 'POST', body: '{"model":"m"}' });
+  assert.deepEqual(sent.map((x) => JSON.parse(String(x.body))), [{ model: 'm', reasoning: { effort: 'low' } }, { model: 'm', reasoning: { effort: 'low' } }]);
+
+  // 6. The reason, from the bottom of the error rather than the SDK's top line.
+  const sdk = Object.assign(new Error('Cannot connect to API: Request was cancelled.'), {
+    cause: Object.assign(new Error('Request was cancelled.'), { cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }) }),
+  });
+  assert.equal(modelErrorText(sdk), 'the connection closed before the model answered (other side closed)');
+  assert.equal(modelErrorText(Object.assign(new Error('Provider returned error'), { statusCode: 502 })), '502: Provider returned error');
+  assert.equal(modelErrorText(new Error('plain')), 'plain');
+  assert.equal(modelErrorText('a string'), 'a string');
+
+  // 7. Every client this app builds goes through the one fetch: no copy merges the body on its own.
+  for (const f of ['src/lib/copilot/hunting.ts', 'src/lib/copilot/jobs/watcher.ts', 'src/lib/copilot/jobs/propose.ts', 'src/lib/copilot/agent/llm.ts']) {
+    const text = readFileSync(f, 'utf8');
+    assert.ok(!/JSON\.stringify\(\{ \.\.\.JSON\.parse\(init\.body\)/.test(text), `${f} merges the body itself`);
+  }
+  assert.equal((readFileSync('src/lib/copilot/agent/llm.ts', 'utf8').match(/createOpenAI\(/g) ?? []).length, 1, 'one place builds a client');
+
+  console.log('copilot-core: model retry checks passed');
+}
+
+modelRetrySuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Ideas are written in the background ─────────────────────────────────── */
+//
+// Asked for at a tap, ideas had 25s under the proxy, and a reasoning model
+// needs minutes: most asks ended "did not answer". Now the tap records the ask
+// and after() writes; Proof reads the newest of set, ask and failure per part.
+import { IDEAS_STALE_MS, LAB_IDEAS as LAB_IDEAS_K, LAB_IDEAS_ASKED, LAB_IDEAS_FAILED, ideaRun, ideaRunsOf } from '../../src/lib/copilot/lab';
+
+async function ideasInBackgroundSuite() {
+  const ev = (event_type: string, part: string, at: string, extra: Record<string, unknown> = {}) => ({ id: at, event_type, payload: { part, ...extra }, created_at: at });
+  const now = new Date('2026-10-08T03:00:00Z');
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+
+  // 1. The newest of the three wins, per part, in whatever order the rows come.
+  const runs = ideaRunsOf([
+    ev(LAB_IDEAS_ASKED, 'who', ago(60_000)),
+    ev(LAB_IDEAS_K, 'reach', ago(30_000), { ideas: [] }),
+    ev(LAB_IDEAS_ASKED, 'reach', ago(90_000)),
+    ev(LAB_IDEAS_FAILED, 'close', ago(10_000), { error: 'No new ideas: m did not answer within 150s' }),
+    ev(LAB_IDEAS_ASKED, 'close', ago(20_000)),
+    ev(LAB_IDEAS_ASKED, 'pay', ago(5_000)),
+    ev(LAB_IDEAS_FAILED, 'pay', ago(50_000), { error: 'old' }),
+    ev(LAB_IDEAS_ASKED, 'nonsense', ago(1_000)),
+  ]);
+  assert.deepEqual(Object.keys(runs).sort(), ['close', 'pay', 'who'], 'a set written after the ask ends it; an unknown part is ignored');
+  assert.equal(runs.who?.kind, 'asked');
+  assert.equal(runs.close?.kind, 'failed');
+  assert.equal(runs.close?.why, 'No new ideas: m did not answer within 150s');
+  assert.equal(runs.pay?.kind, 'asked', 'asked again after a failure is writing again');
+
+  // 2. Writing while fresh; past IDEAS_STALE_MS the process is gone, and that is said.
+  assert.deepEqual(ideaRun(runs.who, now), { state: 'writing', at: runs.who!.at });
+  const stale = ideaRun({ kind: 'asked', at: ago(IDEAS_STALE_MS + 1), why: null }, now);
+  assert.equal(stale?.state, 'failed');
+  assert.match(stale?.state === 'failed' ? stale.why : '', /stopped without an answer/);
+  assert.equal(ideaRun(undefined, now), null);
+  assert.equal(ideaRun({ kind: 'failed', at: ago(1), why: null }, now)?.state, 'failed', 'a failure with no reason still reads as one');
+
+  // 3. The route starts and returns; the writing is after(), and never in the request.
+  const route = readFileSync('src/app/api/copilot/lab/route.ts', 'utf8');
+  assert.match(route, /const \{ started \} = await startIdeas\(auth\.pid, part\);/);
+  assert.match(route, /after\(async \(\) => \{\s*\/\/[^\n]*\n\s*const r = await writeIdeas\(auth\.pid, part\);/);
+  const proofai = readFileSync('src/lib/copilot/proofai.ts', 'utf8');
+  assert.match(proofai, /const IDEAS_TIMEOUT_MS = 150_000;/, 'bounded by the model, not the proxy');
+  assert.ok(150_000 < IDEAS_STALE_MS, 'an ask still inside its budget never reads as stopped');
+  // A failure is recorded where the tab reads it (invariant 13), never only logged.
+  assert.match(proofai, /await insertIdeaRun\(pid, LAB_IDEAS_FAILED, \{ part, error: error\.slice\(0, 300\) \}\)/);
+
+  // 4. The asks are read in their own window, never in LAB_EVENTS': a day of asking must not push a bet out of view.
+  const lab = readFileSync('src/lib/copilot/lab.ts', 'utf8');
+  const events = lab.match(/export const LAB_EVENTS = \[([^\]]+)\]/)?.[1] ?? '';
+  assert.ok(!/LAB_IDEAS_ASKED|LAB_IDEAS_FAILED/.test(events));
+  assert.match(readFileSync('src/lib/copilot/store.ts', 'utf8'), /read\(\[LAB_IDEAS_ASKED, LAB_IDEAS_FAILED\], IDEA_RUN_EVENT_LIMIT\)/);
+
+  console.log('copilot-core: ideas in the background checks passed');
+}
+
+ideasInBackgroundSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── What a month costs: the latest whole months, not the last 90 days ───── */
+//
+// Runway read $614 a month for an account whose August was $504 and September
+// $478: the average ran over 86 days that began with a fortnight of moving in
+// and ended a week into October, rent paid on the 1st. The latest whole months
+// are what a month costs now; the span is the fallback until one is on file.
+import { burnFromRows as wmBurnFromRows, financeFromRead as wmFinance, moneyRead as wmRead, statementAt as wmStatementAt, wholeMonths, type LedgerTx as WmTx } from '../../src/lib/copilot/money/ledger';
+
+async function wholeMonthsSuite() {
+  // 1. Which months are whole.
+  assert.deepEqual(wholeMonths('2026-07-14', '2026-10-08'), ['2026-09', '2026-08']);
+  assert.deepEqual(wholeMonths('2026-08-01', '2026-08-31'), ['2026-08'], 'first to last day is a whole month');
+  assert.deepEqual(wholeMonths('2026-08-02', '2026-08-31'), [], 'a day short at the start is part of one');
+  assert.deepEqual(wholeMonths('2026-08-01', '2026-08-30'), [], 'and a day short at the end');
+  assert.deepEqual(wholeMonths('2025-11-01', '2026-01-31'), ['2026-01', '2025-12', '2025-11'], 'across the year');
+  assert.deepEqual(wholeMonths('2024-02-01', '2024-02-29'), ['2024-02'], 'a leap February');
+
+  // 2. The account in the screenshots: two weeks of July, August, September, a week of October.
+  let n = 0;
+  const out = (on: string, amount: number): WmTx => ({ id: `t${n++}`, on, amount: -amount, currency: 'USD', key: `SHOP ${n}`, accountId: 'book', outcomeId: null });
+  const rows: WmTx[] = [
+    out('2026-07-14', 300), out('2026-07-20', 170), out('2026-07-31', 100), // $570, moving in
+    out('2026-08-01', 80), out('2026-08-10', 200), out('2026-08-20', 224), // $504
+    out('2026-09-01', 80), out('2026-09-12', 198), out('2026-09-25', 200), // $478
+    out('2026-10-01', 80), out('2026-10-03', 60), out('2026-10-08', 44), // $184, rent on the 1st
+  ];
+  const read = wmRead({ txs: rows, payees: [], accounts: [{ id: 'book', label: 'Book', currency: 'USD', balance: 1016, on: '2026-10-08' }], today: '2026-10-08', currency: 'USD' })!;
+  assert.deepEqual(read.perMonth?.months, ['2026-08', '2026-09']);
+  assert.equal(read.perMonth?.over, 61);
+  assert.equal(Math.round(read.perMonth!.out), Math.round((504 + 478) * 30.44 / 61), 'about $490, not the $614 the span said');
+  assert.equal(read.runwayMonths, 2.1, '$1,016 ÷ $490');
+  // Where it goes is counted over the same months, so its lines add up to the burn.
+  assert.equal(Math.round(read.spend.reduce((a, x) => a + x.perMonth, 0)), Math.round(read.perMonth!.out));
+
+  // 3. No whole month yet: the last days of rows, as before, from twenty days on.
+  const young = wmRead({ txs: rows.filter((t) => t.on >= '2026-09-10'), payees: [], accounts: [], today: '2026-10-08', currency: 'USD' })!;
+  assert.equal(young.perMonth?.months, undefined);
+  assert.equal(young.perMonth?.over, 27, 'from its first row, 12 Sep, to its last');
+  const tooYoung = wmRead({ txs: rows.filter((t) => t.on >= '2026-09-25'), payees: [], accounts: [], today: '2026-10-08', currency: 'USD' })!;
+  assert.equal(tooYoung.perMonth, null, 'two weeks is a guess about a month nobody has seen');
+
+  // 4. At most WHOLE_MONTHS, the latest.
+  const long = wmRead({ txs: [out('2026-03-01', 10), ...rows], payees: [], accounts: [], today: '2026-10-08', currency: 'USD' })!;
+  assert.deepEqual(long.perMonth?.months, ['2026-07', '2026-08', '2026-09'], 'July is whole once the rows begin before it');
+
+  // 5. A number typed on the Runway sheet stands over the rows until it is handed back; then the estimate takes its place.
+  const typed = { currency: '$', monthly_burn: 614, source: { monthly_burn: 'typed' as const }, typed_at: '2026-10-09T01:00:00Z' };
+  assert.equal(wmFinance(typed, read, '2026-10-09T02:00:00Z', { main: 'USD' }).monthly_burn, 614, 'typed after the newest row: it stands');
+  const back = wmBurnFromRows(typed, '2026-10-09T03:00:00Z');
+  assert.equal(back.monthly_burn, undefined);
+  assert.equal(back.source?.monthly_burn, undefined);
+  const settled = wmFinance(back, read, '2026-10-09T03:00:00Z', { main: 'USD' });
+  assert.equal(settled.monthly_burn, Math.round(read.perMonth!.out), 'the records’ estimate, once the typed number is given back');
+  assert.equal(settled.source?.monthly_burn, 'statement');
+  const pesosTyped = wmBurnFromRows({ ...typed, typed_in: { monthly_burn: { amount: 30_000, currency: 'PHP' }, cash: { amount: 60_000, currency: 'PHP' } } }, '2026-10-09T03:00:00Z');
+  assert.deepEqual(pesosTyped.typed_in, { cash: { amount: 60_000, currency: 'PHP' } }, 'the cash typed stays; only the monthly spend goes back');
+  // 6. Typed today, over Money-tab rows dated today: the typed number stands. Only a statement read in after it replaces it.
+  const typedToday = { currency: '$', monthly_burn: 614, source: { monthly_burn: 'typed' as const }, typed_at: '2026-10-08T05:00:00Z' };
+  assert.equal(wmFinance(typedToday, read, '2026-10-08T06:00:00Z', { main: 'USD' }).monthly_burn, Math.round(read.perMonth!.out), 'without statementAt, the rows’ own dates decide, as before');
+  assert.equal(wmFinance(typedToday, read, '2026-10-08T06:00:00Z', { main: 'USD', statementAt: null }).monthly_burn, 614, 'no statement at all: the book’s daily rows do not wipe what was typed');
+  assert.equal(wmFinance(typedToday, read, '2026-10-08T06:00:00Z', { main: 'USD', statementAt: '2026-10-01T09:00:00Z' }).monthly_burn, 614, 'a statement read in before it was typed');
+  assert.equal(wmFinance(typedToday, read, '2026-10-09T06:00:00Z', { main: 'USD', statementAt: '2026-10-09T05:00:00Z' }).monthly_burn, Math.round(read.perMonth!.out), 'a statement read in after it: news enough to replace it');
+  const imp = (status: string, startedAt: string, finishedAt: string | null) => ({ status, startedAt, finishedAt }) as unknown as Parameters<typeof wmStatementAt>[0][number];
+  assert.equal(wmStatementAt([imp('ready', '2026-09-01T00:00:00Z', '2026-09-01T00:01:00Z'), imp('failed', '2026-10-05T00:00:00Z', null), imp('ready', '2026-10-02T00:00:00Z', null)]), '2026-10-02T00:00:00Z', 'the newest whose rows are on file');
+  assert.equal(wmStatementAt([]), null);
+
+  // The sheet leads with the figure and where it came from; the boxes are a link unless there is nothing to count from.
+  const sheet = readFileSync('src/app/copilot/_components/MoneySheets.tsx', 'utf8');
+  assert.match(sheet, /const showFields = editing \|\| askCash \|\| \(!estimate && !burnTyped\);/);
+  assert.match(sheet, /Use your records instead/);
+
+  console.log('copilot-core: whole months checks passed');
+}
+
+wholeMonthsSuite().catch((e) => { console.error(e); process.exit(1); });

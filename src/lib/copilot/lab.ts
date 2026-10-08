@@ -80,6 +80,18 @@ export const LAB_SHELF = 'lab_shelf';
 /** A shelf entry taken off without being started: the last word on it. */
 export const LAB_SHELF_GONE = 'lab_shelf_gone';
 export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS, LAB_INTRO, LAB_SHELF, LAB_SHELF_GONE] as const;
+/**
+ * Ideas asked for, being written in the background (proofai.ts startIdeas):
+ * a reasoning model needs longer than a tap can wait behind the proxy, so the
+ * tap starts the writing and Proof watches for the set, or for why there is none.
+ * Read on their own (store.ts loadLabEvents), never in LAB_EVENTS' window: a
+ * day of asking must not push a month-old bet out of it.
+ */
+export const LAB_IDEAS_ASKED = 'lab_ideas_asked';
+/** Ideas asked for and not written, with why: said on Proof, never shown as no ideas (invariant 13). */
+export const LAB_IDEAS_FAILED = 'lab_ideas_failed';
+/** Ideas still "being written" after this belong to a process that is gone: a redeploy kills after() work. */
+export const IDEAS_STALE_MS = 5 * 60_000;
 
 /**
  * Said beside a play that came in as words shared from another app (seed.ts):
@@ -397,6 +409,45 @@ export interface IdeaSet {
   ideas: Idea[];
   model: string | null;
   at: string;
+}
+
+/** The newest ask for ideas on a part that has not ended in a set: still being written, or failed and why. */
+export interface IdeaRunRow { kind: 'asked' | 'failed'; at: string; why: string | null }
+export type IdeaRun = { state: 'writing'; at: string } | { state: 'failed'; at: string; why: string };
+
+/**
+ * Per part, the newest of: a set written, an ask, a failure — kept only when it
+ * is not a set. Rows in any order; the newest wins, so an ask after a failure is
+ * writing again, and a set after an ask is done.
+ */
+export function ideaRunsOf(rows: LabEventRow[]): Partial<Record<LinkKey, IdeaRunRow>> {
+  const newest = new Map<LinkKey, { at: string; row: IdeaRunRow | null }>();
+  for (const r of rows) {
+    if (r.event_type !== LAB_IDEAS && r.event_type !== LAB_IDEAS_ASKED && r.event_type !== LAB_IDEAS_FAILED) continue;
+    const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {};
+    if (!isPart(p.part)) continue;
+    const was = newest.get(p.part);
+    if (was && was.at > r.created_at) continue;
+    newest.set(p.part, {
+      at: r.created_at,
+      row: r.event_type === LAB_IDEAS ? null
+        : r.event_type === LAB_IDEAS_ASKED ? { kind: 'asked', at: r.created_at, why: null }
+        : { kind: 'failed', at: r.created_at, why: typeof p.error === 'string' && p.error.trim() ? p.error.trim().slice(0, 300) : null },
+    });
+  }
+  const out: Partial<Record<LinkKey, IdeaRunRow>> = {};
+  for (const [part, v] of newest) if (v.row) out[part] = v.row;
+  return out;
+}
+
+/** What an ask is now: writing while it is fresh, failed once it is not or once it said so. */
+export function ideaRun(row: IdeaRunRow | null | undefined, now: Date): IdeaRun | null {
+  if (!row) return null;
+  if (row.kind === 'failed') return { state: 'failed', at: row.at, why: row.why ?? 'no reason was recorded' };
+  const age = now.getTime() - Date.parse(row.at);
+  return Number.isFinite(age) && age <= IDEAS_STALE_MS
+    ? { state: 'writing', at: row.at }
+    : { state: 'failed', at: row.at, why: 'it stopped without an answer, most likely a restart of the server' };
 }
 
 export const BELIEF_MAX = 160;
@@ -1012,6 +1063,8 @@ export interface LabHome {
   links?: Record<string, string[]>;
   /** The newest ideas a model wrote, per part. */
   ideas?: Partial<Record<LinkKey, IdeaSet>>;
+  /** Per part, an ask for ideas still being written or failed (ideaRunsOf). Optional: a payload from before has none. */
+  ideaRuns?: Partial<Record<LinkKey, IdeaRunRow>>;
   /** Talk id → how the introduction offered in it went, where the person has said. */
   intros?: Record<string, IntroClose>;
   /** Tests kept for later, newest first. Optional: a payload from before the shelf has none. */
@@ -1045,6 +1098,8 @@ export interface LabInput {
    * `events`.
    */
   shelfEvents?: LabEventRow[];
+  /** Asks for ideas and their failures (LAB_IDEAS_ASKED, LAB_IDEAS_FAILED), read on their own. */
+  ideaRunEvents?: LabEventRow[];
 }
 
 /**
@@ -1087,6 +1142,7 @@ export function labHome(i: LabInput): LabHome {
     tallies: ledger.tallies.slice(0, MAX_TALLIES),
     links: Object.fromEntries(ledger.links),
     ideas: ledger.ideas,
+    ideaRuns: ideaRunsOf([...i.events, ...(i.ideaRunEvents ?? [])]),
     intros: Object.fromEntries(ledger.intros),
     shelf: i.shelfEvents ? shelfFromEvents(i.shelfEvents) : ledger.shelf,
     unreadable: i.unreadable,
@@ -1601,6 +1657,8 @@ export interface LabView {
   checkpoint: CheckpointView;
   /** The newest ideas a model wrote, per part. */
   ideas: Partial<Record<LinkKey, IdeaSet>>;
+  /** Per part, an ask for ideas being written or failed: read with ideaRun against the clock. */
+  ideaRuns: Partial<Record<LinkKey, IdeaRunRow>>;
   /** The running bet's own counts, newest first. */
   tallies: Tally[];
   /** Bet id → the projects handed over for it. */
@@ -1624,6 +1682,7 @@ export function labView(lab: LabHome | undefined, ctx: { runwayMonths: number | 
     clock: labClock(ctx.runwayMonths, bets),
     checkpoint,
     ideas: lab?.ideas ?? {},
+    ideaRuns: lab?.ideaRuns ?? {},
     tallies: current ? (lab?.tallies ?? []).filter((t) => t.bet === current.bet.id) : [],
     links: lab?.links ?? {},
     intros: lab?.intros ?? {},

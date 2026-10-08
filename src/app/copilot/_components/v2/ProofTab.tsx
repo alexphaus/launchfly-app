@@ -36,7 +36,7 @@ import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } f
 import { historyDay, type HistoryEntry } from '@/lib/copilot/history';
 import {
   BET_STATE_LABEL, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS,
-  betPrice, countedFrom, dayWords, decisionWords, gradeWords, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
+  betPrice, countedFrom, dayWords, decisionWords, gradeWords, ideaRun, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
 import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
@@ -744,6 +744,9 @@ function PlayCard({ play: p, priceLabel, actions }: { play: Play; priceLabel: st
   );
 }
 
+/** After a failed ask, opening the tab does not ask again on its own for this long. The button still does. */
+const IDEAS_RETRY_MS = 60 * 60_000;
+
 /**
  * Three ideas a model wrote for this part of this business, from its record.
  * Asked for once a visit when there are none, or when the record has moved
@@ -755,19 +758,27 @@ function Ideas({ home, d, actions, part, priceLabel }: { home: HomeData; d: Deri
   const set = d.proof.lab.ideas[part] ?? null;
   const can = !!home.ai && !d.noOffer;
   const stale = ideasStale(set, d.proof.bets, home.recent.today);
+  // The ask, as the rows have it: being written in the background (the hook
+  // watches it and reloads when it lands), or failed and why.
+  const run = ideaRun(d.proof.lab.ideaRuns[part], d.now);
   const [asking, setAsking] = useState<LinkKey | null>(null);
-  const [failed, setFailed] = useState<{ part: LinkKey; why: string } | null>(null);
+  const [refused, setRefused] = useState<{ part: LinkKey; why: string } | null>(null);
   const asked = useRef(new Set<LinkKey>());
+  const writing = asking === part || run?.state === 'writing';
+  const failedWhy = refused?.part === part ? refused.why : run?.state === 'failed' ? run.why : null;
+  // A failure an hour old is worth one more try on opening; a fresh one waits for the tap.
+  const failedLately = run?.state === 'failed' && d.now.getTime() - Date.parse(run.at) < IDEAS_RETRY_MS;
 
   const ask = async (k: LinkKey) => {
     asked.current.add(k);
-    setAsking(k); setFailed(null);
+    setAsking(k); setRefused(null);
+    // Returns once the ask is recorded; the writing goes on in the background.
     const r = await actions.lab({ action: 'ideas', part: k });
     setAsking((x) => (x === k ? null : x));
-    if (!r.ok) setFailed({ part: k, why: r.error ?? 'No new ideas just now.' });
+    if (!r.ok) setRefused({ part: k, why: r.error ?? 'No new ideas just now.' });
   };
   useEffect(() => {
-    if (!can || !stale || asking || asked.current.has(part)) return;
+    if (!can || !stale || writing || failedLately || asked.current.has(part)) return;
     void ask(part);
     // Once per part per visit: a failure is said, and asking again is a tap.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -778,10 +789,10 @@ function Ideas({ home, d, actions, part, priceLabel }: { home: HomeData; d: Deri
     <div className="cp2-pf-ideas">
       <div className="cp2-pf-ideas-top">
         <span className="cp2-pf-k">Written for your business</span>
-        {can && <button className="cp2-link" disabled={!!asking} onClick={() => void ask(part)}>{asking === part ? 'Writing…' : set ? 'New ideas' : 'Write some'}</button>}
+        {can && <button className="cp2-link" disabled={writing} onClick={() => void ask(part)}>{writing ? 'Writing…' : failedWhy ? 'Try again' : set ? 'New ideas' : 'Write some'}</button>}
       </div>
-      {asking === part && !set && <p className="cp2-pf-wait">Writing three from your record…</p>}
-      {failed?.part === part && <p className="cp-help cp2-err">{failed.why}</p>}
+      {writing && <p className="cp2-pf-wait">Writing three from your record. A minute or two — this can stay open or close.</p>}
+      {!writing && failedWhy && <p className="cp-help cp2-err">{/^No new ideas/.test(failedWhy) ? failedWhy : `No new ideas: ${failedWhy}`}</p>}
       {set?.ideas.map((idea) => <IdeaCard key={idea.key} idea={idea} priceLabel={priceLabel} actions={actions} />)}
       {set && (
         <p className="cp2-pf-ideas-s">

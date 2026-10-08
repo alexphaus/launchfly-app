@@ -1315,8 +1315,14 @@ a date off the rows — invariant 2):
 - **The read** (`moneyRead`): "Since 1 Jul: $4,200 in from 2 payers. Acme was
   86% of it. Last paid on 25 Sep: Coron Reef Divers, $150. You spend $844 a
   month, $804 of it on repeat bills. That is 4.5 months of runway on $3,789 (25
-  Sep). Next: Rent $400 around 1 Oct." Monthly figures average the last 90 days
-  of rows and are withheld under 20 days of history; repeat bills are the same
+  Sep). Next: Rent $400 around 1 Oct." Monthly figures average the latest whole
+  calendar months on file (`wholeMonths`, up to `WHOLE_MONTHS` = 3) — a month
+  whose rows start after its 1st or stop before its last day does not count —
+  and, before one month is whole, the last 90 days of rows; they are withheld
+  under 20 days of history. The span alone read $614 a month for an account
+  whose August was $504 and September $478: its 86 days began with a fortnight
+  of moving in and ended a week into October, rent paid on the 1st. Where it
+  goes is counted over the same days, so its lines add up to the figure; repeat bills are the same
   payee, about the same amount, weekly to monthly, at least three times and
   still going (`recurringOut`); cash is the last balance each account printed.
   The average covers only accounts still being written — one whose rows stop
@@ -1368,7 +1374,13 @@ a date off the rows — invariant 2):
   so metrics, the forecast, the runway guard, scoreMove's money factor and the
   plan all move without any of them changing. A number the person typed after
   the statement's own date stands (`typed_at`); the Runway sheet says which is
-  which. Runway is in the main currency: statement figures arrive converted,
+  which. A typed monthly spend is replaced only by a statement read in after it
+  (`statementAt`, the newest ready import) — never by the Money tab's rows,
+  which are dated today each time a coffee is logged: under the rows'-own-date
+  rule, every number typed on the sheet was gone on the next load. The sheet
+  leads with the figure the rows give and the whole months behind it ("A month:
+  about $490 · Your last 2 whole months: Aug $504, Sep $478"); typing your own is
+  a link, and "Use your records instead" hands a typed one back (`burnFromRows`). Runway is in the main currency: statement figures arrive converted,
   and a number typed in another — ₱71,804 of cash in a dollar app — is kept as
   typed (`typed_in`) and converted at the newest rate every time runway
   settles, so the dollar figure follows the peso (`typedInLines` says what it
@@ -1838,7 +1850,7 @@ COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL
 # The plan's own model (optional; unset = the brief's). The plan is drawn in the
 # background, so it can take a slower, stronger model than the 30s brief.
 COPILOT_PLAN_MODEL / COPILOT_PLAN_API_KEY / COPILOT_PLAN_BASE_URL
-COPILOT_PLAN_TIMEOUT_MS=110000      # up to 240000; spent inside the nightly pass too
+COPILOT_PLAN_TIMEOUT_MS=200000      # one call, under the draw's own 270s ceiling; spent inside the nightly pass too
 COPILOT_PLAN_EXTRA_BODY / COPILOT_PLAN_MAX_OUTPUT_TOKENS   # e.g. a higher reasoning effort for the plan only
 # The model that reads PDF statements and screenshots (optional; unset = the brief's).
 # Screenshots need one that takes images. CSV and OFX need no model at all.
@@ -2157,6 +2169,35 @@ COPILOT_AI_MAX_OUTPUT_TOKENS=6000
 knobs stay out of the code; invalid JSON is logged and ignored. Note that the
 SDK speaks the **Responses API** (`input`, `max_output_tokens`), not Chat
 Completions — worth knowing when comparing against a raw `curl`.
+
+## When the model is slow, or the connection drops
+
+Two different failures used to read as one ("could not draw your plan", "no new
+ideas") and fail one tap and work the next:
+
+- **The connection closed before any answer.** Node's fetch says "Request was
+  cancelled." when the other side shuts the socket, and the SDK reports it as
+  "Cannot connect to API: …"; a 502 or 429 from OpenRouter while its provider is
+  busy is the same kind. Every call was one attempt (`maxRetries: 0`, on
+  purpose: a generation that ran long and is asked again doubles the wall clock
+  and the bill). Now every client goes through `modelFetch` (`agent/llm.ts`,
+  via `providerFor`), which sends a request again when it got no answer or got
+  one of `RETRY_STATUS` — at most `MODEL_RETRIES` (2) times, waiting 1.5s then
+  4s or what `Retry-After` says up to 8s. The caller's own abort signal bounds
+  every attempt and every wait, so a retry never outlives its budget and a
+  timeout is never retried. `modelErrorText` says the reason from the bottom of
+  the error chain ("the connection closed before the model answered (other side
+  closed)") instead of the SDK's top line.
+- **The model is slower than the budget.** Generations on reasoning models run
+  minutes. Work that needs that long no longer waits behind the proxy: the plan
+  draws in `after()` (200s a call, `COPILOT_PLAN_TIMEOUT_MS`, inside the draw's
+  270s, under the five minutes after which a draw reads as stopped), and ideas
+  are now written the same way — the tap records `lab_ideas_asked` and returns,
+  `writeIdeas` runs in `after()` for up to 150s and records the set or
+  `lab_ideas_failed` with its reason, and the hook polls `GET /api/copilot/lab?ideas=1`
+  until neither part is still being written (`ideaRun`; an ask older than
+  `IDEAS_STALE_MS` reads as stopped). Taps that still wait — drafts, asked, tell
+  — keep their 25–30s.
 
 ## Why long work returns partial instead of failing
 
@@ -3103,9 +3144,9 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/goals` | create / update a goal |
 | POST | `/api/copilot/targeting` | `{ target_segments, target_area }` |
 | POST | `/api/copilot/offer` | `{ sells, for_who, problem, price_band, proof_url, found_by?, bet? }` — every change is recorded as a version of the offer; `bet` ties that version to the bet it was written for |
-| POST | `/api/copilot/lab` | the bets: `open` (with `idea`, `unit`, `experiment`), `stop`, `talk` (with `role` and `via`, the introduction it came through), `intro` (asked for, or fell through), `forget`, `count`, `uncount`, `link` (a project to a bet), `checkpoint`, `ideas` (three from a model, for one part), `found_by` — never a verdict |
+| POST | `/api/copilot/lab` | the bets: `open` (with `idea`, `unit`, `experiment`), `stop`, `talk` (with `role` and `via`, the introduction it came through), `intro` (asked for, or fell through), `forget`, `count`, `uncount`, `link` (a project to a bet), `checkpoint`, `ideas` (three from a model, for one part: the ask is recorded and the writing runs in `after()`; `GET ?ideas=1` is what Proof polls), `found_by` — never a verdict |
 | GET/POST | `/api/copilot/assets` | `GET ?id=` one asset whole · `POST` `add`, `version`, `draft` (by AI), `retire`, `restore`, `adopt` (make a version of the offer yours), `proof` (a demo's link as the proof) |
-| POST | `/api/copilot/finance` | `{ monthly_burn, cash, currency }` |
+| POST | `/api/copilot/finance` | `{ monthly_burn, cash, currency }` · `{ burn: 'rows' }` hands a typed monthly spend back to the rows' estimate |
 | POST | `/api/copilot/opportunities/:id` | `{ status: saved \| dismissed \| acted \| new }` |
 | POST | `/api/copilot/opportunities/:id/draft` | draft an opener onto today's plan, send-ready |
 | POST | `/api/copilot/actions/:id` | `{ status: done \| dismissed \| open }` |

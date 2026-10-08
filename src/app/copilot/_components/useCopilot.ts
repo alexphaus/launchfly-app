@@ -19,6 +19,8 @@ import type { Reading } from '@/lib/copilot/tell';
 import type { Connection } from '@/lib/copilot/oauth';
 import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/lib/copilot/nightly';
 import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
+import { ideaRun, type IdeaRunRow } from '@/lib/copilot/lab';
+import type { LinkKey } from '@/lib/copilot/business';
 import type { ExperimentState } from '@/lib/copilot/experiment';
 import { importLine, type MoneyImport } from '@/lib/copilot/money/ledger';
 import { takeSharedSeed } from './sharedSeed';
@@ -45,7 +47,8 @@ const LAB_SAID: Record<LabInput['action'], string> = {
   count: 'Counted.',
   uncount: 'Removed.',
   link: 'Tied to the bet.',
-  ideas: 'New ideas, written from your record.',
+  // Written in the background now: the card shows them being written, and the set when it lands.
+  ideas: 'Writing ideas from your record.',
   found_by: 'Saved. Proof reads your business that way now.',
   checkpoint: 'Decided. The next checkpoint reads it back.',
 };
@@ -122,8 +125,10 @@ const FINDER_NAME: Record<string, string> = { web: 'the web', google_maps: 'Goog
 const NIGHTLY_POLL_MS = 4_000;
 /** Consecutive failed checks before saying so. One is a blip; three is the connection. */
 const NIGHTLY_MISSES = 3;
-/** A draw is one model call, usually under a minute. */
+/** A draw is one model call, often a minute or two on a reasoning model. */
 const ROADMAP_POLL_MS = 3_000;
+/** Ideas are one model call too, written in after() (proofai.ts). */
+const IDEAS_POLL_MS = 4_000;
 /** A PDF or a screenshot is one model call a few pages long. */
 const IMPORT_POLL_MS = 3_000;
 
@@ -280,7 +285,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
       setHome((h) => (h.roadmap ? { ...h, roadmap: { ...h.roadmap, latest: r.run } } : h));
       // Only when asked. A redraw started because something changed is shown
       // on the plan itself, and a toast on opening the app is noise.
-      if (reason === 'manual') say(r.already ? 'Already redrawing.' : 'Redrawing your plan. It takes about a minute.');
+      if (reason === 'manual') say(r.already ? 'Already redrawing.' : 'Redrawing your plan. It takes a minute or two.');
     } catch (e) { say(e instanceof Error ? e.message : 'Could not redraw the plan'); }
   }, [say]);
 
@@ -314,6 +319,42 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     const timer = setInterval(() => { void tick(); }, ROADMAP_POLL_MS);
     return () => { over = true; clearInterval(timer); };
   }, [liveRoadmap, refresh, say]);
+
+  // Ideas are written in after() as well: the tap records the ask and returns.
+  // Follow the parts still being written — keyed on them, so a second part
+  // asked for joins the watch — and reload when none is, which brings the set,
+  // or the reason there is none, onto Proof.
+  const writingIdeas = Object.entries(home.lab?.ideaRuns ?? {})
+    .filter(([, row]) => ideaRun(row, new Date())?.state === 'writing').map(([part]) => part).sort().join(',');
+  useEffect(() => {
+    if (!writingIdeas) return;
+    const parts = writingIdeas.split(',') as LinkKey[];
+    let over = false;
+    let misses = 0;
+    const tick = async () => {
+      let runs: Partial<Record<LinkKey, IdeaRunRow>>;
+      try {
+        runs = (await get<{ runs: Partial<Record<LinkKey, IdeaRunRow>> }>('/lab?ideas=1')).runs ?? {};
+        misses = 0;
+      } catch (e) {
+        misses += 1;
+        if (misses === NIGHTLY_MISSES) say(`Cannot check on your ideas: ${e instanceof Error ? e.message : 'no connection'}. Still trying.`);
+        return;
+      }
+      if (over || parts.some((k) => ideaRun(runs[k], new Date())?.state === 'writing')) return;
+      over = true;
+      clearInterval(timer);
+      try { await refresh(); } catch {
+        say('Your ideas were written, but this screen could not reload. Reopen the app to see them.');
+        return;
+      }
+      // A failure stays on the card, with its reason; a set shows itself.
+      const failed = parts.map((k) => ideaRun(runs[k], new Date())).find((r) => r?.state === 'failed');
+      if (failed?.state === 'failed') say(`No new ideas: ${failed.why.replace(/^No new ideas: /, '')}`);
+    };
+    const timer = setInterval(() => { void tick(); }, IDEAS_POLL_MS);
+    return () => { over = true; clearInterval(timer); };
+  }, [writingIdeas, refresh, say]);
 
   // A PDF or a screenshot is read in after(), so the upload returns while it is
   // still being read. Follow it — keyed on the ids being read, so a second

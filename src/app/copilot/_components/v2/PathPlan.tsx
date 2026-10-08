@@ -297,7 +297,7 @@ export function PlanPending({ view, onDraw }: { view: Extract<RoadmapView, { sta
       {view.drawing ? (
         <>
           <span className="cp2-way-t">Drawing your plan</span>
-          <span className="cp2-way-s">From your goals, what you told it and what has happened so far. About a minute.</span>
+          <span className="cp2-way-s">From your goals, what you told it and what has happened so far. A minute or two.</span>
         </>
       ) : (
         <>

@@ -96,6 +96,27 @@ function Months({ read }: { read: MoneyRead }) {
 
 /* ─── Runway ──────────────────────────────────────────────────────────────── */
 
+const MONTH_NAME = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthName = (m: string) => MONTH_NAME[Number(m.slice(5, 7)) - 1] ?? m;
+/** "Sep", "Aug and Sep", "Jul to Sep". */
+function monthsSpan(months: string[]): string {
+  if (months.length <= 1) return months.map(monthName).join('');
+  if (months.length === 2) return `${monthName(months[0])} and ${monthName(months[1])}`;
+  return `${monthName(months[0])} to ${monthName(months[months.length - 1])}`;
+}
+
+/**
+ * Runway, and what a month costs.
+ *
+ * The monthly spend is the app's to count, not the person's to work out. It
+ * was already counted off the statements and the Money tab — but it sat in an
+ * input box under "Spent a month" with Save and Back beneath it, so the sheet
+ * read as a form to fill, and its owner asked why they had to figure out their
+ * own spending when the app had their records. Now the figure leads, with the
+ * months it was counted from and each month's total; typing a number of your
+ * own is a link, and a number typed earlier can be handed back to the rows.
+ * The boxes are open from the start only when there is nothing to count from.
+ */
 export function RunwaySheet({ home, actions }: { home: HomeData; actions: Actions }) {
   const f = home.profile.finance ?? {};
   const read = home.money?.read ?? null;
@@ -108,6 +129,7 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
   const [burn, setBurn] = useState(f.typed_in?.monthly_burn ? String(f.typed_in.monthly_burn.amount) : f.monthly_burn?.toString() ?? '');
   const [burnCurrency, setBurnCurrency] = useState(f.typed_in?.monthly_burn?.currency ?? main);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   // The Money tab's balance is the cash (ledger.ts financeFromRead); it moves there, with each move logged.
   const fromBook = f.source?.cash === 'book' || !!f.book;
   const save = async () => {
@@ -120,6 +142,11 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
     });
     setBusy(false);
   };
+  const useEstimate = async () => {
+    setBusy(true);
+    await actions.saveFinance({ burn: 'rows' });
+    setBusy(false);
+  };
   // Previewed only when both are in the main currency: anything else is converted on save, at the rate the server has.
   const preview = fromBook ? (burnCurrency === main && f.cash != null ? computeRunwayMonths({ monthly_burn: Number(burn) || undefined, cash: f.cash }) : null)
     : cashCurrency === main && burnCurrency === main
@@ -127,18 +154,33 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
     : null;
 
   const runway = computeRunwayMonths(f);
-  // Not which currencies: a statement that stopped months ago is converted in the read but not in this average.
-  const converted = read?.inMain && read.converted.length ? `, converted to ${main} at ${FX_SOURCE}` : '';
-  const fromBank = [
-    f.source?.cash === 'statement' && f.cash_on ? `cash is your balance on ${dayLabel(f.cash_on)}` : null,
-    fromStatementBurn && f.burn_to ? `burn is your spending averaged over the rows to ${dayLabel(f.burn_to)}${converted}` : null,
-  ].filter(Boolean);
   const typedLines = typedInLines(f);
   // The one number a budget export cannot give — it prints no balance — asked first, with the burn it did give filled in.
   const askCash = fromStatementBurn && f.cash == null && !f.typed_in?.cash;
   const unlabelled = read && !read.currencyKnown;
   const notMain = read && read.currencyKnown && !read.inMain;
   const options = currencyChoices(home, main);
+
+  // What the rows say a month costs: the latest whole months, or the span before one is whole (ledger.ts moneyRead).
+  const estimate = read?.inMain && read.perMonth && read.perMonth.out > 0 ? read.perMonth : null;
+  const fmt = read ? readMoney(read) : (n: number) => moneyText(n, main);
+  const counted = estimate?.months?.length
+    ? estimate.months.map((m) => {
+      const mo = read!.months.find((x) => x.month === m);
+      return mo ? `${monthName(m)} ${fmt(mo.out)}` : monthName(m);
+    })
+    : null;
+  // Not which currencies: a statement that stopped months ago is converted in the read but not in this average.
+  const converted = read?.inMain && read.converted.length ? ` Converted to ${main} at ${FX_SOURCE}.` : '';
+  const basis = estimate
+    ? counted
+      ? `Your last ${counted.length === 1 ? 'whole month' : `${counted.length} whole months`}: ${counted.join(', ')}.${converted}`
+      : `Your spending over the last ${estimate.over} days, averaged to a month — a whole month on file makes it the month's own.${converted}`
+    : null;
+  // Typed on this sheet — or set before statements said where a number came from.
+  const burnTyped = f.monthly_burn != null && !fromStatementBurn || !!f.typed_in?.monthly_burn;
+  // The boxes open by themselves only when there is nothing to count from, or the cash is the one number missing.
+  const showFields = editing || askCash || (!estimate && !burnTyped);
 
   return (
     <div className="cp-sheet-embed">
@@ -151,7 +193,7 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
       ) : askCash ? (
         <div className="cp2-mny-hero">
           <b>{moneyText(f.monthly_burn ?? 0, main)} a month</b>
-          <span>what your statements spend · type your cash to count runway</span>
+          <span>what your records spend · type your cash to count runway</span>
         </div>
       ) : (
         <p className="desc">Cash divided by what you spend a month, in {main}. Under four months, the copilot favours work that pays fast over big builds.</p>
@@ -160,47 +202,65 @@ export function RunwaySheet({ home, actions }: { home: HomeData; actions: Action
       {/* A failed write is said here, not shown as a runway that never came (invariant 13). */}
       {home.money?.settleError && <div className="cp-error">{home.money.settleError}</div>}
       {typedLines.map((l) => <div key={l} className="cp-note">{l}</div>)}
+      {fromBook && f.source?.cash === 'book' && !f.typed_in?.cash && <div className="cp-note">Cash is your balance on the Money tab. Log a move there and runway follows it.</div>}
       {unlabelled
         ? <div className="cp-note">Your statement does not say its currency, so runway does not use it yet. <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>Say which</button> and it is converted to {main}.</div>
         : notMain
         ? <div className="cp-note">Your statements are in {read.currency} and there is no rate to put them in {main} yet, so runway does not use them. It tries again shortly.</div>
-        : fromBank.length > 0
-        ? <div className="cp-note">From your bank statements: {fromBank.join('; ')}. Type a number to use yours instead — a newer statement replaces it again.</div>
-        : !read && home.money?.ready && <div className="cp-note">Or skip the typing: <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>upload a bank statement</button> and both are read off it.</div>}
+        : !read && home.money?.ready && !fromBook && <div className="cp-note">Or skip the typing: <button className="cp2-bank-inline" onClick={() => actions.openSheet({ kind: 'bank' })}>upload a bank statement</button>, or log what you spend on the Money tab, and both are counted for you.</div>}
 
-      {fromBook ? (
-        // No cash field: one typed here would be overwritten by the book on the next load.
-        f.source?.cash === 'book' && !f.typed_in?.cash && <div className="cp-note">Cash is your balance on the Money tab. Log a move there and runway follows it.</div>
-      ) : (
-        <div className="cp-field">
-          <label className="cp-label" htmlFor="cp2-rw-cash">Cash on hand</label>
-          <div className="cp-input-row">
-            <input id="cp2-rw-cash" className="cp-input" inputMode="decimal" autoFocus={askCash || !fromStatementBurn} value={cash} onChange={(e) => setCash(e.target.value)} placeholder="Cash" />
-            <CurrencyPick value={cashCurrency} options={options} onChange={setCashCurrency} label="Currency of the cash" />
-          </div>
+      {/* What a month costs, and where the number came from. */}
+      {fromStatementBurn && basis && (
+        <div className="cp2-rw-basis">
+          <span className="t">A month: about {moneyText(f.monthly_burn ?? 0, main)}</span>
+          <span className="s">{basis}</span>
         </div>
       )}
-      <div className="cp-field">
-        <label className="cp-label" htmlFor="cp2-rw-burn">Spent a month</label>
-        <div className="cp-input-row">
-          <input id="cp2-rw-burn" className="cp-input" inputMode="decimal" value={burn} onChange={(e) => setBurn(e.target.value)} placeholder="A month" />
-          <CurrencyPick value={burnCurrency} options={options} onChange={setBurnCurrency} label="Currency of the monthly spend" />
+      {burnTyped && !editing && (
+        <div className="cp2-rw-basis">
+          <span className="t">A month: {f.typed_in?.monthly_burn ? moneyText(f.typed_in.monthly_burn.amount, f.typed_in.monthly_burn.currency) : moneyText(f.monthly_burn ?? 0, main)}, as you typed it</span>
+          {estimate && <span className="s">Your records say about {fmt(estimate.out)}{counted ? `, from ${monthsSpan(estimate.months!)}` : ''}.</span>}
+          {estimate && <button className="cp-btn sm cp2-rw-use" disabled={busy} onClick={() => void useEstimate()}>{busy ? 'Saving…' : 'Use your records instead'}</button>}
         </div>
-        <div className="cp-help">
-          {preview != null ? `That is ${preview} months of runway.`
-            : (!fromBook && cashCurrency !== main) || burnCurrency !== main ? `Counted in ${main}: converted at the newest ${FX_SOURCE} when you save.`
-            : 'Enter both to see runway.'}
-        </div>
-      </div>
-      <div className="cp-btn-row">
-        <button className="cp-btn primary" disabled={busy} onClick={save}>Save</button>
-        <button className="cp-btn" onClick={actions.closeSheet}>Back</button>
-      </div>
+      )}
+
+      {showFields ? (
+        <>
+          {!fromBook && (
+            <div className="cp-field">
+              <label className="cp-label" htmlFor="cp2-rw-cash">Cash on hand</label>
+              <div className="cp-input-row">
+                <input id="cp2-rw-cash" className="cp-input" inputMode="decimal" autoFocus={askCash || !estimate} value={cash} onChange={(e) => setCash(e.target.value)} placeholder="Cash" />
+                <CurrencyPick value={cashCurrency} options={options} onChange={setCashCurrency} label="Currency of the cash" />
+              </div>
+            </div>
+          )}
+          <div className="cp-field">
+            <label className="cp-label" htmlFor="cp2-rw-burn">Spent a month</label>
+            <div className="cp-input-row">
+              <input id="cp2-rw-burn" className="cp-input" inputMode="decimal" value={burn} onChange={(e) => setBurn(e.target.value)} placeholder="A month" />
+              <CurrencyPick value={burnCurrency} options={options} onChange={setBurnCurrency} label="Currency of the monthly spend" />
+            </div>
+            <div className="cp-help">
+              {preview != null ? `That is ${preview} months of runway.`
+                : (!fromBook && cashCurrency !== main) || burnCurrency !== main ? `Counted in ${main}: converted at the newest ${FX_SOURCE} when you save.`
+                : 'Enter both to see runway.'}
+              {estimate && ' A newer statement replaces a typed number again.'}
+            </div>
+          </div>
+          <div className="cp-btn-row">
+            <button className="cp-btn primary" disabled={busy} onClick={save}>Save</button>
+            <button className="cp-btn" onClick={() => (editing ? setEditing(false) : actions.closeSheet())}>{editing ? 'Cancel' : 'Back'}</button>
+          </div>
+        </>
+      ) : (
+        <button className="cp2-mny-link cp2-rw-own" onClick={() => setEditing(true)}>{burnTyped ? 'Change the number you typed' : 'Use a number of your own instead'}</button>
+      )}
 
       {/* Converted into the main currency like runway itself, so the lines add up to the burn above. */}
       {read?.inMain && read.spend.length > 0 && (
         <>
-          <div className="cp-section"><span className="lead">Where it goes</span><span className="count">a month, last {read.perMonth?.over ?? 0} days</span></div>
+          <div className="cp-section"><span className="lead">Where it goes</span><span className="count">a month, {estimate?.months?.length ? monthsSpan(estimate.months) : `last ${read.perMonth?.over ?? 0} days`}</span></div>
           {read.spend.map((x) => (
             <div key={x.key} className="cp-kv"><span>{x.name}</span><b>{readMoney(read)(x.perMonth)}</b></div>
           ))}

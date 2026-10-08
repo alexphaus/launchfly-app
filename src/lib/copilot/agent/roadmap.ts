@@ -35,7 +35,7 @@ import {
 } from '../store';
 import type { Goal, Profile } from '../types';
 import { workingBrief } from '../working';
-import { planExtraBody, planMaxOutputTokens, planTimeoutMs, providerFor, resolvePlanConfig } from './llm';
+import { modelErrorText, planExtraBody, planMaxOutputTokens, planTimeoutMs, providerFor, resolvePlanConfig } from './llm';
 import { UnreadableJson, extractJson } from './schema';
 import { salesCurrency } from '../metrics';
 
@@ -48,10 +48,12 @@ const MAX_TOKENS_HINT = 6_000;
 /**
  * The draw never runs behind the proxy — the route hands it to after(), the
  * pass runs inside the container — so it can take longer than a tap could.
- * planTimeoutMs() sets it (110s by default); this is the ceiling, under the
- * route's own five minutes.
+ * planTimeoutMs() sets one call (200s by default); this is the ceiling for the
+ * call and the one re-ask a broken answer gets, kept under ROADMAP_STALE_MS
+ * (five minutes) with room for the reads before it, so a draw still working is
+ * never shown as one that stopped.
  */
-const DRAW_MAX_MS = 240_000;
+const DRAW_MAX_MS = 270_000;
 /** A second answer is asked for only with at least this long left to give it. */
 const RETRY_MIN_MS = 30_000;
 /** Calls the plan is shown, newest first. */
@@ -321,7 +323,7 @@ export async function drawRoadmap(profileId: string, runId: string): Promise<{ o
         ? `the model's plan could not be read as JSON${askedAgain ? ', twice' : ''}: ${message}`
         : /abort|timeout/i.test(message)
         ? `${cfg.model} did not answer in time — raise COPILOT_PLAN_TIMEOUT_MS or pick a faster model`
-        : `the model did not answer: ${message}`);
+        : `${cfg.model} did not answer: ${modelErrorText(e)}`);
     }
 
     const parsed = parseRoadmap(raw, {

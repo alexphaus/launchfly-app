@@ -8,7 +8,7 @@
 // One attempt, bounded under the proxy's ceiling, a daily cap, and every way it
 // can fail said in words the sheet shows (invariant 13).
 import { generateText } from 'ai';
-import { maxOutputTokens, providerFor, resolveLlmConfig } from '@/lib/copilot/agent/llm';
+import { maxOutputTokens, modelErrorText, providerFor, resolveLlmConfig } from '@/lib/copilot/agent/llm';
 import { extractJson } from '@/lib/copilot/agent/schema';
 import { ASKED_SYSTEM, askedPrompt, cleanAsked, normalizeAsked } from '@/lib/copilot/asked';
 import { getProfile } from '@/lib/copilot/base';
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
     const timedOut = (e instanceof Error && e.name === 'TimeoutError') || /abort|timeout/i.test(m);
-    return json({ ok: true, asked: null, why: timedOut ? `${cfg.model} did not answer within ${TIMEOUT_MS / 1000}s.` : `The model did not answer (${m.slice(0, 140)}).` });
+    return json({ ok: true, asked: null, why: timedOut ? `${cfg.model} did not answer within ${TIMEOUT_MS / 1000}s.` : `The model did not answer: ${modelErrorText(e).slice(0, 160)}.` });
   }
   let parsed: unknown;
   try { parsed = extractJson(text); } catch { return json({ ok: true, asked: null, why: 'The model did not answer in the shape asked for.' }); }

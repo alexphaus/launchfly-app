@@ -167,7 +167,10 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
       {/* No header on Swipe: the card is the screen, as a deck of cards has to be to be read at a glance. */}
       {tab !== 'swipe' && <header className="cp-header">
         <div className="cp2-header-text">
-          <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
+          {/* The greeting once, on the tab a day starts on; elsewhere the tab says
+              where you are. "Good morning, Alex" over a balance or a settings list
+              was 60px of the same words on every screen. */}
+          <h1>{tab === 'path' ? greeting(home.profile.timezone, home.profile.name) : LABEL[tab]}</h1>
           {/* Tab-aware, and nothing when there is nothing true to say. While the mic is open, what it hears. */}
           {voice.listening
             ? <VoiceLive voice={voice} hint="Listening… say what happened, or ask" />

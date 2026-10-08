@@ -23,7 +23,7 @@ import { money } from '../format';
 import { creditedGoalId, goalCard } from '@/lib/copilot/goalcard';
 import { currencyMark, dayLabel, recentLabel } from '@/lib/copilot/money/ledger';
 import { mainCurrency } from '@/lib/copilot/money/fx';
-import { HOW_LABEL, sensorViews } from '@/lib/copilot/sensors';
+import { sensorViews } from '@/lib/copilot/sensors';
 import { signalLine } from '@/lib/copilot/signal';
 import type { Actions } from '../shared';
 import { useShell } from '../shell';
@@ -141,7 +141,9 @@ function Week({ home, d, actions, openMatches }: { home: HomeData; d: Derived; a
   const unread = home.recent.unreadable;
   return (
     <>
-      <div className="cp-section"><span className="lead">This week</span><span className="count">counted, never estimated</span></div>
+      {/* Asking the record sits where its answers do: a lone link under the last
+          card read as an afterthought, and the mic in the header asks too. */}
+      <div className="cp-section"><span className="lead">This week</span><button className="link" onClick={() => actions.openSheet({ kind: 'ask' })}>Ask your record</button></div>
 
       {/* A failed read is said, never rendered as a quiet week — invariant 13. */}
       {unread.length > 0 && (
@@ -163,8 +165,6 @@ function Week({ home, d, actions, openMatches }: { home: HomeData; d: Derived; a
       </div>
 
       <ChangeCard change={r.change} go={go} />
-
-      <button className="cp2-more" onClick={() => actions.openSheet({ kind: 'ask' })}>Ask your own record</button>
     </>
   );
 }
@@ -292,18 +292,27 @@ function Goals({ home, actions }: { home: HomeData; actions: Actions }) {
   return (
     <>
       <div className="cp-section"><span className="lead">Goals</span><button className="link" onClick={() => actions.openSheet({ kind: 'goal' })}>+ Add</button></div>
-      {home.goals.length ? home.goals.map((g) => {
-        const card = goalCard(g, { today: home.recent.today, creditedId: credited, wonAmount: m.won_amount, windowDays: m.window_days });
-        return (
-          <button key={g.id} className="cp-card cp-goal cp2-goal" onClick={() => actions.openSheet({ kind: 'goal', id: g.id })}>
-            <div className="top"><span className="name">{g.title}</span><span className="pct">{card.badge}</span></div>
-            {/* A meter only where there is a target to be a fraction of. A goal
-                with no number behind it gets its note, not an empty bar. */}
-            {card.pct !== null && <div className="track"><div className="cp-fill" style={{ width: `${card.pct}%` }} /></div>}
-            <div className="sub">{card.sub}</div>
-          </button>
-        );
-      }) : (
+      {/* One list, like Records and Settings under it: a card per goal made nine
+          goals three screens of mostly empty bars. */}
+      {home.goals.length ? (
+        <div className="cp-list cp2-rows">
+          {home.goals.map((g) => {
+            const card = goalCard(g, { today: home.recent.today, creditedId: credited, wonAmount: m.won_amount, windowDays: m.window_days });
+            return (
+              <button key={g.id} className="cp2-row cp2-goalrow" onClick={() => actions.openSheet({ kind: 'goal', id: g.id })}>
+                <span className="cp2-row-main">
+                  <span className="cp2-goalrow-top"><span className="t cp2-clamp1">{g.title}</span><span className="cp2-right">{card.badge}</span></span>
+                  {/* A meter only where there is a target to be a fraction of. A goal
+                      with no number behind it gets its note, not an empty bar. */}
+                  {card.pct !== null && <span className="cp2-goalrow-track"><i style={{ width: `${card.pct}%` }} /></span>}
+                  <span className="s">{card.sub}</span>
+                </span>
+                <IconChevron />
+              </button>
+            );
+          })}
+        </div>
+      ) : (
         <div className="cp-empty"><b>No goal yet</b>Add one and the call, the projects it proposes and this tab all point at it.</div>
       )}
     </>
@@ -341,7 +350,7 @@ function Records({ home, d, actions }: { home: HomeData; d: Derived; actions: Ac
   });
   return (
     <>
-      <div className="cp-section"><span className="lead">Records</span><span className="count">what it reads instead of asking</span></div>
+      <div className="cp-section"><span className="lead">Records</span></div>
       <div className="cp-list cp2-rows">
         {views.map((v) => (
           <button key={v.key} className="cp2-row" onClick={() => actions.openSheet({ kind: v.sheet })}>
@@ -349,7 +358,10 @@ function Records({ home, d, actions }: { home: HomeData; d: Derived; actions: Ac
               <span className="t">{v.label}</span>
               <span className="s cp2-clamp1">{v.line}</span>
             </span>
-            <span className={`cp2-recs-state ${v.state}`}>{v.state === 'on' ? HOW_LABEL[v.how] : v.state === 'attention' ? 'Look' : 'Not yet'}</span>
+            {/* A pill only where something waits on you. "You log" and "Not yet"
+                beside every row restated the line under the name, and four pills
+                in three colours buried the one that mattered. */}
+            {v.state === 'attention' && <span className="cp2-recs-state attention">Look</span>}
             <IconChevron />
           </button>
         ))}
@@ -360,52 +372,68 @@ function Records({ home, d, actions }: { home: HomeData; d: Derived; actions: Ac
 
 /* ─── Settings ────────────────────────────────────────────────────────────── */
 
+type SettingRow = { key: string; l: string; s?: string; onClick?: () => void; href?: string; right?: string };
+
+/** One row of a settings list: a link where it leaves the app, a button where it opens a sheet. */
+function SettingRows({ rows }: { rows: SettingRow[] }) {
+  return (
+    <>
+      {rows.map((r) => {
+        const inner = (
+          <>
+            <span className="cp2-row-main"><span className="t">{r.l}</span>{r.s && <span className="s cp2-clamp1">{r.s}</span>}</span>
+            {r.right && <span className="cp2-right">{r.right}</span>}
+            <IconChevron />
+          </>
+        );
+        return r.href
+          ? <a key={r.key} className="cp2-row" href={r.href}>{inner}</a>
+          : <button key={r.key} className="cp2-row" onClick={r.onClick}>{inner}</button>;
+      })}
+    </>
+  );
+}
+
+/**
+ * Three groups, each one kind of thing: what the app works from (the business),
+ * what it does at night (a status, not a setting — it sat between Plan and
+ * Classic layout as the tallest row in the list), and the account. They were
+ * one eleven-row list ending in the person's own name beside a "Forget device"
+ * button.
+ */
 function Settings({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
   const shell = useShell();
   const p = home.profile;
   const b = home.billing;
-  const rows: Array<{ key: string; l: string; s: string; onClick?: () => void; href?: string; right?: string }> = [
+  const business: SettingRow[] = [
     { key: 'offer', l: 'Your offer', s: p.offer?.sells || 'Not set — nothing is drafted without it', onClick: () => actions.openSheet({ kind: 'offer' }) },
     { key: 'targeting', l: 'Who it looks for', s: p.target_segments.length ? `${p.target_segments.join(', ')}${p.target_area || p.location ? ` · ${p.target_area || p.location}` : ''}` : 'Not set', onClick: () => actions.openSheet({ kind: 'targeting' }) },
     { key: 'working', l: 'How you work', s: `${home.workingProgress?.filled ?? 0} of ${home.workingProgress?.total ?? 6} written${home.workingProgress?.proposals ? ` · ${home.workingProgress.proposals} to check` : ''}`, onClick: () => actions.openSheet({ kind: 'working' }) },
-    // The currency every figure is counted in; statements in others are converted into it.
-    { key: 'currency', l: 'Currency', s: 'Everything is counted in it · other currencies converted', onClick: () => actions.openSheet({ kind: 'currency' }), right: mainCurrency(p.finance, home.goals) },
     { key: 'capacity', l: 'Capacity', s: CAPACITY_META[p.capacity].sub, onClick: () => actions.openSheet({ kind: 'capacity' }), right: CAPACITY_META[p.capacity].label },
-    // Talking it over is Claude's to do; reading the record is this app's to give it (lib/copilot/mcp.ts).
-    { key: 'claude', l: 'Claude', s: 'Talk things over in Claude, with your record in front of it', onClick: () => actions.openSheet({ kind: 'claude' }) },
+    // The currency every figure is counted in; statements in others are converted into it. The value says it.
+    { key: 'currency', l: 'Currency', onClick: () => actions.openSheet({ kind: 'currency' }), right: mainCurrency(p.finance, home.goals) },
+  ];
+  const plan = `Plan · ${PLANS[b.effective].name}`;
+  const used = `${b.matches.used} of ${b.matches.limit} matches used this month`;
+  const account: SettingRow[] = [
     { key: 'account', l: 'Account & notifications', s: home.account.email ? `${home.account.email}${home.account.verified ? ' · verified' : ' · not verified'}${home.push.enabled ? ' · push on' : ''}` : 'This device only — add an email to sign in elsewhere', onClick: () => actions.openSheet({ kind: 'account' }) },
     b.effective === 'free'
-      ? { key: 'plan', l: `Plan · ${PLANS[b.effective].name}`, s: `${b.matches.used} of ${b.matches.limit} matches used this month`, href: `${shell}/pricing` }
-      : { key: 'plan', l: `Plan · ${PLANS[b.effective].name}`, s: `${b.matches.used} of ${b.matches.limit} matches used this month`, onClick: () => void actions.openBilling() },
+      ? { key: 'plan', l: plan, s: used, href: `${shell}/pricing` }
+      : { key: 'plan', l: plan, s: used, onClick: () => void actions.openBilling() },
+    // Talking it over is Claude's to do; reading the record is this app's to give it (lib/copilot/mcp.ts).
+    { key: 'claude', l: 'Connect to Claude', s: 'Talk it over in Claude, with your record in front of it', onClick: () => actions.openSheet({ kind: 'claude' }) },
+    // The way back. Two layouts over one app, and neither is the real one until one of them is the one that gets opened.
+    { key: 'classic', l: 'Classic layout', s: 'The same account and data, in two tabs', href: '/lifeos' },
+    { key: 'reset', l: 'Forget this device', s: `Signed in here as ${p.name}`, onClick: () => actions.openSheet({ kind: 'reset' }) },
   ];
   return (
     <>
       <div className="cp-section"><span className="lead">Settings</span></div>
-      <div className="cp-list cp2-rows cp2-settings">
-        {rows.map((r) => r.href ? (
-          <a key={r.key} className="cp2-row" href={r.href}>
-            <span className="cp2-row-main"><span className="t">{r.l}</span><span className="s cp2-clamp1">{r.s}</span></span>
-            <IconChevron />
-          </a>
-        ) : (
-          <button key={r.key} className="cp2-row" onClick={r.onClick}>
-            <span className="cp2-row-main"><span className="t">{r.l}</span><span className="s cp2-clamp1">{r.s}</span></span>
-            {r.right && <span className="cp2-right">{r.right}</span>}
-            <IconChevron />
-          </button>
-        ))}
-        <NightlyRow home={home} d={d} actions={actions} />
-        {/* The way back. Two layouts over one app, and neither is the real one
-            until one of them is the one that gets opened. */}
-        <a className="cp2-row" href="/lifeos">
-          <span className="cp2-row-main"><span className="t">Classic layout</span><span className="s">Now and Working? — the same account and data</span></span>
-          <IconChevron />
-        </a>
-        <div className="cp2-row">
-          <span className="cp2-row-main"><span className="t">{p.name}</span><span className="s cp2-clamp1">{p.headline ?? 'No headline yet'}{p.location ? ` · ${p.location}` : ''}</span></span>
-          <button className="cp-connect ghost" onClick={() => actions.openSheet({ kind: 'reset' })}>Forget device</button>
-        </div>
-      </div>
+      <div className="cp-list cp2-rows cp2-settings"><SettingRows rows={business} /></div>
+      <div className="cp-section"><span className="lead">Nightly run</span></div>
+      <div className="cp-list cp2-rows cp2-settings"><NightlyRow home={home} d={d} actions={actions} /></div>
+      <div className="cp-section"><span className="lead">Account</span></div>
+      <div className="cp-list cp2-rows cp2-settings"><SettingRows rows={account} /></div>
       <p className="cp-note">
         {home.channels.mode === 'api'
           ? `Sending from your own account: WhatsApp ${home.channels.whatsapp ? 'on' : 'off'} · Email ${home.channels.email ? 'on' : 'off'}.`
@@ -484,7 +512,7 @@ function NightlyRow({ home, d, actions }: { home: HomeData; d: Derived; actions:
     <div className="cp2-row cp2-nightly">
       <div className="cp2-nightly-head">
         <span className="cp2-row-main">
-          <span className="t">Nightly run</span>
+          {/* The section above names it; the row says how the last one went. */}
           <span className={`s${bad ? ' bad' : ''}`}>{sub}</span>
         </span>
         <button className="cp-connect ghost" disabled={busy} onClick={() => void start()}>{busy ? 'Running' : 'Run again'}</button>

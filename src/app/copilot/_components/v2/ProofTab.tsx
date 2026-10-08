@@ -361,7 +361,9 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
       <div className="cp2-lab-bar" role="progressbar" aria-label="Toward the pass line" aria-valuemin={0} aria-valuemax={b.target} aria-valuenow={Math.min(view.result, b.target)}>
         <i style={{ width: `${pctOf(view.result, b.target)}%` }} />
       </div>
-      {rungs.length > 1 && <Reading view={view} rungs={rungs} found={found} />}
+      {/* The rungs before the line. The line's own rung is the score above, and
+          "0 of 3 commitments" over a "0/3 committed" chip said one count twice. */}
+      {rungs.length > 1 && <Reading view={view} rungs={rungs.filter((r) => !r.line)} found={found} />}
       {/* The plan has its place on the ladder when the ladder holds it; shown twice it would read as two plans. */}
       {b.tries && view.tries != null && !planInRungs && (
         <div className="cp2-pf-tries">

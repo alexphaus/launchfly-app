@@ -10084,7 +10084,8 @@ async function betReadingSuite() {
 
   /* 4. On the screen, and to Claude: the plan once, the reading only while it can still be read. */
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
-  assert.match(tab, /\{rungs\.length > 1 && <Reading view=\{view\} rungs=\{rungs\} found=\{found\} \/>\}/);
+  // The line's own rung is the score above the ladder, so the ladder drawn under it leaves it out.
+  assert.match(tab, /\{rungs\.length > 1 && <Reading view=\{view\} rungs=\{rungs\.filter\(\(r\) => !r\.line\)\} found=\{found\} \/>\}/);
   assert.match(tab, /b\.tries && view\.tries != null && !planInRungs/, 'the old plan bar goes only where the ladder holds the plan');
   const conn = src('src/app/api/copilot/mcp/read.ts');
   assert.match(conn, /reading: v\.state === 'running' \? readingLine\(v, found\) : null/);

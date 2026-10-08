@@ -14,10 +14,9 @@
 // the Scout on Work reads it — because the alternative is the web quietly never
 // being searched while the screen looks like a quiet week (invariant 13).
 
-import { createOpenAI } from '@ai-sdk/openai';
 import { generateText } from 'ai';
 import { extractJson } from './agent/schema';
-import { extraBody, maxOutputTokens, resolveLlmConfig } from './agent/llm';
+import { maxOutputTokens, providerFor, resolveLlmConfig } from './agent/llm';
 import { copilotDb } from './db';
 import {
   AUTO_HUNTS, PLAN_SYSTEM, exaCategoryFor, huntsNeeded, noPlanReason, parsePlan, planFromOffer, planPrompt, spentHunts,
@@ -73,18 +72,8 @@ async function planFor(profile: Profile, existing: string[], need: number, deadl
   if (!cfg) return fromOffer();
   if (deadline && deadline - Date.now() < MODEL_MIN_MS) return { ...fromOffer(), why: 'no time left on this run to ask the model' };
   try {
-    const extra = extraBody();
-    const provider = createOpenAI({
-      apiKey: cfg.apiKey,
-      baseURL: cfg.baseURL,
-      fetch: extra
-        ? (input, init) => {
-            if (typeof init?.body !== 'string') return fetch(input, init);
-            try { return fetch(input, { ...init, body: JSON.stringify({ ...JSON.parse(init.body), ...extra }) }); }
-            catch { return fetch(input, init); }
-          }
-        : undefined,
-    });
+    // The shared client: the endpoint's body knobs, and a request that never got an answer sent again (llm.ts modelFetch).
+    const provider = providerFor(cfg);
     const working = workingBrief(await loadWorking(profile.id).catch(() => []));
     const { data: goalRows } = await copilotDb().from('copilot_goals').select('title').eq('profile_id', profile.id).eq('status', 'active').order('priority').limit(3);
     // Where the person's plan is going this week and this month, so a search

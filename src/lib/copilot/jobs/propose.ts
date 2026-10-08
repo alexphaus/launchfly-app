@@ -12,9 +12,8 @@
 // as nothing at all. No new surface, no new section, no permanent button.
 
 import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
 import { extractJson } from '../agent/schema';
-import { cronTimeoutMs, extraBody, maxOutputTokens, resolveLlmConfig } from '../agent/llm';
+import { cronTimeoutMs, maxOutputTokens, providerFor, resolveLlmConfig } from '../agent/llm';
 import { describeMetrics, salesCurrency } from '../metrics';
 import { countOpenMoves, loadCommissions, loadMoveAnswers, loadStandingRefusals, loadWorking } from '../store';
 import { dismissedStreak } from '../moves';
@@ -120,18 +119,8 @@ export const proposeJob: Job = {
 
     let raw: unknown;
     try {
-      const extra = extraBody();
-      const provider = createOpenAI({
-        apiKey: cfg.apiKey,
-        baseURL: cfg.baseURL,
-        fetch: extra
-          ? (input, init) => {
-              if (typeof init?.body !== 'string') return fetch(input, init);
-              try { return fetch(input, { ...init, body: JSON.stringify({ ...JSON.parse(init.body), ...extra }) }); }
-              catch { return fetch(input, init); }
-            }
-          : undefined,
-      });
+      // The shared client: the endpoint's body knobs, and a request that never got an answer sent again (llm.ts modelFetch).
+      const provider = providerFor(cfg);
       const { text } = await generateText({
         model: provider(cfg.model),
         system: PROPOSE_SYSTEM,

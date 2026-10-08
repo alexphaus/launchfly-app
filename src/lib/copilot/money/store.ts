@@ -21,7 +21,7 @@ import { copilotDb, describeDbError, todayIso } from '../db';
 import { recordOutcome } from '../outcomes';
 import type { Finance, Profile } from '../types';
 import {
-  WIN_MATCH_DAYS, WIN_RECORD_DAYS, dayLabel, financeFromRead, financeMark, financeWithoutStatements, importView, matchWin, moneyRead, moneyText,
+  WIN_MATCH_DAYS, WIN_RECORD_DAYS, dayLabel, financeFromRead, financeMark, financeWithoutStatements, importView, matchWin, moneyRead, moneyText, statementAt,
   winsToRecord, type AccountBalance, type LedgerTx, type MoneyImport, type MoneyRead, type Payee, type PayeeRole,
 } from './ledger';
 import { anchorOf, bookBalance, type BookAnchor } from './book';
@@ -518,6 +518,7 @@ export async function refreshFinance(profileId: string): Promise<MoneyRead | nul
   const next = financeFromRead(prev, read, new Date().toISOString(), {
     main, latest: (from, to) => latestRate(fx.table, from, to),
     book: await bookBalanceNow(profileId, prev, today),
+    statementAt: statementAt(rows.imports),
   });
   if (next === prev) return read;
   const w = await writeSettledFinance(profileId, prev, next);

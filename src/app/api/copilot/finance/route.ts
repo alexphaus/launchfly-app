@@ -24,7 +24,9 @@ export async function POST(req: Request) {
   const burn_currency = code(b.burn_currency);
   if ((b.cash_currency != null && !cash_currency) || (b.burn_currency != null && !burn_currency)) return fail('A currency is three letters: USD, PHP, EUR.');
   try {
-    await setFinance(auth.pid, { monthly_burn, cash, cash_currency, burn_currency, main_currency });
+    // The monthly spend handed back to the rows: what was typed is forgotten and the estimate takes its place.
+    if (b.burn === 'rows') await setFinance(auth.pid, { burn_from_rows: true });
+    else await setFinance(auth.pid, { monthly_burn, cash, cash_currency, burn_currency, main_currency });
   } catch (e) {
     return fail(e instanceof Error ? e.message : 'Could not save runway', 500);
   }

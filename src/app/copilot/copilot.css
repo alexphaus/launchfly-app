@@ -717,6 +717,11 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-root .cp2-mny-role { font-style: normal; margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--muted); }
 .cp-root .cp2-mny-cur { flex: none; width: 92px; }
 .cp-root .cp2-mny-link { display: block; margin: 10px 0 4px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--blue); text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+/* Runway: what a month costs, and the months it was counted from, ahead of any box to type in. */
+.cp-root .cp2-rw-basis { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 6px; padding: 12px 14px; border: 2px solid var(--ink); }
+.cp-root .cp2-rw-basis .t { font-size: 14px; font-weight: 700; }
+.cp-root .cp2-rw-basis .s { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root .cp2-rw-use { align-self: flex-start; margin-top: 8px; }
 .cp-root .cp2-bank-cur .cp-input { margin-top: 0; max-width: 96px; text-transform: uppercase; }
 .cp-root .cp2-bank-why { margin: 0 0 4px; }
 .cp-root .cp2-bank-forget { display: block; margin: 22px 0 6px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
@@ -2033,6 +2038,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 /* Money in and Runway, opened (MoneySheets.tsx): the figure first, the rows under it. */
 .cp-root[data-theme="soft"] .cp2-mny-hero b { font-family: var(--display); font-size: 30px; font-weight: 700; letter-spacing: -0.5px; }
 .cp-root[data-theme="soft"] .cp2-mny-hero span { font-size: 12.5px; }
+.cp-root[data-theme="soft"] .cp2-rw-basis { border: 0; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
 
 /* ── The Money tab (v2/MoneyTab.tsx) ──────────────────────────────────────
    One budget-app screen: the balance, the list under it with each day's spend

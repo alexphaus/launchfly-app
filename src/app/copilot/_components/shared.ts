@@ -270,7 +270,8 @@ export interface Actions {
   draftFor(oppId: string, channel?: Channel): Promise<boolean>;
   findMatches(): Promise<void>;
   /** `cash_currency` / `burn_currency`: what each number was typed in, when not the main currency. `main_currency`: the whole app's, from Settings. */
-  saveFinance(f: { monthly_burn?: number; cash?: number; cash_currency?: string; burn_currency?: string; main_currency?: string }): Promise<boolean>;
+  /** The two numbers typed, the main currency, or `burn: 'rows'` to drop a typed monthly spend for the estimate off the rows. */
+  saveFinance(f: { monthly_burn?: number; cash?: number; cash_currency?: string; burn_currency?: string; main_currency?: string; burn?: 'rows' }): Promise<boolean>;
   saveTargeting(t: { target_segments: string[]; target_area: string }): Promise<boolean>;
   /** Signals → "Stop matching <segment>": drops one segment and everything drafted for it. */
   dropSegment(segment: string): Promise<boolean>;

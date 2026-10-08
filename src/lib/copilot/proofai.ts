@@ -4,16 +4,20 @@
 // (ideas.ts, assets.ts); this file reads what they need, calls the model, and
 // stores what passed.
 //
-// The pattern is the deck's (deckstore.ts writeDeckDraft), for the same
-// reasons: one attempt, hard bounded under the proxy's ceiling, a daily cap, and
-// every way it can fail said to the person in words — no model on the server, a
-// cap reached, a timeout, a reply set aside and why (invariant 13). Nothing here
-// drafts from a blank offer (invariant 1), and a reply that states a number the
-// person never gave is refused (invariant 2).
+// Drafts follow the deck's pattern (deckstore.ts writeDeckDraft): one attempt,
+// hard bounded under the proxy's ceiling, a daily cap. Ideas do not: they are
+// written in the background (startIdeas, then writeIdeas in after()), because a
+// reasoning model needs minutes and a tap gets under one — at 25s, most asks
+// for ideas ended "did not answer". Either way every failure is said to the
+// person in words — no model on the server, a cap reached, a timeout, a reply
+// set aside and why (invariant 13). Nothing here drafts from a blank offer
+// (invariant 1), and a reply that states a number the person never gave is
+// refused (invariant 2).
 
 import { randomUUID } from 'node:crypto';
 import { generateText } from 'ai';
-import { maxOutputTokens, providerFor, resolveLlmConfig } from './agent/llm';
+import { maxOutputTokens, modelErrorText, providerFor, resolveLlmConfig } from './agent/llm';
+import { getProfile } from './base';
 import { extractJson } from './agent/schema';
 import {
   ASSET_DRAFT_SYSTEM, ASSET_LABEL, ASSET_PART, ASSET_VERSION, DRAFT_ASK_MAX, OFFER_ASSET,
@@ -21,13 +25,13 @@ import {
 } from './assets';
 import { LINK_STATE_LABEL, businessChain, type LinkKey } from './business';
 import { IDEAS_SYSTEM, ideaSources, ideasPrompt, normalizeIdeas, talkTotals, type IdeasContext } from './ideas';
-import { LAB_IDEAS, heardFrom, heardLine, passLine, playForModel, resultLine, talkCounts } from './lab';
+import { LAB_IDEAS, LAB_IDEAS_ASKED, LAB_IDEAS_FAILED, heardFrom, heardLine, ideaRun, passLine, playForModel, resultLine, talkCounts } from './lab';
 import { rateLimit } from './limits';
 import { matchFeed } from './matches';
 import { salesCurrency } from './metrics';
 import { offerIsEmpty } from './offer';
 import { assetKindsOf, chainInputOf, foundOf } from './proof';
-import { ensureOfferHistory, insertAssetEvent, insertLabEvent, loadHome, loadWorking } from './store';
+import { ensureOfferHistory, insertAssetEvent, insertIdeaRun, insertLabEvent, loadHome, loadIdeaRuns, loadWorking } from './store';
 import type { HomeData } from './types';
 import { workingBrief } from './working';
 
@@ -41,8 +45,13 @@ export class ProofModelError extends Error {}
  * higher), with room for the reads around the call. A draft that needs longer
  * is a model that should be faster, and the person is told which.
  */
-const IDEAS_TIMEOUT_MS = 25_000;
 const DRAFT_TIMEOUT_MS = 25_000;
+/**
+ * Ideas are written in after(), so they are bounded by what a reasoning model
+ * needs rather than by the proxy: two and a half minutes, under IDEAS_STALE_MS
+ * (lab.ts), after which an ask still writing reads as stopped.
+ */
+const IDEAS_TIMEOUT_MS = 150_000;
 /** Sets of ideas a person can ask for in a day. Each is one call; past it, the books. */
 export const IDEAS_PER_DAY = 30;
 /** Asset drafts per person per day. */
@@ -52,7 +61,7 @@ export const ASSET_DRAFTS_PER_DAY = 40;
 function failure(e: unknown, budget: number, model: string): string {
   const m = e instanceof Error ? e.message : String(e);
   if ((e instanceof Error && e.name === 'TimeoutError') || /abort|timeout/i.test(m)) return `${model} did not answer within ${budget / 1000}s — try again, or set a faster model`;
-  return `the model did not answer (${m.slice(0, 140)})`;
+  return modelErrorText(e).slice(0, 180);
 }
 
 /** Everything both calls read: the home, the chain as Proof shows it, and the working file as written. */
@@ -74,16 +83,48 @@ async function contextOf(pid: string): Promise<{ home: HomeData; chain: ReturnTy
 }
 
 /**
- * Three ideas for one part of the business, written from its record, kept as a
- * set the tab shows until the next is asked for. Throws ProofRefusal for what
- * the person can fix or wait out, ProofModelError for what the model did.
+ * Ask for three ideas for one part of the business. What the person can fix or
+ * wait out is refused here, at the tap — no model, no offer, today's cap — and
+ * the ask is recorded, so Proof shows it being written; writeIdeas, in after(),
+ * does the writing. A part already being written is not asked for twice: the
+ * second tap joins the first (`started: false`).
  */
-export async function writeIdeas(pid: string, part: LinkKey): Promise<{ count: number }> {
+export async function startIdeas(pid: string, part: LinkKey): Promise<{ started: boolean }> {
+  if (!resolveLlmConfig()) throw new ProofRefusal('There is no model on this server, so ideas come from the books for now.');
+  const profile = await getProfile(pid);
+  if (!profile) throw new ProofRefusal('Not found');
+  if (offerIsEmpty(profile.offer)) throw new ProofRefusal('Say what you sell first — every idea and every draft is written from it.');
+  const runs = await loadIdeaRuns(pid);
+  if (ideaRun(runs[part], new Date())?.state === 'writing') return { started: false };
+  const rl = await rateLimit(`copilot:ideas:${pid}`, IDEAS_PER_DAY, 86_400);
+  if (!rl.ok) throw new ProofRefusal(`${IDEAS_PER_DAY} sets of ideas written today. The books are still there until tomorrow.`);
+  await insertIdeaRun(pid, LAB_IDEAS_ASKED, { part });
+  return { started: true };
+}
+
+/**
+ * Write the set an ask started: three ideas for one part, from its record, kept
+ * as the set the tab shows until the next is asked for. Never throws — a
+ * failure is recorded beside the ask, where Proof reads it (invariant 13), and
+ * returned for the log.
+ */
+export async function writeIdeas(pid: string, part: LinkKey): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  try {
+    return { ok: true, count: await composeIdeas(pid, part) };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    await insertIdeaRun(pid, LAB_IDEAS_FAILED, { part, error: error.slice(0, 300) }).catch((x: unknown) => {
+      // The ask then reads as stopped once IDEAS_STALE_MS passes: late, never "fine".
+      console.error('[copilot/ideas] could not record why the ideas failed:', x instanceof Error ? x.message : x);
+    });
+    return { ok: false, error };
+  }
+}
+
+async function composeIdeas(pid: string, part: LinkKey): Promise<number> {
   const cfg = resolveLlmConfig();
   if (!cfg) throw new ProofRefusal('There is no model on this server, so ideas come from the books for now.');
   const { home, chain, working } = await contextOf(pid);
-  const rl = await rateLimit(`copilot:ideas:${pid}`, IDEAS_PER_DAY, 86_400);
-  if (!rl.ok) throw new ProofRefusal(`${IDEAS_PER_DAY} sets of ideas written today. The books are still there until tomorrow.`);
   const found = foundOf(home);
   const ctx: IdeasContext = {
     part, offer: home.profile.offer ?? {}, foundBy: found.value, working,
@@ -117,7 +158,7 @@ export async function writeIdeas(pid: string, part: LinkKey): Promise<{ count: n
   const ideas = normalizeIdeas(parsed, { part, foundBy: found.value, sources: ideaSources(ctx) });
   if (!ideas.length) throw new ProofModelError('No new ideas: none of the model\'s held to what a bet needs — a count this business can keep and a line in range. Try again.');
   await insertLabEvent(pid, LAB_IDEAS, { part, ideas, model: cfg.model });
-  return { count: ideas.length };
+  return ideas.length;
 }
 
 export interface DraftAsk {

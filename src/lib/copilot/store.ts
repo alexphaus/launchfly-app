@@ -7,7 +7,8 @@ import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, 
 import { addDays, copilotDb, describeDbError, todayIso } from './db';
 import { horizonFor } from './due';
 import { FOCUS_EVENT, focusFromEvents, type FocusInput } from './focus';
-import { LAB_BET, LAB_COUNT, LAB_EVENTS, LAB_SHELF, LAB_SHELF_GONE, LAB_TALK, dayIn, experimentVerdicts, labHome, type LabEventRow } from './lab';
+import { LAB_BET, LAB_COUNT, LAB_EVENTS, LAB_IDEAS, LAB_IDEAS_ASKED, LAB_IDEAS_FAILED, LAB_SHELF, LAB_SHELF_GONE, LAB_TALK, dayIn, experimentVerdicts, ideaRunsOf, labHome, type IdeaRunRow, type LabEventRow } from './lab';
+import type { LinkKey } from './business';
 import { ASSET_EVENTS, ASSET_VERSION, OFFER_ASSET, assetsHome, offerBody, offerFields, sameOffer, type AssetEventRow, type Maker } from './assets';
 import { RECENT_DAYS, type AnsweredMove, type RecentLedger, type RecentOutcome } from './review';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
@@ -59,7 +60,7 @@ import { resolveLlmConfig, resolvePlanConfig } from './agent/llm';
 import { ROADMAP_COLUMNS, ROADMAP_MARK_EVENT, ROADMAP_RUN_KIND, markFromEvent, roadmapRunFromRow, type RoadmapMark, type RoadmapRun } from './roadmap';
 import { EXPERIMENT_EVENT, experimentMarkFromEvent, type ExperimentMark } from './experiment';
 import { bookBalanceNow, loadMoneyRows, moneyGoals, ratesFor, refreshFinance, writeSettledFinance } from './money/store';
-import { financeFromRead, financeFromTyped, moneyHome } from './money/ledger';
+import { burnFromRows, financeFromRead, financeFromTyped, moneyHome, statementAt } from './money/ledger';
 import { latestRate, mainCurrency, toCode } from './money/fx';
 import { resolveStatementConfig } from './money/extract';
 
@@ -955,6 +956,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     const was: Finance = profile.finance ?? {};
     const settled = financeFromRead(was, moneyRows.ready ? money.read : null, new Date().toISOString(), {
       main, latest: (from, to) => latestRate(fx.table, from, to), book,
+      // Only a statement read in after a typed monthly spend replaces it; the Money tab's daily rows do not.
+      statementAt: statementAt(moneyRows.imports),
     });
     if (settled !== was) {
       const w = await writeSettledFinance(profileId, was, settled);
@@ -1023,6 +1026,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   const lab = labHome({
     events: labEvents.rows,
     shelfEvents: labEvents.shelfRows,
+    ideaRunEvents: labEvents.runRows,
     unreadable: labEvents.unreadable,
     timezone: profile.timezone,
     today,
@@ -1243,8 +1247,16 @@ export async function requestSource(profileId: string, key: SourceKey) {
  * financeFromRead); a number left as it was keeps where it came from, so saving
  * the currency does not turn a balance read off the bank into a typed guess.
  */
-export async function setFinance(profileId: string, finance: Finance & { cash_currency?: string; burn_currency?: string }) {
+export async function setFinance(profileId: string, finance: Finance & { cash_currency?: string; burn_currency?: string; burn_from_rows?: boolean }) {
   const prev: Finance = (await getProfile(profileId))?.finance ?? {};
+  // "Use the estimate": the typed monthly spend goes, and the settle below writes the rows' in its place.
+  if (finance.burn_from_rows) {
+    const { error } = await copilotDb().from('copilot_profiles').update({ finance: burnFromRows(prev, new Date().toISOString()) }).eq('id', profileId);
+    if (error) throw new Error(describeDbError(error, 'Could not save runway.'));
+    await logEvent(profileId, 'finance_updated', { monthly_burn: 'from rows' });
+    await refreshFinance(profileId);
+    return;
+  }
   const goals = await moneyGoals(profileId);
   // A main currency chosen here is the whole app's; the numbers typed with it
   // are in whichever currency the person typed them in.
@@ -2247,6 +2259,8 @@ export const LAB_EVENT_LIMIT = 800;
  * finished one back: its start or take-off is always newer than its keeping.
  */
 export const SHELF_EVENT_LIMIT = 300;
+/** Asks for ideas and their failures read per load: enough for the newest of each part, and a few over. */
+export const IDEA_RUN_EVENT_LIMIT = 20;
 
 /**
  * The Lab's events — bets, call-offs, conversations, checkpoints — newest
@@ -2254,19 +2268,44 @@ export const SHELF_EVENT_LIMIT = 300;
  * failed read is `unreadable`, said on the Lab rather than shown as a Lab with
  * nothing in it (invariant 13).
  */
-export async function loadLabEvents(profileId: string): Promise<{ rows: LabEventRow[]; shelfRows: LabEventRow[]; unreadable: string | null }> {
+export async function loadLabEvents(profileId: string): Promise<{ rows: LabEventRow[]; shelfRows: LabEventRow[]; runRows: LabEventRow[]; unreadable: string | null }> {
   try {
     const read = (kinds: readonly string[], limit: number) => copilotDb().from('copilot_events')
       .select('id, event_type, payload, created_at')
       .eq('profile_id', profileId).in('event_type', [...kinds])
       .order('created_at', { ascending: false }).limit(limit);
-    const [all, shelf] = await Promise.all([read(LAB_EVENTS, LAB_EVENT_LIMIT), read([LAB_SHELF, LAB_SHELF_GONE, LAB_BET], SHELF_EVENT_LIMIT)]);
-    const failed = all.error ?? shelf.error;
-    if (failed) return { rows: [], shelfRows: [], unreadable: failed.message };
-    return { rows: (all.data ?? []) as LabEventRow[], shelfRows: (shelf.data ?? []) as LabEventRow[], unreadable: null };
+    const [all, shelf, runs] = await Promise.all([
+      read(LAB_EVENTS, LAB_EVENT_LIMIT),
+      read([LAB_SHELF, LAB_SHELF_GONE, LAB_BET], SHELF_EVENT_LIMIT),
+      read([LAB_IDEAS_ASKED, LAB_IDEAS_FAILED], IDEA_RUN_EVENT_LIMIT),
+    ]);
+    const failed = all.error ?? shelf.error ?? runs.error;
+    if (failed) return { rows: [], shelfRows: [], runRows: [], unreadable: failed.message };
+    return { rows: (all.data ?? []) as LabEventRow[], shelfRows: (shelf.data ?? []) as LabEventRow[], runRows: (runs.data ?? []) as LabEventRow[], unreadable: null };
   } catch (e) {
-    return { rows: [], shelfRows: [], unreadable: e instanceof Error ? e.message : String(e) };
+    return { rows: [], shelfRows: [], runRows: [], unreadable: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * Per part, an ask for ideas still being written or failed — the one read the
+ * Proof tab polls while ideas are written in the background, so it is the
+ * newest sets, asks and failures only, not the whole Lab. Throws: a poller that
+ * cannot read says so rather than reading "done".
+ */
+export async function loadIdeaRuns(profileId: string): Promise<Partial<Record<LinkKey, IdeaRunRow>>> {
+  const { data, error } = await copilotDb().from('copilot_events')
+    .select('id, event_type, payload, created_at')
+    .eq('profile_id', profileId).in('event_type', [LAB_IDEAS, LAB_IDEAS_ASKED, LAB_IDEAS_FAILED])
+    .order('created_at', { ascending: false }).limit(IDEA_RUN_EVENT_LIMIT);
+  if (error) throw new Error(describeDbError(error, 'Could not read your ideas.'));
+  return ideaRunsOf((data ?? []) as LabEventRow[]);
+}
+
+/** An ask for ideas, or why it failed: the rows Proof reads the writing from. Throws with a reason the route can say. */
+export async function insertIdeaRun(profileId: string, type: typeof LAB_IDEAS_ASKED | typeof LAB_IDEAS_FAILED, payload: { part: LinkKey; error?: string }): Promise<void> {
+  const { error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: type, payload });
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
 }
 
 /**

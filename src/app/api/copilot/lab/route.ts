@@ -7,6 +7,7 @@
 // reasoning: a bet the person could pass by tapping would be graded by the one
 // person most hoping it passes).
 
+import { after } from 'next/server';
 import { todayIso } from '@/lib/copilot/db';
 import { LINK_KEYS, type LinkKey } from '@/lib/copilot/business';
 import {
@@ -17,13 +18,31 @@ import {
 import { foundOf } from '@/lib/copilot/proof';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { isFoundBy } from '@/lib/copilot/offer';
-import { ProofModelError, ProofRefusal, writeIdeas } from '@/lib/copilot/proofai';
-import { claimProposal, deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, loadHome, loadLabEvents, setFoundBy, unclaimProposal, withdrawLabBet } from '@/lib/copilot/store';
+import { ProofModelError, ProofRefusal, startIdeas, writeIdeas } from '@/lib/copilot/proofai';
+import { claimProposal, deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, loadHome, loadIdeaRuns, loadLabEvents, setFoundBy, unclaimProposal, withdrawLabBet } from '@/lib/copilot/store';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
-// Ideas wait on a model for up to 25s.
-export const maxDuration = 60;
+// Ideas are written in after(), for up to two and a half minutes (proofai.ts):
+// the tap has its answer at once, and the writing outlives it.
+export const maxDuration = 300;
+
+/**
+ * GET ?ideas=1: per part, an ask for ideas still being written or failed — what
+ * Proof polls while the writing runs, so it reads three kinds of row, not the
+ * whole home. A failed read is an error, never "nothing being written": the
+ * poller would stop watching an ask that is still going.
+ */
+export async function GET(req: Request) {
+  const auth = await profileIdOr401();
+  if ('res' in auth) return auth.res;
+  if (new URL(req.url).searchParams.get('ideas') !== '1') return fail('Unknown read');
+  try {
+    return json({ ok: true, runs: await loadIdeaRuns(auth.pid) });
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : 'Could not read your ideas', 500);
+  }
+}
 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -191,8 +210,17 @@ export async function POST(req: Request) {
       case 'ideas': {
         const part = (LINK_KEYS as readonly string[]).includes(str(b.part)) ? (b.part as LinkKey) : null;
         if (!part) return fail('Ideas for which part of the business?');
-        const r = await writeIdeas(auth.pid, part);
-        return json({ ok: true, count: r.count, home: await loadHome(auth.pid) });
+        // Started here, written in after(): the tap returns with the ask on the
+        // screen, and Proof watches it until the set or the reason lands.
+        const { started } = await startIdeas(auth.pid, part);
+        if (started) {
+          after(async () => {
+            // writeIdeas never throws: a failure is recorded where Proof reads it.
+            const r = await writeIdeas(auth.pid, part);
+            if (!r.ok) console.error('[copilot/lab] ideas failed', r.error);
+          });
+        }
+        return json({ ok: true, started, home: await loadHome(auth.pid) });
       }
       case 'found_by': {
         if (b.found_by !== null && !isFoundBy(b.found_by)) return fail('How do buyers find you?');

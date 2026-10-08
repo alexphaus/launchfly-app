@@ -18,9 +18,8 @@
 // feeds is six calls; judging item by item would be hundreds. See watch/judge.ts.
 
 import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
 import { extractJson } from '../agent/schema';
-import { cronTimeoutMs, extraBody, maxOutputTokens, resolveLlmConfig } from '../agent/llm';
+import { cronTimeoutMs, maxOutputTokens, providerFor, resolveLlmConfig } from '../agent/llm';
 import { MAX_ITEMS_PER_SOURCE, parseFeed, trimSeen, unseenItems, type FeedItem } from '../watch/feed';
 import { moveKeepRate } from '../moves';
 import { JUDGE_SYSTEM, judgePrompt, movesFromVerdicts, parseVerdicts, watchBrief } from '../watch/judge';
@@ -100,18 +99,8 @@ export async function fetchFeed(url: string, budgetMs: number): Promise<string> 
 async function judge(system: string, prompt: string, budgetMs: number): Promise<unknown> {
   const cfg = resolveLlmConfig();
   if (!cfg) throw new Error('no model configured');
-  const extra = extraBody();
-  const provider = createOpenAI({
-    apiKey: cfg.apiKey,
-    baseURL: cfg.baseURL,
-    fetch: extra
-      ? (input, init) => {
-          if (typeof init?.body !== 'string') return fetch(input, init);
-          try { return fetch(input, { ...init, body: JSON.stringify({ ...JSON.parse(init.body), ...extra }) }); }
-          catch { return fetch(input, init); }
-        }
-      : undefined,
-  });
+  // The shared client: the endpoint's body knobs, and a request that never got an answer sent again (llm.ts modelFetch).
+  const provider = providerFor(cfg);
   const { text } = await generateText({
     model: provider(cfg.model),
     system,

@@ -13,13 +13,13 @@
 import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster } from '@/lib/copilot/machine';
-import { LINK_LABEL, businessChain, teamLine, waitingOnYou } from '@/lib/copilot/business';
+import { businessChain, teamLine, waitingOnYou } from '@/lib/copilot/business';
 import { lapsedOn } from '@/lib/copilot/commission';
 import { assetGaps } from '@/lib/copilot/assets';
 import { historyOf } from '@/lib/copilot/history';
 import { betPrice, labView, openIntros } from '@/lib/copilot/lab';
 import { proposalLine } from '@/lib/copilot/proposals';
-import { chainInputOf, foundOf, proofLine, saidOf } from '@/lib/copilot/proof';
+import { chainInputOf, foundOf, saidOf } from '@/lib/copilot/proof';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
 import { isFoundBy, offerIsEmpty } from '@/lib/copilot/offer';
 import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
@@ -340,11 +340,6 @@ export function derive(home: HomeData) {
       // By name and age, for the waste line that opens: named the way the queue sheet names them.
       drafts: home.queue.map((q) => ({ who: q.opp?.title || q.title.replace(/^Opener to /, '').replace(/, ready to review$/, ''), createdAt: q.execution.created_at })),
     },
-    sources: {
-      total: home.watchSources.length,
-      failing: home.watchSources.filter((s) => !!s.last_error).length,
-      failed: home.watchSources.filter((s) => !!s.last_error).map((s) => ({ label: s.label || s.url, error: s.last_error!, checkedAt: s.last_checked_at })),
-    },
     decisions: home.decisionLog,
     edge: home.edge,
     bottleneck: d.findings.find((f) => f.kind === 'bottleneck') ?? null,
@@ -360,10 +355,14 @@ export function derive(home: HomeData) {
     path: planStatus(asks.length, path.week.streak),
     // The deck has no header: the card is the screen, and its own top line counts what is left.
     swipe: null,
-    proof: proofLine(chain, { current: lab.current, checkpoint: lab.checkpoint, part: lab.current ? LINK_LABEL[lab.current.bet.part].toLowerCase() : null }, proof.waiting),
+    // The verdict and the bet's day are the first two cards, and what waits on
+    // you is on the Path's badge: "Not proven · day 2 of 14 on who buys · 3
+    // waiting on you" said the screen under it again, over two lines.
+    proof: null,
     // The balance is the first thing on the tab; a header saying it again is noise.
     money: null,
-    you: home.metrics.runway_months != null ? `${home.metrics.runway_months} months of runway` : null,
+    // So is runway: "1.7 months of runway" sat directly over the Runway tile.
+    you: null,
   };
 
   return {

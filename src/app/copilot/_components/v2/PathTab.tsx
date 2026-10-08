@@ -43,7 +43,7 @@ import { CallCard, FirstRun } from '../views/NowView';
 import type { Derived } from './derive';
 import { IconAlert, IconArrow, IconCheck, IconChevron, IconFlag, IconProof, IconRedraw, IconStar, IconSwap, IconYou, PathGlyph } from './icons2';
 import { planServesOneGoal } from '@/lib/copilot/roadmap';
-import { resultLine } from '@/lib/copilot/lab';
+import { metricWords as betWords, resultLine } from '@/lib/copilot/lab';
 import { experimentPart } from '@/lib/copilot/proof';
 import { AlsoThisWeek, DrawnPlanHead, ExperimentCard, GoalMarkers, HereVerdict, IconMilestone, PhaseBlock, PlanPending, type Handed } from './PathPlan';
 
@@ -97,7 +97,7 @@ export default function PathTab({ home, d, actions, briefing, finding, openMatch
 
   return (
     <div className="cp2-way">
-      <div className="cp-section"><span className="lead">Evidence</span><span className="count">what the last two weeks taught</span></div>
+      <div className="cp-section"><span className="lead">Evidence</span><span className="count">last two weeks</span></div>
       <section className="cp2-way-past">
         {past.earlier > 0 && <button className="cp2-way-earlier" onClick={() => setAllPast(true)}>Show {past.earlier} earlier</button>}
         {/* Nothing came back is itself the finding, with the count that explains it. */}
@@ -234,7 +234,8 @@ function BetHere({ d, actions }: { d: Derived; actions: Actions }) {
   const cur = lab.current;
   if (lab.unreadable || (!cur && !lab.checkpoint.due)) return null;
   const line = cur
-    ? [`Day ${cur.day} of ${cur.bet.days}`, resultLine(cur), cur.bet.tries && cur.tries != null ? `${cur.tries} of ${cur.bet.tries.planned} planned` : null, lab.checkpoint.due ? 'checkpoint due' : null].filter(Boolean).join(' · ')
+    ? [`Day ${cur.day} of ${cur.bet.days}`, resultLine(cur), // Counted in the plan's own unit, the word Proof uses: "0 of 10 planned" there was "0/10 talks" here.
+    cur.bet.tries && cur.tries != null ? `${cur.tries} of ${cur.bet.tries.planned} ${betWords(cur.bet.tries.metric, cur.bet.tries.planned)}` : null, lab.checkpoint.due ? 'checkpoint due' : null].filter(Boolean).join(' · ')
     : 'Pivot or persevere: the bets that ended, read back';
   return (
     <button className="cp2-way-bet" onClick={() => actions.setTab('proof')}>

@@ -97,7 +97,10 @@ export interface Here {
  */
 export function pathHere(ladder: { steps: PathStep[]; current: number }, f: Funnel): Here {
   const step = ladder.steps[ladder.current];
-  const line = `${f.sent} sent · ${f.replied} replied · ${f.won} paid`;
+  // "So far": these are every send since the start. The tiles on You count the
+  // last 30 days, and "27 sent" here over "24 sent" there read as one number
+  // counted twice, wrongly.
+  const line = `${f.sent} sent · ${f.replied} replied · ${f.won} paid so far`;
   const reached = step?.key === 'goal' && step.input === 'next-goal';
   switch (step?.key) {
     case 'offer': return { title: 'Nothing to send yet', line: 'No offer written, so nothing is drafted' };

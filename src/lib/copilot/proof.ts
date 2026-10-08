@@ -22,7 +22,7 @@
 import { ASSET_KINDS, type Asset, type AssetKind } from './assets';
 import { talkTotals } from './ideas';
 import { CHECKPOINT_DAYS, daysBetween, dayWords, resultLine, type BetView, type IdeaSet, type LabMetric, type Talk, type Tally } from './lab';
-import { LINK_KEYS, LINK_LABEL, PIVOT_REACH, restartsOf, type Chain, type ChainBet, type ChainInput, type LinkKey } from './business';
+import { LINK_KEYS, LINK_LABEL, PIVOT_REACH, restartsOf, type ChainBet, type ChainInput, type LinkKey } from './business';
 import type { Angle } from './experiment';
 import type { Agent } from './machine';
 import { foundByOf, isFoundBy } from './offer';
@@ -144,17 +144,6 @@ export function foundOf(home: HomeData): { value: ReturnType<typeof foundByOf>['
   const count = (k: string) => home.diagnosis.stages.find((st) => st.key === k)?.count ?? 0;
   const o = home.profile.offer;
   return isFoundBy(o?.found_by) ? { value: o!.found_by!, said: true } : foundByOf(o, count('sent'), count('matched'));
-}
-
-/** The line under the greeting on Proof: the verdict, the bet or the checkpoint, and what waits on the person. */
-export function proofLine(chain: Pick<Chain, 'verdict'>, lab: { current: BetView | null; checkpoint: { due: boolean }; part: string | null }, waiting: number): string {
-  const verdict = chain.verdict.proven ? 'Proven' : chain.verdict.title === 'Not started' ? 'Not started' : 'Not proven';
-  const bet = lab.checkpoint.due
-    ? 'checkpoint due'
-    : lab.current
-    ? `day ${lab.current.day} of ${lab.current.bet.days}${lab.part ? ` on ${lab.part}` : ''}`
-    : 'no bet running';
-  return [verdict, bet, waiting ? `${waiting} waiting on you` : null].filter(Boolean).join(' · ');
 }
 
 /** The asset kinds a business has, for a prompt: what not to suggest making twice. */

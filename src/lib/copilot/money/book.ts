@@ -539,7 +539,8 @@ const ICON_WORDS: Array<[BookIcon, RegExp]> = [
   ['groceries', /grocer|supermarket|market|palengke|sari.?sari|7.?eleven|minimart/],
   ['coffee', /coffee|caf[eé]|starbucks|latte|tea\b|milk ?tea/],
   ['dining', /dining|restaurant|food|eat|lunch|dinner|breakfast|snack|jollibee|mcdo|siomai|grab ?food|foodpanda/],
-  ['transport', /transport|taxi|grab(?! ?food)|jeep|bus|fare|gas|fuel|petrol|parking|toll|mrt|lrt|train|angkas|car\b/],
+  // "bus" as a word: inside "Business" it drew a bus beside every subscription the owner files there.
+  ['transport', /transport|taxi|grab(?! ?food)|jeep|\bbus(?:es)?\b|fare|gas|fuel|petrol|parking|toll|mrt|lrt|train|angkas|car\b/],
   ['phone', /\bload\b|data|5g|4g|internet|wifi|wi-fi|mobile|phone|globe|smart|dito|pldt|converge/],
   ['bills', /utilit|electric|meralco|water|bill|vps|hosting|subscription|netflix|spotify/],
   ['home', /hous|rent|condo|apartment|home/],

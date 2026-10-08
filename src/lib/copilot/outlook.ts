@@ -143,13 +143,18 @@ export function goalOutlook(g: OutlookGoal, input: OutlookInput): GoalOutlook {
     // send turns into a sale and what a sale turned out to be worth. A $1 win
     // counted as a sale at $150 would call a plan on track that is not.
     const perSend = f.wonAmount > 0 ? f.wonAmount / f.sent : (f.won * input.price!) / f.sent;
-    const basis = f.wonAmount > 0 ? `${money(f.wonAmount)} from ${plural(f.sent, 'send')}` : `${plural(f.won, 'sale')} from ${plural(f.sent, 'send')}`;
+    const earned = f.wonAmount > 0 ? `${money(f.wonAmount)} earned` : plural(f.won, 'sale');
     const sends = Math.ceil(gap / perSend);
     const days = Math.ceil(sends / sendsPerDay(input.capacity));
     const verdict: Verdict = days <= due.daysLeft * ON_TRACK_SHARE ? 'on_track' : days <= due.daysLeft ? 'tight' : 'off_track';
+    // What is needed, what the sends did, what that adds up to: three short
+    // sentences in that order. One sentence with the rate in brackets in the
+    // middle ("…about 30,000 sends at what yours have earned ($1 from 20
+    // sends), 3,000 days of sending…") hid the one comparison that matters —
+    // the days it takes against the days left.
     return {
       ...base, verdict,
-      line: `${capital(need)}: about ${plural(sends, 'send')} at what yours have earned (${basis}), ${plural(days, 'day')} of sending at ${CAPACITY_META[input.capacity].label}.`,
+      line: `${capital(need)}. Last ${f.windowDays} days: ${plural(f.sent, 'send')}, ${earned}. At that rate it takes about ${plural(sends, 'send')}, ${plural(days, 'day')} of sending at ${CAPACITY_META[input.capacity].label}.`,
     };
   }
 
@@ -169,7 +174,10 @@ export function goalOutlook(g: OutlookGoal, input: OutlookInput): GoalOutlook {
     const pace = daily ? f.wonAmount / f.windowDays : f.wonAmount / (f.windowDays / 7);
     const ratio = pace / needed;
     const verdict: Verdict = ratio * ON_TRACK_SHARE >= 1 ? 'on_track' : ratio >= 1 ? 'tight' : 'off_track';
-    return { ...base, verdict, line: `${needs}. You were paid ${money(f.wonAmount)} in the last ${f.windowDays} days, about ${money(pace)} a ${per}.` };
+    // "About $0 a week" beside "you were paid $1" read as a broken sum: a pace
+    // that rounds to nothing is said as under the smallest whole amount.
+    const paceWords = Math.round(pace) >= 1 ? `about ${money(pace)}` : `under ${money(1)}`;
+    return { ...base, verdict, line: `${needs}. You were paid ${money(f.wonAmount)} in the last ${f.windowDays} days, ${paceWords} a ${per}.` };
   }
   return { ...base, verdict: 'too_early', line: `${needs}. Nothing in the app measures your pace on it yet.` };
 }

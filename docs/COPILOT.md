@@ -322,14 +322,16 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
-| Proof | is the business proven, and what is being bet to find out | what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play, the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet · the history, everything above dated · conversations, projects and agents, a line each | `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts` |
-| Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move | `money/book.ts` |
-| You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals · Records, what it reads instead of asking · settings, with the nightly run: "Run again" starts tonight's pass now, and the row reports each step | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
+| Proof | is the business proven, and what is being bet to find out | what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play (folded under its name with how it counts and the hand-over box), the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet · the history, everything above dated · conversations, projects and agents, a line each | `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts` |
+| Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move, which steps aside while the list is read downward (it sat over the amounts) | `money/book.ts` |
+| You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals, one list · Records, what it reads instead of asking (a pill only where one waits on you) · Settings (the business), the nightly run ("Run again" starts tonight's pass now, and the row reports each step) and Account, three groups · the header names the tab; only Path greets, and only Path has a line under it — on Proof, Money and You it repeated the first card | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
 `derive.ts` computes all of it once per `HomeData`, from `generatedAt` rather
 than the clock, so the header's status line and the tab under it cannot disagree
 (the old header said 61 over a card saying 51) and the server render and the
-hydrating client agree across an hour boundary.
+hydrating client agree across an hour boundary. Only the Path has a status line
+now: on Proof ("Not proven · day 2 of 14 on who buys · 3 waiting on you") and You
+("1.7 months of runway") it said the first card again, over two lines.
 
 **The Path is a plan, not a log.** One line runs down the left of the screen,
 outside the cards: solid through the evidence above "you are here", dashed
@@ -563,7 +565,11 @@ the rate is a number"). Never a probability (invariant 2). Only where buyers com
 through what the app sends (`viaSends`): "about 40,500 sends" was the goal line
 for an app its buyers find online, from a rate earned writing to plumbers, so a
 business that said its buyers find it gets the goal in sales and the pace it was
-actually paid. A goal with no number is measured by the plan's milestones for it. The lines go into the planner's
+actually paid. Said in short sentences, in order — what is needed, what the last
+30 days of sends did, what that adds up to: "52 sales at your $29 in 61 days.
+Last 30 days: 20 sends, $1 earned. At that rate it takes about 30,000 sends,
+3,000 days of sending at Moderate." A pace that rounds to nothing is "under $1 a
+week", never "about $0". A goal with no number is measured by the plan's milestones for it. The lines go into the planner's
 prompt, which is what lets it cite them past the number guard. The Path shows
 the verdict for the goal the plan leads with (`roadmapLeadGoal`: its first open
 milestone's goal, else the person's first) under **You are here**, as a pill,
@@ -1121,7 +1127,12 @@ proposal (done there means handed over) — or a step ticked on the plan; a plan
 call's tick and the call are one line, said as the call. A mandate
 counts as closed with nothing to show when its ledger row says `nothing`, or when
 it was stopped with no verdict at all; the sentence `closeCommission` writes is
-read only when the ledger row is missing, matched against `worthSentence` itself. An empty block
+read only when the ledger row is missing, matched against `worthSentence` itself. A step
+the plan reworded and the person ticked again is the same work (`sameWork`): one line,
+named by its newest wording, opening to every wording and its day — a move ticked as
+"Move your things to the Intramuros room", "…to Intramuros" and "Moved into the
+Intramuros room" was three lines of value. Failing sources are not waste: they are
+the app's input broken, said on the Records row and the Path. An empty block
 says why it is empty, and `recent.unreadable` names any read that failed, so a
 broken read never renders as a quiet week (invariant 13). The funnel, openings
 and segments left the tab; the funnel is still one tap away as the chain on

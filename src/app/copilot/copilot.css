@@ -955,6 +955,8 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-call { border: 0; }
 .cp-root[data-theme="soft"] .cp-call-head { font-weight: 700; font-size: 19px; letter-spacing: -0.2px; }
 .cp-root[data-theme="soft"] .cp-chip.unsure { background: var(--line); color: var(--muted); border: 0; }
+/* What a move costs ("free to bid"): a fact about it, in the same grey pill as the part a bet is on — bare, it rendered as loose bold text in the card's corner. */
+.cp-root[data-theme="soft"] .cp-chip.cost { background: var(--line); color: var(--muted); font-weight: 600; }
 .cp-root[data-theme="soft"] .cp-because li::before { border-radius: 50%; }
 .cp-root[data-theme="soft"] :is(.cp-instead, .cp-missing) { border-top: 1px solid var(--line); }
 .cp-root[data-theme="soft"] :is(.cp-instead b, .cp-missing b) { text-transform: none; letter-spacing: 0; font-size: 11.5px; color: var(--muted); }
@@ -1303,6 +1305,15 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-rd-step.later b { color: var(--dim); }
 .cp-root[data-theme="soft"] .cp2-rd-step.line span { font-weight: 600; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-playing { margin-top: 14px; padding: 11px 13px; border-radius: 14px; background: var(--line); }
+/* The bet's fold: one line naming the play, opening to how it is counted, the method and the hand-over box. */
+.cp-root[data-theme="soft"] .cp2-lab-more {
+  display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 10px; padding: 9px 12px; border-radius: 12px;
+  background: var(--line); font-size: 12.5px; font-weight: 600; color: var(--muted); text-align: left;
+}
+.cp-root[data-theme="soft"] .cp2-lab-more > .cp2-clamp1 { flex: 1; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-lab-more .cp2-chev { width: 15px; height: 15px; }
+.cp-root[data-theme="soft"] .cp2-lab-morebody { padding: 2px 2px 0; }
+.cp-root[data-theme="soft"] .cp2-lab-morebody .cp2-lab-playing { margin-top: 8px; }
 .cp-root[data-theme="soft"] .cp2-lab-playing p { font-size: 13px; line-height: 1.5; color: var(--ink); margin-top: 3px; }
 .cp-root[data-theme="soft"] .cp2-lab-book { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-lab-prep { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
@@ -1653,6 +1664,10 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-goal { width: calc(100% - 44px); }
 .cp-root[data-theme="soft"] .cp2-goal .track { background: var(--tint); }
 .cp-root[data-theme="soft"] .cp2-right { flex: none; font-size: 12px; font-weight: 600; color: var(--blue); }
+/* Goals as rows of one list: the name and its badge on a line, a slim meter, the line under it. */
+.cp-root[data-theme="soft"] .cp2-goalrow-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-goalrow-track { display: block; height: 4px; margin: 7px 0 6px; border-radius: 999px; background: var(--tint); overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-goalrow-track > i { display: block; height: 100%; border-radius: inherit; background: var(--blue); }
 
 /* ── The deep-work sheet: seven columns that are also the day picker ───── */
 .cp-root[data-theme="soft"] .cp2-week { display: flex; align-items: stretch; gap: 6px; height: 132px; margin: 8px 0 2px; }
@@ -1774,6 +1789,8 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-way-chip {
   display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 8px 9px 8px 13px; border-radius: 999px;
   background: var(--surface); box-shadow: var(--shadow-sm); font-size: 13px; font-weight: 600; color: var(--ink);
+  /* A button centres its text by default: a clamped chip read centred, the one beside it not. */
+  text-align: left;
 }
 .cp-root[data-theme="soft"] .cp2-way-chip .cp2-chev { flex: none; width: 15px; height: 15px; color: var(--dim); }
 /* A breakage wears the warning colour; a question is the user's own business, not a fault. */
@@ -2122,6 +2139,10 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
   width: 54px; height: 54px; border: 0; border-radius: 50%; background: var(--blue); color: #fff;
   font-size: 28px; font-weight: 400; line-height: 1; box-shadow: var(--lift); cursor: pointer;
 }
+.cp-root[data-theme="soft"] .cp2-bk-fab { transition: transform .2s ease, opacity .2s ease; }
+.cp-root[data-theme="soft"] .cp2-bk-fab.away { transform: translateY(24px) scale(.6); opacity: 0; pointer-events: none; }
+/* Room under the last row to scroll it clear of the button, which sits above the nav. */
+.cp-root[data-theme="soft"] .cp2-booking .cp-content { padding-bottom: 172px; }
 
 /* The balance sheet */
 .cp-root[data-theme="soft"] .cp2-bk-save { margin-top: 18px; }

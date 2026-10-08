@@ -130,10 +130,10 @@ export interface RecentLedger {
  * they name — the wins sheet and the Matches pills — rather than the record
  * sheet, which answers questions and is not where a reply is followed up.
  */
-export type ReviewTarget = 'queue' | 'sources' | 'projects' | 'matches' | 'focus' | 'record' | 'won' | 'replied' | 'waiting' | null;
+export type ReviewTarget = 'queue' | 'projects' | 'matches' | 'focus' | 'record' | 'won' | 'replied' | 'waiting' | null;
 
 /** What a line is about. The screen gives each its glyph, so the card reads at a glance. */
-export type ReviewKind = 'money' | 'worth' | 'reply' | 'meeting' | 'did' | 'focus' | 'queue' | 'calls' | 'projects' | 'sources' | 'binned';
+export type ReviewKind = 'money' | 'worth' | 'reply' | 'meeting' | 'did' | 'focus' | 'queue' | 'calls' | 'projects' | 'binned';
 
 /** One row behind a line, shown when the line opens. */
 export interface ReviewItem {
@@ -205,8 +205,6 @@ export interface ReviewInput {
   commissions: Array<{ id: string; objective: string; status: string; closed_at: string | null; outcome: string | null }>;
   /** `drafts` are the waiting ones by name and age, for the line that opens; absent on an older caller. */
   queue: { count: number; oldestDays: number; drafts?: Array<{ who: string; createdAt: string }> };
-  /** `failed` names each failing source and why, for the line that opens. */
-  sources: { total: number; failing: number; failed?: Array<{ label: string; error: string; checkedAt: string | null }> };
   /**
    * The call record. Filtered to this week here, not by the caller: the tab is
    * headed "This week", and three ignored calls from last month are not this
@@ -311,6 +309,68 @@ function grouped<T>(rows: T[], map: (row: T) => ReviewItem): Pick<ReviewLine, 'i
 
 const line = (l: Pick<ReviewLine, 'key' | 'kind' | 'text' | 'target'> & Partial<ReviewLine>): ReviewLine =>
   ({ when: null, sub: null, detail: [], items: [], more: 0, ...l });
+
+/** Words that say nothing about which piece of work a line is. */
+const FILLER = new Set(['a', 'an', 'the', 'to', 'into', 'in', 'on', 'at', 'of', 'for', 'your', 'my', 'our', 'and', 'with', 'from', 'by', 'it', 'its', 'this', 'that', 'them', 'their']);
+
+/** A word cut to its stem, crudely and the same way every time: "moved", "move" and "moving" are one word here, and so are "applied" and "apply". */
+function stem(w: string): string {
+  let x = w;
+  if (x.length > 4 && /ie[ds]$/.test(x)) return `${x.slice(0, -3)}y`;
+  if (x.length > 5 && x.endsWith('ing')) x = x.slice(0, -3);
+  else if (x.length > 4 && x.endsWith('ed')) x = x.slice(0, -2);
+  else if (x.length > 3 && x.endsWith('s') && !x.endsWith('ss')) x = x.slice(0, -1);
+  if (x.length > 3 && x.endsWith('e')) x = x.slice(0, -1);
+  return x;
+}
+
+function workWords(text: string): Set<string> {
+  return new Set(text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 1 && !FILLER.has(w)).map(stem));
+}
+
+/**
+ * Whether two lines name the same piece of work in different words.
+ *
+ * A plan redrawn overnight hands back a step it already had, reworded, and each
+ * tick of it was a line of value: "Move your things to the Intramuros room" on
+ * Saturday, then "Move your things to Intramuros" and "Moved into the
+ * Intramuros room" on Sunday — one move, three lines, on the card meant to say
+ * what the week was worth.
+ *
+ * The same when one says all the other does and is no more than twice as long,
+ * or the two share three words in four. Fewer than two words that mean
+ * anything is matched only exactly: "Call Ana" is not "Call Ben".
+ */
+export function sameWork(a: string, b: string): boolean {
+  if (a.trim().toLowerCase() === b.trim().toLowerCase()) return true;
+  const x = workWords(a);
+  const y = workWords(b);
+  const [small, big] = x.size <= y.size ? [x, y] : [y, x];
+  if (small.size < 2) return false;
+  let shared = 0;
+  for (const w of small) if (big.has(w)) shared += 1;
+  const inside = shared === small.size && small.size * 2 >= big.size;
+  return inside || shared / (x.size + y.size - shared) >= 0.75;
+}
+
+/**
+ * Items in groups, each holding everything `same` ties it to, directly or
+ * through another member — so A, B and C are one group when A matches both and
+ * B and C match neither each other. Groups and their members keep first-seen order.
+ */
+function clusters<T>(items: T[], same: (a: T, b: T) => boolean): T[][] {
+  const parent = items.map((_, i) => i);
+  const root = (i: number): number => (parent[i] === i ? i : (parent[i] = root(parent[i])));
+  for (let i = 1; i < items.length; i++) {
+    for (let j = 0; j < i; j++) if (same(items[i], items[j])) parent[root(i)] = root(j);
+  }
+  const out = new Map<number, T[]>();
+  items.forEach((x, i) => {
+    const r = root(i);
+    out.set(r, [...(out.get(r) ?? []), x]);
+  });
+  return [...out.values()];
+}
 
 /**
  * What a call answered "I did it" turned into, in its metric's own unit — the
@@ -460,30 +520,40 @@ export function weekReview(input: ReviewInput): WeekReview {
     const was = lastMark.get(m.item);
     if (!was || Date.parse(m.at) >= Date.parse(was.at)) lastMark.set(m.item, m);
   }
-  const ticks = [...lastMark.values()].filter((m) => m.state === 'done' && m.title?.trim() && inWeek(m.at));
+  // Newest first, so a step ticked under several wordings is named by its latest.
+  const ticks = [...lastMark.values()].filter((m) => m.state === 'done' && m.title?.trim() && inWeek(m.at))
+    .sort((a, b) => b.at.localeCompare(a.at));
 
-  type Did = { key: string; headline: string; day: string; detail: string[] };
-  const did: Did[] = [];
-  const seen = new Set<string>();
+  type Did = { key: string; headline: string; day: string; detail: string[]; tick: boolean };
+  const candidates: Did[] = [
+    ...didCalls.map((d) => ({ key: `call:${d.for_date}`, headline: d.headline, day: d.for_date, detail: [`${callName(d.for_date, input.today)} — you answered “I did it”`, callResult(d, input.currency)].filter(isText), tick: false })),
+    ...didMoves.map((a) => ({ key: `move:${a.id}`, headline: a.headline, day: localDay(a.acted_at, input.timezone), detail: ['A suggestion you marked done'], tick: false })),
+    ...ticks.map((m) => ({ key: `tick:${m.item}`, headline: m.title.trim(), day: localDay(m.at, input.timezone), detail: ['Ticked off on your plan'], tick: true })),
+  ];
   // One piece of work, one line. "I did it" on a call drawn from the plan also
   // ticks the step it came from (stepForCall), under the same words, so the call
-  // and the tick are said once — as the call, which knows what came of it.
-  const add = (x: Did) => {
-    const k = x.headline.trim().toLowerCase();
-    if (seen.has(k)) return;
-    seen.add(k);
-    did.push(x);
-  };
-  for (const d of didCalls) {
-    add({ key: `call:${d.for_date}`, headline: d.headline, day: d.for_date, detail: [`${callName(d.for_date, input.today)} — you answered “I did it”`, callResult(d, input.currency)].filter(isText) });
-  }
-  for (const a of didMoves) add({ key: `move:${a.id}`, headline: a.headline, day: localDay(a.acted_at, input.timezone), detail: ['A suggestion you marked done'] });
-  for (const m of ticks) add({ key: `tick:${m.item}`, headline: m.title.trim(), day: localDay(m.at, input.timezone), detail: ['Ticked off on your plan'] });
+  // and the tick are said once — as the call, which knows what came of it. A
+  // step the plan reworded and the person ticked again is the same work too
+  // (sameWork): one line, its newest day, and every wording behind it.
+  const did = clusters(candidates, (a, b) => sameWork(a.headline, b.headline)).map((g): Omit<Did, 'tick'> & { items: ReviewItem[] } => {
+    const [first] = g;
+    const day = g.reduce((latest, x) => (x.day > latest ? x.day : latest), first.day);
+    const wordings = [...new Map(g.map((x) => [x.headline.trim().toLowerCase(), x])).values()];
+    if (wordings.length < 2) return { ...first, day, items: [] };
+    const ticksOnly = g.every((x) => x.tick);
+    return {
+      ...first, day,
+      detail: ticksOnly
+        ? [`Counted once: you ticked the same step ${g.length} times, worded differently`]
+        : [...first.detail, `Counted once: the same work is in your record ${g.length} times, worded differently`],
+      items: wordings.map((x) => ({ text: x.headline, when: whenLabel(x.day, input.today), note: ticksOnly ? null : x.detail[0] ?? null })),
+    };
+  });
   did.sort((a, b) => b.day.localeCompare(a.day));
 
   const own = did.length > MAX_DID_LINES ? did.slice(0, MAX_DID_LINES - 1) : did;
   for (const x of own) {
-    value.push(line({ key: `did:${x.key}`, kind: 'did', target: null, text: x.headline, when: whenLabel(x.day, input.today), detail: x.detail }));
+    value.push(line({ key: `did:${x.key}`, kind: 'did', target: null, text: x.headline, when: whenLabel(x.day, input.today), detail: x.detail, items: x.items }));
   }
   const rest = did.slice(own.length);
   if (rest.length) {
@@ -599,21 +669,11 @@ export function weekReview(input: ReviewInput): WeekReview {
     }));
   }
 
-  if (input.sources.failing > 0) {
-    const failed = input.sources.failed ?? [];
-    waste.push(line({
-      key: 'sources', kind: 'sources', target: 'sources',
-      text: `${input.sources.failing} of ${plural(input.sources.total, 'source')} failed their last read`,
-      sub: 'Each one is tried every night for nothing',
-      // Each by name, with the reason it gave and when it last tried: what to fix, or to drop.
-      items: failed.slice(0, MAX_ITEMS).map((s) => ({
-        text: s.label,
-        when: s.checkedAt ? dayOf(s.checkedAt) : null,
-        note: s.error.length > 110 ? `${s.error.slice(0, 109).trimEnd()}…` : s.error,
-      })),
-      more: failed.length ? Math.max(0, input.sources.failing - Math.min(failed.length, MAX_ITEMS)) : 0,
-    }));
-  }
+  // Failing sources are not here. A feed that will not read is the app's input
+  // broken, not effort the person spent for nothing, and it was said three times:
+  // here, on the Records row under this card ("4 of 12 failing", with Look), and
+  // on the Path. Records and the Path keep it; the Sources sheet names each one
+  // and why.
 
   const binned = newest(input.answered.filter((a) => a.status === 'dismissed' && inWeek(a.acted_at)), (a) => a.acted_at);
   if (binned.length >= MIN_BINNED) {

@@ -882,7 +882,11 @@ function Hero({ card }: { card: DeckCard }) {
 function reachLine(card: DeckCard): string | null {
   const vias = card.reach.map((r) => r.via);
   if (!vias.length) return card.kind === 'find' ? 'Nothing to reply on — keep it or skip it' : null;
-  if (vias[0] === 'post') return `Reply on ${card.source ?? 'the post'}`;
+  // A post is replied to where it was posted, which the card's top already names
+  // ("Earn · reddit.com") and its message says ("Your reply — copied when you
+  // swipe right"). "Reply on reddit.com" a third time, in a blue pill, read as a
+  // button that did nothing.
+  if (vias[0] === 'post') return null;
   const phone = vias.includes('sms') ? 'Mobile · WhatsApp or text' : vias.includes('whatsapp') ? 'Phone · WhatsApp or call' : vias.includes('call') ? 'Landline · call only' : null;
   const other = [vias.includes('email') ? 'email' : null, vias.includes('site') ? 'website' : null].filter(Boolean).join(', ');
   if (phone) return other ? `${phone} · ${other}` : phone;

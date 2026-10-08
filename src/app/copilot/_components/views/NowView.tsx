@@ -574,7 +574,7 @@ export function CallCard({ decision, home, actions, noOffer, compact = false }: 
               stops every morning reading "Today's call — send the drafts". */}
           <div className="cp-eyebrow">{move ? `Today’s call · ${KIND_LABEL[move.kind]}` : 'Today’s call'}</div>
           {move?.cost_label
-            ? <span className="cp-chip">{move.cost_label}</span>
+            ? <span className="cp-chip cost">{move.cost_label}</span>
             : decision.confidence === 'low' && <span className="cp-chip unsure">Not sure</span>}
         </div>
         <h2 className="cp-call-head">{decision.headline}</h2>
@@ -799,7 +799,7 @@ export function MoveCard({ move, actions, onAnswered }: { move: Move; actions: A
     <div className="cp-card">
       <div className="cp-call-top">
         <div className="cp-eyebrow">{KIND_LABEL[move.kind]}</div>
-        {move.cost_label && <span className="cp-chip">{move.cost_label}</span>}
+        {move.cost_label && <span className="cp-chip cost">{move.cost_label}</span>}
       </div>
       <h2 className="cp-call-head">{move.headline}</h2>
 

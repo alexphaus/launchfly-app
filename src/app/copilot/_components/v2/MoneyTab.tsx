@@ -19,7 +19,7 @@
 // drew (bookLocal.ts) while the fresh one loads, and a move logged goes into
 // the phone's outbox and the sheet closes — the server is told behind it, and
 // until it answers the move is listed under "Sending".
-import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { BookPayload, EntryDefault } from '@/lib/copilot/money/bookstore';
 import {
   bookDayLabel, bookMoney, bookRateLine, categoryIcon, parseRepeat, safeLine, safeWhy, shiftMonth, type BookDay, type BookLine, type CalendarCell,
@@ -501,9 +501,37 @@ function Calendar({ b, onTap }: { b: BookPayload; onTap: (l: BookLine) => void }
 /* ─── The sheets: log a move, say the balance ─────────────────────────────── */
 
 /** The add button, outside the scrolling content so it stays under the thumb. */
-export function BookFab({ book }: { book: Book }) {
+/**
+ * Whether the list is being read downward. The button sits over the right-hand
+ * column, which on this tab is the amounts: on every phone it hid one row's
+ * figure wherever the list stopped. Reading down, it steps aside; any move up,
+ * or the top of the list, brings it back.
+ */
+function useReadingDown(scroller: RefObject<HTMLElement | null> | undefined): boolean {
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    const el = scroller?.current;
+    if (!el) return;
+    let last = el.scrollTop;
+    const onScroll = () => {
+      const y = el.scrollTop;
+      // A few pixels either way is a thumb resting, not a direction.
+      if (Math.abs(y - last) < 6) return;
+      setDown(y > last && y > 80);
+      last = y;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [scroller]);
+  return down;
+}
+
+export function BookFab({ book, scroller }: { book: Book; scroller?: RefObject<HTMLElement | null> }) {
+  const away = useReadingDown(scroller);
   if (!book.book?.ready || !book.book.started) return null;
-  return <button className="cp2-bk-fab" onClick={() => book.openEntry({ kind: 'add' })} aria-label="Log a move">+</button>;
+  return (
+    <button className={`cp2-bk-fab${away ? ' away' : ''}`} onClick={() => book.openEntry({ kind: 'add' })} aria-label="Log a move" tabIndex={away ? -1 : undefined}>+</button>
+  );
 }
 
 export function BookSheet({ book }: { book: Book }) {

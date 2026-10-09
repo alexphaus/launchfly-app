@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 81 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 87 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -140,6 +140,18 @@ the app is what you sell, set `COPILOT_OWN_COUNT_LINK` to your own link and each
 new account counts as a sign-up on your Proof; `/api/copilot/health` says when
 it is set and wrong.
 
+**People who said it** (a conversation bet's posts, Proof) needs `EXA_API_KEY` and
+no migration: searches and set-asides are `copilot_events` rows, and each post kept
+spends one of the month's matches. Without the key the section is not shown.
+
+**Your page** (a landing page put online from its sheet, `/p/<code>`) needs no
+migration and no new secret: the address is signed with a key derived from
+`COPILOT_SESSION_SECRET` (rotating it changes every page's address), and states and
+counts are `copilot_events` rows. The address shown is built from
+`NEXT_PUBLIC_APP_URL`, and `/p/*` and `/api/copilot/page/*` must be reachable from
+the outside. The page is served by a route, not a page, so the root layout's
+script and service worker stay off it; its policy lets one script run by nonce.
+
 **The Claude connector** (You → Claude, `/api/copilot/mcp`) needs no migration
 and no new secret: its client ids, codes and tokens are signed with a key derived
 from `COPILOT_SESSION_SECRET`, and its few rows are `copilot_events`. It does need
@@ -159,6 +171,15 @@ server whose `NEXT_PUBLIC_SUPABASE_URL` points at an in-memory stand-in for
 Supabase's REST API; sign the session cookie as
 `pid.hmac_sha256(COPILOT_SESSION_SECRET, pid)`. Claude cannot reach a sandbox:
 to try a real connection, deploy, then add the address from You → Claude.
+
+**Testing the bet's search and the page:** `COPILOT_EXA_URL` points the Exa calls at
+a stand-in (as `COPILOT_FX_URL` does for rates), and `COPILOT_AI_API_KEY` with
+`COPILOT_AI_BASE_URL` at a Responses API stand-in writes the searches. The whole
+loop — search, talk logged from a post, set aside, publish, a stranger's open and
+tap, the owner's visit not counted — runs against a dev server whose
+`NEXT_PUBLIC_SUPABASE_URL` points at an in-memory PostgREST stand-in. Open the page
+in a context without the session cookie: the owner's own visits are not counted, by
+design. A forged code answers 404, and a `GET` on the count's address counts nothing.
 
 **Testing offline:** Playwright's `setOffline` does not cover a service
 worker's own requests, and `public/sw.js` passes the page's API calls through

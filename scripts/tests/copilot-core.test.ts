@@ -8701,7 +8701,9 @@ async function labSuite() {
   const actions = [...route.matchAll(/case '([a-z_]+)'/g)].map((m) => m[1]).sort();
   // "intro" says how an introduction went — asked for, or fell through — and never whether a bet passed.
   // "shelve" and "unshelve" keep a test for later and take it off: a test with a line and no result, never a verdict on one.
-  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'intro', 'link', 'open', 'shelve', 'stop', 'talk', 'uncount', 'unshelve'], 'a verdict is the rows’, not a request’s');
+  // "voices" and "voice_gone" find people for the bet and set one aside: who to talk to, never what the talking counted.
+  // "pivot_left" sets aside, or keeps, what a pivot left behind: the pool and the drafts, never a bet.
+  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'intro', 'link', 'open', 'pivot_left', 'shelve', 'stop', 'talk', 'uncount', 'unshelve', 'voice_gone', 'voices'], 'a verdict is the rows’, not a request’s');
 
   console.log('copilot-core: lab checks passed');
 }
@@ -10282,7 +10284,8 @@ async function shelfSuite() {
   assert.match(sheet, /const keptCountOff = !!shelved && !!countRefusal\(shelved\.metric, shelved\.tries, found\);/, 'a kept count the business can no longer keep reopens the pickers');
   assert.match(sheet, /const fixed = keptCountOff \? null : play \?\? idea;/);
   assert.match(src('src/app/copilot/_components/useCopilot.ts'), /shelve: 'Kept on your shelf\. Nothing counts until you start it\.'/);
-  assert.match(src('src/app/copilot/_components/useCopilot.ts'), /'talk', 'shelf'\]/, 'two kept tests are two sheets, not the first one’s state');
+  // 'voice' after it: two conversations logged from two people's posts are two sheets too (voices.ts).
+  assert.match(src('src/app/copilot/_components/useCopilot.ts'), /'talk', 'shelf', 'voice'\]/, 'two kept tests are two sheets, not the first one’s state');
 
   console.log('copilot-core: shelf checks passed');
 }
@@ -11083,3 +11086,397 @@ async function wholeMonthsSuite() {
 }
 
 wholeMonthsSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── People who said it: the running bet finds its people ────────────────── */
+//
+// A conversation bet sat at "0 of 10" on day three with nothing in the app that
+// could find one person to talk to. Now the bet finds public posts where somebody
+// says its problem, each with its link and their own sentence, for the person to
+// answer by hand; a conversation logged from one names it.
+
+import {
+  LAB_VOICE_GONE as vxGone, LAB_VOICES as vxSearch, VOICE_OPENER as vxOpener, VOICE_QUERY_MAX as vxQueryMax, VOICE_SEARCHES as vxSearches,
+  betVoiced as vxVoiced, betVoices as vxBetVoices, cleanSaid as vxClean, parseVoiceQueries as vxParse, postedWords as vxPosted, stuckLine as vxStuck,
+  voiceId as vxId, voiceKey as vxKey, voiceQueries as vxQueries, voiceRefusal as vxRefusal, voiceWhere as vxWhere, voiceWho as vxWho,
+  voicesFromEvents as vxFromEvents, voicesFromHits as vxFromHits, voicesSeen as vxSeen,
+} from '../../src/lib/copilot/voices';
+import { exaHits as vxExaHits } from '../../src/lib/copilot/watch/exa';
+import { LAB_TALK as vxTalk, labFromEvents as vxLab, normalizeTalk as vxNormTalk } from '../../src/lib/copilot/lab';
+
+async function voicesSuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(p, 'utf8');
+
+  /* 1. A post is known by its address: one thread is one card, however it was linked. */
+  const thread = 'https://www.reddit.com/r/Entrepreneur/comments/1abcde/i_want_to_start_a_business/';
+  assert.equal(vxKey(thread), 'reddit.com/r/entrepreneur/comments/1abcde');
+  assert.equal(vxId(thread), vxId('https://old.reddit.com/r/Entrepreneur/comments/1abcde?utm_source=share#c1'), 'with or without the slug, old or new reddit');
+  assert.match(vxId(thread)!, /^v_[0-9a-f]{8}$/);
+  assert.notEqual(vxId('https://news.ycombinator.com/item?id=1'), vxId('https://news.ycombinator.com/item?id=2'), 'Hacker News says which thread in its query');
+  for (const bad of ['https://example.com/r/x', 'https://reddit.com.evil.io/r/x/comments/1', 'javascript:alert(1)', 'https://user:pw@www.reddit.com/r/x', 'https://www.reddit.com:8443/r/x', 'not a url']) {
+    assert.equal(vxId(bad), null, `${bad} is not a post on a site people say things on`);
+  }
+  assert.deepEqual([vxWhere(thread), vxWhere('https://www.indiehackers.com/post/x'), vxWhere('https://twitter.com/a/status/1'), vxWhere('https://x.com/a/status/1'), vxWhere('https://www.quora.com/How-do-I')],
+    ['r/Entrepreneur', 'Indie Hackers', 'X', 'X', 'Quora']);
+
+  /* 2. Their words, as the page has them: formatting off, nothing reworded, cut at a word. */
+  assert.equal(vxClean('**I want** to start a business but I have *no idea* where to begin'), 'I want to start a business but I have no idea where to begin');
+  assert.equal(vxClean('> quoted [a link](https://x.y) here and more words'), 'quoted a link here and more words');
+  assert.equal(vxClean('too short'), null);
+  const long = vxClean(`${'word '.repeat(100)}end`)!;
+  assert.ok(long.length <= 280 && long.endsWith('…') && !/\s…$/.test(long), 'cut at a word, said as cut');
+
+  /* 3. What a search brought back, kept: the sites only, each once, none already found, at most the limit. */
+  const hits = [
+    { url: thread, title: 'I want to start a business : r/Entrepreneur', highlight: 'I have savings and no idea what to do first.', author: 'u/maria_starts', publishedDate: '2026-09-27T10:00:00.000Z' },
+    { url: 'https://old.reddit.com/r/Entrepreneur/comments/1abcde', title: 'Same thread again', highlight: 'The same post, found by the other search.' },
+    { url: 'https://medium.com/@someone/how-to-start', title: 'A blog', highlight: 'Not somebody asking for help.' },
+    { url: 'https://www.indiehackers.com/post/stuck-1', title: 'https://www.indiehackers.com/post/stuck-1', highlight: 'Stuck between three ideas and building none of them.' },
+    { url: 'https://x.com/someone/status/9', title: '', highlight: '' },
+    { url: 'https://www.quora.com/How-do-I-start', title: 'How do I start a business with no experience?', author: 'https://spam.example a long sentence that is not a name' },
+  ];
+  const kept = vxFromHits(hits, new Set());
+  assert.deepEqual(kept.map((v) => v.where), ['r/Entrepreneur', 'Indie Hackers', 'Quora'], 'one card per thread; a blog and a post with nothing in it are not people');
+  assert.deepEqual([kept[0].title, kept[0].said, kept[0].author, kept[0].posted], ['I want to start a business', 'I have savings and no idea what to do first.', 'maria_starts', '2026-09-27']);
+  assert.equal(kept[1].title, 'Indie Hackers', 'a title that is only the address is no title');
+  assert.equal(kept[2].author, null, 'a name that is a link or a sentence is not a name');
+  assert.deepEqual(vxFromHits(hits, new Set([vxId(thread)!])).map((v) => v.where), ['Indie Hackers', 'Quora'], 'somebody already found is not brought back');
+  assert.equal(vxFromHits(hits, new Set(), 1).length, 1, 'never more than the allowance left');
+  assert.equal(vxWho(kept[0]), 'maria_starts (r/Entrepreneur)');
+  assert.equal(vxWho({ author: null, where: 'Quora' }), 'Someone on Quora');
+
+  /* 4. The search's words: the model's, held to what a search is; otherwise the offer's own. */
+  const offer = { sells: 'Founder OS Copilot App', for_who: "People who want a business but don't know how to start, tech Indies", problem: 'Not knowing what to do that moves the needle' };
+  assert.deepEqual(vxQueries(offer, 'They have the problem'), [
+    'asking for advice: not knowing what to do that moves the needle',
+    "People who want a business but don't know how to start: not knowing what to do that moves the needle",
+  ]);
+  assert.deepEqual(vxQueries({ sells: 'X' }, 'Dentists lose bookings to missed calls'), ['asking for advice: dentists lose bookings to missed calls'], 'no problem written: the belief, once');
+  assert.ok(vxQueries({ problem: 'x '.repeat(200) }, 'b').every((q) => q.length <= vxQueryMax));
+  assert.deepEqual(vxParse({ queries: ['I have savings but no idea which business to start', 'see https://reddit.com', 'short', 'I HAVE SAVINGS BUT NO IDEA WHICH BUSINESS TO START', 'Stuck choosing between three side projects', 'a third one is never asked for'] }),
+    ['I have savings but no idea which business to start', 'Stuck choosing between three side projects'], 'no address, no repeat, two at most');
+  assert.equal(vxParse({ queries: ['www.example.com please'] }), null);
+  assert.equal(vxParse('not json'), null);
+
+  /* 5. What was stored, read back from the address, never trusted. */
+  const rows = [
+    { id: 1, event_type: vxSearch, created_at: '2026-10-09T02:00:00Z', payload: { bet: 'b1', from: 'model', queries: ['q1'], voices: [
+      { id: 'v_00000000', url: thread, title: 'I want to start a business', said: 'I have savings and no idea what to do first.', author: 'maria_starts', posted: '2026-09-27' },
+      { url: 'https://evil.example/x', title: 'Not a post' },
+      { url: 'https://www.indiehackers.com/post/stuck-1', title: 'Stuck', said: 'Stuck between three ideas and building none of them.' },
+    ] } },
+    { id: 2, event_type: vxGone, created_at: '2026-10-09T03:00:00Z', payload: { voice: vxId('https://www.indiehackers.com/post/stuck-1') } },
+    { id: 3, event_type: vxSearch, created_at: '2026-10-09T04:00:00Z', payload: { bet: 'b1', from: 'offer', queries: ['q2'], voices: [] } },
+    { id: 4, event_type: vxSearch, created_at: '2026-10-08T04:00:00Z', payload: { bet: 'old', voices: [{ url: 'https://www.quora.com/How-do-I-start', title: 'How do I start' }] } },
+  ];
+  const read = vxFromEvents(rows);
+  assert.deepEqual(read.searches.map((x) => [x.id, x.bet, x.voices.length, x.from]), [['3', 'b1', 0, 'offer'], ['1', 'b1', 2, 'model'], ['4', 'old', 1, 'offer']], 'newest first; a row that is not a post on the list is dropped');
+  assert.equal(read.searches[1].voices[0].id, vxId(thread), 'the id is worked out from the address, never taken from the row');
+  assert.deepEqual(read.gone, [vxId('https://www.indiehackers.com/post/stuck-1')]);
+  assert.equal(vxSeen(read).size, 3, 'every post found for the account, any bet');
+
+  /* 6. The bet's people: talked to, set aside, still open. */
+  const talks = [{ voice: vxId(thread) }, { voice: null }, {}];
+  const mine = vxBetVoices(read, { id: 'b1' }, talks);
+  assert.deepEqual([mine.open.length, mine.talked, mine.found, mine.searches, mine.last], [0, 1, 2, 2, { at: '2026-10-09T04:00:00Z', kept: 0 }]);
+  assert.deepEqual(vxBetVoices(undefined, { id: 'b1' }, []), { open: [], talked: 0, found: 0, searches: 0, last: null }, 'a payload from before posts');
+
+  /* 7. Whether it may search, said the same by the route and the card. */
+  const can = { running: true, voiced: true, searches: 0, ready: true, remaining: 25 };
+  assert.equal(vxRefusal(can), null);
+  assert.match(vxRefusal({ ...can, ready: false })!, /EXA_API_KEY/);
+  assert.equal(vxRefusal({ ...can, running: false }), 'That bet is not running.');
+  assert.match(vxRefusal({ ...can, voiced: false })!, /does not count conversations/);
+  assert.match(vxRefusal({ ...can, searches: vxSearches })!, /^3 searches for this bet already/);
+  assert.match(vxRefusal({ ...can, remaining: 0 })!, /matches for this month are used up/);
+  assert.deepEqual([
+    vxVoiced({ part: 'who', metric: 'paid', tries: null }), vxVoiced({ part: 'reach', metric: 'talks', tries: null }),
+    vxVoiced({ part: 'pay', metric: 'committed', tries: null }), vxVoiced({ part: 'close', metric: 'meetings', tries: { metric: 'talks', planned: 5 } }),
+    vxVoiced({ part: 'reach', metric: 'logged', tries: null }),
+  ], [true, true, true, true, false]);
+
+  /* 8. Stuck, said from the person's own line, never a pace the app estimated. */
+  assert.equal(vxStuck({ day: 1, days: 14, talks: 0, planned: 10 }), null, 'day one is not stuck');
+  assert.equal(vxStuck({ day: 3, days: 14, talks: 0, planned: 10 }), 'Day 3 of 14 and no conversation logged yet: 10 to have in the 12 days left.');
+  assert.equal(vxStuck({ day: 14, days: 14, talks: 0, planned: 3 }), 'Day 14 of 14 and no conversation logged yet: 3 to have in the 1 day left.');
+  assert.equal(vxStuck({ day: 5, days: 14, talks: 1, planned: 10 }), null);
+  assert.equal(vxStuck({ day: 5, days: 7, talks: 0, planned: null }), 'Day 5 of 7 and no conversation logged yet.');
+  assert.deepEqual(['2026-10-09', '2026-10-08', '2026-09-27', '2026-06-01', null, '2026-10-10'].map((d) => vxPosted(d, '2026-10-09')), ['today', 'yesterday', '12 days ago', '4 months ago', null, null]);
+
+  /* 9. A conversation names the post it came from; anything not shaped like one is dropped. */
+  const t = vxNormTalk({ role: 'buyer', commitment: 'time', voice: vxId(thread) }, '2026-10-09');
+  assert.ok(t.ok && t.value.voice === vxId(thread));
+  const bad = vxNormTalk({ role: 'buyer', commitment: 'none', voice: 'https://evil.example' }, '2026-10-09');
+  assert.ok(bad.ok && !('voice' in bad.value), 'a voice that is not an id ties the conversation to nothing');
+  const back = vxLab([{ id: 9, event_type: vxTalk, created_at: '2026-10-09T05:00:00Z', payload: { on: '2026-10-09', role: 'buyer', commitment: 'time', problem: 'yes', voice: vxId(thread) } }]);
+  assert.equal(back.talks[0].voice, vxId(thread));
+
+  /* 10. The index's own sentence, never its summary: highlights are read, and a post search asks only the sites, recent. */
+  assert.deepEqual(vxExaHits({ results: [{ url: thread, title: 'T', highlights: ['Their own sentence.'], summary: 'A model’s reading of them.', author: 'maria' }] })[0],
+    { title: 'T', url: thread, publishedDate: undefined, summary: 'A model’s reading of them.', highlight: 'Their own sentence.', author: 'maria' });
+  const exa = src('src/lib/copilot/watch/exa.ts');
+  const posts = exa.slice(exa.indexOf('export async function exaPosts'), exa.indexOf('export async function exaSearch'));
+  assert.match(posts, /includeDomains: opts\.domains,/);
+  assert.match(posts, /startPublishedDate: opts\.since,/);
+  assert.match(posts, /contents: \{ highlights: \{/);
+  assert.ok(!/summary/.test(posts), 'a summary is a model’s reading of a person; the card quotes them');
+  assert.match(src('src/lib/copilot/voicefind.ts'), /voicesFromHits\(turns, i\.seen,/, 'kept only through the rules');
+  assert.match(src('src/lib/copilot/voicefind.ts'), /if \(!done\.length\) throw new Error\(`The search did not run:/, 'a search that never ran is not stored as one that found nobody');
+
+  /* 11. The route: refused the same way the card hides it, stored even when it kept nobody, metered by what it kept. */
+  const route = src('src/app/api/copilot/lab/route.ts');
+  const voices = route.slice(route.indexOf("case 'voices'"), route.indexOf("case 'voice_gone'"));
+  assert.match(voices, /const no = voiceRefusal\(\{ running: view\.state === 'running', voiced: betVoiced\(view\.bet\), searches: mine\.searches, ready: exaConfigured\(\), remaining \}\);/);
+  assert.match(voices, /if \(offerIsEmpty\(profile\.offer\)\) return fail/, 'nothing from a blank offer (invariant 1)');
+  assert.ok(voices.indexOf('insertVoiceEvent(auth.pid, LAB_VOICES') < voices.indexOf('bumpUsage('), 'stored before it is billed');
+  assert.match(voices, /if \(found\.voices\.length\) await bumpUsage\(auth\.pid, periodKey\(profile\.timezone\), 'matches', found\.voices\.length\);/, 'a paid search spends the allowance by what it kept (invariant 6 protects only the free ones)');
+  assert.match(voices, /home\.lab\?\.voices\?\.unreadable\) return fail/, 'unread, it cannot tell who is new');
+
+  /* 12. The card: no section where nothing can search (invariant 7), the opener is fixed words, nothing is sent. */
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /if \(!ready && !mine\.found\) return null;/);
+  assert.match(tab, /\{betVoiced\(b\) && <Voices home=\{home\} view=\{view\} work=\{work\} actions=\{actions\} \/>\}/);
+  assert.match(tab, /href=\{v\.url\} target="_blank" rel="noopener noreferrer nofollow"/);
+  assert.match(tab, /actions\.openSheet\(\{ kind: 'talk', voice: v\.id \}\)/);
+  assert.ok(vxOpener.length < 140 && !/\$|\d/.test(vxOpener), 'a question about their past, with no number in it');
+  assert.match(src('src/app/copilot/_components/v2/LabSheets.tsx'), /\.\.\.\(post && logged === 0 \? \{ voice: post\.id \} : \{\}\),/, 'only the first conversation in the sitting is theirs');
+
+  console.log('copilot-core: voices checks passed');
+}
+
+voicesSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Your page, online: a landing page that counts who opens it ──────────── */
+//
+// "Draft it" gave text, and text is not somewhere a buyer can find. A kept
+// landing page goes online at one address, with one button to the person's own
+// channel, and counts opens and taps — never who opened it.
+
+import {
+  PAGE_CAPPED as lpCapped, PAGE_HIT as lpHit, PAGE_LIVE as lpLive, PAGE_OFF as lpOff,
+  askHref as lpHref, askWhere as lpWhere, esc as lpEsc, goneHtml as lpGone, lastAskOf as lpLastAsk, livePageOf as lpLiveOf, normalizeAsk as lpAsk,
+  pageBlocks as lpBlocks, pageCounts as lpCounts, pageHitsOf as lpHitsOf, pageHtml as lpHtml, pageLine as lpLine, pageSummary as lpSummary,
+  publishRefusal as lpRefusal, waDigits as lpWa,
+} from '../../src/lib/copilot/livepage';
+import { pageCode as lpCode, pageUrl as lpUrl, readPageCode as lpRead } from '../../src/lib/copilot/pagekey';
+import { countIn as lpCountIn, countedFrom as lpCountedFrom, unitPage as lpUnit } from '../../src/lib/copilot/lab';
+import { businessChain as lpChain, type ChainInput as LpInput } from '../../src/lib/copilot/business';
+import { assetGaps as lpGaps, type Asset as LpAsset } from '../../src/lib/copilot/assets';
+import { pageInput as lpPageInput } from '../../src/lib/copilot/proof';
+
+async function livePageSuite() {
+  const { readFileSync } = await import('node:fs');
+  const { randomBytes } = await import('node:crypto');
+  const src = (p: string) => readFileSync(p, 'utf8');
+
+  /* 1. What the page asks for, held to what each kind can be. */
+  assert.deepEqual([lpWa('+63 917 123 4567'), lpWa('09171234567'), lpWa('(415) 555-0100 ext'), lpWa('12'), lpWa(null)], ['639171234567', '639171234567', '4155550100', null, null]);
+  assert.deepEqual(lpAsk({ kind: 'whatsapp', to: '+63 917 123 4567' }), { ok: true, value: { kind: 'whatsapp', to: '639171234567', label: 'Message me on WhatsApp' } });
+  assert.equal(lpAsk({ kind: 'whatsapp', to: 'call me' }).ok, false);
+  assert.deepEqual(lpAsk({ kind: 'email', to: ' alex@example.com ', label: '  Write to me  ' }), { ok: true, value: { kind: 'email', to: 'alex@example.com', label: 'Write to me' } });
+  assert.equal(lpAsk({ kind: 'email', to: 'alex@' }).ok, false);
+  assert.equal(lpAsk({ kind: 'link', to: 'http://my-app.com/signup' }).ok, false, 'a secure address only');
+  assert.equal(lpAsk({ kind: 'link', to: 'javascript:alert(1)' }).ok, false);
+  assert.deepEqual(lpAsk({ kind: 'link', to: 'https://my-app.com/signup', label: 'x'.repeat(60) }), { ok: true, value: { kind: 'link', to: 'https://my-app.com/signup', label: 'x'.repeat(40) } });
+  assert.equal(lpAsk({ kind: 'sms', to: '1' }).ok, false);
+  assert.equal(lpHref({ kind: 'whatsapp', to: '639171234567', label: 'x' }, 'Founder OS'), 'https://wa.me/639171234567?text=Hi%2C%20I%20saw%20your%20page%3A%20Founder%20OS');
+  assert.equal(lpHref({ kind: 'email', to: 'a@b.co', label: 'x' }, 'A & B'), 'mailto:a@b.co?subject=A%20%26%20B');
+  assert.equal(lpWhere({ kind: 'whatsapp', to: '639171234567', label: 'x' }), 'WhatsApp, +639171234567');
+
+  /* 2. Which page is online: the newest of on and off; a row that does not hold together is never a page. */
+  const ev = (id: number, type: string, at: string, payload: unknown = {}) => ({ id, event_type: type, payload, created_at: at });
+  const ask = { kind: 'link', to: 'https://my-app.com/signup', label: 'Try it free' };
+  assert.equal(lpLiveOf([]), null);
+  assert.deepEqual(lpLiveOf([ev(1, lpLive, '2026-10-09T01:00:00Z', { asset: 'a1', n: 2, ask })]), { asset: 'a1', n: 2, ask, at: '2026-10-09T01:00:00Z' });
+  assert.equal(lpLiveOf([ev(1, lpLive, '2026-10-09T01:00:00Z', { asset: 'a1', n: 2, ask }), ev(2, lpOff, '2026-10-09T02:00:00Z')]), null, 'taken offline');
+  assert.equal(lpLiveOf([ev(2, lpOff, '2026-10-09T01:00:00Z'), ev(3, lpLive, '2026-10-09T02:00:00Z', { asset: 'a1', n: 3, ask })])?.n, 3, 'back online');
+  assert.equal(lpLiveOf([ev(1, lpLive, '2026-10-09T01:00:00Z', { asset: 'a1', n: 1, ask }), ev(2, lpLive, '2026-10-09T02:00:00Z', { asset: 'a1', n: 0, ask: { kind: 'link', to: 'javascript:x' } })])?.n, 1, 'a broken row is skipped, not shown');
+  assert.deepEqual(lpLastAsk([ev(1, lpLive, '2026-10-09T01:00:00Z', { asset: 'a1', n: 2, ask }), ev(2, lpOff, '2026-10-09T02:00:00Z')]), ask, 'taken offline, the button it had is still known, to put back up');
+  assert.equal(lpLastAsk([ev(2, lpOff, '2026-10-09T02:00:00Z')]), null);
+
+  /* 3. Counts, never visitors: a kind, a day and the version that was online. */
+  const hitRows = [
+    ev(10, lpHit, '2026-10-09T03:00:00Z', { kind: 'open', asset: 'a1', n: 2, ip: '1.2.3.4' }),
+    ev(11, lpHit, '2026-10-09T03:01:00Z', { kind: 'tap', asset: 'a1', n: 2 }),
+    ev(12, lpHit, '2026-10-07T03:00:00Z', { kind: 'open', asset: 'a1', n: 1 }),
+    ev(13, lpHit, '2026-10-06T03:00:00Z', { kind: 'visit', asset: 'a1', n: 1 }),
+    ev(14, lpCapped, '2026-10-08T03:00:00Z'),
+  ];
+  const read = lpHitsOf(hitRows, (iso) => iso.slice(0, 10));
+  assert.deepEqual(read.hits, [
+    { kind: 'tap', on: '2026-10-09', asset: 'a1', n: 2 }, { kind: 'open', on: '2026-10-09', asset: 'a1', n: 2 }, { kind: 'open', on: '2026-10-07', asset: 'a1', n: 1 },
+  ], 'nothing but the kind, the day and the version is read back');
+  assert.equal(read.capped, '2026-10-08T03:00:00Z');
+  assert.deepEqual([lpCounts(read.hits), lpCounts(read.hits, { asset: 'a1', n: 2 }), lpCounts(read.hits, { since: '2026-10-08' })], [{ opened: 2, tapped: 1 }, { opened: 1, tapped: 1 }, { opened: 1, tapped: 1 }]);
+  assert.equal(lpLine({ opened: 41, tapped: 5 }, 'Message me'), '41 opened · 5 tapped Message me');
+  assert.equal(lpLine({ opened: 0, tapped: 0 }, 'x'), '');
+
+  /* 4. The page itself: the version's words as blocks, escaped, with one link and one script under a nonce. */
+  const body = '# Founder OS Copilot App\nKnow what to do next.\n\n## What you get\n- A plan from your own numbers\n- **One** move a day\n1. Sign up\nQuestions? <script>alert(1)</script> https://evil.example';
+  const blocks = lpBlocks(body, 'Founder OS Copilot App');
+  assert.deepEqual(blocks, [
+    { kind: 'p', text: 'Know what to do next.' },
+    { kind: 'h', text: 'What you get' },
+    { kind: 'list', items: ['A plan from your own numbers', 'One move a day', 'Sign up'] },
+    { kind: 'p', text: 'Questions? <script>alert(1)</script> https://evil.example' },
+  ], 'the heading that repeats the title is dropped; a list is one list');
+  assert.equal(lpSummary(blocks), 'Know what to do next.');
+  assert.equal(lpEsc(`<a href="x">'&'</a>`), '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
+  const nonce = randomBytes(16).toString('base64');
+  const html = lpHtml({ code: 'uABC.def', title: 'Founder <OS>', body, ask: { kind: 'link', to: 'https://my-app.com/signup', label: 'Try it "free"' }, nonce, madeWith: null });
+  assert.ok(!html.includes('<script>alert'), 'their words are text, never markup');
+  assert.equal((html.match(/<a /g) ?? []).length, 1, 'the only link on the page is the ask');
+  assert.match(html, /<a id="ask" class="ask" href="https:\/\/my-app\.com\/signup" rel="noopener noreferrer" target="_blank">Try it &quot;free&quot;<\/a>/);
+  assert.match(html, /<title>Founder &lt;OS&gt;<\/title>/);
+  assert.equal((html.match(/<script/g) ?? []).length, 1);
+  assert.ok(html.includes(`<script nonce="${nonce}">`), 'the one script runs under the response’s nonce');
+  assert.match(html, /<meta name="robots" content="noindex">/);
+  assert.match(html, /sessionStorage/, 'counted once per tab');
+  assert.ok(!/\bip\b|userAgent|document\.cookie|referrer|location\.href/i.test(html.slice(html.indexOf('<script'))), 'the script sends a kind and nothing about who');
+  assert.ok(lpHtml({ code: 'u</script>', title: 't', body: 'b', ask: { kind: 'email', to: 'a@b.co', label: 'x' }, nonce: 'n', madeWith: null }).includes('"u\\u003c/script>"'), 'a code can never close the script');
+  assert.match(lpHtml({ code: 'c', title: 't', body: 'b', ask: { kind: 'email', to: 'a@b.co', label: 'x' }, nonce: 'n', madeWith: 'https://app.example/copilot2' }), /Made with <a href="https:\/\/app\.example\/copilot2" rel="noopener">Copilot<\/a>/);
+  assert.match(lpGone(), /This page is not online right now\./);
+
+  /* 5. The address: the account, signed; nobody makes one for an account by guessing. */
+  const key = Buffer.from('k'.repeat(32));
+  const pid = '2f1c3c1e-8a4b-4c5d-9e6f-0123456789ab';
+  const code = lpCode(pid, key);
+  assert.match(code, /^u[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{12}$/, 'a uuid packs to 22 characters');
+  assert.equal(lpRead(code, key), pid);
+  assert.equal(lpRead(lpCode('acct_7', key), key), 'acct_7', 'an id that is not a uuid still round-trips');
+  assert.equal(lpRead(`${code.slice(0, -1)}${code.endsWith('A') ? 'B' : 'A'}`, key), null, 'a changed signature');
+  assert.equal(lpRead(code, Buffer.from('x'.repeat(32))), null, 'another server’s key');
+  assert.equal(lpRead(`u${'A'.repeat(22)}.${code.split('.')[1]}`, key), null, 'another account under this signature');
+  for (const bad of [null, '', 'nodot', 'a.b.c', `${'u'.repeat(130)}.x`]) assert.equal(lpRead(bad, key), null);
+  assert.equal(lpUrl('https://app.example/', code), `https://app.example/p/${code}`);
+
+  /* 6. Only a landing page with words goes online. */
+  const v = (body: string | null) => ({ body });
+  assert.equal(lpRefusal(null, null), 'That page is not in your assets.');
+  assert.match(lpRefusal({ kind: 'script', retired: false }, v('x'))!, /^Only a landing page goes online/);
+  assert.match(lpRefusal({ kind: 'landing_page', retired: true }, v('x'))!, /put away/);
+  assert.match(lpRefusal({ kind: 'landing_page', retired: false }, v('  '))!, /no words/);
+  assert.equal(lpRefusal({ kind: 'landing_page', retired: false }, v('Words')), null);
+
+  /* 7. A bet that counts visits or taps counts what the page saw; the source is said. */
+  assert.deepEqual(['visits', 'Visitors', 'page views', 'taps', 'clicks', 'sign-ups', null].map(lpUnit), ['open', 'open', 'open', 'tap', 'tap', null, null]);
+  const rows = { sends: [], outcomes: [], finished: [], talks: [], tallies: [{ bet: 'b1', n: 1, on: '2026-10-08' }], pageHits: [{ kind: 'open' as const, on: '2026-10-08' }, { kind: 'open' as const, on: '2026-10-06' }, { kind: 'tap' as const, on: '2026-10-09' }] };
+  assert.equal(lpCountIn('logged', '2026-10-07', '2026-10-20', rows, null, 'b1', 'visits'), 2, 'one typed and one the page counted since the bet began');
+  assert.equal(lpCountIn('logged', '2026-10-07', '2026-10-20', rows, null, 'b1', 'taps'), 2);
+  assert.equal(lpCountIn('logged', '2026-10-07', '2026-10-20', rows, null, 'b1', 'walk-ins'), 1);
+  assert.equal(lpCountedFrom('logged', '2026-10-07', null, 'visits', false, true), 'From the visits your page counts, and any you log, since 7 Oct. Your own visits are not counted.');
+
+  /* 8. How they hear reads the page: measured, never bare, and a tap is not an enquiry. */
+  const quiet: LpInput = {
+    offer: { sells: 'Founder OS Copilot App', for_who: 'People starting out', price_band: '$29/month' }, said: {}, segments: [], area: null, web: false,
+    funnel: { matched: 0, sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, worthAMessage: 0, bySegment: [], byChannel: [], wins: [], queue: 0,
+    wonRecent: { amount: 0, days: 30 }, goal: null, currency: '$', workerConnected: false, agents: [], topOpening: null, foundBy: 'inbound',
+    signals: { linked: true, signup: 0, enquiry: 0 }, assets: { demo: null, script: null, landing: 'Founder OS', workflow: null },
+  };
+  const reach = (x: Partial<LpInput>) => lpChain({ ...quiet, ...x }).links.find((l) => l.key === 'reach')!;
+  const opened = reach({ page: { live: true, opened: 41, tapped: 5, label: 'Try it free', offline: null } });
+  assert.deepEqual([opened.state, opened.facts], ['testing', '41 people opened your page, 5 tapped Try it free']);
+  assert.equal(opened.why, '41 people opened your page, 5 tapped Try it free. A bet on how they hear says whether that is enough.');
+  assert.match(reach({ page: { live: true, opened: 1, tapped: 0, label: 'x', offline: null } }).facts, /^1 person opened your page$/);
+  const offline = reach({ page: { live: false, opened: 0, tapped: 0, label: null, offline: 'lp1' } });
+  assert.equal(offline.state, 'untested');
+  assert.deepEqual(offline.moves.find((m) => m.key === 'reach-online'), { key: 'reach-online', label: 'Put your page online', by: 'you', go: { assetId: 'lp1' } });
+  assert.ok(!reach({}).moves.some((m) => m.key === 'reach-online'), 'a payload from before pages asks for nothing');
+  const both = reach({ signals: { linked: true, signup: 2, enquiry: 0 }, page: { live: true, opened: 3, tapped: 0, label: 'x', offline: null } });
+  assert.equal(both.facts, '2 sign-ups through your count link; 3 people opened your page', 'said apart: a tap is never added to the link’s enquiries');
+  // After a pivot, the page's counts are the era's.
+  const era = { funnel: { sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, bySegment: [], byChannel: [], wins: [], since: '2026-10-07', pivot: 'who' as const, talks: { n: 0, problem: 0, committed: 0 }, signals: { signup: 0, enquiry: 0 }, page: { opened: 4, tapped: 1 } };
+  assert.equal(reach({ page: { live: true, opened: 41, tapped: 5, label: 'Try', offline: null }, eras: { reach: era } }).facts, '4 people opened your page, 1 tapped Try');
+
+  /* 9. The chain's input from the payload, and a gap for a page kept and not online. */
+  const asset = (id: string, kind: LpAsset['kind'], body: string | null, retired = false): LpAsset => {
+    const ver = { id: `${id}-1`, asset: id, n: 1, by: 'ai' as const, at: '2026-10-08T00:00:00Z', title: 'T', body, url: null, note: null, bet: null, project: null, offer: null, model: null, trimmed: false };
+    return { id, kind, title: 'T', versions: [ver], current: ver, firstBy: 'ai', retired, updatedAt: null, live: null };
+  };
+  const page = (live: boolean, hits: Array<{ kind: 'open' | 'tap'; on: string }> = []) => ({
+    live: live ? { asset: 'lp1', n: 1, ask: { kind: 'link' as const, to: 'https://x.co', label: 'Go' }, at: '2026-10-08T00:00:00Z' } : null,
+    url: null, path: '/p/x', hits: hits.map((h) => ({ ...h, asset: 'lp1', n: 1 })), capped: null, unreadable: null,
+  });
+  assert.deepEqual(lpPageInput({ page: page(true, [{ kind: 'open', on: '2026-10-08' }]), assets: { assets: [asset('lp1', 'landing_page', 'Words')], unreadable: null } }), { live: true, opened: 1, tapped: 0, label: 'Go', offline: null });
+  assert.deepEqual(lpPageInput({ page: page(false), assets: { assets: [asset('lp0', 'landing_page', null), asset('lp1', 'landing_page', 'Words')], unreadable: null } }), { live: false, opened: 0, tapped: 0, label: null, offline: 'lp1' }, 'only a page with words can go up');
+  assert.equal(lpPageInput({ page: { ...page(false), unreadable: 'timeout' }, assets: undefined }), undefined, 'unread is absent, never a page nobody opened');
+  const offer = { sells: 'Founder OS Copilot App' };
+  const gaps = (online: string | null | undefined) => lpGaps({ assets: [asset('lp1', 'landing_page', 'Words')], offer, weak: 'reach', foundBy: 'inbound', states: { reach: 'untested' }, online });
+  assert.deepEqual(gaps(null)[0], { kind: 'landing_page', title: 'Your page is not online', why: 'Kept, and nobody can open it yet. Online, it counts who opens it.', open: 'lp1' });
+  assert.ok(!gaps('lp1').some((g) => g.open), 'online: no gap');
+  assert.ok(!gaps(undefined).some((g) => g.open), 'a payload from before pages asks for nothing it cannot see');
+
+  /* 10. The routes: the page under a nonce policy and noindex; the count reads a kind and nothing else, never the owner's own. */
+  const pageRoute = src('src/app/p/[code]/route.ts');
+  assert.match(pageRoute, /'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-\$\{nonce\}'; connect-src 'self';/);
+  assert.match(pageRoute, /'x-robots-tag': 'noindex'/);
+  assert.match(pageRoute, /if \(!profile \|\| events\.unreadable\) return gone\(503\);/, 'a read that failed is not a page that is gone');
+  const count = src('src/app/api/copilot/page/[code]/route.ts');
+  assert.match(count, /if \(\(await currentProfileId\(\)\.catch\(\(\) => null\)\) === pid\) return answer\(\{ ok: true, counted: false, why: 'Your own visits are not counted\.' \}\);/);
+  assert.match(count, /await insertPageEvent\(pid, PAGE_HIT, \{ kind, asset: live\.asset, n: live\.n \}\);/, 'a kind and the version online — nothing about who');
+  assert.ok(!/x-forwarded-for|user-agent|clientIp/i.test(count), 'no visitor is read');
+  assert.match(count, /rateLimit\(`page:\$\{pid\}`, PAGE_HITS_PER_HOUR, 60 \* 60\)/);
+  assert.match(count, /insertPageEvent\(pid, PAGE_CAPPED, \{\}\)/, 'a count that stopped is said, not dropped quietly (invariant 13)');
+  const getFn = count.slice(count.indexOf('export function GET'), count.indexOf('export async function POST'));
+  assert.ok(!/insertPageEvent|rateLimit/.test(getFn), 'opening the count’s address counts nothing');
+  const publish = src('src/app/api/copilot/page/route.ts');
+  assert.match(publish, /profileIdOr401/, 'putting a page up is the signed-in person’s');
+  assert.match(publish, /const refused = publishRefusal\(asset, version\);/);
+  assert.match(src('src/app/copilot/_components/v2/ProofSheets.tsx'), /\{a\.kind === 'landing_page' && !a\.retired && v\.body && <PagePanel home=\{home\} asset=\{a\} actions=\{actions\} \/>\}/);
+
+  console.log('copilot-core: live page checks passed');
+}
+
+livePageSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── What a pivot on who buys left behind ────────────────────────────────── */
+//
+// Two days after pivoting to people starting out, the app still searched Maps
+// for pest control, held 148 of those businesses, and had rewritten 35 drafts to
+// them from the new offer. The pivot asks, once: set them aside, or keep them.
+
+import { foundForOld as pvOld, pivotLeft as pvLeft } from '../../src/lib/copilot/era';
+
+async function pivotLeftSuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(p, 'utf8');
+
+  const pool = [
+    { id: 'old1', day: '2026-09-20', segment: 'pest control' },
+    { id: 'old2', day: '2026-10-06', segment: null },
+    { id: 'maps', day: '2026-10-08', segment: 'Pest Control' },
+    { id: 'new1', day: '2026-10-08', segment: 'people starting a side business' },
+    { id: 'nodate', day: null, segment: null },
+  ];
+  const segments = ['Staycation & resorts', 'Pest control', 'plumbing'];
+  /* 1. Found for the old buyers: before the pivot, or since under a segment typed before it. */
+  assert.deepEqual(pvOld(pool, '2026-10-07', segments), ['old1', 'old2', 'maps']);
+  assert.deepEqual(pvOld(pool, '2026-10-07', []), ['old1', 'old2'], 'no segments: only what came before');
+
+  /* 2. Said until answered, for the last pivot on who buys, with the drafts written to those businesses. */
+  const drafts = [{ opp: 'old1' }, { opp: 'maps' }, { opp: 'new1' }, { opp: null }];
+  assert.deepEqual(pvLeft({ day: '2026-10-07', answered: null, segments, pool, drafts }), { day: '2026-10-07', segments, businesses: 3, drafts: 2 });
+  assert.equal(pvLeft({ day: null, answered: null, segments, pool, drafts }), null, 'no pivot on who buys');
+  assert.equal(pvLeft({ day: '2026-10-07', answered: '2026-10-07', segments, pool, drafts }), null, 'answered, set aside or kept');
+  assert.ok(pvLeft({ day: '2026-10-20', answered: '2026-10-07', segments, pool, drafts }), 'a later pivot is another business: it asks again');
+  assert.equal(pvLeft({ day: '2026-10-07', answered: null, segments: [], pool: pool.filter((p) => p.id === 'new1'), drafts }), null, 'nothing left behind: nothing to ask');
+  assert.deepEqual(pvLeft({ day: '2026-10-07', answered: null, segments, pool: [], drafts: [] }), { day: '2026-10-07', segments, businesses: 0, drafts: 0 }, 'the searches alone are worth asking about');
+
+  /* 3. Set aside at a tap: drafts cancelled, businesses dismissed (a status), the old searches stopped, the answer kept — and never done for them. */
+  const store = src('src/lib/copilot/store.ts');
+  const fn = store.slice(store.indexOf('export async function setAsidePivot'), store.indexOf('export async function insertPivotAnswer'));
+  assert.match(fn, /const ids = foundForOld\(/, 'the same rule the card counted with');
+  assert.match(fn, /cancelOpenDrafts\(profileId, \{ reason: 'pivot', opportunityIds: slice \}\)/);
+  assert.match(fn, /update\(\{ status: 'dismissed' \}\)\.in\('id', slice\)\.eq\('profile_id', profileId\)/);
+  assert.match(fn, /update\(\{ target_segments: \[\] \}\)/);
+  assert.match(fn, /\.in\('status', \['new', 'saved'\]\)/, 'a business already written to is history, not a lead');
+  assert.match(fn, /await insertPivotAnswer\(profileId, PIVOT_SET_ASIDE,/);
+  const route = src('src/app/api/copilot/lab/route.ts');
+  assert.match(route, /if \(!left \|\| left\.day !== str\(b\.day\)\) return fail\('Nothing from that pivot is waiting on you\.'\);/, 'only the pivot the screen showed');
+  assert.match(src('src/app/copilot/_components/v2/ProofTab.tsx'), /\{home\.pivotLeft && <AfterPivot home=\{home\} left=\{home\.pivotLeft\} actions=\{actions\} \/>\}/);
+  assert.ok(!/setAsidePivot/.test(src('src/lib/copilot/nightly.ts')) && !/setAsidePivot/.test(src('src/app/api/copilot/cron/daily/route.ts')), 'nothing sets it aside for them');
+
+  console.log('copilot-core: pivot left checks passed');
+}
+
+pivotLeftSuite().catch((e) => { console.error(e); process.exit(1); });

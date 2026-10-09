@@ -307,7 +307,7 @@ export function derive(home: HomeData) {
     bets: home.lab?.bets ?? [],
     assets,
     assetsUnreadable: home.assets?.unreadable ?? null,
-    gaps: assetGaps({ assets, offer: home.profile.offer, weak: chain.weak, foundBy: found.value, states }),
+    gaps: assetGaps({ assets, offer: home.profile.offer, weak: chain.weak, foundBy: found.value, states, online: home.page ? (home.page.unreadable ? undefined : home.page.live?.asset ?? null) : undefined }),
     history: historyOf({
       bets: home.lab?.bets ?? [],
       checkpoints: home.lab?.checkpoints ?? [],

@@ -1,8 +1,10 @@
 // src/app/api/copilot/lab/route.ts
 // The bets' writes: open a bet, call one off, keep a test on the shelf or take
 // it off, log a conversation or a count, say how an introduction went, tie a
-// project to a bet, answer the checkpoint, ask for ideas, and say how buyers find
-// you. Each is validated by lib/copilot/lab.ts and stored as an event. A verdict is never posted here — there is no "mark it passed" —
+// project to a bet, answer the checkpoint, ask for ideas, say how buyers find
+// you, search for the running bet's people or set one aside (voices.ts), and
+// answer what a pivot on who buys left behind (era.ts pivotLeft). Each is
+// validated by lib/copilot/lab.ts or its own module and stored as an event. A verdict is never posted here — there is no "mark it passed" —
 // because it is computed from the rows on every load (invariant 10's
 // reasoning: a bet the person could pass by tapping would be graded by the one
 // person most hoping it passes).
@@ -19,8 +21,16 @@ import { foundOf } from '@/lib/copilot/proof';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { isFoundBy } from '@/lib/copilot/offer';
 import { ProofModelError, ProofRefusal, startIdeas, writeIdeas } from '@/lib/copilot/proofai';
-import { claimProposal, deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, loadHome, loadIdeaRuns, loadLabEvents, setFoundBy, unclaimProposal, withdrawLabBet } from '@/lib/copilot/store';
+import {
+  PIVOT_KEPT, claimProposal, deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, insertPivotAnswer, insertVoiceEvent,
+  loadHome, loadIdeaRuns, loadLabEvents, loadVoices, setAsidePivot, setFoundBy, unclaimProposal, withdrawLabBet,
+} from '@/lib/copilot/store';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
+import { offerIsEmpty } from '@/lib/copilot/offer';
+import { bumpUsage, periodKey } from '@/lib/copilot/usage';
+import { LAB_VOICE_GONE, LAB_VOICES, betVoiced, betVoices, isVoiceId, voiceRefusal, voicesSeen } from '@/lib/copilot/voices';
+import { findVoices } from '@/lib/copilot/voicefind';
+import { exaConfigured } from '@/lib/copilot/watch/exa';
 
 export const runtime = 'nodejs';
 // Ideas are written in after(), for up to two and a half minutes (proofai.ts):
@@ -221,6 +231,56 @@ export async function POST(req: Request) {
           });
         }
         return json({ ok: true, started, home: await loadHome(auth.pid) });
+      }
+      case 'voices': {
+        // People who said it, for the running bet (voices.ts): the searches run
+        // here, in the tap — seconds, not minutes — and what they kept is stored
+        // and metered like the matches it is.
+        const home = await loadHome(auth.pid);
+        if (!home) return fail('Not found', 404);
+        if (home.lab?.unreadable) return fail(`Your bets could not be read just now: ${home.lab.unreadable}`);
+        // Unread, a search could bring back the people already on the card and charge for them twice.
+        if (home.lab?.voices?.unreadable) return fail(`The people already found could not be read just now, so a search cannot tell who is new: ${home.lab.voices.unreadable}`);
+        const view = home.lab?.bets.find((x) => x.bet.id === str(b.bet));
+        if (!view) return fail('That bet is not in your record.');
+        const mine = betVoices(home.lab?.voices, view.bet, home.lab?.talks ?? []);
+        const remaining = home.billing.matches.remaining;
+        const no = voiceRefusal({ running: view.state === 'running', voiced: betVoiced(view.bet), searches: mine.searches, ready: exaConfigured(), remaining });
+        if (no) return fail(no);
+        // A search worked out from nothing is not the person's (invariant 1).
+        if (offerIsEmpty(profile.offer)) return fail('Say what you sell and who for first: the search is written from it.');
+        const found = await findVoices({ offer: profile.offer ?? {}, bet: view.bet, seen: voicesSeen(home.lab?.voices), today, max: remaining });
+        // Stored even when it kept nobody: "searched, nobody new" is an answer, and
+        // the next search should know this one ran.
+        await insertVoiceEvent(auth.pid, LAB_VOICES, {
+          bet: view.bet.id, queries: found.queries, from: found.from, voices: found.voices,
+          ...(found.why ? { why: found.why } : {}),
+        });
+        if (found.voices.length) await bumpUsage(auth.pid, periodKey(profile.timezone), 'matches', found.voices.length);
+        return json({ ok: true, kept: found.voices.length, why: found.why, home: await loadHome(auth.pid) });
+      }
+      case 'voice_gone': {
+        if (!isVoiceId(b.voice)) return fail('Which post?');
+        // The posts alone, not the whole home: checking one id needs only the searches.
+        const found = await loadVoices(auth.pid);
+        if (found.unreadable) return fail(`The people found for your bets could not be read just now: ${found.unreadable}`);
+        if (!found.searches.some((s) => s.voices.some((v) => v.id === b.voice))) return fail('That post is not one found for your bets.');
+        await insertVoiceEvent(auth.pid, LAB_VOICE_GONE, { voice: b.voice });
+        return json({ ok: true, home: await loadHome(auth.pid) });
+      }
+      case 'pivot_left': {
+        // What a pivot on who buys left behind (era.ts pivotLeft): set aside, or
+        // kept, by the person's tap. Only the pivot the screen showed — a second
+        // pivot since then is another question, asked on its own card.
+        const home = await loadHome(auth.pid);
+        const left = home?.pivotLeft ?? null;
+        if (!left || left.day !== str(b.day)) return fail('Nothing from that pivot is waiting on you.');
+        if (b.keep === true) {
+          await insertPivotAnswer(auth.pid, PIVOT_KEPT, { pivot: left.day });
+          return json({ ok: true, home: await loadHome(auth.pid) });
+        }
+        const set = await setAsidePivot(auth.pid, left.day);
+        return json({ ok: true, set, home: await loadHome(auth.pid) });
       }
       case 'found_by': {
         if (b.found_by !== null && !isFoundBy(b.found_by)) return fail('How do buyers find you?');

@@ -322,7 +322,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
-| Proof | is the business proven, and what is being bet to find out | what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play (folded under its name with how it counts and the hand-over box), the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet · the history, everything above dated · conversations, projects and agents, a line each | `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts` |
+| Proof | is the business proven, and what is being bet to find out | what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play (folded under its name with how it counts and the hand-over box), the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · a conversation bet's people: public posts where somebody says its problem, each to answer by hand · after a pivot on who buys, what it left behind, to set aside or keep · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet; a landing page put online with one button, counting opens and taps · the history, everything above dated · conversations, projects and agents, a line each | `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts`, `voices.ts`, `livepage.ts`, `era.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move, which steps aside while the list is read downward (it sat over the amounts) | `money/book.ts` |
 | You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals, one list · Records, what it reads instead of asking (a pill only where one waits on you) · Settings (the business), the nightly run ("Run again" starts tonight's pass now, and the row reports each step) and Account, three groups · the header names the tab; only Path greets, and only Path has a line under it — on Proof, Money and You it repeated the first card | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
@@ -776,8 +776,12 @@ On the screen, top to bottom:
   chain whole (the parts below). Under it, runway in bets and the last checkpoint
   read back. "Since you last looked" names a part that moved, per device, under
   the key Work used, so what a device saw there carries over.
-- **The bet**, one at a time — or the checkpoint, or the way to pick one.
-- **Assets**, the gaps first, each with who made the version in use.
+- **What a pivot on who buys left behind**, until it is answered: the old
+  buyers' businesses, the drafts to them and the searches for them.
+- **The bet**, one at a time — or the checkpoint, or the way to pick one — and
+  where it is about people, the people who said its problem in public.
+- **Assets**, the gaps first, each with who made the version in use; a landing
+  page online says so, with what it counted.
 - **History**, the four newest; all of it, by month and kind, behind a tap.
 - **Behind it**: conversations, projects and agents, a line each.
 
@@ -1078,6 +1082,100 @@ the person's own rows, so a number in it is one they gave and passes
 `numberOutside`; the prompt says one person's number is not a rate. Nothing here
 keeps a file on anyone, sets a quota, or messages people for you (DIRECTION.md).
 
+**People who said it** (`voices.ts`, `voicefind.ts`, `Voices` in `ProofTab.tsx`).
+Its owner's bet was ten conversations with people who want a business and do
+not know where to start, and on day three the card read "0 of 10" over a "Log a
+conversation" button: nothing in the app could find one such person. The pool,
+the hunts and the deck all look for businesses to write to; a conversation bet
+needs people to talk to. So a bet on who buys, or one counted in conversations
+(`betVoiced`), finds them: one tap searches recent public posts — Reddit, Indie
+Hackers, Hacker News, Quora, X (`VOICE_DOMAINS`), the last `VOICE_DAYS` (120) —
+where somebody says the bet's problem in the first person. The searches are
+written by the model as the sentence such a person would post (`VOICE_SYSTEM`),
+or from the offer's own problem and buyers where there is no model; Exa is asked
+for the page's own sentence (`highlights`), never its summary, because the card
+quotes it as theirs. What comes back is held to the rules before anything is
+kept (`voicesFromHits`): a post on one of those sites by its address (checked
+again here, not trusted from the index), each thread once however it was linked
+(`voiceKey`: Reddit with or without its slug, old or new), none already found
+for the account, at most `VOICES_PER_SEARCH`. Each card has the title, their
+sentence, where and when, and three taps: **Open** (their post, to answer from
+the person's own account — the app writes to nobody, invariant 4), **Talked to
+them** (the conversation sheet, filled with who they are and named for the post:
+`Talk.voice`), and **Not a fit** (`lab_voice_gone`). Above them, a first line from
+The Mom Test in fixed words (`VOICE_OPENER`), to copy and change. The bet counts
+how many it found it talked to ("2 of 8 talked to"), from the conversations that
+name a post. From day two of a conversation bet with nothing logged the card
+says so in the person's own numbers ("Day 3 of 14 and no conversation logged
+yet: 10 to have in the 12 days left", `stuckLine` — arithmetic on their line,
+never a pace the app estimated), and while nobody is found the search leads and
+"Log a conversation" waits beside it. A search runs in the tap (seconds),
+three per bet (`VOICE_SEARCHES`); it is stored even when it kept nobody ("found
+nobody new" is an answer), and metered like the matches it is — Exa charges per
+search, so each post kept spends one of the month's matches (invariant 6 protects
+the free adapters). Refused the same way by the route and the card
+(`voiceRefusal`): no `EXA_API_KEY` (no section at all — invariant 7), the bet
+not running or not about people, three searches done, the allowance spent. A
+search that never ran is an error on the card, not a search that found nobody,
+and one of two failing is said beside what the other found (invariant 13). It
+passes the survival test on the join: a harness can call a search once; it
+cannot say that eight posts found for this bet became two conversations and one
+commitment. Nothing is kept about anyone but what they posted in public and
+where, for the bet that found it — no file on a person (DIRECTION.md).
+
+**Your page, online** (`livepage.ts`, `pagekey.ts`, `PagePanel` in
+`ProofSheets.tsx`, `/p/[code]`). Proof read "Weak link: how they hear. Your count
+link has recorded nothing yet" over "No landing page yet — Draft it", and drafting
+gave text: not somewhere a buyer can find, and the count link waited on a form
+tool's webhook nobody wired. Now a kept landing page goes online from its sheet
+in one tap, at one address per account (`pageCode`: the account packed short and
+signed, so the page route reads one account's rows and nobody can make an
+address by guessing), with **one ask**: the person's WhatsApp, their email, or a
+secure link they give — a sign-up, a booking page, a checkout (`normalizeAsk`).
+The page is the version's own words and nothing else: text only, escaped, the ask
+the only link on it (`pageHtml` — a page on this app's address must not become a
+way to put a link of anyone's choosing in front of a stranger), served by a route
+rather than a page so the app's root layout (its title, a form widget's script, a
+service worker) stays off it, under a policy that lets one script run by nonce,
+nothing load, nothing frame it, and nothing post anywhere but the app (`noindex`
+too). That script counts: one **open** per tab and one **tap** on the ask
+(`page_hit`, sent by `sendBeacon` from the page itself, so link previews that do
+not run scripts count nothing), each with the version that was online — never
+who: no address, no agent, no cookie of theirs is read or kept. The person's own
+visits are not counted (their session rides along on the same address). Past
+`PAGE_HITS_PER_HOUR` in an hour counting pauses and says so on the sheet once
+(`page_capped`), rather than quietly dropping. A tap is a tap: it is said apart
+from the count link's enquiries and never added to them — somebody who tapped
+"Message me" may have sent nothing. What it feeds: **how they hear**, for a
+business found online (`ChainInput.page`: "41 people opened your page, 5 tapped
+Try it free", measured, so the part is never bare, and counted from a pivot's day
+like the rest); a bet that counts "visits" or "taps" (`unitPage`, beside the
+count link's `unitSignal`); the asset's row ("Online · v2 · 41 opened · 5
+tapped") and each version's line ("Online: 30 opened · 1 tapped" — which version
+was up when it was opened, the join a page written in a chat cannot make); and a
+gap, "Your page is not online", for a page kept and not put up. The address
+stays while the version behind it changes, so a link already shared keeps
+working; taken offline, it says the page is not online, and goes back up in one
+tap with the button it had (`lastAskOf`).
+
+**What a pivot on who buys left behind** (`era.ts` `pivotLeft`, `AfterPivot` in
+`ProofTab.tsx`). Its owner pivoted who buys on 7 Oct, from booking automation for
+resorts to the app itself for people starting out; two days later Maps still
+searched for pest control and plumbing in Manila every night, 148 of those
+businesses waited in the pool, and 35 drafts had been rewritten to them from the
+new offer — a $29 app for people starting a business, pitched to exterminators.
+Saving the offer rewrites the waiting drafts by design (a reworded offer is the
+same business), and only the pivot says the buyers changed. So after a pivot on
+who buys, a card under the verdict says what was left: the segments still
+searched, the businesses found for the old buyers (`foundForOld`: found before
+the pivot's day, or since under a segment typed before it) and the drafts written
+to them. **Set them aside** cancels those drafts (`cancel_reason = 'pivot'`),
+dismisses those businesses (a status — nothing deleted; what was sent and what
+came back stays in the history) and clears the segments (`setAsidePivot`);
+**Keep them** keeps everything. Either answer is kept for that pivot
+(`pivot_set_aside`, `pivot_kept`) and the card goes; a later pivot asks again.
+Nothing is set aside for anybody: no cron or nightly pass calls it.
+
 **A project's day can pass** (`commission.ts` `lapsedOn`). "List guesthouses in
 Manila for Oct 5" asked on 7 Oct which of three to book, and that question sat on
 the Path as something owed and held one of three project slots. A draft or a
@@ -1108,6 +1206,10 @@ becomes the experiment's (`experimentVerdicts`: passed is worked, did not pass i
 failed, called off is could not tell), written by `settleBetExperiments` before
 the next plan is drawn, so the planner hears what the rows said. An
 introduction that waits is in Needs you, as above.
+
+The bet's people, the page and a pivot's leftovers are `copilot_events` rows
+too: `lab_voices` (one search, with what it kept), `lab_voice_gone`, `page_live`,
+`page_off`, `page_hit`, `page_capped`, `pivot_set_aside`, `pivot_kept` — no migration.
 
 Stored without a migration, as `copilot_events` rows: the bets' `lab_bet`,
 `lab_bet_stopped`, `lab_talk`, `lab_checkpoint`, `lab_count`, `lab_link`,
@@ -3144,7 +3246,10 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/goals` | create / update a goal |
 | POST | `/api/copilot/targeting` | `{ target_segments, target_area }` |
 | POST | `/api/copilot/offer` | `{ sells, for_who, problem, price_band, proof_url, found_by?, bet? }` — every change is recorded as a version of the offer; `bet` ties that version to the bet it was written for |
-| POST | `/api/copilot/lab` | the bets: `open` (with `idea`, `unit`, `experiment`), `stop`, `talk` (with `role` and `via`, the introduction it came through), `intro` (asked for, or fell through), `forget`, `count`, `uncount`, `link` (a project to a bet), `checkpoint`, `ideas` (three from a model, for one part: the ask is recorded and the writing runs in `after()`; `GET ?ideas=1` is what Proof polls), `found_by` — never a verdict |
+| POST | `/api/copilot/lab` | the bets: `open` (with `idea`, `unit`, `experiment`), `stop`, `talk` (with `role`, `via`, the introduction it came through, and `voice`, the post it came from), `intro` (asked for, or fell through), `forget`, `count`, `uncount`, `link` (a project to a bet), `checkpoint`, `ideas` (three from a model, for one part: the ask is recorded and the writing runs in `after()`; `GET ?ideas=1` is what Proof polls), `found_by`, `voices` (`{ bet }`: one search for the running bet's people, in the tap; answers `kept` and `why`), `voice_gone` (`{ voice }`), `pivot_left` (`{ day, keep? }`: set aside, or keep, what a pivot on who buys left behind; answers `set`) — never a verdict |
+| POST | `/api/copilot/page` | your page: `{ action: 'publish', asset, n?, ask?: { kind: whatsapp \| email \| link, to, label? } }` — a landing page's version online; without `ask`, the button it last had · `{ action: 'off' }` |
+| GET | `/p/[code]` | the page online, as a stranger opens it: the version's words, its one button, a nonce-only script that counts. No session; the code is the account, signed |
+| POST | `/api/copilot/page/[code]` | the page's own count: `{ kind: open \| tap }`, nothing else read. The owner's visits are not counted; 410 when offline, 429 past `PAGE_HITS_PER_HOUR`. `GET` counts nothing |
 | GET/POST | `/api/copilot/assets` | `GET ?id=` one asset whole · `POST` `add`, `version`, `draft` (by AI), `retire`, `restore`, `adopt` (make a version of the offer yours), `proof` (a demo's link as the proof) |
 | POST | `/api/copilot/finance` | `{ monthly_burn, cash, currency }` · `{ burn: 'rows' }` hands a typed monthly spend back to the rows' estimate |
 | POST | `/api/copilot/opportunities/:id` | `{ status: saved \| dismissed \| acted \| new }` |

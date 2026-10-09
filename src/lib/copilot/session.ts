@@ -35,6 +35,15 @@ export function signalKey(): Buffer {
   return createHmac('sha256', secret()).update('copilot-signal-v1').digest();
 }
 
+/**
+ * The key a page's address is signed with (pagekey.ts): derived like the count
+ * link's, so an address can never pass for a cookie or a link. Rotating the
+ * session secret changes every page's address; each is shown again on its sheet.
+ */
+export function pageKey(): Buffer {
+  return createHmac('sha256', secret()).update('copilot-page-v1').digest();
+}
+
 function sign(profileId: string): string {
   return createHmac('sha256', secret()).update(profileId).digest('hex');
 }

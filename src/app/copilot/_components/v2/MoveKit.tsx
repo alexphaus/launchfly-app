@@ -84,6 +84,7 @@ export function useMove(actions: Actions, brief: Brief) {
       else if ('outreach' in go) actions.openSheet({ kind: 'outreach', stage: go.outreach });
       else if ('bet' in go) actions.openSheet({ kind: 'bet', part: go.bet });
       else if ('asset' in go) actions.openSheet({ kind: 'asset', assetKind: go.asset });
+      else if ('assetId' in go) actions.openSheet({ kind: 'asset', id: go.assetId });
       else actions.setTab(go.tab);
       return;
     }

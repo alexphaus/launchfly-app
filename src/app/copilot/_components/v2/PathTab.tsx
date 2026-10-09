@@ -234,7 +234,7 @@ function BetHere({ d, actions }: { d: Derived; actions: Actions }) {
   const cur = lab.current;
   if (lab.unreadable || (!cur && !lab.checkpoint.due)) return null;
   const line = cur
-    ? [`Day ${cur.day} of ${cur.bet.days}`, resultLine(cur), // Counted in the plan's own unit, the word Proof uses: "0 of 10 planned" there was "0/10 talks" here.
+    ? [`Day ${cur.day} of ${cur.bet.days}`, resultLine(cur), // Counted in the plan's own unit, the word Engine uses: "0 of 10 planned" there was "0/10 talks" here.
     cur.bet.tries && cur.tries != null ? `${cur.tries} of ${cur.bet.tries.planned} ${betWords(cur.bet.tries.metric, cur.bet.tries.planned)}` : null, lab.checkpoint.due ? 'checkpoint due' : null].filter(Boolean).join(' · ')
     : 'Pivot or persevere: the bets that ended, read back';
   return (

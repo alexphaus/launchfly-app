@@ -66,7 +66,7 @@ export function SignalsSheet({ home, actions }: { home: HomeData; actions: Actio
     <>
       <h3>Sign-ups and sales</h3>
       <p className="desc">
-        A private link your forms and checkout send to. Each sign-up, enquiry or payment it gets is counted where Proof counts
+        A private link your forms and checkout send to. Each sign-up, enquiry or payment it gets is counted where Engine counts
         how buyers hear and what they pay — measured, not typed. Nothing about who sent it is kept: no names, no emails.
       </p>
       {error && <div className="cp-error">{error}</div>}

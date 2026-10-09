@@ -7,6 +7,10 @@ Two products share this repository and almost nothing else.
 | **Launchfly** | `src/app/*` (except below), `src/lib/*` (except below) | The original product: AI website/store generation, WhatsApp sales agents, prospect pipeline. |
 | **The Copilot** | `src/app/copilot/`, `src/app/lifeos/`, `src/app/copilot2/`, `src/app/api/copilot/`, `src/lib/copilot/`, `scripts/tests/copilot-core.test.ts` | A mobile-first installable PWA for local outbound. Shares the Supabase project, the Next runtime, the WhatsApp provider, Resend and the Apify Maps scraper — **none of the business logic**. |
 
+The copilot's fourth tab is called **Engine** on screen (it was Proof until October
+2026). Its key, files, routes and the connector's `get_proof` are still `proof`, and
+both names open it. Code and docs that say Proof mean this tab.
+
 Almost all recent work is the copilot. Two docs carry the context this file
 deliberately does not repeat:
 
@@ -23,7 +27,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 87 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 88 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 

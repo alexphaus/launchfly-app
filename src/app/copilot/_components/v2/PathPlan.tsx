@@ -179,7 +179,7 @@ export function ExperimentCard({ view, goalTitle, today, actions, bet, canBet, o
           <>
             <span className="cp2-exp-when">
               {bet.state === 'running'
-                ? `A bet on Proof decides it · day ${bet.day} of ${bet.bet.days}, ${resultLine(bet)}`
+                ? `A bet on Engine decides it · day ${bet.day} of ${bet.bet.days}, ${resultLine(bet)}`
                 : `The bet ${bet.state === 'passed' ? 'passed' : bet.state === 'failed' ? 'did not pass' : 'was called off'}: ${resultLine(bet)}. The plan hears it when it is next drawn.`}
             </span>
             <span className="cp2-way-acts">

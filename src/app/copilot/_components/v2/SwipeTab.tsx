@@ -746,7 +746,7 @@ export default function SwipeTab({ home, d, actions, finding, say, refresh }: {
             ) : !d.searching ? (
               // Said rather than shown as a quiet morning: nothing on this server
               // can search yet, and the Scout under Agents on Proof names what is missing.
-              <><b>Nothing can look for you yet</b><p>Web search is not set up on this server. The Scout, under Agents on Proof, says what is missing.</p></>
+              <><b>Nothing can look for you yet</b><p>Web search is not set up on this server. The Scout, under Agents on Engine, says what is missing.</p></>
             ) : (
               // "Every night" only while the nightly job is running; the Path says when it is not.
               <><b>Nothing worth your time yet</b><p>{setAside ? `It went through ${setAside} and none were worth a message. ` : ''}{d.done.stale ? 'New ones land here as they are found.' : 'It keeps looking every night, and new ones land here.'}</p></>

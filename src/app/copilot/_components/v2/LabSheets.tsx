@@ -355,7 +355,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
       )}
       {running && (
         <div className="cp-note cp2-lab-warn">
-          One bet at a time: &ldquo;{running.bet.belief}&rdquo; runs until {dayWords(running.last)}. Let it finish, or call it off on Proof, first — two at once would share every count.
+          One bet at a time: &ldquo;{running.bet.belief}&rdquo; runs until {dayWords(running.last)}. Let it finish, or call it off on Engine, first — two at once would share every count.
         </div>
       )}
       {error && <div className="cp-error">{error}</div>}

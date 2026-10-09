@@ -11234,8 +11234,10 @@ async function voicesSuite() {
 
   /* 12. The card: no section where nothing can search (invariant 7), the opener is fixed words, nothing is sent. */
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
-  assert.match(tab, /if \(!ready && !mine\.found\) return null;/);
-  assert.match(tab, /\{betVoiced\(b\) && <Voices home=\{home\} view=\{view\} work=\{work\} actions=\{actions\} \/>\}/);
+  // Its own card above the bet, and nothing at all until a search has run or its record cannot be read.
+  assert.match(tab, /if \(mine\.searches === 0 && !read\?\.unreadable\) return null;/);
+  assert.match(tab, /<People home=\{home\} view=\{lab\.current\} actions=\{actions\} find=\{find\} opened=\{opened\} \/>/);
+  assert.ok(tab.indexOf('<People ') < tab.indexOf('<ThisBet '), 'the people come before the bet they count toward');
   assert.match(tab, /href=\{v\.url\} target="_blank" rel="noopener noreferrer nofollow"/);
   assert.match(tab, /actions\.openSheet\(\{ kind: 'talk', voice: v\.id \}\)/);
   assert.ok(vxOpener.length < 140 && !/\$|\d/.test(vxOpener), 'a question about their past, with no number in it');
@@ -11480,3 +11482,166 @@ async function pivotLeftSuite() {
 }
 
 pivotLeftSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Engine: the next step first ─────────────────────────────────────────── */
+//
+// The tab was Proof and opened on its verdict, with the one thing to do two and
+// a half screens down. Now the step leads — read off the rows — and the verdict
+// is one tap under it; the people a bet found are their own card, one tap logs a
+// conversation, and a bet that does not pay says so against the goal that does.
+
+import {
+  OPENED_KEY as enOpenedKey, OPENED_MAX as enOpenedMax, claudeAsk as enAsk, clearOpened as enClear, engineStep as enStep, markOpened as enMark,
+  parseOpened as enParse, payoffGoal as enGoal, payoffOf as enPayoff, type PayoffGoal as EnGoal, type StepInput as EnInput,
+} from '../../src/lib/copilot/engine';
+import { voiceId as enVoiceId, voiceTalk as enVoiceTalk, type BetVoices as EnVoices, type Voice as EnVoice } from '../../src/lib/copilot/voices';
+import type { BetView as EnBetView } from '../../src/lib/copilot/lab';
+import type { Goal as EnGoalRow } from '../../src/lib/copilot/types';
+
+async function engineSuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(p, 'utf8');
+  const today = '2026-10-10';
+
+  const bet = (over: Record<string, unknown> = {}, day = 4, view: Record<string, unknown> = {}) => ({
+    bet: {
+      id: 'b1', part: 'who', belief: 'People starting out have the problem I fix', play: null, idea: null, metric: 'committed', unit: null, target: 3,
+      tries: { metric: 'talks', planned: 10 }, days: 14, start: '2026-10-07', price: 29, priceLabel: '$29', experiment: null, openedAt: '2026-10-07T00:00:00Z', ...over,
+    },
+    state: 'running', result: 0, tries: 0, day, last: '2026-10-20', ended: null, ...view,
+  }) as unknown as EnBetView;
+  const post = (n: number, where = 'Indie Hackers'): EnVoice => ({
+    id: enVoiceId(`https://www.indiehackers.com/post/p${n}`)!, url: `https://www.indiehackers.com/post/p${n}`, where, title: `Post ${n}`, said: null, author: null, posted: null,
+  });
+  const voices = (open: EnVoice[], over: Partial<EnVoices> = {}): EnVoices => ({ open, talked: 0, found: open.length, searches: open.length ? 1 : 0, last: null, ...over });
+  const input = (over: Partial<EnInput> = {}): EnInput => ({
+    today, offerSet: true, unreadable: false, checkpoint: { due: false, ended: 0 }, current: bet(), talks: [], found: 'inbound', voices: voices([]),
+    opened: new Set(), searchRefusal: null, shelf: [], weak: { key: 'reach', label: 'How they hear', why: 'Your count link has recorded nothing yet. It counts what comes in.' }, goal: null, ...over,
+  });
+
+  /* 1. The step, in order. */
+  const offer = enStep(input({ offerSet: false, current: null }))!;
+  assert.deepEqual([offer.kind, offer.primary.go], ['offer', { to: 'offer' }], 'nothing is written from a blank offer');
+  assert.equal(enStep(input({ unreadable: true })), null, 'no step over a record nobody could read (invariant 13)');
+  const cp = enStep(input({ current: null, checkpoint: { due: true, ended: 2 } }))!;
+  assert.deepEqual([cp.kind, cp.title, cp.primary.go], ['checkpoint', 'Pivot or persevere?', { to: 'checkpoint' }]);
+  assert.equal(cp.why, '2 bets ended since you last decided. The next one starts from your answer.');
+  assert.equal(enStep(input({ checkpoint: { due: true, ended: 1 } }))!.kind, 'find', 'a running bet comes before a stale checkpoint');
+  const kept = enStep(input({ current: null, shelf: [{ id: 's1', part: 'pay', belief: 'They pay $29 for a guarantee' }] }))!;
+  assert.deepEqual([kept.kind, kept.title, kept.primary.go], ['shelf', 'They pay $29 for a guarantee', { to: 'shelf', id: 's1' }], 'the test they wrote down comes first');
+  assert.equal(enStep(input({ current: null, found: null }))!.kind, 'found');
+  const pick = enStep(input({ current: null }))!;
+  assert.deepEqual([pick.kind, pick.title, pick.primary.go], ['pick', 'Bet on how they hear', { to: 'bet', part: 'reach' }]);
+  assert.equal(pick.why, 'Your count link has recorded nothing yet.', 'the first sentence; the sheet has the rest');
+  assert.deepEqual(enStep(input({ current: null, weak: null }))!.primary.go, { to: 'bet', part: 'who' });
+
+  /* 2. A conversation bet: find people, reply, ask how it went, find more — and say what it is counted from. */
+  const none = enStep(input())!;
+  assert.deepEqual([none.kind, none.title, none.primary, none.hint?.startsWith('Searches recent public posts')], ['find', 'Find people who said it', { label: 'Find people', go: { to: 'find' } }, true]);
+  assert.equal(none.eyebrow, 'Next step · day 4 of 14');
+  assert.equal(none.why, 'Day 4 of 14 and no conversation logged yet: 10 to have in the 11 days left.', 'the person’s own line, not a pace');
+  const five = [1, 2, 3, 4, 5].map((n) => post(n));
+  const reply = enStep(input({ voices: voices(five), talks: [{ on: '2026-10-08' }] }))!;
+  assert.deepEqual([reply.kind, reply.title, reply.primary.label, reply.primary.go], ['reply', 'Reply to one of the 5 people who said it', 'Open the post on Indie Hackers', { to: 'post', voice: five[0].id, url: five[0].url }]);
+  assert.equal(reply.why, '0 of 3 commitments · 11 days left.', 'something logged: no longer "stuck"');
+  assert.equal(enStep(input({ voices: voices([five[0]]) }))!.title, 'Reply to the person who said it');
+  const skipOpened = enStep(input({ voices: voices(five), opened: new Set([five[0].id]) }))!;
+  assert.deepEqual([skipOpened.title, (skipOpened.primary.go as { voice: string }).voice], ['Reply to one of the 4 people who said it', five[1].id], 'the next one, not the one already opened');
+  const waiting = enStep(input({ voices: voices(five.slice(0, 2)), opened: new Set(five.slice(0, 2).map((v) => v.id)) }))!;
+  assert.deepEqual([waiting.kind, waiting.title, waiting.primary.go], ['waiting', 'Did any of the 2 answer?', { to: 'people' }]);
+  assert.equal(enStep(input({ voices: voices([five[0]]), opened: new Set([five[0].id]) }))!.title, 'Did they answer?');
+  const more = enStep(input({ voices: voices([], { found: 4, searches: 1 }) }))!;
+  assert.deepEqual([more.kind, more.title, more.hint, more.primary.go], ['find', 'Find more people who said it', null, { to: 'find' }], 'the hint is said once');
+  const capped = enStep(input({ voices: voices([], { found: 4, searches: 3 }), searchRefusal: '3 searches for this bet already.' }))!;
+  assert.deepEqual([capped.kind, capped.primary.go], ['count', { to: 'next', go: 'talk' }], 'no search to offer: log the conversation that happened');
+  assert.equal(enStep(input({ searchRefusal: 'Searching the web is not set up on this server (EXA_API_KEY).' }))!.title, 'Log your next conversation', 'never a button that could only be refused (invariant 7)');
+
+  /* 3. Every other bet: where its next count happens. */
+  const sends = enStep(input({ current: bet({ part: 'reach', metric: 'replied', tries: { metric: 'sent', planned: 20 } }), voices: null, found: 'outreach' }))!;
+  assert.deepEqual([sends.title, sends.primary.label, sends.primary.go], ['Send the next messages', 'Open Swipe', { to: 'next', go: 'swipe' }]);
+  assert.equal(enStep(input({ current: bet({ part: 'pay', metric: 'paid_at_price', tries: null }), voices: null, found: 'inbound' }))!.primary.go.to, 'next');
+  assert.equal(enStep(input({ current: bet({ part: 'reach', metric: 'logged', unit: 'sign-ups', tries: null }), voices: null }))!.title, 'Log your sign-ups');
+  const last = enStep(input({ current: bet({}, 14, { last: today }) }))!;
+  assert.equal(last.eyebrow, 'Next step · day 14 of 14 · last day');
+
+  /* 4. A bet that does not pay says so, against the goal sales land on. */
+  const goalRows = [
+    { id: 'g2', title: 'Monetize App', metric: 'count', unit: 'users', target_value: 10, current_value: 0, horizon_days: 60, priority: 1, created_at: '2026-10-09T00:00:00Z' },
+    { id: 'g3', title: 'Emergency fund', metric: 'currency', unit: '$', target_value: 15000, current_value: 1000, horizon_days: 54, priority: 2, created_at: '2026-10-09T00:00:00Z' },
+    { id: 'g1', title: 'Save Exit PH [NOV]', metric: 'currency', unit: '$', target_value: 1500, current_value: 0, horizon_days: 60, priority: 0, created_at: '2026-10-09T00:00:00Z' },
+  ] as unknown as EnGoalRow[];
+  const g = enGoal(goalRows, today)!;
+  assert.deepEqual([g.title, g.target, g.dueOn, g.daysLeft], ['Save Exit PH [NOV]', 1500, '2026-12-08', 59], 'the goal a sale is credited to: the first money goal by priority');
+  assert.equal(enGoal(goalRows.filter((x) => x.id === 'g2'), today), null, 'no money goal, nothing to say');
+  assert.equal(enGoal([{ ...goalRows[2], target_value: null }] as unknown as EnGoalRow[], today), null, 'no target to be short of');
+  const talkBet = bet();
+  assert.deepEqual(enPayoff(talkBet.bet, g, today), {
+    line: 'Passing this bet does not pay you. Save Exit PH [NOV] still needs $1,500 by 8 Dec (59 days left).', pays: false, link: { label: 'What pays now', go: { to: 'tab', tab: 'path' } },
+  });
+  const sale = enPayoff(bet({ metric: 'paid_at_price' }).bet, g, today)!;
+  assert.deepEqual([sale.pays, sale.link], [true, null]);
+  assert.equal(sale.line, 'A sale counts toward Save Exit PH [NOV]: $1,500 to go by 8 Dec (59 days left). At your $29 that is 52 sales.', 'the same 52 the goal’s own outlook says');
+  assert.equal(enPayoff(talkBet.bet, { ...g, current: 1500 }, today), null, 'met: nothing to be short of');
+  assert.equal(enPayoff(talkBet.bet, null, today), null);
+  assert.equal(enPayoff(talkBet.bet, { ...g, dueOn: null, daysLeft: null }, today)!.line, 'Passing this bet does not pay you. Save Exit PH [NOV] still needs $1,500.', 'no date, none said');
+  assert.equal(
+    enPayoff(talkBet.bet, { ...g, unit: 'EUR', title: 'A very long goal name that would not sit in a sentence at all' }, today)!.line,
+    'Passing this bet does not pay you. A very long goal name that would not… still needs 1,500 EUR by 8 Dec (59 days left).',
+    'a long name is cut at a word, and a unit written as letters follows the number',
+  );
+  assert.equal(enStep(input({ goal: g }))!.payoff?.pays, false);
+  assert.equal(enStep(input({ current: null, goal: g }))!.payoff, null, 'said of a running bet only');
+
+  /* 5. The line Claude starts from: the bet's own words and count, then the record. */
+  assert.equal(enAsk(bet({}, 4, { result: 1 })), 'I am on day 4 of 14 of a bet: "People starting out have the problem I fix" It stands at 1 of 3 commitments. What should I do today, and would you change the bet?');
+  assert.equal(enStep(input())!.claude, enAsk(bet()));
+  assert.equal(enStep(input({ current: null }))!.claude, null, 'no bet, nothing to think through');
+  const mk = src('src/app/copilot/_components/v2/MoveKit.tsx');
+  assert.match(mk, /Use only what it says, and where it does not say, ask me rather than guess\./, 'the record goes with it, held to what it says');
+
+  /* 6. Posts opened on this device: reshaped, capped, first-open stays. */
+  assert.deepEqual(enParse(null), {});
+  assert.deepEqual(enParse([1, 2]), {});
+  const id = enVoiceId('https://www.reddit.com/r/x/comments/abc')!;
+  assert.deepEqual(enParse({ [id]: '2026-10-09T01:00:00Z', 'not-an-id': '2026-10-09T01:00:00Z', [enVoiceId('https://x.com/a/status/1')!]: 'yesterday' }), { [id]: '2026-10-09T01:00:00Z' });
+  assert.equal(enMark({ [id]: 'A' }, id, '2026-10-10T00:00:00Z')[id], 'A', 'opened again: the first time stays');
+  const crowd: Record<string, string> = {};
+  for (let n = 0; n < enOpenedMax + 5; n++) crowd[enVoiceId(`https://news.ycombinator.com/item?id=${n + 1}`)!] = new Date(Date.UTC(2026, 0, 1, 0, n)).toISOString();
+  assert.equal(Object.keys(enMark(crowd, id, '2027-01-01T00:00:00Z')).length, enOpenedMax, 'the oldest go');
+  assert.deepEqual(enClear({ [id]: 'A' }, id), {});
+  assert.equal(enOpenedKey('p1'), 'cp2.voices.opened:p1');
+
+  /* 7. One tap logs the conversation, named for the post, with the problem left to the conversation. */
+  const p1 = { ...post(1), author: 'marta_codes', where: 'Indie Hackers' };
+  assert.deepEqual(enVoiceTalk(p1, 'time'), { who: 'marta_codes (Indie Hackers)', role: 'buyer', problem: 'unasked', commitment: 'time', voice: p1.id });
+
+  /* 8. The screen: the step leads, the people are their own card, the verdict is a tap under it, the tab is Engine. */
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.ok(tab.indexOf('<Top ') < tab.indexOf('<AfterPivot') && tab.indexOf('<AfterPivot') < tab.indexOf('<People ') && tab.indexOf('<People ') < tab.indexOf('<ThisBet '), 'step, then what a pivot left, then the people, then the bet');
+  assert.match(tab, /const step = engineStep\(\{/);
+  assert.match(tab, /<Summary home=\{home\} d=\{d\} actions=\{actions\} changes=\{changes\} \/>/);
+  assert.ok(!/<Voices /.test(tab), 'the people are not inside the bet card');
+  assert.ok(!/work\.talks && work\.talks\.n > 0/.test(tab), 'the conversations row is gone: the score counts them and Behind it lists them');
+  assert.match(tab, /<button className="cp-btn" onClick=\{\(\) => goTo\(next\.go, actions, b\.id\)\}>\{next\.label\}<\/button>/, 'one primary button on the screen: the step’s');
+  assert.match(tab, /actions\.lab\(\{ action: 'talk', talk: voiceTalk\(v, commitment\) \}\)/, 'one tap on how it ended');
+  assert.match(tab, /try \{ window\.localStorage\.setItem\(key, JSON\.stringify\(next\)\); \} catch/, 'storage that keeps nothing costs only the question');
+  assert.match(tab, /href=\{p\.go\.url\} target="_blank" rel="noopener noreferrer nofollow"/, 'a real link, not a script’s popup');
+  assert.match(tab, /dayIn\(at, home\.profile\.timezone\)/, 'opened "yesterday" is the person’s yesterday');
+  const shell = src('src/app/copilot/_components/v2/CopilotApp2.tsx');
+  assert.match(shell, /const LABEL: Record<Tab2, string> = \{ path: 'Path', swipe: 'Swipe', proof: 'Engine', money: 'Money', you: 'You' \};/);
+  assert.match(shell, /proof: 'proof', engine: 'proof',/, 'both names open it');
+  assert.match(shell, /proof: IconEngine,/);
+  for (const [file, text] of [
+    ['src/app/copilot/_components/v2/PathPlan.tsx', 'A bet on Engine decides it'],
+    ['src/app/copilot/_components/useCopilot.ts', 'Saved. Engine reads your business that way now.'],
+    ['src/app/copilot/_components/v2/SwipeTab.tsx', 'under Agents on Engine'],
+    ['src/lib/copilot/asked.ts', 'Start one on Engine.'],
+  ] as const) assert.ok(src(file).includes(text), `${file} names the tab as it is called`);
+  assert.ok(!/\bProof\b/.test(src('src/app/copilot/_components/v2/CopilotApp2.tsx').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/ProofTab|Proof'/g, '')), 'no label of the old name left in the shell’s code');
+  const css = src('src/app/copilot/copilot.css');
+  for (const c of ['cp2-ns', 'cp2-ns-t', 'cp2-ns-chain', 'cp2-ns-dots', 'cp2-vox-card', 'cp2-vox-end']) assert.ok(css.includes(`.cp2-${c.replace(/^cp2-/, '')}`), `${c} is styled`);
+
+  console.log('copilot-core: engine checks passed');
+}
+
+engineSuite().catch((e) => { console.error(e); process.exit(1); });

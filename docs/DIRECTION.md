@@ -501,6 +501,29 @@ feature), and anything done for the person: the pivot asks, the search is a tap.
 See COPILOT.md → **Proof**: People who said it, Your page, online, and What a
 pivot on who buys left behind.
 
+**Then — Engine, step first.** Its owner asked for a review of Proof as an
+entrepreneur would meet it, and whether it earns a place beside Claude. The honest
+answer was in two halves. What a chat cannot do held: a test written before it
+starts and counted from rows, work done unprompted, a join of which version was up
+when. What did not: the tab opened on a report, carried a vocabulary of bets, pass
+lines, chains and shelves for somebody with two months of runway, asked for a
+five-field log after every conversation in an app that had written 380 drafts for
+27 sent, and gave no word on whether a two-week bet could pay for the goal beside
+it. So: the tab opens on the one step, read off the rows, with the verdict one tap
+under it; the people a bet found are their own card, and one tap on how a
+conversation ended logs it; and a bet that does not pay says so against the goal
+that does, with the way to what pays one tap away. Claude stays where it is better
+— thinking, writing, advice — with the same record handed to it by one tap (Ask
+Claude) or read live over the connector. The tab is renamed **Engine**, because it
+is the five-part machine that makes the money and the weak part to tune, and
+because "Proof" described a verdict where the tab now leads with the act. What was
+declined: a score of how likely the bet is to work (invariant 2: there is no such
+number), choosing the step with a model (the step is a rule; a model that picks
+what to do is the morning brief, which a harness does better), and logging on the
+person's behalf (the conversation is theirs to say how it ended). It passes the
+survival test as before, on the rows the step is read from and the goal it is read
+against. See COPILOT.md → **Proof**: The next step first.
+
 ---
 
 ## Where it actually stands

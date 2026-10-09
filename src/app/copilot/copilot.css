@@ -1157,15 +1157,9 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
    ("business") on purpose: .cp2-link already means the small blue text button,
    and a part of the chain named after it would inherit its colour and size
    inside .cp-root, where scoping cannot help. */
-.cp-root[data-theme="soft"] .cp2-product-name { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -0.2px; margin: 2px 0 8px; }
 
 /* The verdict: proven, or the bar and the count against it. Green only when
    it is proven; a tint is not a verdict until the rows say so. */
-.cp-root[data-theme="soft"] .cp2-bz-verdict { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; padding: 12px 14px; border-radius: 16px; background: var(--line); }
-.cp-root[data-theme="soft"] .cp2-bz-verdict.proven { background: var(--ai-tint); }
-.cp-root[data-theme="soft"] .cp2-bz-verdict-t { font-family: var(--display); font-size: 14px; font-weight: 700; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-bz-verdict.proven .cp2-bz-verdict-t { color: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-bz-verdict-s { font-size: 13px; line-height: 1.45; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-bz-moved { margin-top: 10px; font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--blue); }
 
 
@@ -1413,29 +1407,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
    ring is missing — and the word always travels with the colour. */
 
 /* The verdict card: how buyers find you, the chain as five dots, the clock. */
-.cp-root[data-theme="soft"] .cp2-pf-found { display: block; margin: -2px 0 12px; text-align: left; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-pf-found b { font-weight: 600; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-pf-found.ask b { color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-pf-chain { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 16px; text-align: left; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-pf-dots { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); text-align: center; }
-.cp-root[data-theme="soft"] .cp2-pf-dots::before { content: ''; position: absolute; left: 10%; right: 10%; top: 8px; height: 2px; background: var(--line); }
-.cp-root[data-theme="soft"] .cp2-pf-dot { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-pf-dot i { box-sizing: border-box; width: 14px; height: 14px; margin-top: 1px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--dim); }
-.cp-root[data-theme="soft"] .cp2-pf-dot.works i { background: var(--ai); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-pf-dot.testing i { background: var(--blue); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-pf-dot.stuck i { background: var(--bad); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-pf-dot.missing i { box-shadow: none; border: 1.5px dashed var(--dim); }
-.cp-root[data-theme="soft"] .cp2-pf-dot.weak i { width: 16px; height: 16px; margin-top: 0; outline: 4px solid var(--tint); }
-.cp-root[data-theme="soft"] .cp2-pf-dot.weak.stuck i { outline-color: var(--bad-tint); }
-.cp-root[data-theme="soft"] .cp2-pf-dot b { font-size: 11px; font-weight: 600; line-height: 1.2; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-pf-dot.weak b { font-weight: 700; }
-.cp-root[data-theme="soft"] .cp2-pf-dot em { font-style: normal; font-size: 10px; font-weight: 600; line-height: 1.2; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-pf-dot.works em { color: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-pf-dot.testing em { color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-pf-dot.stuck em { color: var(--bad); font-weight: 700; }
-.cp-root[data-theme="soft"] .cp2-pf-weak { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--line); font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-pf-weak > span { flex: 1; min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-pf-weak b { font-weight: 600; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-pf-clock { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-pf-clock-i { flex: none; display: inline-flex; margin-top: 2px; }
 .cp-root[data-theme="soft"] .cp2-pf-clock-i svg { width: 15px; height: 15px; }
@@ -1470,6 +1441,40 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pg-acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .cp-root[data-theme="soft"] .cp2-pg-acts .cp2-link { padding: 6px 0; }
 .cp-root[data-theme="soft"] .cp2-pf-online { font-size: 11.5px; font-weight: 600; line-height: 1.4; color: var(--ai); }
+/* Engine's top: the one next step, and the verdict one tap under it (engine.ts). */
+.cp-root[data-theme="soft"] .cp2-ns { padding-top: 20px; }
+.cp-root[data-theme="soft"] .cp2-ns-t { font-family: var(--display); font-size: 21px; font-weight: 700; line-height: 1.28; letter-spacing: -0.3px; margin: 4px 0 6px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-ns-why { font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-ns-do { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px; }
+.cp-root[data-theme="soft"] .cp2-ns-do a.cp-btn { text-decoration: none; }
+.cp-root[data-theme="soft"] .cp2-ns-do .cp2-ext { width: 14px; height: 14px; margin-left: 2px; vertical-align: -2px; }
+.cp-root[data-theme="soft"] .cp2-ns-do .cp2-link { padding: 8px 0; }
+.cp-root[data-theme="soft"] .cp2-ns-step .cp-help { margin-top: 8px; }
+.cp-root[data-theme="soft"] .cp2-ns-pay { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--line); font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-ns-pay .cp2-link { display: inline; padding: 0; }
+.cp-root[data-theme="soft"] .cp2-ns-sum { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-ns-step + .cp2-ns-sum { margin-top: 16px; }
+.cp-root[data-theme="soft"] .cp2-ns > .cp2-ns-sum:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.cp-root[data-theme="soft"] .cp2-ns-offer { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-ns-offer > span { flex: 1; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-ns-offer b { font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-ns-chain { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--line); text-align: left; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-ns-chain.proven { background: var(--ai-tint); }
+.cp-root[data-theme="soft"] .cp2-ns-dots { position: relative; display: flex; justify-content: space-between; padding: 0 4px; }
+.cp-root[data-theme="soft"] .cp2-ns-dots::before { content: ''; position: absolute; left: 8px; right: 8px; top: 6px; height: 2px; background: var(--fill-quiet); opacity: .5; }
+.cp-root[data-theme="soft"] .cp2-ns-dots i { position: relative; box-sizing: border-box; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--dim); }
+.cp-root[data-theme="soft"] .cp2-ns-dots i.works { background: var(--ai); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-ns-dots i.testing { background: var(--blue); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-ns-dots i.stuck { background: var(--bad); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-ns-dots i.missing { box-shadow: none; border: 1.5px dashed var(--dim); }
+.cp-root[data-theme="soft"] .cp2-ns-dots i.weak { outline: 4px solid var(--tint); }
+.cp-root[data-theme="soft"] .cp2-ns-dots i.weak.stuck { outline-color: var(--bad-tint); }
+.cp-root[data-theme="soft"] .cp2-ns-chain-row { display: flex; align-items: center; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-ns-chain-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-root[data-theme="soft"] .cp2-ns-chain-t b { font-family: var(--display); font-size: 14px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-ns-chain.proven .cp2-ns-chain-t b { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-ns-chain-t span { font-size: 13px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-ns-chain-t small { font-size: 12px; line-height: 1.45; color: var(--muted); }
 /* What a pivot on who buys left behind (era.ts pivotLeft): said once, answered by a tap. */
 .cp-root[data-theme="soft"] .cp2-pv-left .cp2-lab-q { margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-pv-said { font-size: 13.5px; line-height: 1.5; color: var(--ink); margin-top: 8px; }
@@ -1478,17 +1483,20 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pv-do { display: flex; align-items: center; gap: 10px; margin: 14px 0 8px; }
 .cp-root[data-theme="soft"] .cp2-pv-do .cp2-link { margin-left: auto; padding: 8px 2px; }
 /* People who said it (voices.ts): public posts where somebody says the bet's problem, each one a person to answer by hand. */
-.cp-root[data-theme="soft"] .cp2-vox { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
 .cp-root[data-theme="soft"] .cp2-vox-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .cp-root[data-theme="soft"] .cp2-vox-count { font-size: 11.5px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
-.cp-root[data-theme="soft"] .cp2-vox-stuck { font-size: 13px; font-weight: 600; line-height: 1.45; color: var(--warn); }
-.cp-root[data-theme="soft"] .cp2-vox-what { font-size: 13px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-vox-go { display: flex; }
 .cp-root[data-theme="soft"] .cp2-vox-opener { display: flex; flex-direction: column; gap: 4px; padding: 11px 13px; border-radius: 14px; background: var(--tint); }
 .cp-root[data-theme="soft"] .cp2-vox-opener > span { font-size: 11.5px; font-weight: 600; color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-vox-opener > q { font-size: 13px; line-height: 1.5; color: var(--ink); quotes: '\201C' '\201D'; }
 .cp-root[data-theme="soft"] .cp2-vox-opener > .cp2-link { align-self: flex-start; padding: 4px 0 0; font-size: 12.5px; }
-.cp-root[data-theme="soft"] .cp2-vox-row { display: flex; flex-direction: column; gap: 5px; padding: 12px 13px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-sm); }
+/* The people found are their own card above the bet: a row is a tinted box on the white, not a card on a card. */
+.cp-root[data-theme="soft"] .cp2-vox-card { display: flex; flex-direction: column; gap: 8px; scroll-margin-top: 12px; }
+.cp-root[data-theme="soft"] .cp2-vox-row { display: flex; flex-direction: column; gap: 5px; padding: 12px 13px; border-radius: 14px; background: var(--line); }
+.cp-root[data-theme="soft"] .cp2-vox-row.waiting { background: var(--tint); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.cp-root[data-theme="soft"] .cp2-vox-ask { font-size: 12.5px; font-weight: 600; line-height: 1.4; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-vox-end { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-vox-end .cp2-link { padding: 2px 0; }
 .cp-root[data-theme="soft"] .cp2-vox-row > b { font-size: 13.5px; font-weight: 700; line-height: 1.4; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-vox-said { font-size: 13px; line-height: 1.5; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cp-root[data-theme="soft"] .cp2-vox-meta { font-size: 11.5px; line-height: 1.4; color: var(--muted); }

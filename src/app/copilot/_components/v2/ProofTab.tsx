@@ -39,11 +39,12 @@ import {
   betPrice, countedFrom, dayWords, decisionWords, gradeWords, ideaRun, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
-import { FOUND_BY_LABEL } from '@/lib/copilot/offer';
 import { assetMakers, betNext, betWork, ideasStale, pivotWords, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
 import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
-import { VOICE_OPENER, VOICE_SEARCHES, betVoiced, betVoices, postedWords, stuckLine, voiceRefusal, type Voice } from '@/lib/copilot/voices';
+import { COMMITMENT_LABEL, COMMITMENTS, dayIn, type Commitment } from '@/lib/copilot/lab';
+import { VOICE_OPENER, VOICE_SEARCHES, betVoiced, betVoices, postedWords, voiceRefusal, voiceTalk, type Voice } from '@/lib/copilot/voices';
+import { OPENED_KEY, clearOpened, engineStep, markOpened, parseOpened, payoffGoal, type Step, type StepGo } from '@/lib/copilot/engine';
 import { pageCounts, pageLine } from '@/lib/copilot/livepage';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
@@ -56,9 +57,11 @@ export default function ProofTab({ home, d, actions, briefing }: { home: HomeDat
   const brief = useBrief(actions);
   const full = agentIsFull(home);
   const lab = d.proof.lab;
+  const opened = useOpened(home.profile.id);
+  const find = useFind(actions, lab.current?.bet.id ?? null);
   return (
     <>
-      <Verdict home={home} d={d} actions={actions} changes={changes} />
+      <Top home={home} d={d} actions={actions} changes={changes} brief={brief} find={find} opened={opened} />
       {home.pivotLeft && <AfterPivot home={home} left={home.pivotLeft} actions={actions} />}
       {lab.unreadable ? (
         // Refused rather than shown empty: an unread record drawn as "no bet
@@ -74,6 +77,8 @@ export default function ProofTab({ home, d, actions, briefing }: { home: HomeDat
           {lab.current
             ? (
               <>
+                {/* The people it found come before the bet: the step above says to reply to one, and the bet's own card is what they count toward. */}
+                <People home={home} view={lab.current} actions={actions} find={find} opened={opened} />
                 {/* The bet keeps a slot of its own: errands on the go do not grey out the work it exists to move (commission.ts roomForProject). */}
                 <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={agentIsFull(home, lab.links[lab.current.bet.id] ?? [])} />
                 <Shelf home={home} d={d} actions={actions} />
@@ -127,58 +132,182 @@ function useSeen(home: HomeData, d: Derived): ChainChange[] {
   return changes;
 }
 
-/* ─── The verdict ─────────────────────────────────────────────────────────── */
+/* ─── The next step, and the verdict under it ────────────────────────────── */
 
-/** The parts' names in a row of five on a phone. The chain sheet uses the whole ones. */
-const SHORT: Record<LinkKey, string> = { who: 'Who buys', reach: 'They hear', close: 'They say yes', pay: 'They pay', deliver: 'You deliver' };
+/**
+ * Which posts this device opened and has not answered, kept on the device. A
+ * convenience about the screen — what to ask "did they answer?" about — and
+ * nothing is decided from it: storage that keeps nothing costs only the
+ * question. Read in an effect, never during render, so the first paint is the
+ * server's.
+ */
+function useOpened(profileId: string) {
+  const key = OPENED_KEY(profileId);
+  const [map, setMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      setMap(parseOpened(raw ? JSON.parse(raw) : null));
+    } catch { /* storage refused or unreadable: nothing remembered, so nothing is asked */ }
+  }, [key]);
+  const save = (next: Record<string, string>) => {
+    setMap(next);
+    try { window.localStorage.setItem(key, JSON.stringify(next)); } catch { /* as above */ }
+  };
+  return {
+    map,
+    ids: new Set(Object.keys(map)),
+    mark: (id: string) => save(markOpened(map, id, new Date().toISOString())),
+    clear: (id: string) => save(clearOpened(map, id)),
+  };
+}
+type Opened = ReturnType<typeof useOpened>;
 
-function Verdict({ home, d, actions, changes }: { home: HomeData; d: Derived; actions: Actions; changes: ChainChange[] }) {
-  const o = home.profile.offer ?? {};
-  const { chain, found } = d.proof;
-  if (!o.sells?.trim()) {
-    return (
-      <div className="cp-card cp2-pf-verdict">
-        <div className="cp-eyebrow">What you sell</div>
-        <h2 className="cp2-product-name">Not written down yet</h2>
-        <p className="cp2-lede">Every part of the business is tested against this, and nothing is written from a blank offer — a message from nothing is not yours.</p>
-        <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'offer' })}>Write your offer — three minutes</button>
+/**
+ * The search for the running bet's people, run from whichever card asks: the
+ * step at the top, or "Find more" under the people already found. One state, so
+ * a search started in one place is seen in the other and cannot be started twice.
+ */
+function useFind(actions: Actions, betId: string | null) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [why, setWhy] = useState<string | null>(null);
+  const run = async () => {
+    if (!betId || busy) return;
+    setBusy(true); setError(null); setWhy(null);
+    const r = await actions.lab({ action: 'voices', bet: betId });
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? 'The search did not run');
+    // One of the two searches failing, or the model's words not used, is said beside what was found.
+    if (r.why) setWhy(r.why);
+  };
+  return { busy, error, why, run };
+}
+type Find = ReturnType<typeof useFind>;
+
+/** Scrolls to a card on this tab: the checkpoint, or the people found. */
+function scrollToCard(id: string) {
+  try { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* an older browser: the card is where it was */ }
+}
+
+function Top({ home, d, actions, changes, brief, find, opened }: {
+  home: HomeData; d: Derived; actions: Actions; changes: ChainChange[]; brief: Brief; find: Find; opened: Opened;
+}) {
+  const { chain, found, lab } = d.proof;
+  const view = lab.current;
+  const b = view?.bet ?? null;
+  const read = home.lab?.voices;
+  const voices = view && b && betVoiced(b) ? betVoices(read, b, home.lab?.talks ?? []) : null;
+  // Said the same way the route refuses it, so a button that could only be refused is not the step.
+  const searchRefusal = voices
+    ? read?.unreadable
+      ? 'The people found for this bet could not be read just now.'
+      : voiceRefusal({ running: true, voiced: true, searches: voices.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining })
+    : null;
+  const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
+  const step = engineStep({
+    today: home.recent.today, offerSet: !d.noOffer, unreadable: !!lab.unreadable,
+    checkpoint: { due: lab.checkpoint.due, ended: lab.checkpoint.ended.length },
+    current: view, talks: lab.talks, found: found.value, voices, opened: opened.ids, searchRefusal,
+    shelf: lab.shelf, weak: weak ? { key: weak.key, label: weak.label, why: weak.why } : null,
+    goal: payoffGoal(home.goals, home.recent.today),
+  });
+  return (
+    <div className="cp-card cp2-ns">
+      {step && <NextStep step={step} view={view} actions={actions} brief={brief} find={find} opened={opened} peopleShown={!!voices && (voices.searches > 0 || !!read?.unreadable)} />}
+      {!d.noOffer && <Summary home={home} d={d} actions={actions} changes={changes} />}
+    </div>
+  );
+}
+
+function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
+  step: Step; view: BetView | null; actions: Actions; brief: Brief; find: Find; opened: Opened; peopleShown: boolean;
+}) {
+  const move = useMove(actions, brief);
+  const go = (g: StepGo) => {
+    switch (g.to) {
+      case 'offer': return actions.openSheet({ kind: 'offer' });
+      case 'foundby': return actions.openSheet({ kind: 'foundby' });
+      case 'checkpoint': return scrollToCard('cp2-checkpoint');
+      case 'find': return void find.run();
+      case 'people': return scrollToCard('cp2-people');
+      case 'bet': return actions.openSheet({ kind: 'bet', part: g.part });
+      case 'shelf': return actions.openSheet({ kind: 'bet', shelf: g.id });
+      case 'next': return view ? goTo(g.go, actions, view.bet.id) : undefined;
+      case 'tab': return actions.setTab(g.tab);
+      case 'post': return undefined;
+    }
+  };
+  const p = step.primary;
+  const searching = find.busy && p.go.to === 'find';
+  const ask: LinkMove | null = step.claude ? { key: 'engine-ask', label: 'Think it through with Claude', by: 'claude', ask: step.claude } : null;
+  // A search that failed or was cut short is said where it was asked — here, unless the people card is up to say it.
+  const said = step.kind === 'find' && !peopleShown;
+  return (
+    <div className="cp2-ns-step">
+      <div className="cp-eyebrow">{step.eyebrow}</div>
+      <h2 className="cp2-ns-t">{step.title}</h2>
+      {step.why && <p className="cp2-ns-why">{step.why}</p>}
+      <div className="cp2-ns-do">
+        {p.go.to === 'post' ? (
+          // A real link, not a script's window.open: a popup blocker has no quarrel with a tap on an anchor.
+          <a className="cp-btn primary" href={p.go.url} target="_blank" rel="noopener noreferrer nofollow" onClick={() => opened.mark((p.go as { voice: string }).voice)}>
+            {p.label} <IconExternal />
+          </a>
+        ) : (
+          <button className="cp-btn primary" disabled={searching} onClick={() => go(p.go)}>{searching ? 'Looking… about twenty seconds' : p.label}</button>
+        )}
+        {ask && (
+          <button className="cp2-link muted" disabled={move.busy === ask.key} onClick={() => void move.run(ask)}>
+            {move.busy === ask.key ? 'Gathering…' : 'Ask Claude'}
+          </button>
+        )}
       </div>
-    );
-  }
+      {step.hint && <p className="cp-help">{step.hint}</p>}
+      {said && find.error && <p className="cp-help cp2-err">{find.error}</p>}
+      {said && find.why && <p className="cp-help">{find.why[0].toUpperCase() + find.why.slice(1)}.</p>}
+      {ask && move.note?.key === ask.key && <MoveNote note={move.note} />}
+      {step.payoff && (
+        <p className="cp2-ns-pay">
+          {step.payoff.line}
+          {step.payoff.link && <> <button className="cp2-link" onClick={() => go(step.payoff!.link!.go)}>{step.payoff.link.label}</button></>}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The verdict, one tap under the step: what you sell, whether it is proven by the
+ * count against the bar, the chain as five dots and the weak one named. The whole
+ * chain, each part with its rule and what would move it, is the sheet it opens.
+ */
+function Summary({ home, d, actions, changes }: { home: HomeData; d: Derived; actions: Actions; changes: ChainChange[] }) {
+  const o = home.profile.offer ?? {};
+  const { chain } = d.proof;
   const v = chain.verdict;
   const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
   const price = o.price_band?.trim();
   return (
-    <div className="cp-card cp2-pf-verdict">
-      <div className="cp-call-top">
-        <div className="cp-eyebrow">What you sell{price && price.length <= 24 ? ` · ${price}` : ''}</div>
+    <div className="cp2-ns-sum">
+      <div className="cp2-ns-offer">
+        <span className="cp2-clamp1"><b>{o.sells}</b>{price && price.length <= 24 ? ` · ${price}` : ''}</span>
         <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'offer' })}>Edit</button>
       </div>
-      <h2 className="cp2-product-name">{o.sells}</h2>
-      <button className={`cp2-pf-found${found.value ? '' : ' ask'}`} onClick={() => actions.openSheet({ kind: 'foundby' })}>
-        {found.value
-          ? <>How buyers find you: <b>{FOUND_BY_LABEL[found.value]}</b>{!found.said ? ', read from what the app finds' : ''}</>
-          : <><b>How do buyers find you?</b> Say it, and Proof reads the business that way</>}
-      </button>
-      <div className={`cp2-bz-verdict ${v.proven ? 'proven' : ''}`}>
-        <span className="cp2-bz-verdict-t">{v.title}</span>
-        <span className="cp2-bz-verdict-s">{v.line}</span>
-        {/* Said where the count is: "So far: 0" the day after a pivot is the new business's 0, not the old one's. */}
-        {v.since && <span className="cp2-pf-countfrom">{v.since}</span>}
-      </div>
       <button
-        className="cp2-pf-chain" onClick={() => actions.openSheet({ kind: 'chain' })}
-        aria-label={`How it makes money: ${chain.links.map((l) => `${l.label}, ${LINK_STATE_LABEL[l.state]}`).join('; ')}. Open each part.`}
+        className={`cp2-ns-chain${v.proven ? ' proven' : ''}`} onClick={() => actions.openSheet({ kind: 'chain' })}
+        aria-label={`How it makes money. ${v.title}. ${chain.links.map((l) => `${l.label}, ${LINK_STATE_LABEL[l.state]}`).join('; ')}. Open each part.`}
       >
-        <span className="cp2-pf-dots" aria-hidden>
-          {chain.links.map((l) => (
-            <span key={l.key} className={`cp2-pf-dot ${l.state}${l.key === chain.weak ? ' weak' : ''}`}>
-              <i /><b>{SHORT[l.key]}</b><em>{LINK_STATE_LABEL[l.state]}</em>
-            </span>
-          ))}
+        <span className="cp2-ns-dots" aria-hidden>
+          {chain.links.map((l) => <i key={l.key} className={`${l.state}${l.key === chain.weak ? ' weak' : ''}`} />)}
         </span>
-        <span className="cp2-pf-weak">
-          <span>{weak ? <><b>Weak link: {weak.label.toLowerCase()}.</b> {weak.why}</> : v.proven ? 'Every part that sells works.' : 'Each part, with the rule that judged it.'}</span>
+        <span className="cp2-ns-chain-row">
+          <span className="cp2-ns-chain-t">
+            <b>{v.title}</b>
+            <span>{v.line}</span>
+            {/* Said where the count is: "So far: 0" the day after a pivot is the new business's 0, not the old one's. */}
+            <small>{[weak ? `Weak link: ${weak.label.toLowerCase()}.` : v.proven ? 'Every part that sells works.' : null, v.since].filter(Boolean).join(' ')}</small>
+          </span>
           <IconChevron />
         </span>
       </button>
@@ -188,13 +317,13 @@ function Verdict({ home, d, actions, changes }: { home: HomeData; d: Derived; ac
           Since you last looked: {changes.slice(0, 2).map(changeLine).join('; ')}{changes.length > 2 ? `; and ${changes.length - 2} more` : ''}.
         </p>
       )}
-      <Clock d={d} actions={actions} />
+      <Clock d={d} actions={actions} compact />
     </div>
   );
 }
 
 /** Runway in bets: the book's pivots left, counted — and the last checkpoint, read back. */
-function Clock({ d, actions }: { d: Derived; actions: Actions }) {
+function Clock({ d, actions, compact }: { d: Derived; actions: Actions; compact?: boolean }) {
   const c = d.proof.lab.clock;
   const cp = d.proof.lab.checkpoint;
   const back = cp.last && !cp.due ? gradeWords(cp.last, cp.grade) : null;
@@ -210,7 +339,7 @@ function Clock({ d, actions }: { d: Derived; actions: Actions }) {
         ) : (
           <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'finance' })}>Add your runway, and this counts the bets it pays for</button>
         )}
-        {cp.last && !cp.due && <span className="cp2-pf-clock-s">Last checkpoint, {dayWords(cp.last.on)}: {decisionWords(cp.last)}.{back ? ` ${back}` : ''}</span>}
+        {!compact && cp.last && !cp.due && <span className="cp2-pf-clock-s">Last checkpoint, {dayWords(cp.last.on)}: {decisionWords(cp.last)}.{back ? ` ${back}` : ''}</span>}
       </span>
     </div>
   );
@@ -291,7 +420,7 @@ function Checkpoint({ d, actions }: { d: Derived; actions: Actions }) {
   };
 
   return (
-    <div className="cp-card cp2-lab-check">
+    <div className="cp-card cp2-lab-check" id="cp2-checkpoint">
       <div className="cp-eyebrow">Checkpoint</div>
       <h2 className="cp2-lab-q">Pivot or persevere?</h2>
       <p className="cp2-lede">
@@ -382,9 +511,6 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   const planInRungs = rungs.length > 1 && rungs.some((r) => r.planned != null);
   // A bet decided by a sale but planned in conversations still needs its log one tap away.
   const logToo = b.tries?.metric === 'talks' && next.go !== 'talk';
-  // Nobody found and nobody talked to: finding people is the next step, so it
-  // leads and logging waits beside it — two primary buttons is no lead at all.
-  const findFirst = betVoiced(b) && !!home.hunting?.webReady && !(work.talks?.n) && betVoices(home.lab?.voices, b, home.lab?.talks ?? []).found === 0;
   // Reached by outreach, a sale still comes in from outside the app sometimes — a referral, a walk-in.
   const saleToo = next.go === 'replied' && (b.metric === 'paid' || b.metric === 'paid_at_price');
   const [stopping, setStopping] = useState(false);
@@ -450,7 +576,6 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
       )}
 
       <BetWorkList view={view} work={work} home={home} actions={actions} />
-      {betVoiced(b) && <Voices home={home} view={view} work={work} actions={actions} />}
       <Prep home={home} view={view} work={work} actions={actions} brief={brief} full={full} canDraft={!!home.ai && !d.noOffer} />
 
       {stopping ? (
@@ -465,7 +590,8 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         </div>
       ) : (
         <div className="cp2-lab-actions">
-          <button className={`cp-btn${findFirst ? '' : ' primary'}`} onClick={() => goTo(next.go, actions, b.id)}>{next.label}</button>
+          {/* The step at the top of the tab is the one primary button on this screen; this one is the same count's way in, close to where the bet ends. */}
+          <button className="cp-btn" onClick={() => goTo(next.go, actions, b.id)}>{next.label}</button>
           {logToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'talk' })}>Log a conversation</button>}
           {saleToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'sale', outcome: 'won' })}>Log a sale</button>}
           <button className="cp2-link muted" onClick={() => setStopping(true)}>Call it off</button>
@@ -493,15 +619,13 @@ function Reading({ view, rungs, found }: { view: BetView; rungs: Rung[]; found: 
   );
 }
 
-const ENDED_AS = { none: 'no commitment', time: 'another call', intro: 'an intro', money: 'money' } as const;
 
 /** The work done for the bet, from the rows that say so. Nothing here is a claim the app made about itself. */
 function BetWorkList({ view, work, home, actions }: { view: BetView; work: BetWork; home: HomeData; actions: Actions }) {
   const b = view.bet;
-  // No conversations yet is not work on the bet: the score above says 0 and the
-  // button under it is "Log a conversation". The row only repeated both.
-  const talks = work.talks && work.talks.n > 0 ? work.talks : null;
-  if (!work.projects.length && !work.assets.length && !talks && !work.tallies) return null;
+  // Conversations are not listed here: the score above counts them, "Behind it"
+  // lists them, and a row for one repeated both.
+  if (!work.projects.length && !work.assets.length && !work.tallies) return null;
   return (
     <div className="cp2-pf-work">
       <span className="cp2-pf-k">Working on this bet</span>
@@ -533,16 +657,6 @@ function BetWorkList({ view, work, home, actions }: { view: BetView; work: BetWo
           </button>
         );
       })}
-      {talks && (
-        <button className="cp2-pf-wrow" onClick={() => actions.openSheet({ kind: 'talks' })}>
-          <span className="cp2-pf-glyph"><PathGlyph icon="reply" /></span>
-          <span className="cp2-pf-wmain">
-            <b>{`${talks.n} ${talks.n === 1 ? 'conversation' : 'conversations'} since it began`}</b>
-            <span>{talks.last ? `${talks.last.who || 'Someone'} · ${ENDED_AS[talks.last.commitment]}` : 'The app cannot hear your calls: log each the day it happens'}</span>
-          </span>
-          <IconChevron />
-        </button>
-      )}
       {work.tallies && (
         <button className="cp2-pf-wrow" onClick={() => actions.openSheet({ kind: 'count', bet: b.id })}>
           <span className="cp2-pf-glyph"><IconCheck /></span>
@@ -563,107 +677,124 @@ const VOICES_SHOWN = 3;
 /**
  * People who said it (voices.ts): public posts where somebody says the bet's
  * problem in their own words, each with its link, for the person to answer from
- * their own account. A conversation bet with nobody to talk to was a bar at zero
- * over a button to log what had not happened; this is where the first ones come
- * from. Each post leaves the card when a conversation is logged from it or it is
- * said not to be a fit, and the bet counts how many of the people it found it
- * talked to. Nothing is sent from the app (invariant 4).
+ * their own account. Its own card, above the bet: the step at the top says to
+ * reply to one, and the bet is what they count toward. Nothing is sent from
+ * here (invariant 4).
+ *
+ * Each post goes through three states, each a tap. Not opened: Open, or Not a
+ * fit. Opened — on this device — it asks "Did they answer?": one tap on how it
+ * ended logs the conversation, named for the post, and the post leaves; no
+ * answer is nothing to do. The full sheet is still there for the detail.
  */
-function Voices({ home, view, work, actions }: { home: HomeData; view: BetView; work: BetWork; actions: Actions }) {
+function People({ home, view, actions, find, opened }: { home: HomeData; view: BetView; actions: Actions; find: Find; opened: Opened }) {
   const b = view.bet;
   const today = home.recent.today;
   const read = home.lab?.voices;
   const mine = betVoices(read, b, home.lab?.talks ?? []);
-  const ready = !!home.hunting?.webReady;
-  const refusal = voiceRefusal({ running: true, voiced: true, searches: mine.searches, ready, remaining: home.billing.matches.remaining });
-  const planned = b.tries?.metric === 'talks' ? b.tries.planned : b.metric === 'talks' ? b.target : null;
-  // Said only of a bet counted in conversations: one on who buys counted in sales is not behind on talking.
-  const stuck = work.talks ? stuckLine({ day: view.day, days: b.days, talks: work.talks.n, planned }) : null;
+  const refusal = voiceRefusal({ running: true, voiced: betVoiced(b), searches: mine.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [why, setWhy] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [all, setAll] = useState(false);
-  // No search on this server and nobody found before it went: no section, and
-  // no button that could only be refused (invariant 7).
-  if (!ready && !mine.found) return null;
+  // Which opened post is being asked how it ended: one at a time, so a stray tap cannot log the wrong one.
+  const [ending, setEnding] = useState<string | null>(null);
+  if (!betVoiced(b)) return null;
+  // Nothing found and nothing said: the step above leads, and a card of nothing would only repeat it.
+  if (mine.searches === 0 && !read?.unreadable) return null;
 
-  const find = async () => {
-    setBusy('find'); setError(null); setWhy(null);
-    const r = await actions.lab({ action: 'voices', bet: b.id });
-    setBusy(null);
-    if (!r.ok) return setError(r.error ?? 'The search did not run');
-    // Kept beside what it found: one search of two failing, or the model's words not used, is said.
-    if (r.why) setWhy(r.why);
-  };
   const gone = async (v: Voice) => {
     setBusy(v.id); setError(null);
     const r = await actions.lab({ action: 'voice_gone', voice: v.id });
     setBusy(null);
-    if (!r.ok) setError(r.error ?? 'Could not set it aside');
+    if (!r.ok) return setError(r.error ?? 'Could not set it aside');
+    opened.clear(v.id);
+  };
+  // The conversation, kept with the one tap: who it was with is their post's name, and the ending is theirs.
+  const logIt = async (v: Voice, commitment: Commitment) => {
+    setBusy(v.id); setError(null);
+    const r = await actions.lab({ action: 'talk', talk: voiceTalk(v, commitment) });
+    setBusy(null);
+    if (!r.ok) return setError(r.error ?? 'Could not log that');
+    opened.clear(v.id);
+    setEnding(null);
   };
   const copy = async () => {
     try { await navigator.clipboard.writeText(VOICE_OPENER); setCopied('Copied. Change it to fit their post.'); }
     catch { setCopied('Your browser did not let it be copied. Select the words and copy them from there.'); }
   };
-  const shown = all ? mine.open : mine.open.slice(0, VOICES_SHOWN);
-  const button = (label: string, primary: boolean) => (
-    <button className={`cp-btn sm${primary ? ' primary' : ''}`} disabled={busy !== null} onClick={() => void find()}>
-      {busy === 'find' ? 'Looking… about twenty seconds' : label}
-    </button>
-  );
+  // The ones opened and not answered come first: they are the ones waiting on this person.
+  const rows = [...mine.open.filter((v) => opened.ids.has(v.id)), ...mine.open.filter((v) => !opened.ids.has(v.id))];
+  const shown = all ? rows : rows.slice(0, VOICES_SHOWN);
 
   return (
-    <div className="cp2-vox">
+    <div className="cp-card cp2-vox-card" id="cp2-people">
       <div className="cp2-vox-top">
-        <span className="cp2-pf-k">People who said it</span>
+        <div className="cp-eyebrow">People who said it</div>
         {mine.found > 0 && <span className="cp2-vox-count">{mine.talked ? `${mine.talked} of ${mine.found} talked to` : `${mine.found} found`}</span>}
       </div>
-      {stuck && <p className="cp2-vox-stuck">{stuck}</p>}
       {read?.unreadable && <p className="cp-help cp2-err">The people found for this bet could not be read just now: {read.unreadable}</p>}
-
-      {mine.found === 0 ? (
-        <>
-          <p className="cp2-vox-what">
-            Recent public posts where somebody says this problem in their own words, on Reddit, Indie Hackers, Hacker News, Quora and X. Each with its link: you answer from your own account.
-          </p>
-          {refusal ? <p className="cp-help">{refusal}</p> : <div className="cp2-vox-go">{button('Find people who said it', true)}</div>}
-        </>
-      ) : (
-        <>
-          {mine.open.length > 0 && (
-            <div className="cp2-vox-opener">
-              <span>Open with their past, not your idea</span>
-              <q>{VOICE_OPENER}</q>
-              <button className="cp2-link" onClick={() => void copy()}>Copy it</button>
-            </div>
-          )}
-          {copied && <p className="cp-help">{copied}</p>}
-          {shown.map((v) => (
-            <div key={v.id} className="cp2-vox-row">
-              <b className="cp2-clamp2">{v.title}</b>
-              {v.said && v.said !== v.title && <p className="cp2-vox-said">&ldquo;{v.said}&rdquo;</p>}
-              <span className="cp2-vox-meta">{[v.where, postedWords(v.posted, today), v.author].filter(Boolean).join(' · ')}</span>
-              <div className="cp2-vox-do">
-                <a className="cp-btn sm" href={v.url} target="_blank" rel="noopener noreferrer nofollow" aria-label={`Open the post on ${v.where}`}>Open <IconExternal /></a>
-                <button className="cp-btn sm primary" disabled={busy !== null} onClick={() => actions.openSheet({ kind: 'talk', voice: v.id })}>Talked to them</button>
-                <button className="cp2-link muted" disabled={busy !== null} onClick={() => void gone(v)}>{busy === v.id ? 'Setting aside…' : 'Not a fit'}</button>
-              </div>
-            </div>
-          ))}
-          {mine.open.length > VOICES_SHOWN && (
-            <button className="cp2-pf-more" onClick={() => setAll((x) => !x)}>{all ? 'Fewer' : `${mine.open.length - VOICES_SHOWN} more`}</button>
-          )}
-          {mine.open.length === 0 && <p className="cp-help">Everyone found is talked to or set aside.</p>}
-          {mine.last && mine.last.kept === 0 && <p className="cp-help">The last search, {dayWords(mine.last.at.slice(0, 10))}, found nobody new.</p>}
-          <div className="cp2-vox-go">
-            {refusal ? <p className="cp-help">{refusal}</p> : button(`Find more · ${mine.searches} of ${VOICE_SEARCHES} searches`, mine.open.length === 0)}
-          </div>
-          <p className="cp2-vox-src">Their words, from the post. Found by a web search for this bet; nothing is sent from the app.</p>
-        </>
+      {mine.open.length > 0 && (
+        <div className="cp2-vox-opener">
+          <span>Open with their past, not your idea</span>
+          <q>{VOICE_OPENER}</q>
+          <button className="cp2-link" onClick={() => void copy()}>Copy it</button>
+        </div>
       )}
-      {why && <p className="cp-help">{why[0].toUpperCase() + why.slice(1)}.</p>}
+      {copied && <p className="cp-help">{copied}</p>}
+      {shown.map((v) => {
+        const at = opened.map[v.id];
+        const waiting = !!at;
+        return (
+          <div key={v.id} className={`cp2-vox-row${waiting ? ' waiting' : ''}`}>
+            <b className="cp2-clamp2">{v.title}</b>
+            {v.said && v.said !== v.title && <p className="cp2-vox-said">&ldquo;{v.said}&rdquo;</p>}
+            <span className="cp2-vox-meta">{[v.where, postedWords(v.posted, today), v.author].filter(Boolean).join(' · ')}</span>
+            {waiting && ending !== v.id && (
+              <div className="cp2-vox-ask">
+                <span>Opened {postedWords(dayIn(at, home.profile.timezone), today) ?? 'earlier'}. Did they answer?</span>
+              </div>
+            )}
+            {ending === v.id && (
+              <div className="cp2-vox-end" role="group" aria-label="How it ended">
+                <span>How did it end?</span>
+                <div className="cp-chips">
+                  {COMMITMENTS.map((c) => (
+                    <button key={c} className="cp-fchip" disabled={busy !== null} onClick={() => void logIt(v, c)}>{COMMITMENT_LABEL[c]}</button>
+                  ))}
+                </div>
+                <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'talk', voice: v.id })}>Add detail instead</button>
+              </div>
+            )}
+            <div className="cp2-vox-do">
+              {waiting
+                ? <button className="cp-btn sm primary" disabled={busy !== null} onClick={() => setEnding(ending === v.id ? null : v.id)}>They answered</button>
+                : (
+                  <a className="cp-btn sm primary" href={v.url} target="_blank" rel="noopener noreferrer nofollow" aria-label={`Open the post on ${v.where}`} onClick={() => opened.mark(v.id)}>
+                    Open <IconExternal />
+                  </a>
+                )}
+              {waiting && <a className="cp-btn sm" href={v.url} target="_blank" rel="noopener noreferrer nofollow" aria-label={`Open the post on ${v.where} again`}>Open again <IconExternal /></a>}
+              <button className="cp2-link muted" disabled={busy !== null} onClick={() => void gone(v)}>{busy === v.id ? 'Saving…' : 'Not a fit'}</button>
+            </div>
+          </div>
+        );
+      })}
+      {rows.length > VOICES_SHOWN && (
+        <button className="cp2-pf-more" onClick={() => setAll((x) => !x)}>{all ? 'Fewer' : `${rows.length - VOICES_SHOWN} more`}</button>
+      )}
+      {mine.found > 0 && mine.open.length === 0 && <p className="cp-help">Everyone found is talked to or set aside.</p>}
+      {mine.last && mine.last.kept === 0 && <p className="cp-help">The last search, {dayWords(mine.last.at.slice(0, 10))}, found nobody new.</p>}
+      <div className="cp2-vox-go">
+        {refusal
+          ? <p className="cp-help">{refusal}</p>
+          : <button className={`cp-btn sm${mine.open.length === 0 ? ' primary' : ''}`} disabled={find.busy} onClick={() => void find.run()}>
+            {find.busy ? 'Looking… about twenty seconds' : `Find more · ${mine.searches} of ${VOICE_SEARCHES} searches`}
+          </button>}
+      </div>
+      {find.why && <p className="cp-help">{find.why[0].toUpperCase() + find.why.slice(1)}.</p>}
+      {find.error && <p className="cp-help cp2-err">{find.error}</p>}
       {error && <p className="cp-help cp2-err">{error}</p>}
+      <p className="cp2-vox-src">Their words, from the post. Found by a web search for this bet; nothing is sent from the app.</p>
     </div>
   );
 }

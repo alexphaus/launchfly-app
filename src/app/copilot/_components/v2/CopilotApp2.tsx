@@ -62,7 +62,7 @@ import SheetContent from '../SheetContent';
 import type { Tab2 } from '../shared';
 import { sheetKey, useCopilot } from '../useCopilot';
 import { useDerived } from './derive';
-import { IconMoney, IconPath, IconProof, IconSwipe, IconYou } from './icons2';
+import { IconEngine, IconMoney, IconPath, IconSwipe, IconYou } from './icons2';
 import PathTab from './PathTab';
 import ProofTab from './ProofTab';
 import MoneyTab, { BookFab, BookSheet, MoneyTabGuard, useBook } from './MoneyTab';
@@ -72,8 +72,10 @@ import { useVoice, VoiceButton, VoiceLive } from './VoiceLog';
 import { openReading } from './TellSheets';
 
 const TABS: Tab2[] = ['path', 'swipe', 'proof', 'money', 'you'];
-const LABEL: Record<Tab2, string> = { path: 'Path', swipe: 'Swipe', proof: 'Proof', money: 'Money', you: 'You' };
-const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, swipe: IconSwipe, proof: IconProof, money: IconMoney, you: IconYou };
+// The tab is called Engine; its key stays `proof`, because every route, shortcut,
+// push and file that names it already does (ALIAS below maps both names onto it).
+const LABEL: Record<Tab2, string> = { path: 'Path', swipe: 'Swipe', proof: 'Engine', money: 'Money', you: 'You' };
+const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, swipe: IconSwipe, proof: IconEngine, money: IconMoney, you: IconYou };
 /** After the last move logged in a burst, the rest of the app re-reads runway once, not once per coffee. */
 const HOME_AFTER_BOOK_MS = 4_000;
 /**
@@ -86,8 +88,8 @@ const ALIAS: Record<string, Tab2> = {
   // Matches was a tab until Swipe replaced it; a shortcut or a push naming it opens the deck.
   matches: 'swipe', pipeline: 'swipe', opportunities: 'swipe', signals: 'swipe',
   swipe: 'swipe', deck: 'swipe', triage: 'swipe',
-  // Work and the Lab were tabs until Proof replaced both; a shortcut or a push naming either opens it.
-  proof: 'proof', work: 'proof', business: 'proof', assets: 'proof', history: 'proof',
+  // Work and the Lab were tabs until Proof replaced both, and Proof is now called Engine; a shortcut or a push naming any of them opens it.
+  proof: 'proof', engine: 'proof', work: 'proof', business: 'proof', assets: 'proof', history: 'proof',
   lab: 'proof', bets: 'proof', bet: 'proof', experiments: 'proof', tests: 'proof',
   money: 'money', book: 'money', cash: 'money',
   you: 'you', working: 'you',

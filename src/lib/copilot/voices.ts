@@ -32,7 +32,7 @@
 // Pure: no DB import, no fetch. The route searches (watch/exa.ts exaPosts) and
 // store.ts keeps the rows, as copilot_events — no migration.
 
-import type { Bet, Talk } from './lab';
+import type { Bet, Commitment, Talk } from './lab';
 import type { Offer } from './types';
 
 /** One search for a bet and what it kept. */
@@ -402,6 +402,18 @@ export function postedWords(posted: string | null, today: string): string | null
   if (days === 1) return 'yesterday';
   if (days < 60) return `${days} days ago`;
   return `${Math.round(days / 30)} months ago`;
+}
+
+/**
+ * The conversation a post becomes with one tap on how it ended. Who they are is
+ * their post's name; they are a buyer, because their post is the reason they are
+ * on the list; and the problem is left as "did not come up" — the post said it,
+ * but whether they have it is a thing the conversation answers, and a count of
+ * who has the problem that took a search's word for it would be the app forming a
+ * view and feeding it back (invariants 2 and 12). The sheet can still say it.
+ */
+export function voiceTalk(v: Pick<Voice, 'id' | 'author' | 'where'>, commitment: Commitment): { who: string; role: 'buyer'; problem: 'unasked'; commitment: Commitment; voice: string } {
+  return { who: voiceWho(v), role: 'buyer', problem: 'unasked', commitment, voice: v.id };
 }
 
 /** Who a conversation logged from a post was with, for the sheet's first value: the name it is signed with, or where it was said. */

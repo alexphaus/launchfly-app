@@ -17,7 +17,7 @@ but none of the business logic. Everything is under:
 
 | Layer | Path |
 | --- | --- |
-| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — the four-tab layout, five tabs now (Path · Swipe · Proof · Money · You), calm |
+| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) — two tabs; `src/app/copilot2/` — the four-tab layout, five tabs now (Path · Swipe · Engine · Money · You — Engine is the tab that was Proof, and keeps `proof` as its key), calm |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
@@ -291,8 +291,8 @@ somewhere sensible.
 
 ## Four tabs (`/copilot2`)
 
-A second layout over the same app: **Path**, **Swipe**, **Proof**, **Money**,
-**You**. It began as Today, Matches, Work, You, written from its owner's verdict on the
+A second layout over the same app: **Path**, **Swipe**, **Engine** (the key and
+the files are still `proof`; see **Proof** below), **Money**, **You**. It began as Today, Matches, Work, You, written from its owner's verdict on the
 two-tab version ("too many things, nothing that stands out, the purpose lost from
 the original mock-ups; Working? is a log"). Then every redraft of Work met the
 same verdict — "static sections that compete for attention and nothing changes",
@@ -322,7 +322,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
-| Proof | is the business proven, and what is being bet to find out | what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play (folded under its name with how it counts and the hand-over box), the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · a conversation bet's people: public posts where somebody says its problem, each to answer by hand · after a pivot on who buys, what it left behind, to set aside or keep · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet; a landing page put online with one button, counting opens and taps · the history, everything above dated · conversations, projects and agents, a line each | `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts`, `voices.ts`, `livepage.ts`, `era.ts` |
+| Engine (`proof`) | what to do next to prove the business, and is it proven | the one next step, read off the rows, with its button · what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play (folded under its name with how it counts and the hand-over box), the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · a conversation bet's people: public posts where somebody says its problem, each to answer by hand · after a pivot on who buys, what it left behind, to set aside or keep · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet; a landing page put online with one button, counting opens and taps · the history, everything above dated · conversations, projects and agents, a line each | `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts`, `voices.ts`, `livepage.ts`, `era.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move, which steps aside while the list is read downward (it sat over the amounts) | `money/book.ts` |
 | You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals, one list · Records, what it reads instead of asking (a pill only where one waits on you) · Settings (the business), the nightly run ("Run again" starts tonight's pass now, and the row reports each step) and Account, three groups · the header names the tab; only Path greets, and only Path has a line under it — on Proof, Money and You it repeated the first card | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
@@ -330,7 +330,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 than the clock, so the header's status line and the tab under it cannot disagree
 (the old header said 61 over a card saying 51) and the server render and the
 hydrating client agree across an hour boundary. Only the Path has a status line
-now: on Proof ("Not proven · day 2 of 14 on who buys · 3 waiting on you") and You
+now: on Engine ("Not proven · day 2 of 14 on who buys · 3 waiting on you") and You
 ("1.7 months of runway") it said the first card again, over two lines.
 
 **The Path is a plan, not a log.** One line runs down the left of the screen,
@@ -754,7 +754,11 @@ one live account it was the letter "m". A one-letter segment is refused at every
 write path (`isSearchableSegment`) and named back when it is.
 
 **Proof: is it proven, and what is being bet to find out** (`proof.ts`,
-`v2/ProofTab.tsx`, `v2/ProofSheets.tsx`). It replaced two tabs. Work was the
+`v2/ProofTab.tsx`, `v2/ProofSheets.tsx`). *Called **Engine** on screen since
+October 2026 — the business as the machine that makes money, with a weak part to
+tune — and this section keeps the name it was written under: the tab's key, its
+files, its routes and the connector's `get_proof` are all still `proof`, so a
+link, a push or a shortcut naming either opens it (`ALIAS`).* It replaced two tabs. Work was the
 business as a chain of bets — the verdict, the parts, the weak link, the
 projects, what was built — and the Lab was one bet at a time on that weak link.
 Its owner found them answering one question in two places: the verdict on one,
@@ -770,16 +774,18 @@ writes is the person's until they keep it.
 
 On the screen, top to bottom:
 
-- **The verdict.** What you sell, how buyers find you, proven or not — "Proven at
-  3 paid at your $150. So far: 0." — and the chain as five dots in a row, each with
-  its state's word, the weak link named under them with its rule. A tap opens the
-  chain whole (the parts below). Under it, runway in bets and the last checkpoint
-  read back. "Since you last looked" names a part that moved, per device, under
-  the key Work used, so what a device saw there carries over.
+- **The next step, and the verdict under it** (`engine.ts`, `Top` in
+  `ProofTab.tsx`). One card. First the step — what to do now, as a sentence, in
+  the person's own numbers, with one primary button — then, one tap under it, the
+  verdict: what you sell, proven or not ("Proven at 3 paid at your $150. So far:
+  0."), the chain as five dots with the weak link named, runway in bets. A tap on
+  it opens the chain whole (the parts below). "Since you last looked" names a part
+  that moved, per device, under the key Work used.
 - **What a pivot on who buys left behind**, until it is answered: the old
   buyers' businesses, the drafts to them and the searches for them.
-- **The bet**, one at a time — or the checkpoint, or the way to pick one — and
-  where it is about people, the people who said its problem in public.
+- **The people who said it**, for a bet about people: their own card, above the
+  bet, once a search has run.
+- **The bet**, one at a time — or the checkpoint, or the way to pick one.
 - **Assets**, the gaps first, each with who made the version in use; a landing
   page online says so, with what it counted.
 - **History**, the four newest; all of it, by month and kind, behind a tap.
@@ -1082,7 +1088,41 @@ the person's own rows, so a number in it is one they gave and passes
 `numberOutside`; the prompt says one person's number is not a rate. Nothing here
 keeps a file on anyone, sets a quota, or messages people for you (DIRECTION.md).
 
-**People who said it** (`voices.ts`, `voicefind.ts`, `Voices` in `ProofTab.tsx`).
+**The next step first** (`engine.ts`, `Top` and `NextStep` in `ProofTab.tsx`).
+Proof opened on its verdict — the offer, five dots with five state words, the weak
+link in forty words, runway in bets — and the one thing to do was two and a half
+screens down, at the foot of the bet's card. A review of the tab put it plainly:
+an instrument too heavy for the moment it is used in, for somebody with two months
+of runway, with a first screen that was a report where a tab opened to act should
+lead with the act. So the tab opens on one step, read off the rows by a rule and
+never a model's advice (`engineStep`), and the verdict is one tap under it. In
+order: an offer to write (nothing is written from a blank offer); a checkpoint
+nobody answered, while no bet runs; **the running bet's next step** — for a bet
+about people, *reply to one of the N people who said it* (the button is their
+post), *did they answer?* for posts opened and not logged, or *find people*, and
+for any other bet where its own next count happens (`betNext`: Swipe, who replied,
+log a conversation, a sale, a count); then a test kept for later, how buyers find
+you, and a bet to pick on the weak part. A step that could only be refused is not
+offered (`voiceRefusal`: no search key, three searches done, the allowance spent
+fall through to logging the conversation that happened, invariant 7). Every number
+in it is one the rows hold: the bet's count and line, the days left to its last
+day, the goal's target and date.
+
+Two lines under the button are the point of the card. **What passing the bet does
+for the money** (`payoffOf`): a conversation bet earns nothing, and the card says
+so against the goal a sale is credited to (the first money goal by priority — the
+rule `recordOutcome` applies): "Passing this bet does not pay you. Save Exit PH
+[NOV] still needs $1,500 by 8 Dec (59 days left)", with **What pays now** one tap
+to the Path; a bet counted in sales says "A sale counts toward…" and how many at
+the price it is held to — the same 52 the goal's own outlook says. A tab about
+building a business that lets a person believe a test is income is the opposite of
+a co-founder. And **Ask Claude** (`claudeAsk`, the existing handoff): the bet's
+own words and count as the first line, then the whole record, held to what it
+says — the chat does the thinking this app does not, with the rows it never
+collected. With the connector (You → Claude) Claude reads the same numbers live,
+and can propose a conversation for the person to keep.
+
+**People who said it** (`voices.ts`, `voicefind.ts`, `People` in `ProofTab.tsx`).
 Its owner's bet was ten conversations with people who want a business and do
 not know where to start, and on day three the card read "0 of 10" over a "Log a
 conversation" button: nothing in the app could find one such person. The pool,
@@ -1098,18 +1138,26 @@ quotes it as theirs. What comes back is held to the rules before anything is
 kept (`voicesFromHits`): a post on one of those sites by its address (checked
 again here, not trusted from the index), each thread once however it was linked
 (`voiceKey`: Reddit with or without its slug, old or new), none already found
-for the account, at most `VOICES_PER_SEARCH`. Each card has the title, their
-sentence, where and when, and three taps: **Open** (their post, to answer from
-the person's own account — the app writes to nobody, invariant 4), **Talked to
-them** (the conversation sheet, filled with who they are and named for the post:
-`Talk.voice`), and **Not a fit** (`lab_voice_gone`). Above them, a first line from
-The Mom Test in fixed words (`VOICE_OPENER`), to copy and change. The bet counts
-how many it found it talked to ("2 of 8 talked to"), from the conversations that
-name a post. From day two of a conversation bet with nothing logged the card
-says so in the person's own numbers ("Day 3 of 14 and no conversation logged
-yet: 10 to have in the 12 days left", `stuckLine` — arithmetic on their line,
-never a pace the app estimated), and while nobody is found the search leads and
-"Log a conversation" waits beside it. A search runs in the tap (seconds),
+for the account, at most `VOICES_PER_SEARCH`. Each post has the title, their
+sentence, where and when, and goes through three states, each a tap. *Not
+opened:* **Open** (their post, in a new tab, to answer from the person's own
+account — the app writes to nobody, invariant 4), or **Not a fit**
+(`lab_voice_gone`). *Opened* — which this device remembers, in storage that costs
+only the question if it keeps nothing (`useOpened`) — the row is ringed and asks
+"Did they answer?": **They answered** reveals how it ended — Nothing, Another
+call, An intro, Money — and one tap on it logs the conversation, named for the
+post (`voiceTalk`, `Talk.voice`), and the post leaves; no answer is nothing to
+do. **Add detail instead** opens the full sheet. The one-tap log leaves "do they
+have the problem" as *did not come up*: their post said it, but whether they have
+it is what the conversation answers, and a count of who has the problem that took
+a search's word for it would be the app forming a view and feeding it back
+(invariants 2 and 12). Above the rows, a first line from The Mom Test in fixed
+words (`VOICE_OPENER`), to copy and change. The bet counts how many it found it
+talked to ("2 of 8 talked to"), from the conversations that name a post. Where
+the bet is at ("Day 3 of 14 and no conversation logged yet: 10 to have in the 12
+days left", `stuckLine` — arithmetic on their line, never a pace the app
+estimated) is said by the step at the top, which also leads with the search while
+nobody is found. A search runs in the tap (seconds),
 three per bet (`VOICE_SEARCHES`); it is stored even when it kept nobody ("found
 nobody new" is an answer), and metered like the matches it is — Exa charges per
 search, so each post kept spends one of the month's matches (invariant 6 protects

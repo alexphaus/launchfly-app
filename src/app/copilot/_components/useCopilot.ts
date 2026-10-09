@@ -49,7 +49,7 @@ const LAB_SAID: Record<LabInput['action'], string> = {
   link: 'Tied to the bet.',
   // Written in the background now: the card shows them being written, and the set when it lands.
   ideas: 'Writing ideas from your record.',
-  found_by: 'Saved. Proof reads your business that way now.',
+  found_by: 'Saved. Engine reads your business that way now.',
   checkpoint: 'Decided. The next checkpoint reads it back.',
   // Said with the count it kept (lab() below); this is the line when it says nothing more.
   voices: 'Searched.',
@@ -525,7 +525,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         setHome(r.home);
         // Said as what happened: started now, or written and waiting on an approval
         // that could not be given (three already running) — never "done".
-        say(r.started ? 'Handed over. It is starting now.' : 'Written. Approve it under Projects on Proof to start it.');
+        say(r.started ? 'Handed over. It is starting now.' : 'Written. Approve it under Projects on Engine to start it.');
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };

@@ -361,13 +361,13 @@ export function answerAsked(a: Asked, i: AskedInput): Answer {
     case 'bet': {
       if (!i.bet) {
         const due = i.checkpointDue ? ' A checkpoint is due: decide whether to pivot or persevere.' : '';
-        return answer(a, today, 'No bet running.', `No bet is running.${due || ' Start one on Proof.'}`, [due.trim()], 'From Proof.');
+        return answer(a, today, 'No bet running.', `No bet is running.${due || ' Start one on Engine.'}`, [due.trim()], 'From Engine.');
       }
       const b = i.bet;
       return answer(a, today, `Day ${b.day} of ${b.days}: ${b.result}`,
         `Your bet, ${b.belief.replace(/\.$/, '')}: day ${b.day} of ${b.days}, ${b.result}. It passes at ${b.pass}.`,
         [`“${b.belief}” — on ${b.part.toLowerCase()}.`, `It passes at ${b.pass}.`, i.checkpointDue ? 'A checkpoint is due as well.' : ''],
-        'Counted from the bet’s own rows, as Proof counts it.');
+        'Counted from the bet’s own rows, as Engine counts it.');
     }
     case 'goal': {
       const goals = i.goals ?? [];

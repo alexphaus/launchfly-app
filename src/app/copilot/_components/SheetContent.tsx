@@ -892,7 +892,7 @@ function OfferSheet({ home, bet, told, actions }: { home: HomeData; bet?: string
             <button key={f} className={`cp-fchip ${foundBy === f ? 'active' : ''}`} aria-pressed={foundBy === f} onClick={() => setFoundBy(f)}>{FOUND_BY_LABEL[f]}</button>
           ))}
         </div>
-        <div className="cp-help">{foundBy ? FOUND_BY_HINT[foundBy] : 'Proof reads how they hear from your sends when you reach out, and from what you log every other way.'}</div>
+        <div className="cp-help">{foundBy ? FOUND_BY_HINT[foundBy] : 'Engine reads how they hear from your sends when you reach out, and from what you log every other way.'}</div>
       </div>
       <div className="cp-btn-row">
         <button className="cp-btn primary" disabled={busy || !sells.trim()} onClick={save}>Save</button>

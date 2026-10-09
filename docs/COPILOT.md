@@ -778,18 +778,21 @@ On the screen, top to bottom:
   `ProofTab.tsx`). One card. First the step — what to do now, as a sentence, in
   the person's own numbers, with one primary button — then, one tap under it, the
   verdict: what you sell, proven or not ("Proven at 3 paid at your $150. So far:
-  0."), the chain as five dots with the weak link named, runway in bets. A tap on
-  it opens the chain whole (the parts below). "Since you last looked" names a part
+  0."), the chain as five dots with the weak link named. The offer and the runway are
+  not here: You and Money hold them. A tap on it opens the chain whole (the parts below). "Since you last looked" names a part
   that moved, per device, under the key Work used.
 - **What a pivot on who buys left behind**, until it is answered: the old
   buyers' businesses, the drafts to them and the searches for them.
 - **The people who said it**, for a bet about people: their own card, above the
   bet, once a search has run.
 - **The bet**, one at a time — or the checkpoint, or the way to pick one.
-- **Assets**, the gaps first, each with who made the version in use; a landing
-  page online says so, with what it counted.
-- **History**, the four newest; all of it, by month and kind, behind a tap.
-- **Behind it**: conversations, projects and agents, a line each.
+- **More**: the first asset the business lacks (a page that is not online, a
+  script for the weak part) with its one button, then a line each for
+  conversations, assets (a page online says so, with what it counted), history,
+  projects and the agents. Each opens its sheet. They are here because no other
+  tab holds them, and none is read to decide the next move, so none sits above
+  the bet. The bet's own count and pass line are the card; how it is counted,
+  the play and the work done for it are one tap under its play line.
 
 **Five parts, each a bet with a rule** (`business.ts`). Who buys, how they hear,
 how they say yes, what they pay, how you deliver. Each carries what it is in the
@@ -1237,7 +1240,7 @@ for them. Running work never lapses. **The running bet keeps a slot of its own**
 it can be handed over and started, checked on the record and tied to the bet by
 the create route itself, so errands cannot grey out "Hand part of this bet over".
 
-**Behind it**: the conversation log, with an introduction that waits said on
+**Conversations** (under More): the conversation log, with an introduction that waits said on
 its line, the projects — the box to hand anything over or
 copy it for Claude, the projects on the go with a question answered or a
 breakage retried on the card, what the app offers to take on, and what finished,

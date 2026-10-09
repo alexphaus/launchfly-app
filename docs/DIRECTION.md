@@ -524,6 +524,19 @@ person's behalf (the conversation is theirs to say how it ended). It passes the
 survival test as before, on the rows the step is read from and the goal it is read
 against. See COPILOT.md → **Proof**: The next step first.
 
+**Then — Engine, one thing per screen.** Its owner asked what the tab would be if
+only what no other tab can show deserved a place. Path already says what to do
+today, Swipe holds outreach, Money the runway and the bank, You the offer and the
+goals; Engine had been repeating each of them as a line (the offer, the runway in
+bets, what a bet's win pays toward) and carrying a long page of assets, history and
+agents above the one thing it owns. So it is cut to what only it has: the step, the
+verdict under it, the people a bet found, the bet and its count, and the pass
+line. How the bet is counted, the play and the work for it are one tap under the
+play's name. The rest — conversations, assets, history, projects, agents — is one
+short list of links, kept because no other tab has those sheets and a dropped row
+would be a sheet nobody can open. The one asset that is a gap stays above it with
+its button. Nothing was added; the chat-beside-it argument is unchanged.
+
 ---
 
 ## Where it actually stands

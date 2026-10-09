@@ -15,6 +15,7 @@ import { historyMonths, type HistoryKind } from '@/lib/copilot/history';
 import { BET_STATE_LABEL, NOTE_MAX, TALLY_MAX, dayWords, metricWords, resultLine, type BetView } from '@/lib/copilot/lab';
 import { salesCurrency } from '@/lib/copilot/metrics';
 import { FOUND_BY_HINT, FOUND_BY_LABEL, offerIsEmpty } from '@/lib/copilot/offer';
+import { ASK_DEFAULT, ASK_KINDS, ASK_KIND_LABEL, ASK_LABEL_MAX, askWhere, pageCounts, pageLine, type AskKind } from '@/lib/copilot/livepage';
 import { foundOf, pivotWords } from '@/lib/copilot/proof';
 import type { ToldMeta, ToldSale } from '@/lib/copilot/tell';
 import { FOUND_BY, type FoundBy, type HomeData } from '@/lib/copilot/types';
@@ -327,6 +328,8 @@ function AssetView({ home, asset: a, actions }: { home: HomeData; asset: Asset; 
         {v.by === 'ai' && v.model && <p className="cp2-pf-ver-note">Written by {v.model}. Check every claim in it before it goes out.</p>}
       </div>
 
+      {a.kind === 'landing_page' && !a.retired && v.body && <PagePanel home={home} asset={a} actions={actions} />}
+
       {mode === 'ai' ? (
         <div className="cp-field">
           <label className="cp-label" htmlFor="cp2-pf-ask">What should change — optional</label>
@@ -371,6 +374,11 @@ function AssetView({ home, asset: a, actions }: { home: HomeData; asset: Asset; 
                 <span className="cp2-row-main">
                   <span className="t cp2-clamp1">{x.title}</span>
                   <span className="s">{[x.by === 'ai' ? 'By AI' : 'By you', x.at ? dayWords(x.at) : 'undated', live ? (isOffer ? 'in use' : 'current') : null, x.note].filter(Boolean).join(' · ')}</span>
+                  {/* Which version was online when it was opened: the join a page written in a chat cannot make. */}
+                  {a.kind === 'landing_page' && home.page && (() => {
+                    const c = pageLine(pageCounts(home.page.hits, { asset: a.id, n: x.n }), null);
+                    return c ? <span className="s">Online: {c}</span> : null;
+                  })()}
                   {xb && <span className="s">For &ldquo;{xb.bet.belief}&rdquo;{xb.state !== 'running' ? ` · ${BET_STATE_LABEL[xb.state]}` : ''}</span>}
                 </span>
                 <IconChevron />
@@ -393,6 +401,138 @@ function AssetView({ home, asset: a, actions }: { home: HomeData; asset: Asset; 
         })}
       </div>
     </>
+  );
+}
+
+/* ─── Your page, online (livepage.ts) ──────────────────────────────────── */
+
+const ASK_HINT: Record<AskKind, { label: string; placeholder: string; type: string }> = {
+  whatsapp: { label: 'Your WhatsApp number', placeholder: '+63 917 123 4567', type: 'tel' },
+  email: { label: 'Your email', placeholder: 'you@example.com', type: 'email' },
+  link: { label: 'The link', placeholder: 'https://your sign-up, booking or checkout page', type: 'url' },
+};
+
+/**
+ * A landing page, online: one address that stays while the version behind it
+ * changes, one button to the person's own channel, and the opens and taps the
+ * page counts. Text drafted is not somewhere a buyer can find; this is the step
+ * from one to the other, in a tap.
+ */
+function PagePanel({ home, asset: a, actions }: { home: HomeData; asset: Asset; actions: Actions }) {
+  const page = home.page;
+  const live = page?.live ?? null;
+  const here = live?.asset === a.id ? live : null;
+  const other = live && !here ? home.assets?.assets.find((x) => x.id === live.asset) ?? null : null;
+  // The button the page has, or last had before it went offline: put back up, it asks for the same thing unless changed.
+  const known = live?.ask ?? page?.lastAsk ?? null;
+  // The form only where there is no button to reuse: a page taken down goes back up in one tap.
+  const [editing, setEditing] = useState(!here && !known);
+  const [kind, setKind] = useState<AskKind>(known?.kind ?? 'whatsapp');
+  const [to, setTo] = useState(() => (known ? (known.kind === 'whatsapp' ? `+${known.to}` : known.to) : ''));
+  const [label, setLabel] = useState(known?.label ?? '');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  if (!page) return null;
+  if (page.unreadable) return <div className="cp-note cp2-pg">Your page could not be read just now: {page.unreadable}. Nothing is changed until it reads.</div>;
+  // Built from the address the app is open on where the server has none to give: it is the same app.
+  const url = page.url ?? (page.path && typeof window !== 'undefined' ? `${window.location.origin}${page.path}` : null);
+  if (!url) return <div className="cp-note cp2-pg">This server cannot give pages an address: COPILOT_SESSION_SECRET is not set.</div>;
+  const counts = here ? pageCounts(page.hits, { asset: a.id, n: here.n }) : null;
+  const newer = here && a.current.n !== here.n ? a.current : null;
+  // Counting paused for the hour within the last day: said, so a quiet count is not read as nobody opening it.
+  const capped = page.capped && Date.now() - Date.parse(page.capped) < 86_400_000 ? page.capped : null;
+
+  const run = async (key: string, input: Parameters<Actions['page']>[0], after?: () => void) => {
+    setBusy(key); setError(null); setNote(null);
+    const r = await actions.page(input);
+    setBusy(null);
+    if (!r.ok) return setError(r.error ?? 'Could not save that');
+    after?.();
+  };
+  const publish = () => run('publish', { action: 'publish', asset: a.id, n: a.current.n, ask: { kind, to: to.trim(), label: label.trim() || undefined } }, () => setEditing(false));
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); setNote('Copied. Share it where your buyers are.'); } catch { setNote('Your browser did not let it be copied. Hold the address to copy it.'); }
+  };
+
+  return (
+    <div className={`cp2-pg${here ? ' live' : ''}`}>
+      <div className="cp2-pg-top">
+        <span className="cp2-pf-k">{here ? 'Your page · online' : known ? 'Your page · offline' : 'Put it online'}</span>
+        {here && <span className="cp2-pf-pill live">v{here.n} online</span>}
+      </div>
+      {here && (
+        <>
+          <p className="cp2-pg-line">
+            Since {dayWords(here.at.slice(0, 10))}{counts && pageLine(counts, here.ask.label) ? `: ${pageLine(counts, here.ask.label)}` : ': nobody has opened it yet'}. Your own visits are not counted.
+          </p>
+          <div className="cp2-pg-url">
+            <span className="cp2-clamp1">{url.replace(/^https?:\/\//, '')}</span>
+            <button className="cp2-link" onClick={() => void copy()}>Copy</button>
+            <a className="cp2-link" href={url} target="_blank" rel="noreferrer">Open <IconExternal /></a>
+          </div>
+          <p className="cp-help">Its button: {here.ask.label} → {askWhere(here.ask)}</p>
+          {capped && <p className="cp-help cp2-err">Counting paused for an hour at {new Date(capped).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}: more than it could be people opening a page.</p>}
+          {newer && (
+            <button className="cp-btn sm primary" disabled={busy !== null} onClick={() => void run('newer', { action: 'publish', asset: a.id, n: newer.n })}>
+              {busy === 'newer' ? 'Putting it up…' : `Put v${newer.n} online instead`}
+            </button>
+          )}
+        </>
+      )}
+      {!here && !editing && known && (
+        <>
+          <p className="cp2-pg-line">
+            {other ? <>Your page shows &ldquo;{other.title}&rdquo; now. This one can take its place, at the same address, with</> : <>Not online. Put back up, it has</>} the button it had: {known.label} → {askWhere(known)}.
+          </p>
+          <div className="cp2-pg-acts">
+            <button className="cp-btn sm primary" disabled={busy !== null} onClick={() => void run('again', { action: 'publish', asset: a.id, n: a.current.n })}>
+              {busy === 'again' ? 'Putting it up…' : `Put v${a.current.n} online`}
+            </button>
+            <button className="cp2-link" disabled={busy !== null} onClick={() => setEditing(true)}>Change the button first</button>
+          </div>
+        </>
+      )}
+      {editing && (
+        <div className="cp2-pg-form">
+          {!here && (
+            <p className="cp2-pg-line">
+              One address for this page and one button on it: where people reach you. The app counts who opens it and who taps; your own visits are not counted, and nothing about who opened it is kept.
+            </p>
+          )}
+          {other && <p className="cp-help">Your page shows &ldquo;{other.title}&rdquo; now. This one takes its place, at the same address.</p>}
+          <div className="cp-field">
+            <label className="cp-label">What the button opens</label>
+            <div className="cp-chips">
+              {ASK_KINDS.map((k) => (
+                <button key={k} className={`cp-fchip ${kind === k ? 'active' : ''}`} aria-pressed={kind === k} onClick={() => { setKind(k); setTo(''); }}>{ASK_KIND_LABEL[k]}</button>
+              ))}
+            </div>
+          </div>
+          <div className="cp-field">
+            <label className="cp-label" htmlFor="cp2-pg-to">{ASK_HINT[kind].label}</label>
+            <input id="cp2-pg-to" className="cp-input sm" type={ASK_HINT[kind].type} value={to} onChange={(e) => setTo(e.target.value)} placeholder={ASK_HINT[kind].placeholder} />
+          </div>
+          <div className="cp-field">
+            <label className="cp-label" htmlFor="cp2-pg-label">The button says — optional</label>
+            <input id="cp2-pg-label" className="cp-input sm" value={label} maxLength={ASK_LABEL_MAX} onChange={(e) => setLabel(e.target.value)} placeholder={ASK_DEFAULT[kind]} />
+          </div>
+          <div className="cp-btn-row">
+            <button className="cp-btn primary" disabled={busy !== null || !to.trim()} onClick={() => void publish()}>{busy === 'publish' ? 'Putting it up…' : here ? 'Save the button' : `Put v${a.current.n} online`}</button>
+            {/* Back to the page as it is, or to putting it back up with the button it had. */}
+            {(here || known) && <button className="cp-btn" disabled={busy !== null} onClick={() => setEditing(false)}>Back</button>}
+          </div>
+        </div>
+      )}
+      {here && !editing && (
+        <div className="cp2-pg-acts">
+          <button className="cp2-link" onClick={() => setEditing(true)}>Change the button</button>
+          <button className="cp2-link muted" disabled={busy !== null} onClick={() => void run('off', { action: 'off' })}>{busy === 'off' ? 'Taking it offline…' : 'Take it offline'}</button>
+        </div>
+      )}
+      {error && <div className="cp-error">{error}</div>}
+      {note && <p className="cp-help">{note}</p>}
+    </div>
   );
 }
 
@@ -525,7 +665,7 @@ export function AssetsSheet({ home, actions }: { home: HomeData; actions: Action
       <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'asset' })}>Add an asset</button>
       {home.assets?.unreadable && <div className="cp-error">Could not read your assets just now: {home.assets.unreadable}</div>}
       <div className="cp-sheet-embed cp2-pf-sheetlist">
-        {live.length > 0 && <div className="cp-list cp2-rows cp2-pf-assets">{live.map((a) => <AssetRow key={a.id} a={a} bets={bets} actions={actions} />)}</div>}
+        {live.length > 0 && <div className="cp-list cp2-rows cp2-pf-assets">{live.map((a) => <AssetRow key={a.id} a={a} bets={bets} actions={actions} page={home.page} />)}</div>}
         {away.length > 0 && (
           <>
             <div className="cp-section"><span className="lead">Put away</span><span className="count">{away.length}</span></div>

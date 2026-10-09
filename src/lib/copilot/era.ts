@@ -54,3 +54,56 @@ export function eraCounts(rows: EraRows, since: string, timezone: string, offer:
 export function erasFor(days: string[], rows: EraRows, timezone: string, offer: Offer, targetSegments: string[] = []): Record<string, EraCounts> {
   return Object.fromEntries([...new Set(days)].map((day) => [day, eraCounts(rows, day, timezone, offer, targetSegments)]));
 }
+
+/* ─── What a pivot on who buys left behind ────────────────────────────────── */
+//
+// Its owner pivoted who buys on 7 Oct, from booking automation for resorts to
+// the app itself for people starting out, and two days later the app still
+// searched Maps for pest control and plumbing in Manila, held 148 of those
+// businesses, and had rewritten 35 drafts to them from the new offer: a $29 app
+// for people starting a business, pitched to exterminators. Saving the offer
+// rewrites the waiting drafts by design (store.ts setOffer) — a reworded offer
+// is the same business — and only the pivot says the buyers changed. So the
+// pivot is what asks: these were found for the buyers you left; set them aside,
+// or keep them. Asked once per pivot, answered by a tap, never done for them.
+
+/** What a pivot on who buys left behind, said on Proof until it is answered. */
+export interface PivotLeft {
+  /** The pivot's day, the person's. */
+  day: string;
+  /** What Maps still searches for, as the person typed it before the pivot. */
+  segments: string[];
+  /** Businesses waiting in the pool that were found for the old buyers. */
+  businesses: number;
+  /** Drafts waiting to be sent to them. */
+  drafts: number;
+}
+
+/** A business waiting in the pool: when it was found, on the person's day, and the segment it was found under. */
+export interface PoolRow { id: string; day: string | null; segment: string | null }
+
+const norm = (s: string) => s.trim().toLowerCase();
+
+/**
+ * The businesses found for the old buyers: everything found before the pivot's
+ * day, and anything found since under a segment typed before it — Maps went on
+ * searching those every night. A business found since by a search planned from
+ * the new offer is the new business's, and stays.
+ */
+export function foundForOld(rows: PoolRow[], day: string, segments: string[]): string[] {
+  const segs = new Set(segments.map(norm).filter(Boolean));
+  return rows.filter((r) => (!!r.day && r.day < day) || (!!r.segment && segs.has(norm(r.segment)))).map((r) => r.id);
+}
+
+/**
+ * What the last pivot on who buys left behind, or null: no such pivot, an answer
+ * already given for it (set aside or kept), or nothing left to set aside. A
+ * later pivot asks again — it is another business again.
+ */
+export function pivotLeft(i: { day: string | null; answered: string | null; segments: string[]; pool: PoolRow[]; drafts: Array<{ opp: string | null }> }): PivotLeft | null {
+  if (!i.day || (i.answered && i.answered >= i.day)) return null;
+  const old = new Set(foundForOld(i.pool, i.day, i.segments));
+  const drafts = i.drafts.filter((d) => !!d.opp && old.has(d.opp)).length;
+  if (!i.segments.length && !old.size) return null;
+  return { day: i.day, segments: i.segments, businesses: old.size, drafts };
+}

@@ -352,6 +352,8 @@ export interface AssetGap {
   title: string;
   /** Why it matters for this business, now. */
   why: string;
+  /** The asset the gap is about, when it exists and only needs a step more: a page kept and not online (livepage.ts). */
+  open?: string;
 }
 
 /**
@@ -365,11 +367,23 @@ export function assetGaps(i: {
   weak: LinkKey | null;
   foundBy: FoundBy | null;
   states: Partial<Record<LinkKey, string>>;
+  /**
+   * The page online, by its asset, where the payload says (livepage.ts): null
+   * for none online; undefined for a payload from before pages, which asks for
+   * nothing it cannot see.
+   */
+  online?: string | null;
 }): AssetGap[] {
   if (!i.offer?.sells?.trim()) return [];
   const live = i.assets.filter((a) => !a.retired);
   const has = (k: AssetKind) => live.some((a) => a.kind === k);
   const gaps: Array<AssetGap & { part: LinkKey }> = [];
+  // A page kept and not online is a page nobody can find: the step left is one
+  // tap, and a draft that sits as text is how "Draft it" ended before.
+  const offline = i.online === null ? live.find((a) => a.kind === 'landing_page' && !!a.current.body?.trim()) : undefined;
+  if (offline && i.foundBy && i.foundBy !== 'outreach' && i.states.reach !== 'works') {
+    gaps.push({ kind: 'landing_page', part: 'reach', title: 'Your page is not online', why: 'Kept, and nobody can open it yet. Online, it counts who opens it.', open: offline.id });
+  }
   // Proof matters while the price is not being paid: once sales at it come in, they are the proof.
   if (!has('demo') && !i.offer.proof_url?.trim() && i.states.pay !== 'works' && i.states.pay !== 'testing') {
     gaps.push({ kind: 'demo', part: 'pay', title: 'No demo yet', why: 'Proof is what a price is believed on.' });

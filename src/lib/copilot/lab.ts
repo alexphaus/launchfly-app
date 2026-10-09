@@ -58,6 +58,7 @@ import { LINK_KEYS, LINK_LABEL, LINK_STATES, chainChanges, evidenceState, type B
 import { isIsoDay, shiftDay } from './focus';
 import { priceOf } from './plan';
 import { unitSignal } from './signal';
+import { isVoiceId, type VoicesHome } from './voices';
 import { moneyLabel } from './review';
 import type { FoundBy, Offer } from './types';
 
@@ -190,10 +191,11 @@ export function countRefusal(metric: LabMetric, tries: { metric: LabMetric } | n
  * reads as a measured one and nobody wonders why last month's sends are not in
  * it.
  */
-export function countedFrom(m: LabMetric, start: string, priceLabel: string | null, unit?: string | null, linked = false): string {
+export function countedFrom(m: LabMetric, start: string, priceLabel: string | null, unit?: string | null, linked = false, paged = false): string {
   const since = `since ${dayWords(start)}`;
   // Measured and typed, both said: the link's rows are the app's, the tallies are the person's.
   if (m === 'logged' && linked && unitSignal(unit)) return `From the ${unit} your count link records, and any you log, ${since}.`;
+  if (m === 'logged' && paged && unitPage(unit)) return `From the ${unit} your page counts, and any you log, ${since}. Your own visits are not counted.`;
   switch (m) {
     case 'sent': return `Counted from your sends ${since}. Nothing before the bet counts.`;
     case 'replied': return `Counted from replies ${since}, once per business.`;
@@ -339,6 +341,12 @@ export interface Talk {
   said: string | null;
   /** The conversation where somebody offered the introduction this one came through. */
   via: string | null;
+  /**
+   * The public post it came from (voices.ts), when the bet found them: how many
+   * of the people a bet found became conversations is read from this. Optional:
+   * a payload from before there were posts has none.
+   */
+  voice?: string | null;
   at: string;
 }
 export type TalkDraft = Omit<Talk, 'id' | 'at'>;
@@ -658,7 +666,11 @@ export function normalizeTalk(raw: Record<string, unknown>, today: string, known
   // as one more business with the problem.
   const problem = asksProblem(role) && (PROBLEMS as readonly string[]).includes(raw.problem as string) ? (raw.problem as Problem) : 'unasked';
   const commitment = (COMMITMENTS as readonly string[]).includes(raw.commitment as string) ? (raw.commitment as Commitment) : 'none';
-  return { ok: true, value: { on, who: text(raw.who, WHO_MAX), role, problem, commitment, said: text(raw.said, SAID_MAX), via } };
+  // The post it came from is a name, not a claim: one that matches no post the
+  // bet found ties the conversation to nothing, and anything not shaped like one
+  // is dropped rather than kept.
+  const voice = isVoiceId(raw.voice) ? raw.voice : null;
+  return { ok: true, value: { on, who: text(raw.who, WHO_MAX), role, problem, commitment, said: text(raw.said, SAID_MAX), via, ...(voice ? { voice } : {}) } };
 }
 
 /** How an introduction went, said once the person knows: only an introduction in their record. */
@@ -863,6 +875,7 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
         problem: (PROBLEMS as readonly string[]).includes(p.problem as string) ? (p.problem as Problem) : 'unasked',
         commitment: (COMMITMENTS as readonly string[]).includes(p.commitment as string) ? (p.commitment as Commitment) : 'none',
         via: talkRef(p.via),
+        ...(isVoiceId(p.voice) ? { voice: p.voice } : {}),
       });
     } else if (r.event_type === LAB_CHECKPOINT) {
       if (!isIsoDay(p.on) || !(LAB_DECISIONS as readonly string[]).includes(p.decision as string)) continue;
@@ -911,6 +924,21 @@ export interface DayRows {
   tallies?: Array<Pick<Tally, 'bet' | 'n' | 'on'>>;
   /** Sign-ups and enquiries the count link recorded (signal.ts), on the person's day. */
   signals?: Array<{ kind: 'signup' | 'enquiry'; on: string }>;
+  /** Opens and taps the page online counted (livepage.ts), on the person's day. */
+  pageHits?: Array<{ kind: 'open' | 'tap'; on: string }>;
+}
+
+/**
+ * What a bet that counts something the person names reads from their page
+ * (livepage.ts): "visits" are opens, "taps" and "clicks" are taps. Anything else
+ * the page does not see, and stays the person's to log. Here, not in
+ * livepage.ts, because that module reads assets and assets read this one.
+ */
+export function unitPage(unit: string | null | undefined): 'open' | 'tap' | null {
+  const u = (unit ?? '').trim().toLowerCase();
+  if (/^(visits?|visitors?|views?|page ?views?|opens?)$/.test(u)) return 'open';
+  if (/^(taps?|clicks?)$/.test(u)) return 'tap';
+  return null;
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -969,7 +997,10 @@ export function countIn(metric: LabMetric, from: string, to: string, rows: DayRo
     case 'logged': {
       const typed = (rows.tallies ?? []).filter((t) => t.bet === bet && inside(t.on)).reduce((s, t) => s + t.n, 0);
       const kind = unitSignal(unit);
-      return typed + (kind ? (rows.signals ?? []).filter((s) => s.kind === kind && inside(s.on)).length : 0);
+      const hit = unitPage(unit);
+      return typed
+        + (kind ? (rows.signals ?? []).filter((s) => s.kind === kind && inside(s.on)).length : 0)
+        + (hit ? (rows.pageHits ?? []).filter((h) => h.kind === hit && inside(h.on)).length : 0);
     }
   }
 }
@@ -1075,6 +1106,8 @@ export interface LabHome {
    * pivots restarted anything has none, and its chain reads all time, as it did.
    */
   eras?: Record<string, EraCounts>;
+  /** The public posts found for bets, and the ones set aside (voices.ts). Optional: a payload from before them has none. */
+  voices?: VoicesHome;
   /** The read's failure, said on the tab — never shown as an empty Lab (invariant 13). */
   unreadable: string | null;
 }
@@ -1091,6 +1124,8 @@ export interface LabInput {
   finished: Array<string | null | undefined>;
   /** What the count link recorded, already on the person's day (store.ts reads it). */
   signals?: Array<{ kind: 'signup' | 'enquiry'; on: string }>;
+  /** What the page counted, already on the person's day (store.ts reads it). */
+  pageHits?: Array<{ kind: 'open' | 'tap'; on: string }>;
   /**
    * The shelf's own rows (store.ts loadLabEvents): kept tests wait for weeks, and
    * a window of the newest lab events in general would drop one silently once
@@ -1125,6 +1160,7 @@ export function labHome(i: LabInput): LabHome {
     talks: ledger.talks,
     tallies: ledger.tallies,
     signals: i.signals ?? [],
+    pageHits: i.pageHits ?? [],
   };
   return {
     bets: bets.map((b) => {

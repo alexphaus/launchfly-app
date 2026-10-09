@@ -122,7 +122,9 @@ export type MoveGo =
   /** Start a bet on this part: the bet sheet, opened on it. */
   | { bet: LinkKey }
   /** Make or draft an asset of this kind. */
-  | { asset: AssetKind };
+  | { asset: AssetKind }
+  /** One asset that exists, opened: a page kept and not online (livepage.ts). */
+  | { assetId: string };
 
 export interface LinkMove {
   key: string;
@@ -214,6 +216,12 @@ export interface ChainInput {
    * and whether there is a link at all. Absent on a payload from before it.
    */
   signals?: { linked: boolean; signup: number; enquiry: number };
+  /**
+   * The landing page and what it counted (livepage.ts): whether it is online,
+   * every open and tap it counted, the button's words, and the landing page that
+   * could go up when none is. Absent on a payload from before pages.
+   */
+  page?: { live: boolean; opened: number; tapped: number; label: string | null; offline: string | null };
 }
 
 /**
@@ -248,6 +256,8 @@ export interface PartEra extends EraCounts {
   talks: { n: number; problem: number; committed: number };
   /** What the count link recorded since. */
   signals?: { signup: number; enquiry: number };
+  /** What the page counted since. */
+  page?: { opened: number; tapped: number };
 }
 
 /**
@@ -425,6 +435,7 @@ function eraView(i: ChainInput, k: LinkKey): ChainInput {
     talks: e.talks,
     bets: (i.bets ?? []).filter((b) => b.start >= e.since),
     signals: i.signals ? { linked: i.signals.linked, ...(e.signals ?? { signup: 0, enquiry: 0 }) } : undefined,
+    page: i.page ? { ...i.page, ...(e.page ?? { opened: 0, tapped: 0 }) } : undefined,
   };
 }
 
@@ -725,10 +736,16 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   // bare, and said beside the bet's count rather than in place of it — a number
   // of sign-ups is not a verdict on whether they are enough; a bet is.
   const sig = i.signals;
-  const arrived = sig ? sig.signup + sig.enquiry : 0;
-  const heard = arrived
-    ? `${[sig!.signup ? plural(sig!.signup, 'sign-up') : null, sig!.enquiry ? plural(sig!.enquiry, 'enquiry', 'enquiries') : null].filter(Boolean).join(' and ')} through your count link`
-    : null;
+  const linked = sig ? sig.signup + sig.enquiry : 0;
+  // What the page counted is measured too, and said apart from the link's: a
+  // tap on its button is somebody reaching for the person, not an enquiry made.
+  const pg = i.page;
+  const opened = pg ? pg.opened + pg.tapped : 0;
+  const arrived = linked + opened;
+  const heard = [
+    linked ? `${[sig!.signup ? plural(sig!.signup, 'sign-up') : null, sig!.enquiry ? plural(sig!.enquiry, 'enquiry', 'enquiries') : null].filter(Boolean).join(' and ')} through your count link` : null,
+    opened ? `${plural(pg!.opened, 'person', 'people')} opened your page${pg!.tapped ? `, ${pg!.tapped} tapped ${pg!.label ?? 'its button'}` : ''}` : null,
+  ].filter(Boolean).join('; ') || null;
   const linkMove: LinkMove | null = sig && !sig.linked ? { key: 'reach-link', label: 'Count sign-ups by themselves', by: 'you', go: { sheet: 'signals' } } : null;
   if (!c.offerSet) {
     return { key: 'reach', label: LINK_LABEL.reach, what: null, facts: '', more, state: 'missing', runner, moves: [],
@@ -744,7 +761,10 @@ function reachByOwnCount(i: ChainInput, c: Ctx, bets: ChainBet[]): BusinessLink 
   const facts = [bets[0] ? `${BET_SAID[bets[0].state]}: ${bets[0].line}` : null, heard].filter(Boolean).join(' · ') || 'No count yet';
   const base = { key: 'reach' as const, label: LINK_LABEL.reach, what, facts, more, runner };
   const passed = bets.filter((b) => b.state === 'passed');
-  const page: LinkMove | null = found === 'inbound' && !landing ? { key: 'reach-landing', label: 'A landing page', by: 'you', go: { asset: 'landing_page' } } : null;
+  // A page kept and not online is one tap from being somewhere buyers can find; one not written is a draft away.
+  const page: LinkMove | null = found === 'inbound' && !landing ? { key: 'reach-landing', label: 'A landing page', by: 'you', go: { asset: 'landing_page' } }
+    : pg && !pg.live && pg.offline ? { key: 'reach-online', label: 'Put your page online', by: 'you', go: { assetId: pg.offline } }
+    : null;
   const ask = betMove('reach', 'Bet on how they hear');
   const moves = [ask, page, linkMove].filter((m): m is LinkMove => !!m);
   if (passed.length >= 2) {

@@ -17,7 +17,11 @@ import { randomBytes } from 'node:crypto';
 import { restartsOf } from './business';
 import { MCP_PROPOSAL, MCP_PROPOSAL_END, PROPOSAL_EVENTS, openProposals, type ProposalEventRow, type ProposalOutcome, type Proposal } from './proposals';
 import { SIGNAL_EVENTS, SIGNAL_IN, SIGNAL_LINK, SIGNALS_KEPT, signalCounts, signalsFromEvents, type SignalDraft, type SignalEventRow, type SignalHome } from './signal';
-import { erasFor } from './era';
+import { erasFor, foundForOld, pivotLeft, type PivotLeft } from './era';
+import { VOICE_EVENTS, voicesFromEvents, type VoiceEventRow, type VoicesHome } from './voices';
+import { PAGE_HIT_EVENTS, PAGE_HITS_KEPT, PAGE_STATE_EVENTS, lastAskOf, livePageOf, pageHitsOf, type PageEventRow, type PageHome } from './livepage';
+import { pageCode, pageUrl } from './pagekey';
+import { pageKey } from './session';
 import { cancelOpenDrafts, channelsConfigured, countOpenDrafts, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, isFoundBy, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
@@ -762,7 +766,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs, labEvents, assetEvents, signalRows, proposalRows] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows, recentRows, hunting, nightly, roadmapRuns, roadmapMarks, moneyRows, builtOutputs, labEvents, assetEvents, signalRows, proposalRows, voiceRows, pivotAnswered, page] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -816,6 +820,12 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadSignals(profileId),
     // What Claude proposed, waiting on the person (proposals.ts). Never throws either.
     loadProposals(profileId),
+    // The people found for bets (voices.ts). Never throws; the bet says a failed read.
+    loadVoices(profileId),
+    // The last answer to what a pivot on who buys left behind (era.ts pivotLeft).
+    loadPivotAnswer(profileId),
+    // The landing page online, and who opened it (livepage.ts). Never throws.
+    loadPage(profileId, profile.timezone),
   ]);
 
   // Who each recent outcome was about. Most are businesses already in hand; a
@@ -1034,11 +1044,26 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     outcomes: diagRows.outcomes,
     finished: commissionRows.filter((c) => c.status === 'done').map((c) => c.closed_at),
     signals: signals.days,
+    pageHits: page.hits.map((h) => ({ kind: h.kind, on: h.on })),
   });
   // What each pivot restarted is judged on the rows from its day on (era.ts):
   // counted here, where the rows are, because the payload carries totals only.
   const pivotDays = Object.values(restartsOf(lab.checkpoints)).map((r) => r!.on);
   if (pivotDays.length) lab.eras = erasFor(pivotDays, diagRows, profile.timezone, profile.offer ?? {}, profile.target_segments);
+  lab.voices = voiceRows;
+  // What the last pivot on who buys left behind: the businesses found for the
+  // old buyers, the drafts written to them, the segments Maps still searches.
+  // Read off rows already loaded — the pipeline and the queue — so the card's
+  // numbers are the ones Swipe and the queue show.
+  const left: PivotLeft | null = pivotLeft({
+    day: restartsOf(lab.checkpoints).who?.on ?? null,
+    answered: pivotAnswered,
+    segments: profile.target_segments,
+    pool: pipelineRows.filter((o) => o.status === 'new' || o.status === 'saved').map((o) => ({
+      id: o.id, day: dayIn(o.created_at, profile.timezone), segment: segmentOf(o as DiagnoseInput['opportunities'][number], profile.target_segments),
+    })),
+    drafts: queue.map((q) => ({ opp: q.opp?.id ?? null })),
+  });
   const assets = assetsHome({ events: assetEvents.rows, unreadable: assetEvents.unreadable, offer: profile.offer });
   // Every sale, all time, for Proof's history — from the diagnosis's own rows,
   // with the business named where the sale was logged against one.
@@ -1111,6 +1136,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     commissions: commissionThreads,
     built: builtOutputs,
     lab,
+    pivotLeft: left,
+    page,
     assets,
     signals,
     proposals: { open: openProposals(proposalRows.rows, today), unreadable: proposalRows.unreadable },
@@ -2285,6 +2312,142 @@ export async function loadLabEvents(profileId: string): Promise<{ rows: LabEvent
   } catch (e) {
     return { rows: [], shelfRows: [], runRows: [], unreadable: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/* ─── Your page, online (livepage.ts) ──────────────────────────────────────── */
+
+/** Going online and offline: a handful a month, so this reaches back as far as anyone will look. */
+export const PAGE_STATE_LIMIT = 40;
+
+/** The rows that say which page is online. Throws: a page route that cannot read them answers with an error, not a page. */
+export async function loadPageState(profileId: string): Promise<PageEventRow[]> {
+  const { data, error } = await copilotDb().from('copilot_events')
+    .select('id, event_type, payload, created_at')
+    .eq('profile_id', profileId).in('event_type', [...PAGE_STATE_EVENTS])
+    .order('created_at', { ascending: false }).limit(PAGE_STATE_LIMIT);
+  if (error) throw new Error(describeDbError(error, 'Could not read your page.'));
+  return (data ?? []) as PageEventRow[];
+}
+
+/**
+ * The page as the home payload carries it: what is online, its address, and
+ * every open and tap on the person's day. Never throws; a failed read is said on
+ * the page's sheet and its row, never drawn as a page nobody opened (invariant 13).
+ */
+export async function loadPage(profileId: string, timezone: string): Promise<PageHome> {
+  const origin = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || '').trim();
+  let code: string | null = null;
+  try { code = pageCode(profileId, pageKey()); } catch { code = null; }
+  const url = code && origin ? pageUrl(origin, code) : null;
+  const path = code ? `/p/${code}` : null;
+  try {
+    const [state, hits] = await Promise.all([
+      loadPageState(profileId),
+      copilotDb().from('copilot_events').select('id, event_type, payload, created_at')
+        .eq('profile_id', profileId).in('event_type', [...PAGE_HIT_EVENTS])
+        .order('created_at', { ascending: false }).limit(PAGE_HITS_KEPT),
+    ]);
+    if (hits.error) throw new Error(describeDbError(hits.error, 'Could not read who opened your page.'));
+    const read = pageHitsOf((hits.data ?? []) as PageEventRow[], (iso) => dayIn(iso, timezone));
+    return { live: livePageOf(state), lastAsk: lastAskOf(state), url, path, hits: read.hits, capped: read.capped, unreadable: null };
+  } catch (e) {
+    return { live: null, url, path, hits: [], capped: null, unreadable: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Online, offline, an open or a tap, or the hour counting stopped. Throws with a reason the route can say. */
+export async function insertPageEvent(profileId: string, type: string, payload: Record<string, unknown>): Promise<void> {
+  const { error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: type, payload });
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
+}
+
+/* ─── What a pivot on who buys left behind (era.ts pivotLeft) ─────────────── */
+
+export const PIVOT_SET_ASIDE = 'pivot_set_aside';
+export const PIVOT_KEPT = 'pivot_kept';
+
+/** The pivot day last answered — set aside or kept — or null. Never throws: unread, the card asks again, which a tap answers. */
+export async function loadPivotAnswer(profileId: string): Promise<string | null> {
+  try {
+    const { data } = await copilotDb().from('copilot_events').select('payload')
+      .eq('profile_id', profileId).in('event_type', [PIVOT_SET_ASIDE, PIVOT_KEPT])
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const day = (data?.payload as { pivot?: unknown } | null)?.pivot;
+    return typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What a pivot on who buys left behind, set aside at the person's tap: the
+ * drafts to businesses found for the old buyers are cancelled, the businesses
+ * leave Swipe and the pool (dismissed — a status, nothing deleted), and the
+ * segments typed before the pivot stop being searched. What was sent and what
+ * came back stays: a business already written to is history, not a lead.
+ * Throws with a reason the route can say.
+ */
+export async function setAsidePivot(profileId: string, day: string): Promise<{ businesses: number; drafts: number; segments: string[] }> {
+  const db = copilotDb();
+  const profile = await getProfile(profileId);
+  if (!profile) throw new Error('Not found');
+  const segments = profile.target_segments;
+  const { data, error } = await db.from('copilot_opportunities').select('id, data, status, source, source_kind, reason, title, created_at')
+    .eq('profile_id', profileId).eq('source_kind', 'sourced').in('status', ['new', 'saved']);
+  if (error) throw new Error(describeDbError(error, 'Could not read the businesses found for you.'));
+  const rows = (data ?? []) as Array<DiagnoseInput['opportunities'][number] & { created_at: string }>;
+  const ids = foundForOld(rows.map((o) => ({ id: o.id, day: dayIn(o.created_at, profile.timezone), segment: segmentOf(o, segments) })), day, segments);
+  let drafts = 0;
+  // In slices: a long list of ids in one filter is a long address, and the pool can hold hundreds.
+  for (let n = 0; n < ids.length; n += 100) {
+    const slice = ids.slice(n, n + 100);
+    drafts += (await cancelOpenDrafts(profileId, { reason: 'pivot', opportunityIds: slice })).cancelled;
+    const { error: e } = await db.from('copilot_opportunities').update({ status: 'dismissed' }).in('id', slice).eq('profile_id', profileId);
+    if (e) throw new Error(describeDbError(e, 'Could not set those businesses aside.'));
+  }
+  if (segments.length) {
+    const { error: e } = await db.from('copilot_profiles').update({ target_segments: [] }).eq('id', profileId);
+    if (e) throw new Error(describeDbError(e, 'Could not stop the old searches.'));
+    await logEvent(profileId, 'targeting_updated', { target_segments: [], why: 'pivot' });
+  }
+  await insertPivotAnswer(profileId, PIVOT_SET_ASIDE, { pivot: day, businesses: ids.length, drafts, segments });
+  return { businesses: ids.length, drafts, segments };
+}
+
+/**
+ * The answer, kept: set aside or kept, for this pivot. Throws — an answer that
+ * did not save would ask again on the next load as if it had never been given.
+ */
+export async function insertPivotAnswer(profileId: string, type: typeof PIVOT_SET_ASIDE | typeof PIVOT_KEPT, payload: Record<string, unknown>): Promise<void> {
+  const { error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: type, payload });
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
+}
+
+/** Searches a bet's people came from, and the posts set aside: a handful a fortnight, so this reaches back months. */
+export const VOICE_EVENT_LIMIT = 120;
+
+/**
+ * The posts found for bets and the ones set aside (voices.ts). Never throws: a
+ * failed read is said on the bet, never drawn as nobody found (invariant 13).
+ */
+export async function loadVoices(profileId: string): Promise<VoicesHome> {
+  try {
+    const { data, error } = await copilotDb().from('copilot_events')
+      .select('id, event_type, payload, created_at')
+      .eq('profile_id', profileId).in('event_type', [...VOICE_EVENTS])
+      .order('created_at', { ascending: false }).limit(VOICE_EVENT_LIMIT);
+    if (error) return { searches: [], gone: [], unreadable: describeDbError(error, 'Could not read the people found for your bets.') };
+    return { ...voicesFromEvents((data ?? []) as VoiceEventRow[]), unreadable: null };
+  } catch (e) {
+    return { searches: [], gone: [], unreadable: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** A search for a bet's people, or a post set aside. Throws with a reason the route can say. */
+export async function insertVoiceEvent(profileId: string, type: (typeof VOICE_EVENTS)[number], payload: Record<string, unknown>): Promise<string> {
+  const { data, error } = await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type: type, payload }).select('id').single();
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
+  return String((data as { id: number | string }).id);
 }
 
 /**

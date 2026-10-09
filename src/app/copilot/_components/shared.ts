@@ -10,6 +10,7 @@ import type { ExperimentState } from '@/lib/copilot/experiment';
 import type { PayeeRole } from '@/lib/copilot/money/ledger';
 import type { OutreachStage } from '@/lib/copilot/matches';
 import type { AssetKind } from '@/lib/copilot/assets';
+import type { AskKind } from '@/lib/copilot/livepage';
 import type { LinkKey, LinkState } from '@/lib/copilot/business';
 import type { BetIdea, Commitment, IntroOutcome, LabDecision, LabMetric, Problem, TalkRole } from '@/lib/copilot/lab';
 import type { Seed } from '@/lib/copilot/seed';
@@ -111,10 +112,10 @@ export type SheetState =
   | { kind: 'bet'; play?: string; part?: LinkKey; idea?: string; experiment?: BetFromExperiment; seed?: Seed; shelf?: string }
   /**
    * Proof: log one conversation — The Mom Test's record of what was committed —
-   * optionally as the one an introduction led to (`via`), or as one said into
-   * the mic (`told`).
+   * optionally as the one an introduction led to (`via`), one said into the mic
+   * (`told`), or one with somebody whose public post the bet found (`voice`).
    */
-  | { kind: 'talk'; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; proposal?: string }
+  | { kind: 'talk'; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; proposal?: string; voice?: string }
   /** The Path and Proof: an introduction somebody offered, by the conversation it was offered in, and what to do about it. */
   | { kind: 'intro'; talk: string }
   /** Proof: every conversation logged, with the way to log another. */
@@ -183,7 +184,12 @@ export type LabInput =
   | { action: 'unshelve'; id: string }
   | { action: 'stop'; id: string; note?: string }
   /** `proposal`: the proposal it was opened from (lib/copilot/proposals.ts), which this save keeps. */
-  | { action: 'talk'; talk: { on?: string; who?: string; role: TalkRole; problem: Problem; commitment: Commitment; said?: string; via?: string }; proposal?: string }
+  | { action: 'talk'; talk: { on?: string; who?: string; role: TalkRole; problem: Problem; commitment: Commitment; said?: string; via?: string; voice?: string }; proposal?: string }
+  /** People who said it: one search for the running bet's people (voices.ts), or one post set aside. */
+  | { action: 'voices'; bet: string }
+  | { action: 'voice_gone'; voice: string }
+  /** What a pivot on who buys left behind: set aside, or kept (`keep`). `day` is the pivot's, as the card showed it. */
+  | { action: 'pivot_left'; day: string; keep?: boolean }
   | { action: 'intro'; intro: { talk: string; outcome: IntroOutcome } }
   | { action: 'forget'; id: string }
   | { action: 'count'; bet: string; count: { n: number; on?: string; note?: string } }
@@ -201,6 +207,11 @@ export type AssetInput =
   | { action: 'retire' | 'restore'; id: string }
   | { action: 'adopt'; version: string }
   | { action: 'proof'; id: string };
+
+/** Your page (/api/copilot/page): a landing page's version online with what it asks for, or offline. */
+export type PageInput =
+  | { action: 'publish'; asset: string; n?: number; ask?: { kind: AskKind; to: string; label?: string } }
+  | { action: 'off' };
 
 /** What the person can say about their statements. See /api/copilot/money. */
 export type MoneyAnswer =
@@ -406,7 +417,9 @@ export interface Actions {
   /** Confirm or discard a statement, say who a payer is, or delete every row read off the bank. */
   answerMoney(answer: MoneyAnswer): Promise<{ ok: boolean; error?: string }>;
   /** Bets: open one, call one off, log or forget a conversation or a count, tie a project to one, answer the checkpoint, ask for ideas, say how buyers find you. */
-  lab(input: LabInput): Promise<{ ok: boolean; error?: string }>;
+  lab(input: LabInput): Promise<{ ok: boolean; error?: string; kept?: number; why?: string | null; set?: { businesses: number; drafts: number; segments: string[] } }>;
   /** Assets: add one, a new version, a draft by AI, put away or bring back, make a drafted offer yours, use a demo as proof. */
   assets(input: AssetInput): Promise<{ ok: boolean; error?: string; id?: string; rewritten?: number }>;
+  /** Your page: put a landing page's version online, or take it offline. */
+  page(input: PageInput): Promise<{ ok: boolean; error?: string }>;
 }

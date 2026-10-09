@@ -12,6 +12,8 @@ import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { LabHome } from './lab';
+import type { PivotLeft } from './era';
+import type { PageHome } from './livepage';
 import type { SignalHome } from './signal';
 import type { Proposal } from './proposals';
 import type { AssetsHome } from './assets';
@@ -484,6 +486,14 @@ export interface HomeData {
    * existed has to render.
    */
   lab?: LabHome;
+  /**
+   * What the last pivot on who buys left behind and nobody has answered for
+   * yet: the businesses found for the old buyers, the drafts to them, the
+   * segments still searched (era.ts pivotLeft). Optional: an older payload has none.
+   */
+  pivotLeft?: PivotLeft | null;
+  /** The landing page online, its address, and who opened it (livepage.ts). Optional: an older payload has none. */
+  page?: PageHome;
   /**
    * The count link (signal.ts): when it was made, what it recorded lately, and
    * the sign-ups and enquiries the bets and the chain count. Optional because a

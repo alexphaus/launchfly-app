@@ -175,6 +175,12 @@ new.
 - **Competing with Claude Code on building.** The app should *export* what it
   knows to a model, not try to be one. A context pack the user pastes into a
   chat is the honest version of "help me build this".
+  *One thing reopened in October 2026, with a reason that is new:* putting a
+  landing page online is not building one. The page is the version the person
+  kept, as text, with one button to their own channel — no editor, no layout, no
+  design — and it exists because a page that is only text in a sheet is
+  somewhere no buyer can find, and how they hear could not be counted without it.
+  Anything more than that one page is still declined.
 - **A score, a market size, or a validation report on an idea.** Considered in
   October 2026, when its owner asked whether the app could be where they go for
   ideas and validation, and declined. Every idea validator sells exactly that, a
@@ -466,6 +472,35 @@ Sources, as of this revision: [validators compared](https://preuve.ai/blog/best-
 (a competitor's own ranking, used for names and prices only) ·
 [AI Sycophancy and Decisions](https://arxiv.org/pdf/2607.28133)
 
+**Then — Proof that does the next step, not only reports it.** Its owner, looking
+at Proof on day three of a bet, asked how to make it feel like a co-founder
+rather than a dashboard: something that, when they are stuck, finds the work and
+moves it forward — building, sharing, making money. Their own record was the
+brief. The bet was ten conversations with people starting out, at "0 of 10", and
+nothing in the app could find one such person. How they hear was the weak link,
+with a count link nothing posted to and a landing page that was text in a sheet.
+And two days after the pivot, Maps still searched for exterminators every night
+and 35 drafts to them had been rewritten from the new offer. Three changes, each
+the step the screen was pointing at and not taking, and none of them a better
+opinion. **People who said it**: a conversation bet finds public posts where
+somebody says its problem, in their own words with the link, to answer by hand —
+the app writes to nobody, and the bet counts how many of the people it found
+became conversations. **Your page, online**: a kept landing page goes up at one
+address in one tap, with one button to the person's own channel, and counts opens
+and taps; how they hear is measured from the first open. **What a pivot left
+behind**: the old buyers' businesses, drafts and searches, set aside or kept by a
+tap, never by the app. Each passes the survival test on a join, not on the act:
+a harness can run a search, host a page and delete a list; it cannot say which
+posts became conversations under which bet, which version of the page was up when
+it was opened, or which drafts were written for the buyers the person pivoted
+away from. What was declined: sending to the people found (invariant 4 — a
+harness holding their own account does that better, and the app's job is the
+count), a page builder or any page with more than the version's words and one
+button (a host for anybody's links on this app's address is a liability, not a
+feature), and anything done for the person: the pivot asks, the search is a tap.
+See COPILOT.md → **Proof**: People who said it, Your page, online, and What a
+pivot on who buys left behind.
+
 ---
 
 ## Where it actually stands
@@ -545,6 +580,12 @@ direction better than "copilot" does.
   file never kept, a typed DELETE removes every row); a bank link would be the
   high-trust one and does not exist yet. Five uploads from people who are not
   the owner would answer it.
+- **Whether the people found become conversations.** A conversation bet now
+  finds public posts where somebody says its problem. The count to watch is
+  posts talked to against posts found, per bet: if the cards fill and nobody is
+  talked to, the search made the bet look busy and changed nothing, and it should
+  go. Likewise the page: opens against taps, and taps against the conversations
+  and sign-ups that follow. Nobody but its owner has tried either.
 - **Whether the chat ends in the app.** The shelf, the share and the reading rest
   on one guess: that a habit of asking a chat for ideas can be made to end in a
   started test instead of an opinion. The counts to watch are bets started from the

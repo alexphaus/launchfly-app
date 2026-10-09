@@ -14,7 +14,7 @@ import {
   BELIEF_MAX, COMMITMENTS, COMMITMENT_LABEL, DEFAULT_BET_DAYS, INTRO_DAYS, INTRO_LINK_DAYS, INTRO_STATE_LABEL, METRIC, PLANNED_MAX, PLAY_BY_KEY, PROBLEMS, PROBLEM_LABEL,
   SAID_MAX, TALK_BACK_DAYS, TALK_ROLES, TALK_ROLE_LABEL, TARGET_MAX, TRIES_FOR, UNIT_MAX, WHO_MAX,
   asksProblem, betPrice, countRefusal, countedFrom, dayWords, daysBetween, introSources, introState, metricWords, metricsFor, passLine, playFor, roleOf, spanWords,
-  suggestBelief, talkCounts,
+  suggestBelief, talkCounts, unitPage,
   type Commitment, type IntroClose, type IntroOutcome, type LabMetric, type Problem, type Talk, type TalkRole,
 } from '@/lib/copilot/lab';
 import { salesCurrency } from '@/lib/copilot/metrics';
@@ -29,6 +29,7 @@ import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import type { Actions, BetFromExperiment } from '../shared';
 import { newMoveId } from './bookLocal';
 import { ToldLine } from './TellSheets';
+import { voiceWho } from '@/lib/copilot/voices';
 
 /** A custom bet's first count, by the part it is about: the number that part lives or dies by. */
 const PART_METRIC: Record<LinkKey, LabMetric> = { who: 'committed', reach: 'replied', close: 'meetings', pay: 'paid_at_price', deliver: 'handed' };
@@ -294,7 +295,9 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
           <p className="cp-help">
             {home.signals?.made && unitSignal(unit)
               ? `Your count link records ${unit.trim()} by itself: log only the ones it cannot see.`
-              : 'A word or two, plural: sign-ups, enquiries, orders, walk-ins. You log them as they come in.'}
+              : home.page?.live && unitPage(unit)
+              ? `Your page counts ${unit.trim()} by itself: log only the ones it cannot see.`
+              : 'A word or two, plural: sign-ups, enquiries, orders, walk-ins, visits. You log them as they come in.'}
           </p>
         </div>
       )}
@@ -340,7 +343,7 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
       <div className="cp2-lab-preview">
         <span className="cp2-lab-preview-k">Pass line</span>
         <b>{passLine({ metric, target, tries, priceLabel, unit: shownUnit }, shiftDay(today, days - 1))}</b>
-        <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel, shownUnit, !!home.signals?.made)}</span>
+        <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel, shownUnit, !!home.signals?.made, !!home.page?.live)}</span>
       </div>
 
       {/* Said before the tap, with the way to fix it, rather than refused after it. */}
@@ -407,8 +410,8 @@ function SharedWords({ seed }: { seed: Seed }) {
  * and — the model's proposal, there to be changed — whether they have the
  * problem and how it ended, all as first values for the person to keep.
  */
-export function TalkSheet({ home, via: viaAsked, told, proposal: proposalId, actions }: {
-  home: HomeData; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; proposal?: string; actions: Actions;
+export function TalkSheet({ home, via: viaAsked, told, proposal: proposalId, voice: voiceId, actions }: {
+  home: HomeData; via?: string; told?: { meta: ToldMeta; talk: ToldTalk }; proposal?: string; voice?: string; actions: Actions;
 }) {
   const today = home.recent.today;
   const yesterday = shiftDay(today, -1);
@@ -416,7 +419,10 @@ export function TalkSheet({ home, via: viaAsked, told, proposal: proposalId, act
   // What Claude proposed, as the sheet's first values (lib/copilot/proposals.ts):
   // the person's to change, and kept only by this sheet's own save.
   const [proposed] = useState(() => (proposalId ? home.proposals?.open.find((p) => p.id === proposalId && p.kind === 'talk') ?? null : null));
-  const t: Partial<ToldTalk> | undefined = told?.talk ?? (proposed?.talk ? { ...proposed.talk } : undefined);
+  // The public post it came from (voices.ts): read once, so a search landing
+  // while the sheet is open cannot change whose conversation this is.
+  const [post] = useState(() => (voiceId ? home.lab?.voices?.searches.flatMap((s) => s.voices).find((v) => v.id === voiceId) ?? null : null));
+  const t: Partial<ToldTalk> | undefined = told?.talk ?? (proposed?.talk ? { ...proposed.talk } : post ? { who: voiceWho(post), role: 'buyer' } : undefined);
   const [who, setWho] = useState(t?.who ?? '');
   const [role, setRole] = useState<TalkRole>(t?.role ?? 'buyer');
   const [problem, setProblem] = useState<Problem | null>(t?.problem ?? null);
@@ -446,6 +452,8 @@ export function TalkSheet({ home, via: viaAsked, told, proposal: proposalId, act
       talk: {
         on, who: who.trim() || undefined, role, problem: asksProblem(role) ? problem ?? 'unasked' : 'unasked', commitment,
         said: said.trim() || undefined, via: through ?? undefined,
+        // Only the first: the next conversation logged in the sitting is somebody else's.
+        ...(post && logged === 0 ? { voice: post.id } : {}),
       },
       // The first save is the proposal kept; the sheet stays open for the next conversation, which is the person's own.
       ...(proposed && logged === 0 ? { proposal: proposed.id } : {}),
@@ -461,6 +469,7 @@ export function TalkSheet({ home, via: viaAsked, told, proposal: proposalId, act
       {/* What was said, until it is logged: the next one in the sitting is typed. */}
       {told && logged === 0 && <ToldLine meta={told.meta} kind="talk" actions={actions} />}
       {proposed && logged === 0 && <div className="cp2-lab-sheet-book">Proposed by Claude{proposed.why ? ` — ${proposed.why}` : ''}. Change anything, then log it.</div>}
+      {post && logged === 0 && <div className="cp2-lab-sheet-book">From their post on {post.where}, found for your bet</div>}
       {/* Said while it is the pick: tapped "No", or logged and reset for the next, it is just a log. */}
       {opened && through === opened.id && <div className="cp2-lab-sheet-book">Through {opened.who ? `${opened.who}’s` : 'an'} introduction</div>}
       <h3>Log a conversation</h3>

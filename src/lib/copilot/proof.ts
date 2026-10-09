@@ -26,6 +26,7 @@ import { LINK_KEYS, LINK_LABEL, PIVOT_REACH, restartsOf, type ChainBet, type Cha
 import type { Angle } from './experiment';
 import type { Agent } from './machine';
 import { foundByOf, isFoundBy } from './offer';
+import { pageCounts } from './livepage';
 import { SECTIONS, type WorkingSection } from './working';
 import type { CommissionThread, FoundBy, HomeData } from './types';
 
@@ -102,7 +103,20 @@ export function chainInputOf(home: HomeData, x: ChainExtras): ChainInput {
     assets: assetTitles(home.assets?.assets ?? []),
     eras: erasOf(home),
     signals: home.signals ? { linked: !!home.signals.made, ...signalCount(home.signals.days) } : undefined,
+    page: pageInput(home),
   };
+}
+
+/**
+ * The page as the chain reads it (livepage.ts): every open and tap it counted,
+ * the button's words, and the landing page that could go up when none is
+ * online. Unread is absent — never a page nobody opened (invariant 13).
+ */
+export function pageInput(home: Pick<HomeData, 'page' | 'assets'>): ChainInput['page'] {
+  const p = home.page;
+  if (!p || p.unreadable) return undefined;
+  const offline = p.live ? null : (home.assets?.assets ?? []).find((a) => a.kind === 'landing_page' && !a.retired && !!a.current.body?.trim())?.id ?? null;
+  return { live: !!p.live, ...pageCounts(p.hits), label: p.live?.ask.label ?? null, offline };
 }
 
 /** Sign-ups and enquiries the count link recorded, from a day on or all of them. */
@@ -117,7 +131,7 @@ function signalCount(days: Array<{ kind: 'signup' | 'enquiry'; on: string }>, si
  * not in the payload — one cached from before the server counted them — leaves
  * its parts read all time, as they were, rather than read as empty.
  */
-export function erasOf(home: Pick<HomeData, 'lab' | 'signals'>): ChainInput['eras'] {
+export function erasOf(home: Pick<HomeData, 'lab' | 'signals' | 'page'>): ChainInput['eras'] {
   const restarts = restartsOf(home.lab?.checkpoints ?? []);
   const out: NonNullable<ChainInput['eras']> = {};
   for (const k of LINK_KEYS) {
@@ -128,6 +142,7 @@ export function erasOf(home: Pick<HomeData, 'lab' | 'signals'>): ChainInput['era
       ...counts, since: r.on, pivot: r.pivot,
       talks: talkTotals((home.lab?.talks ?? []).filter((t) => t.on >= r.on)),
       signals: signalCount(home.signals?.days ?? [], r.on),
+      ...(home.page && !home.page.unreadable ? { page: pageCounts(home.page.hits, { since: r.on }) } : {}),
     };
   }
   return Object.keys(out).length ? out : undefined;

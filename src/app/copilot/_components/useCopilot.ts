@@ -51,7 +51,22 @@ const LAB_SAID: Record<LabInput['action'], string> = {
   ideas: 'Writing ideas from your record.',
   found_by: 'Saved. Proof reads your business that way now.',
   checkpoint: 'Decided. The next checkpoint reads it back.',
+  // Said with the count it kept (lab() below); this is the line when it says nothing more.
+  voices: 'Searched.',
+  voice_gone: 'Set aside.',
+  // Said with what it did (lab() below) when it set things aside.
+  pivot_left: 'Kept. The app goes on looking for them.',
 };
+
+/** What setting aside a pivot's leftovers did, counted: the queue and Swipe shrink, and this says why. */
+function setAsideSaid(set: { businesses: number; drafts: number; segments: string[] }): string {
+  const parts = [
+    set.drafts ? `${set.drafts} ${set.drafts === 1 ? 'draft' : 'drafts'} cancelled` : null,
+    set.businesses ? `${set.businesses} ${set.businesses === 1 ? 'business' : 'businesses'} out of Swipe` : null,
+    set.segments.length ? 'Maps stopped searching the old segments' : null,
+  ].filter(Boolean);
+  return parts.length ? `Set aside: ${parts.join(', ')}.` : 'Set aside.';
+}
 
 /** A pivot, said back: what it did to the count, which is what the person will see change. */
 const PIVOTED = 'Pivoted. What it changed counts from today; what came before stays in History.';
@@ -103,7 +118,7 @@ export function sheetKey(s: SheetState): string {
   // Two sheets of one kind opened on different things are two sheets: a bet
   // sheet opened from one play and then from another must not keep the first
   // one's line, nor a new asset the first one's kind.
-  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk', 'shelf'] as const)
+  const on = (['play', 'idea', 'part', 'assetKind', 'bet', 'outcome', 'via', 'talk', 'shelf', 'voice'] as const)
     .map((k) => (k in s ? String((s as Record<string, unknown>)[k] ?? '') : ''))
     .join(':');
   const exp = 'experiment' in s && s.experiment ? s.experiment.id : '';
@@ -1049,10 +1064,13 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async lab(input) {
       try {
-        const r = await post<{ home: HomeData }>('/lab', input);
+        const r = await post<{ home: HomeData; kept?: number; why?: string | null; set?: { businesses: number; drafts: number; segments: string[] } }>('/lab', input);
         setHome(r.home);
-        say(input.action === 'checkpoint' && input.checkpoint.decision === 'pivot' ? PIVOTED : LAB_SAID[input.action]);
-        return { ok: true };
+        say(input.action === 'checkpoint' && input.checkpoint.decision === 'pivot' ? PIVOTED
+          : input.action === 'voices' ? (r.kept ? `Found ${r.kept} ${r.kept === 1 ? 'post' : 'posts'} where somebody said it.` : 'Searched. Nobody new this time.')
+          : input.action === 'pivot_left' && r.set ? setAsideSaid(r.set)
+          : LAB_SAID[input.action]);
+        return { ok: true, kept: r.kept, why: r.why ?? null, set: r.set };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };
       }
@@ -1064,6 +1082,16 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         // An offer made theirs rewrites the drafts waiting to be sent; said, so the queue changing is not a surprise.
         say(r.rewritten ? `${ASSET_SAID[input.action]} ${r.rewritten} waiting draft${r.rewritten === 1 ? '' : 's'} rewritten from it.` : ASSET_SAID[input.action]);
         return { ok: true, id: r.id, rewritten: r.rewritten };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };
+      }
+    },
+    async page(input) {
+      try {
+        const r = await post<{ home: HomeData }>('/page', input);
+        setHome(r.home);
+        say(input.action === 'off' ? 'Taken offline. The address says it is not online.' : 'Online. Opens and taps count from now; yours do not.');
+        return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };
       }

@@ -1407,13 +1407,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
    ring is missing — and the word always travels with the colour. */
 
 /* The verdict card: how buyers find you, the chain as five dots, the clock. */
-.cp-root[data-theme="soft"] .cp2-pf-clock { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-pf-clock-i { flex: none; display: inline-flex; margin-top: 2px; }
-.cp-root[data-theme="soft"] .cp2-pf-clock-i svg { width: 15px; height: 15px; }
-.cp-root[data-theme="soft"] .cp2-pf-clock-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.cp-root[data-theme="soft"] .cp2-pf-clock-t b { font-weight: 600; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-pf-clock-t .cp2-link { text-align: left; }
-.cp-root[data-theme="soft"] .cp2-pf-clock-s { font-size: 12px; }
 
 /* The bet: what it took so far, quieter than the count that decides it. */
 .cp-root[data-theme="soft"] .cp2-pf-tries { display: flex; align-items: center; gap: 10px; margin: -2px 0 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
@@ -1455,9 +1448,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-ns-sum { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .cp-root[data-theme="soft"] .cp2-ns-step + .cp2-ns-sum { margin-top: 16px; }
 .cp-root[data-theme="soft"] .cp2-ns > .cp2-ns-sum:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-.cp-root[data-theme="soft"] .cp2-ns-offer { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-ns-offer > span { flex: 1; min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-ns-offer b { font-weight: 600; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-ns-chain { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--line); text-align: left; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-ns-chain.proven { background: var(--ai-tint); }
 .cp-root[data-theme="soft"] .cp2-ns-dots { position: relative; display: flex; justify-content: space-between; padding: 0 4px; }
@@ -1561,6 +1551,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pf-hmark.good { background: var(--ai-tint); color: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-pf-hmark.bad { background: var(--bad-tint); color: var(--bad); }
 .cp-root[data-theme="soft"] .cp2-pf-behind .s.cp2-pf-needs { color: var(--blue); font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-pf-assets + .cp2-pf-behind { margin-top: 14px; }
 
 /* The sheets. */
 .cp-root[data-theme="soft"] .cp2-pf-sheet-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); margin-bottom: 4px; }

@@ -1,26 +1,20 @@
 'use client';
-// Proof: is the business proven, and what is being bet to find out.
+// Engine (key `proof`): the one bet being run to find out, and what it needs next.
 //
-//   The verdict   what you sell, proven or not by the count against the bar,
-//                 and the chain under it — five parts in a row, each with a
-//                 state from the rows, the weak one named. A tap opens each
-//                 part with its rule, its evidence and what would move it
-//   The bet       one at a time: the belief, the line written before it began,
-//                 the count against it, the play, the work done for it, and the
-//                 one place its next count happens. With none running, the
-//                 ideas a model wrote for this business, the plays from books,
-//                 and your own. Every couple of weeks, the checkpoint
-//   Assets        offer, demo, script, landing page, workflow, price test: each
-//                 with its version, who made it, and the bet it was made for
-//   History       everything above, dated, newest first
-//   Behind it     the conversations you logged, the projects handed over, and
-//                 the agents, a line each
+//   The step      one sentence and one button, a rule over the rows (engine.ts),
+//                 and the verdict under it: proven or not, the chain, the weak part
+//   The bet       one at a time: the belief, the count against the line written
+//                 before it began, the pass line. How it is counted, the play and
+//                 the work done for it are one tap down. With none running, the
+//                 ideas, the plays from books, and your own. Every couple of
+//                 weeks, the checkpoint
+//   The people    found for a bet about people, and one tap to log what they said
+//   More          conversations, assets and the page, history, projects, agents:
+//                 a line each, a tap to the sheet
 //
-// Why one tab. Work said which part of the business was weak and the Lab was
-// where a bet on it was run; its owner found the two answering one question in
-// two places. Proof keeps the verdict and the bet on one screen, so the part a
-// play is offered for is the part the verdict calls weak, and a checkpoint is
-// read against the chain right above it.
+// What it leaves to the other tabs: the plan and the day's move (Path), outreach
+// (Swipe), runway and the bank (Money), the offer, goals and settings (You). A
+// number shown here that is shown there is counted twice and will disagree.
 //
 // What it will not do: show a number nobody counted, mark a bet passed, or let a
 // model's draft stand as the person's. A model proposes — ideas for a bet,
@@ -55,7 +49,6 @@ import { Agents } from './ProjectCard';
 export default function ProofTab({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
   const changes = useSeen(home, d);
   const brief = useBrief(actions);
-  const full = agentIsFull(home);
   const lab = d.proof.lab;
   const opened = useOpened(home.profile.id);
   const find = useFind(actions, lab.current?.bet.id ?? null);
@@ -93,9 +86,7 @@ export default function ProofTab({ home, d, actions, briefing }: { home: HomeDat
             )}
         </>
       )}
-      <Assets home={home} d={d} actions={actions} />
-      <History home={home} d={d} actions={actions} />
-      <Behind home={home} d={d} actions={actions} briefing={briefing} />
+      <More home={home} d={d} actions={actions} briefing={briefing} />
     </>
   );
 }
@@ -283,17 +274,11 @@ function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
  * chain, each part with its rule and what would move it, is the sheet it opens.
  */
 function Summary({ home, d, actions, changes }: { home: HomeData; d: Derived; actions: Actions; changes: ChainChange[] }) {
-  const o = home.profile.offer ?? {};
   const { chain } = d.proof;
   const v = chain.verdict;
   const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
-  const price = o.price_band?.trim();
   return (
     <div className="cp2-ns-sum">
-      <div className="cp2-ns-offer">
-        <span className="cp2-clamp1"><b>{o.sells}</b>{price && price.length <= 24 ? ` · ${price}` : ''}</span>
-        <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'offer' })}>Edit</button>
-      </div>
       <button
         className={`cp2-ns-chain${v.proven ? ' proven' : ''}`} onClick={() => actions.openSheet({ kind: 'chain' })}
         aria-label={`How it makes money. ${v.title}. ${chain.links.map((l) => `${l.label}, ${LINK_STATE_LABEL[l.state]}`).join('; ')}. Open each part.`}
@@ -317,30 +302,6 @@ function Summary({ home, d, actions, changes }: { home: HomeData; d: Derived; ac
           Since you last looked: {changes.slice(0, 2).map(changeLine).join('; ')}{changes.length > 2 ? `; and ${changes.length - 2} more` : ''}.
         </p>
       )}
-      <Clock d={d} actions={actions} compact />
-    </div>
-  );
-}
-
-/** Runway in bets: the book's pivots left, counted — and the last checkpoint, read back. */
-function Clock({ d, actions, compact }: { d: Derived; actions: Actions; compact?: boolean }) {
-  const c = d.proof.lab.clock;
-  const cp = d.proof.lab.checkpoint;
-  const back = cp.last && !cp.due ? gradeWords(cp.last, cp.grade) : null;
-  return (
-    <div className="cp2-pf-clock">
-      <span className="cp2-pf-clock-i"><PathGlyph icon="focus" /></span>
-      <span className="cp2-pf-clock-t">
-        {c.betsLeft != null ? (
-          <span>
-            {c.betsLeft > 0 ? <b>{c.betsLeft} {c.betsLeft === 1 ? 'bet' : 'bets'} left</b> : <b className="cp2-err">Less than a bet left</b>}
-            {' · '}{c.runwayMonths} months of runway at {c.betDays} days a bet{c.measured ? ', your pace' : ''}
-          </span>
-        ) : (
-          <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'finance' })}>Add your runway, and this counts the bets it pays for</button>
-        )}
-        {!compact && cp.last && !cp.due && <span className="cp2-pf-clock-s">Last checkpoint, {dayWords(cp.last.on)}: {decisionWords(cp.last)}.{back ? ` ${back}` : ''}</span>}
-      </span>
     </div>
   );
 }
@@ -572,11 +533,10 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
             </div>
           )}
           {home.workerConnected && <HandOver view={view} actions={actions} full={full} />}
+          <BetWorkList view={view} work={work} home={home} actions={actions} />
+          <Prep home={home} view={view} work={work} actions={actions} brief={brief} full={full} canDraft={!!home.ai && !d.noOffer} />
         </div>
       )}
-
-      <BetWorkList view={view} work={work} home={home} actions={actions} />
-      <Prep home={home} view={view} work={work} actions={actions} brief={brief} full={full} canDraft={!!home.ai && !d.noOffer} />
 
       {stopping ? (
         <div className="cp2-lab-stop">
@@ -1112,14 +1072,16 @@ function IdeaCard({ idea, priceLabel, actions }: { idea: Idea; priceLabel: strin
   );
 }
 
-/* ─── Assets ──────────────────────────────────────────────────────────────── */
+/* ─── What is missing ─────────────────────────────────────────────────────── */
 
-const ASSETS_SHOWN = 4;
-
-function Assets({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
-  const { assets, gaps, assetsUnreadable } = d.proof;
-  const live = assets.filter((a) => !a.retired);
-  const makers = assetMakers(assets);
+/**
+ * The assets the business lacks (assets.ts assetGaps): a landing page that is not
+ * online, a script for the part the verdict calls weak. Only the gaps are here —
+ * what exists is a row under More, and the full list its sheet. A gap stays on the
+ * tab because it is the one thing in the assets that asks for something.
+ */
+function AssetGaps({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+  const { gaps, assetsUnreadable } = d.proof;
   const can = !!home.ai && !d.noOffer;
   const [busy, setBusy] = useState<AssetKind | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1132,43 +1094,27 @@ function Assets({ home, d, actions }: { home: HomeData; d: Derived; actions: Act
     if (r.id) actions.openSheet({ kind: 'asset', id: r.id });
   };
 
+  // A read that failed is not a business with nothing made (invariant 13).
+  if (assetsUnreadable) return <div className="cp-note cp2-pf-note">Could not read your assets just now: {assetsUnreadable}. Nothing is shown rather than an empty list, and nothing new is written over them until they read.</div>;
+  if (!gaps.length) return null;
   return (
     <>
-      <div className="cp-section">
-        <span className="lead">Assets</span>
-        {assets.length > ASSETS_SHOWN
-          ? <button className="link" onClick={() => actions.openSheet({ kind: 'assets' })}>All {assets.length}</button>
-          : makers.line && <span className="count">{makers.line}</span>}
-      </div>
-      {assetsUnreadable ? (
-        // A read that failed is not a business with nothing made (invariant 13).
-        <div className="cp-note cp2-pf-note">Could not read your assets just now: {assetsUnreadable}. Nothing is shown rather than an empty list, and nothing new is written over them until they read.</div>
-      ) : (
-        <div className="cp-list cp2-rows cp2-pf-assets">
-          {gaps.map((g) => (
-            <div key={g.kind} className="cp2-row cp2-pf-gap">
-              <span className="cp2-pf-glyph gap"><AssetGlyph kind={g.kind} /></span>
-              <span className="cp2-row-main">
-                <span className="t">{g.title}</span>
-                <span className="s">{g.why}</span>
-              </span>
-              {g.open
-                ? <button className="cp-connect" onClick={() => actions.openSheet({ kind: 'asset', id: g.open })}>Put it online</button>
-                : can
-                ? <button className="cp-connect" disabled={busy !== null} onClick={() => void draft(g)}>{busy === g.kind ? 'Drafting…' : 'Draft it'}</button>
-                : <button className="cp-connect blue" onClick={() => actions.openSheet({ kind: 'asset', assetKind: g.kind })}>Add it</button>}
-            </div>
-          ))}
-          {live.slice(0, ASSETS_SHOWN).map((a) => <AssetRow key={a.id} a={a} bets={d.proof.bets} actions={actions} page={home.page} />)}
-          <button className="cp2-row cp2-pf-addrow" onClick={() => actions.openSheet({ kind: 'asset' })}>
-            <span className="cp2-pf-glyph add" aria-hidden>+</span>
+      <div className="cp-list cp2-rows cp2-pf-assets">
+        {gaps.slice(0, 1).map((g) => (
+          <div key={g.kind} className="cp2-row cp2-pf-gap">
+            <span className="cp2-pf-glyph gap"><AssetGlyph kind={g.kind} /></span>
             <span className="cp2-row-main">
-              <span className="t">Add an asset</span>
-              <span className="s">A demo, a script, a page, a price to test: a link, or written out{can ? ', or drafted by AI' : ''}</span>
+              <span className="t">{g.title}</span>
+              <span className="s">{g.why}</span>
             </span>
-          </button>
-        </div>
-      )}
+            {g.open
+              ? <button className="cp-connect" onClick={() => actions.openSheet({ kind: 'asset', id: g.open })}>Put it online</button>
+              : can
+              ? <button className="cp-connect" disabled={busy !== null} onClick={() => void draft(g)}>{busy === g.kind ? 'Drafting…' : 'Draft it'}</button>
+              : <button className="cp-connect blue" onClick={() => actions.openSheet({ kind: 'asset', assetKind: g.kind })}>Add it</button>}
+          </div>
+        ))}
+      </div>
       {error && <p className="cp-help cp2-err cp2-pf-note">{error}</p>}
     </>
   );
@@ -1213,32 +1159,6 @@ export function AssetRow({ a, bets, actions, page }: { a: Asset; bets: BetView[]
   );
 }
 
-/* ─── History ─────────────────────────────────────────────────────────────── */
-
-const HISTORY_SHOWN = 4;
-
-function History({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
-  const entries = d.proof.history;
-  const before = d.proof.said.tried ?? [];
-  return (
-    <>
-      <div className="cp-section">
-        <span className="lead">History</span>
-        {(entries.length > HISTORY_SHOWN || before.length > 0) && (
-          <button className="link" onClick={() => actions.openSheet({ kind: 'history' })}>All{entries.length > HISTORY_SHOWN ? ` ${entries.length}` : ''}</button>
-        )}
-      </div>
-      {entries.length ? (
-        <div className="cp-list cp2-rows cp2-pf-history">
-          {entries.slice(0, HISTORY_SHOWN).map((e) => <HistoryRow key={e.key} e={e} today={home.recent.today} actions={actions} />)}
-        </div>
-      ) : (
-        <p className="cp2-bz-quiet">Every bet and how it ended, every version of an asset, every sale and every decision lands here as it happens.</p>
-      )}
-    </>
-  );
-}
-
 /** One glyph per kind of thing that happened: a bet is a target, the plan's experiment its flask, work handed over a case. */
 function HistoryMark({ e }: { e: HistoryEntry }) {
   switch (e.kind) {
@@ -1273,9 +1193,16 @@ export function HistoryRow({ e, today, actions }: { e: HistoryEntry; today: stri
     : <div className="cp2-row cp2-pf-hrow">{body}</div>;
 }
 
-/* ─── Behind it ───────────────────────────────────────────────────────────── */
+/* ─── More ────────────────────────────────────────────────────────────────── */
 
-function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
+/**
+ * Everything else the tab used to lay out, a line each and a tap to the sheet that
+ * has it whole: the conversations, the assets and the page, the history, the
+ * projects and the agents. None of it is read to decide what to do next, so none
+ * of it sits above the bet. They are here and not on another tab because no other
+ * tab holds them; a row dropped here would be a sheet nobody can open.
+ */
+function More({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
   const talks = d.proof.lab.talks;
   const c = talkCounts(talks, home.recent.today);
   const intros = d.proof.intros;
@@ -1288,9 +1215,16 @@ function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; ac
     offered ? `${offered} offered` : null,
     jobs.finished.length ? `${jobs.finished.length} finished` : null,
   ].filter(Boolean).join(' · ');
+  const live = d.proof.assets.filter((a) => !a.retired);
+  const online = home.page?.live ?? null;
+  const counted = online && home.page ? pageLine(pageCounts(home.page.hits, { asset: online.asset, n: online.n }), null) : '';
+  const assetsLine = online
+    ? `Page online · v${online.n}${counted ? ` · ${counted}` : ' · nobody has opened it yet'}`
+    : live.length ? assetMakers(d.proof.assets).line || `${live.length} made` : 'A demo, a script, a page, a price to test';
+  const entries = d.proof.history;
   return (
     <>
-      <div className="cp-section"><span className="lead">Behind it</span></div>
+      <AssetGaps home={home} d={d} actions={actions} />
       <div className="cp-list cp2-rows cp2-team cp2-pf-behind">
         <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'talks' })}>
           <span className="cp2-row-main">
@@ -1309,6 +1243,20 @@ function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; ac
           </span>
           <IconChevron />
         </button>
+        <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'assets' })}>
+          <span className="cp2-row-main">
+            <span className="t">Assets</span>
+            <span className="s cp2-clamp1">{assetsLine}</span>
+          </span>
+          <IconChevron />
+        </button>
+        <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'history' })}>
+          <span className="cp2-row-main">
+            <span className="t">History</span>
+            <span className="s cp2-clamp1">{entries.length ? `${entries.length} things tried, made, decided and paid` : 'Every bet and how it ended lands here'}</span>
+          </span>
+          <IconChevron />
+        </button>
         <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'projects' })}>
           <span className="cp2-row-main">
             <span className="t">Projects</span>
@@ -1321,4 +1269,3 @@ function Behind({ home, d, actions, briefing }: { home: HomeData; d: Derived; ac
     </>
   );
 }
-

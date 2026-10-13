@@ -2,6 +2,7 @@
 // icons.tsx so the two sets sit together. Glyphs rather than emoji: an emoji is
 // a different picture on every phone, and on some it is a box.
 import type { AssetKind } from '@/lib/copilot/assets';
+import type { Worker } from '@/lib/copilot/crew';
 import type { AgentKey } from '@/lib/copilot/machine';
 import type { MatchGroup } from '@/lib/copilot/matches';
 import type { PathIcon } from '@/lib/copilot/pathway';
@@ -94,6 +95,26 @@ export function AgentGlyph({ agent }: { agent: AgentKey }) {
     case 'researcher': return (<svg {...base}><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3" /><path d="M7 15h10" /></svg>);
     // A compass: it picks the direction.
     case 'planner': return (<svg {...base}><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" /></svg>);
+  }
+}
+
+/**
+ * One glyph per worker on the crew (crew.ts): an agent its own, a model a spark,
+ * the person a head and shoulders. A person taken on for a part and a machine
+ * doing physical work have theirs drawn already, so a crew that gains one does
+ * not wait on a picture.
+ */
+export function WorkerGlyph({ w }: { w: Pick<Worker, 'kind' | 'agent'> }) {
+  if (w.agent) return <AgentGlyph agent={w.agent} />;
+  switch (w.kind) {
+    // A spark: it thinks, when asked.
+    case 'model': return (<svg {...base}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M17.7 6.3l-2.5 2.5M8.8 15.2l-2.5 2.5" /></svg>);
+    // A robot's head: a machine doing the work.
+    case 'robot': return (<svg {...base}><rect x="5" y="8" width="14" height="11" rx="3" /><path d="M12 4v4M9.5 13h.01M14.5 13h.01M9 16.5h6" /></svg>);
+    case 'agent':
+    case 'person':
+    case 'you':
+      return (<svg {...base}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>);
   }
 }
 

@@ -11538,7 +11538,7 @@ async function engineSuite() {
   /* 2. A conversation bet: find people, reply, ask how it went, find more — and say what it is counted from. */
   const none = enStep(input())!;
   assert.deepEqual([none.kind, none.title, none.primary, none.hint?.startsWith('Searches recent public posts')], ['find', 'Find people who said it', { label: 'Find people', go: { to: 'find' } }, true]);
-  assert.equal(none.eyebrow, 'Next step · day 4 of 14');
+  assert.equal(none.eyebrow, 'Your move · day 4 of 14');
   assert.equal(none.why, 'Day 4 of 14 and no conversation logged yet: 10 to have in the 11 days left.', 'the person’s own line, not a pace');
   const five = [1, 2, 3, 4, 5].map((n) => post(n));
   const reply = enStep(input({ voices: voices(five), talks: [{ on: '2026-10-08' }] }))!;
@@ -11562,7 +11562,7 @@ async function engineSuite() {
   assert.equal(enStep(input({ current: bet({ part: 'pay', metric: 'paid_at_price', tries: null }), voices: null, found: 'inbound' }))!.primary.go.to, 'next');
   assert.equal(enStep(input({ current: bet({ part: 'reach', metric: 'logged', unit: 'sign-ups', tries: null }), voices: null }))!.title, 'Log your sign-ups');
   const last = enStep(input({ current: bet({}, 14, { last: today }) }))!;
-  assert.equal(last.eyebrow, 'Next step · day 14 of 14 · last day');
+  assert.equal(last.eyebrow, 'Your move · day 14 of 14 · last day');
 
   /* 4. A bet that does not pay says so, against the goal sales land on. */
   const goalRows = [
@@ -11615,11 +11615,14 @@ async function engineSuite() {
   const p1 = { ...post(1), author: 'marta_codes', where: 'Indie Hackers' };
   assert.deepEqual(enVoiceTalk(p1, 'time'), { who: 'marta_codes (Indie Hackers)', role: 'buyer', problem: 'unasked', commitment: 'time', voice: p1.id });
 
-  /* 8. The screen: the step leads, the people are their own card, the verdict is a tap under it, the tab is Engine. */
+  /* 8. The screen: the engine leads, the part opened carries the move, the people are their own card, the tab is Engine. */
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
-  assert.ok(tab.indexOf('<Top ') < tab.indexOf('<AfterPivot') && tab.indexOf('<AfterPivot') < tab.indexOf('<People ') && tab.indexOf('<People ') < tab.indexOf('<ThisBet '), 'step, then what a pivot left, then the people, then the bet');
+  assert.ok(tab.indexOf('<EngineHero ') < tab.indexOf('<AfterPivot') && tab.indexOf('<AfterPivot') < tab.indexOf('<Station ') && tab.indexOf('<Station ') < tab.indexOf('<People ') && tab.indexOf('<People ') < tab.indexOf('<ThisBet '), 'the engine, then what a pivot left, then the part opened, then the people, then the bet');
   assert.match(tab, /const step = engineStep\(\{/);
-  assert.match(tab, /<Summary home=\{home\} d=\{d\} actions=\{actions\} changes=\{changes\} \/>/);
+  assert.match(tab, /const part = picked \?\? openPart\(step, d\.proof\.chain\.weak\);/, 'the engine opens where the move is');
+  assert.match(tab, /\{step && !step\.part && \(/, 'a move about the whole business is no one part’s');
+  assert.match(tab, /\{here && <div className="cp2-er-move"><NextStep step=\{here\}/, 'the move sits on the part it moves');
+  assert.match(tab, /actions\.openSheet\(\{ kind: 'crew' \}\)/, 'the crew is a tap on the engine');
   assert.ok(!/<Voices /.test(tab), 'the people are not inside the bet card');
   assert.ok(!/work\.talks && work\.talks\.n > 0/.test(tab), 'the conversations row is gone: the score counts them and Behind it lists them');
   assert.match(tab, /<button className="cp-btn" onClick=\{\(\) => goTo\(next\.go, actions, b\.id\)\}>\{next\.label\}<\/button>/, 'one primary button on the screen: the step’s');
@@ -11634,14 +11637,144 @@ async function engineSuite() {
   for (const [file, text] of [
     ['src/app/copilot/_components/v2/PathPlan.tsx', 'A bet on Engine decides it'],
     ['src/app/copilot/_components/useCopilot.ts', 'Saved. Engine reads your business that way now.'],
-    ['src/app/copilot/_components/v2/SwipeTab.tsx', 'under Agents on Engine'],
+    ['src/app/copilot/_components/v2/SwipeTab.tsx', 'in your crew on Engine'],
     ['src/lib/copilot/asked.ts', 'Start one on Engine.'],
   ] as const) assert.ok(src(file).includes(text), `${file} names the tab as it is called`);
   assert.ok(!/\bProof\b/.test(src('src/app/copilot/_components/v2/CopilotApp2.tsx').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/ProofTab|Proof'/g, '')), 'no label of the old name left in the shell’s code');
   const css = src('src/app/copilot/copilot.css');
-  for (const c of ['cp2-ns', 'cp2-ns-t', 'cp2-ns-chain', 'cp2-ns-dots', 'cp2-vox-card', 'cp2-vox-end']) assert.ok(css.includes(`.cp2-${c.replace(/^cp2-/, '')}`), `${c} is styled`);
+  for (const c of ['cp2-ns', 'cp2-ns-t', 'cp2-er-hero', 'cp2-er-parts', 'cp2-er-station', 'cp2-vox-card', 'cp2-vox-end']) assert.ok(css.includes(`.cp2-${c.replace(/^cp2-/, '')}`), `${c} is styled`);
 
   console.log('copilot-core: engine checks passed');
 }
 
 engineSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Engine, the engine room: the crew, the figure, the part it opens on (crew.ts, engine.ts) ─── */
+import { businessChain as erChain, verdictCount as erCount, type ChainInput as ErInput } from '../../src/lib/copilot/business';
+import { crewHeadline as erHead, crewLine as erCrewLine, crewOf as erCrew, crewOn as erOn, WORKER_KINDS as erKinds, WORKER_KIND_LABEL as erKindLabel } from '../../src/lib/copilot/crew';
+import { builtSoFar as erBuilt, engineFigure as erFigure, engineStep as erStep, openPart as erOpen } from '../../src/lib/copilot/engine';
+import type { HistoryEntry as ErHistory } from '../../src/lib/copilot/history';
+import type { Agent as ErAgent } from '../../src/lib/copilot/machine';
+
+async function engineRoomSuite() {
+  const agents: ErAgent[] = [
+    { key: 'scout', name: 'Scout', role: 'Finds businesses', state: 'working', line: '140 found so far' },
+    { key: 'watcher', name: 'Watcher', role: 'Reads sources', state: 'setup', line: 'Nothing to read yet' },
+    { key: 'writer', name: 'Writer', role: 'Drafts openers', state: 'ready', line: '44 drafts written' },
+    { key: 'researcher', name: 'Researcher', role: 'Takes on work', state: 'failed', line: '2 projects stopped' },
+    { key: 'planner', name: 'Planner', role: 'Picks the call', state: 'working', line: 'Ran 9h ago' },
+  ];
+  const base: ErInput = {
+    offer: { sells: 'Booking automation', for_who: 'resorts', price_band: '$150', found_by: 'outreach' },
+    said: {}, segments: ['resort'], area: 'Palawan', web: false,
+    funnel: { matched: 140, sent: 27, replied: 2, meetings: 0, won: 0, outside: 0 },
+    worthAMessage: 12, bySegment: [{ segment: 'resort', sent: 27, replied: 2, won: 0 }], byChannel: [{ channel: 'whatsapp', sent: 27 }],
+    wins: [], queue: 41, wonRecent: { amount: 0, days: 30 }, goal: null, currency: '$', workerConnected: true, agents, topOpening: null,
+  };
+  const chain = erChain(base);
+
+  /* 1. The crew: the roster where the chain names it, then Claude, then the person — always in that order. */
+  const crew = erCrew({ agents, links: chain.links, asks: 3, proposals: 0, bet: null });
+  assert.deepEqual(crew.map((w) => w.key), ['agent:scout', 'agent:watcher', 'agent:writer', 'agent:researcher', 'agent:planner', 'model:claude', 'you']);
+  assert.deepEqual(crew.find((w) => w.key === 'agent:scout')!.parts, ['who'], 'the Scout works who buys, as the chain says');
+  assert.deepEqual(crew.find((w) => w.key === 'agent:writer')!.parts, ['reach'], '"Writer drafts, you send"');
+  assert.deepEqual(crew.find((w) => w.key === 'agent:researcher')!.parts, [], 'no part without work tied to one');
+  assert.deepEqual(crew.find((w) => w.key === 'agent:planner')!.parts, [], 'the Planner weighs the whole business');
+  assert.equal(crew.find((w) => w.key === 'agent:researcher')!.state, 'stopped', 'a failed agent says it stopped (invariant 13)');
+  assert.equal(crew.find((w) => w.key === 'agent:watcher')!.state, 'idle', 'a Watcher with no source is not trouble');
+  const you = crew.find((w) => w.kind === 'you')!;
+  assert.deepEqual([you.state, you.line], ['waiting', '3 things wait on you']);
+  assert.deepEqual(you.parts, ['reach', 'close', 'pay', 'deliver'], 'every part the chain says is the person’s, or shared');
+  assert.equal(erCrew({ agents, links: chain.links, asks: 1, proposals: 0, bet: null }).find((w) => w.kind === 'you')!.line, '1 thing waits on you');
+  assert.deepEqual(erCrew({ agents, links: chain.links, asks: 0, proposals: 0, bet: null }).find((w) => w.kind === 'you')!.state, 'ready');
+  assert.equal(erCrew({ agents, links: chain.links, asks: 0, proposals: 2, bet: null }).find((w) => w.kind === 'model')!.line, '2 proposals for you to keep or drop');
+  const onBet = erCrew({ agents, links: chain.links, asks: 0, proposals: 0, bet: { part: 'close', projects: 1 } });
+  assert.deepEqual(onBet.find((w) => w.key === 'agent:researcher')!.parts, ['close'], 'placed on a part only by work tied to the bet on it');
+  assert.deepEqual(erCrew({ agents, links: chain.links, asks: 0, proposals: 0, bet: { part: 'close', projects: 0 } }).find((w) => w.key === 'agent:researcher')!.parts, []);
+  assert.deepEqual(erOn(crew, 'who').map((w) => w.name), ['Scout']);
+  assert.deepEqual(erOn(crew, 'reach').map((w) => w.name), ['Writer', 'You']);
+  // Kinds the screen can draw before anything produces them; none is invented today (invariant 7).
+  assert.deepEqual([...erKinds], ['agent', 'model', 'you', 'person', 'robot']);
+  assert.ok(erKinds.every((k) => !!erKindLabel[k]));
+  assert.ok(!crew.some((w) => w.kind === 'person' || w.kind === 'robot'), 'nobody hired, no machine: none shown');
+  // Where buyers find the business, the chain names the person on who buys, and so does the crew.
+  const inbound = erChain({ ...base, offer: { ...base.offer, found_by: 'inbound' }, funnel: { ...base.funnel, sent: 0, replied: 0 } });
+  assert.deepEqual(erOn(erCrew({ agents, links: inbound.links, asks: 0, proposals: 0, bet: null }), 'who').map((w) => w.name), ['You']);
+
+  /* 2. The crew in a line: what runs without the person, and every worker not well, by name. */
+  assert.deepEqual(erCrewLine(crew), { line: '2 at work · Researcher stopped', trouble: 1 });
+  assert.deepEqual(erCrewLine(erCrew({ agents: agents.map((a) => ({ ...a, state: 'ready' as const })), links: chain.links, asks: 5, proposals: 0, bet: null })), { line: 'Nothing at work', trouble: 0 }, 'the person waiting is not the crew at work');
+  assert.equal(erCrewLine(erCrew({ agents: [{ ...agents[2], state: 'setup' }], links: chain.links, asks: 0, proposals: 0, bet: null })).line, 'Nothing at work · Writer needs setup');
+  // On the engine itself: one worker in trouble by name, more by count — the sheet names each.
+  assert.deepEqual(erHead(crew), { working: '2 at work', trouble: 'Researcher stopped' });
+  const many = erCrew({ agents: agents.map((a) => (a.key === 'scout' || a.key === 'writer' ? { ...a, state: 'setup' as const } : a)), links: chain.links, asks: 0, proposals: 0, bet: null });
+  assert.deepEqual(erHead(many), { working: '1 at work', trouble: '3 need a look' });
+  assert.equal(erCrewLine(many).line, '1 at work · Scout needs setup · Writer needs setup · Researcher stopped', 'and the sheet’s line still names every one (invariant 13)');
+  assert.deepEqual(erHead(erCrew({ agents: [], links: chain.links, asks: 0, proposals: 0, bet: null })), { working: 'Nothing at work', trouble: null });
+
+  /* 3. The figure: the count big, the bar after it, and a line that does not say the count again. */
+  const price = '$150';
+  assert.deepEqual(erFigure(chain.verdict, erCount(base), price, true), { n: 0, of: 3, unit: 'paid at your $150', chip: 'Not proven', line: 'Proven at 3.' });
+  assert.deepEqual(erCount(base), { n: 0, of: 3, price: 150 });
+  const paid = { ...base, wins: [150, 200, 90, null] };
+  assert.deepEqual(erCount(paid), { n: 2, of: 3, price: 150 }, 'held to the price, as the verdict is: $90 and an unpriced sale do not count');
+  assert.equal(erFigure(erChain(paid).verdict, erCount(paid), price, true).line, 'Proven at 3: 1 more to go.', 'what is left, from the same count');
+  const proven = { ...base, wins: [150, 150, 300] };
+  assert.deepEqual(erFigure(erChain(proven).verdict, erCount(proven), price, true), { n: 3, of: null, unit: 'paid at your $150 or more', chip: 'Proven', line: 'From here it is volume.' });
+  const noPrice = { ...base, offer: { ...base.offer, price_band: '' } };
+  const np = erFigure(erChain(noPrice).verdict, erCount(noPrice), null, true);
+  assert.deepEqual([np.unit, np.of, np.chip], ['paid', 3, 'Not proven']);
+  assert.equal(np.line, erChain(noPrice).verdict.line, 'with no price the verdict says what starts the count');
+  const blank = { ...base, offer: {} };
+  assert.deepEqual(erFigure(erChain(blank).verdict, erCount(blank), null, false), { n: null, of: null, unit: '', chip: 'Not started', line: erChain(blank).verdict.line });
+  // After a pivot the count starts again, and the line says from when.
+  const era = { since: '2026-10-07', pivot: 'who' as const, funnel: { sent: 0, replied: 0, meetings: 0, won: 0, outside: 0 }, bySegment: [], byChannel: [], wins: [] as Array<number | null>, talks: { n: 0, problem: 0, committed: 0 } };
+  const pivoted = { ...base, wins: [150, 150], eras: { pay: era } };
+  assert.deepEqual(erCount(pivoted), { n: 0, of: 3, price: 150 }, 'sales before the pivot are said, not counted');
+  assert.equal(erFigure(erChain(pivoted).verdict, erCount(pivoted), price, true).line, 'Proven at 3. Counted since 7 Oct, when you pivoted who buys.');
+
+  /* 4. The part the engine opens on: the move's, else the weakest, else the first. */
+  assert.equal(erOpen({ part: 'close' }, 'reach'), 'close');
+  assert.equal(erOpen({ part: null }, 'reach'), 'reach', 'a move about the whole business opens the weakest part');
+  assert.equal(erOpen(null, null), 'who');
+  const stepIn = (over: Partial<Parameters<typeof erStep>[0]>) => erStep({
+    today: '2026-10-13', offerSet: true, unreadable: false, checkpoint: { due: false, ended: 0 }, current: null, talks: [], found: 'inbound',
+    voices: null, opened: new Set(), searchRefusal: null, shelf: [], weak: { key: 'reach', label: 'How they hear', why: 'Nothing counted.' }, goal: null, ...over,
+  });
+  assert.equal(stepIn({ offerSet: false })!.part, null, 'the offer is the whole business’s');
+  assert.equal(stepIn({ checkpoint: { due: true, ended: 1 } })!.part, null);
+  assert.equal(stepIn({ shelf: [{ id: 's1', part: 'pay', belief: 'They pay $29' }] })!.part, 'pay');
+  assert.equal(stepIn({ found: null })!.part, 'reach', 'how buyers find you is How they hear');
+  assert.equal(stepIn({})!.part, 'reach', 'a bet to pick goes on the weakest part');
+  assert.equal(stepIn({ weak: null })!.part, 'who');
+
+  /* 5. Built so far: what the business has to show, not what was only started. */
+  const h = (key: string, kind: ErHistory['kind'], extra: Partial<ErHistory> = {}): ErHistory => ({ key, kind, day: '2026-10-09', at: '2026-10-09T10:00:00Z', title: key, line: null, by: null, tone: null, open: null, ...extra });
+  const built = erBuilt([
+    h('win', 'win', { tone: 'good' }),
+    h('passed', 'bet_end', { tone: 'good' }),
+    h('failed', 'bet_end', { tone: 'bad' }),
+    h('started', 'bet_start'),
+    h('checkpoint', 'checkpoint'),
+    h('finished', 'project', { by: 'ai', tone: null }),
+    h('stopped', 'project', { by: 'ai', tone: 'quiet' }),
+    h('page', 'asset', { title: 'Landing page v1: Founder OS', by: 'ai' }),
+    h('offer-v4', 'asset', { title: 'Offer v4: Founder OS', by: 'you' }),
+    h('money-talk', 'talk', { tone: 'good' }),
+    h('chat', 'talk'),
+    h('worked', 'experiment', { tone: 'good' }),
+  ]);
+  assert.deepEqual(built.map((e) => e.key), ['win', 'passed', 'finished', 'page', 'money-talk', 'worked']);
+
+  /* 6. The screen holds the crew to its own kinds, and the sheet offers work only where a worker picks it up. */
+  const src = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
+  const sheets = src('src/app/copilot/_components/v2/ProofSheets.tsx');
+  assert.match(sheets, /\{home\.workerConnected && \(\s*<button className="cp-btn primary block" onClick=\{\(\) => actions\.openSheet\(\{ kind: 'handover' \}\)\}>Give the crew a job<\/button>/, 'invariant 7');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /case 'crew': return <CrewSheet home=\{home\} actions=\{actions\} briefing=\{briefing\} \/>;/);
+  const icons = src('src/app/copilot/_components/v2/icons2.tsx');
+  for (const k of erKinds) assert.ok(new RegExp(`case '${k}'`).test(icons.slice(icons.indexOf('export function WorkerGlyph'))), `${k} has a glyph`);
+
+  console.log('copilot-core: engine room checks passed');
+}
+
+engineRoomSuite().catch((e) => { console.error(e); process.exit(1); });

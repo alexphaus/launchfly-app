@@ -322,7 +322,7 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 | --- | --- | --- | --- |
 | Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
 | Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
-| Engine (`proof`) | what to do next to prove the business, and is it proven | the one next step, read off the rows, with its button · what you sell, how buyers find you, and the verdict — proven, or the bar and the count against it — over the chain as five dots, the weak link named, and runway in bets · one bet at a time: the belief, the pass line written before it starts, the count from the rows or your own log, the play (folded under its name with how it counts and the hand-over box), the work done for it, and the one place its next count happens — or, with none running, ideas a model wrote for this business, plays from books, your own · the checkpoint every two weeks · a conversation bet's people: public posts where somebody says its problem, each to answer by hand · after a pivot on who buys, what it left behind, to set aside or keep · assets: offer, demo, script, landing page, workflow, price test, each versioned, by AI or by you, tied to its bet; a landing page put online with one button, counting opens and taps · the history, everything above dated · conversations, projects and agents, a line each | `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts`, `voices.ts`, `livepage.ts`, `era.ts` |
+| Engine (`proof`) | is the business proven, what is working on it, and what is mine to do | **the engine**, one dark card: what you sell, the count that proves it drawn big ("0/3 paid at your $29", proven at 3 at your price), the five parts in a row with their states — the track lit through every part that works and stopping at the first that does not, the weakest flagged — and the crew working them, a face each · **the part opened**, under it with a notch pointing at its part: the move when it is here (the one next step, read off the rows), the rule behind the state, who works it and what would move it · for the bet's part, the people a bet found and the bet itself; with none running, the person's own kept tests, then ideas and book plays for the part opened · **Built so far**: sales, bets passed, projects finished, the first version of anything made, newest three, with All history · conversations, assets and the page, projects, a line each · see **The engine room** below | `engine.ts`, `crew.ts`, `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts`, `voices.ts`, `livepage.ts`, `era.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move, which steps aside while the list is read downward (it sat over the amounts) | `money/book.ts` |
 | You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals, one list · Records, what it reads instead of asking (a pill only where one waits on you) · Settings (the business), the nightly run ("Run again" starts tonight's pass now, and the row reports each step) and Account, three groups · the header names the tab; only Path greets, and only Path has a line under it — on Proof, Money and You it repeated the first card | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
@@ -394,7 +394,7 @@ log of what already happened", in its owner's words). The rules are in `plan.ts`
   (`WORKER_CLOSE_MS`); hours you logged, on the day worked; a step reached. Not
   what the app did — finds, drafts, a project's steps, a Move ticked off — and not
   a send on its own, which teaches nothing until something comes back. What the
-  app did is under Projects and Agents on Proof. Days before this week carry their date ("Sat 12 Sep"): a
+  app did is under Projects and the crew on Engine. Days before this week carry their date ("Sat 12 Sep"): a
   weekday alone named two Saturdays. An empty fortnight says so, with the sends
   that explain it.
 - **A step reached is a moment where it happened**, directly under the answer or
@@ -1091,14 +1091,72 @@ the person's own rows, so a number in it is one they gave and passes
 `numberOutside`; the prompt says one person's number is not a rate. Nothing here
 keeps a file on anyone, sets a quota, or messages people for you (DIRECTION.md).
 
-**The next step first** (`engine.ts`, `Top` and `NextStep` in `ProofTab.tsx`).
+**The engine room** (`engine.ts` `engineFigure` · `openPart` · `builtSoFar`,
+`crew.ts`, `EngineHero` · `Station` · `Built` in `ProofTab.tsx`, `CrewSheet` in
+`ProofSheets.tsx`). Its owner's verdict on the tab below — step first, the verdict
+a tap under it — was that it was hard to understand, run by the person rather than
+by the AI, and nothing that could stand beside what else is on the market; the want
+was a startup built by a workforce with its owner steering, a crew that will one
+day include newer models, people taken on for a part, and machines. A sixth tab
+built as a command centre (earned, needs you, on it now, milestones, an order line)
+was tried and rejected the same day: a list of lists, beside the tab it should have
+replaced. So Engine itself was redrawn around the one thing it had that nothing
+else does — the chain — instead of hiding it as five dots under the step.
+
+- **The engine is the hero.** One dark card, the only one in the calm theme: the
+  offer's name, the count that proves the business drawn big — sales at the price,
+  since the pivot that restarted what they pay (`business.ts verdictCount`, read
+  off the same rows as `chainVerdict`, which keeps its sentence) — then the five
+  parts in a row, each with its word. The track is lit from the first part through
+  every part that works and stops at the first that does not: the theory of
+  constraints the weak link was always built on (`weakLink`), drawn rather than
+  said. The weakest part carries a flag. "Since you last looked" stays, under it.
+- **A part is tapped open in place, not in a sheet**, because a sheet over the
+  engine hides the engine. The card under the engine points at its part with a
+  notch, and opens where the move is (`openPart`: the step's part, else the
+  weakest, else who buys). The move sits on the part it moves — `Step.part`: the
+  running bet's part, the part a kept test or a new bet is for, How they hear for
+  saying how buyers arrive; a move about the whole business (the offer, the
+  checkpoint) is no part's and comes before the parts. Opened on another part, the
+  card says where the move is, one tap back. Then the rule behind the state (not
+  said again when the move already said it), who works the part, and what would
+  move it while no bet is on it (the chain's own moves, through `MoveKit`).
+- **The crew** (`crew.ts`). Every worker on the engine, in a fixed order — the
+  roster's agents, Claude, then the person — with its state from rows, never from
+  what it says about itself: an agent's state and line are the roster's
+  (`machine.ts`), the parts it works are the ones the chain names it on
+  (`BusinessLink.runner`), the Researcher is placed on a part only by live work
+  tied to the bet on it, Claude's line counts what it proposed, and the person's
+  counts what waits on them. On the engine: a face each with its state as a dot, and
+  two short lines (`crewHeadline`): how many are at work, and the one worker not
+  well by name or how many by count — every name is on the crew's sheet, a tap away
+  (invariant 13). A worker is described by its kind and what it may do, not by
+  which of today's agents it is: `person` and `robot` are kinds the screen already
+  draws, and nothing produces them yet, so nothing offers them (invariant 7). The
+  seam they would come through already exists: a project is a mandate with an
+  authority ring, handed to whatever worker `COPILOT_JOBS_URL` names, and judged by
+  the events it posts back (**Commissions — the principal layer**). The sheet
+  offers "Give the crew a job" only where a worker is connected.
+- **Built so far** (`builtSoFar`): the engine running is what it built — every sale,
+  a bet that passed, a conversation that ended in money, a project the agent
+  finished, the first version of anything made, the plan's experiment that worked —
+  newest three, read off the history, with All history beside it. Not what was only
+  started, decided or called off, and not every redraft of the offer.
+
+What it took away: the Agents row (the crew is on the engine), the History row
+(Built so far carries the link), the verdict card under the step (the engine is the
+verdict), and the bet picker's own row of parts (the engine is the picker: tap a
+part and its plays are below). Nothing was added below the screen.
+
+**The next step first** (`engine.ts`, `NextStep` in `ProofTab.tsx` — on the part it moves since the engine room).
 Proof opened on its verdict — the offer, five dots with five state words, the weak
 link in forty words, runway in bets — and the one thing to do was two and a half
 screens down, at the foot of the bet's card. A review of the tab put it plainly:
 an instrument too heavy for the moment it is used in, for somebody with two months
 of runway, with a first screen that was a report where a tab opened to act should
 lead with the act. So the tab opens on one step, read off the rows by a rule and
-never a model's advice (`engineStep`), and the verdict is one tap under it. In
+never a model's advice (`engineStep`) — on its part, under the engine that is the
+verdict, since the engine room (above). In
 order: an offer to write (nothing is written from a blank offer); a checkpoint
 nobody answered, while no bet runs; **the running bet's next step** — for a bet
 about people, *reply to one of the N people who said it* (the button is their

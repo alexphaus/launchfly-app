@@ -537,6 +537,31 @@ short list of links, kept because no other tab has those sheets and a dropped ro
 would be a sheet nobody can open. The one asset that is a gap stays above it with
 its button. Nothing was added; the chat-beside-it argument is unchanged.
 
+**Then — Engine, the engine room.** Its owner asked for the tab a startup could be
+seen being built in: how the AI makes money for them, what it is working on, what
+it has done, and what only they can do or must approve — with a want that looks
+past this year's software, to newer models, people taken on for a part and
+machines doing physical work, a startup built by a workforce with its owner
+steering. A sixth tab was built first, a command centre of four lists and an
+order line, and was rejected the same day: lists beside the tab they should have
+replaced, and nothing in them anyone else would ship. The redraw kept what only
+Engine had — the chain, judged by the rows — and made it the screen instead of
+five dots under the step. The engine is one dark card: the count that proves the
+business drawn big, the five parts in a row lit through every part that works up
+to the one that does not, and the crew working them, a face each. A part is
+tapped open in place; the move sits on the part it moves; what the engine has
+built is its record. The crew is described by kind and authority rather than by
+today's five agents, so a person or a machine is a worker the screen can already
+draw — and none is shown or offered until a row says one exists (invariant 7),
+because the seam they would come through is the commission (an authority ring,
+work handed out, events read back), not a new screen. It passes the survival test
+the way the chain always did: a harness can run agents and list what they did;
+"three agents at work, the Researcher stopped, and the weakest part is how they
+hear, with nothing past it testable until it works" needs the ledger and the rule.
+Declined: a chat with the crew (Claude has the record and is better at talk), a
+score of how automated the business is (no row measures it, invariant 2), and any
+worker that acts past `read` without the person's tap.
+
 ---
 
 ## Where it actually stands
@@ -616,6 +641,11 @@ direction better than "copilot" does.
   file never kept, a typed DELETE removes every row); a bank link would be the
   high-trust one and does not exist yet. Five uploads from people who are not
   the owner would answer it.
+- **Whether the engine is read or only admired.** The engine room is drawn to be
+  understood at a glance; the count to watch is whether parts get tapped open and
+  the move on them taken, against visits that end on the engine card. If the card
+  is looked at and nothing below it is touched, it is a better-drawn verdict, and
+  the step-first layout it replaced was the more useful one.
 - **Whether the people found become conversations.** A conversation bet now
   finds public posts where somebody says its problem. The count to watch is
   posts talked to against posts found, per bet: if the cards fill and nobody is

@@ -403,6 +403,17 @@ export function businessChain(i: ChainInput): Chain {
   return { links, weak: weakLink(links, offerSet), verdict: i.eras?.pay && offerSet ? { ...verdict, since: sinceLine(i.eras.pay) } : verdict };
 }
 
+/**
+ * The count the verdict is held to, as numbers rather than a sentence: sales at
+ * the price since the pivot that restarted what they pay, the bar, and the
+ * price. For a screen that draws the count; read off the same rows as
+ * chainVerdict, so the figure and the sentence beside it cannot disagree.
+ */
+export function verdictCount(i: ChainInput): { n: number; of: number; price: number | null } {
+  const w = readWins(eraView(i, 'pay').wins, i.offer.price_band);
+  return { n: w.atPrice, of: REPEAT_WINS, price: w.price };
+}
+
 /* ─── Since a pivot ───────────────────────────────────────────────────────── */
 
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

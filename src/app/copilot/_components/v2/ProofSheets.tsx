@@ -9,6 +9,7 @@ import {
   type Asset, type AssetKind, type AssetVersion,
 } from '@/lib/copilot/assets';
 import { LINK_LABEL, LINK_STATE_LABEL, evidenceState, type BusinessLink, type LinkKey } from '@/lib/copilot/business';
+import { WORKER_KIND_LABEL, WORKER_STATE_LABEL, type Worker } from '@/lib/copilot/crew';
 import { splitThreads } from '@/lib/copilot/commission';
 import { shiftDay } from '@/lib/copilot/focus';
 import { historyMonths, type HistoryKind } from '@/lib/copilot/history';
@@ -23,7 +24,7 @@ import { get } from '../api';
 import type { Actions } from '../shared';
 import { MoveCard } from '../views/NowView';
 import { useDerived } from './derive';
-import { IconChevron, IconExternal } from './icons2';
+import { IconChevron, IconExternal, WorkerGlyph } from './icons2';
 import { Count, talkDay } from './LabSheets';
 import { MoveNote, MoveRow, agentIsFull, orChat, useBrief, useMove } from './MoveKit';
 import { Composer, Project } from './ProjectCard';
@@ -86,6 +87,78 @@ export function ChainSheet({ home, actions }: { home: HomeData; actions: Actions
           </span>
           <IconChevron />
         </button>
+      )}
+    </>
+  );
+}
+
+/* ─── The crew ────────────────────────────────────────────────────────────── */
+
+/**
+ * Every worker on the engine (crew.ts), in the same order every day: what it is,
+ * how it is, what it last did, counted, and the parts it works. A tap goes where
+ * that worker is set up or its work is kept; the Planner, which runs on the
+ * schedule, carries the one thing a tap can do — run it now. Handing the crew a
+ * job is offered only where a worker can pick it up (invariant 7).
+ */
+export function CrewSheet({ home, actions, briefing }: { home: HomeData; actions: Actions; briefing: boolean }) {
+  const d = useDerived(home);
+  const { crew, crewLine } = d.proof;
+  const go = (w: Worker): (() => void) | null => {
+    // Claude's proposals, when it left some; else where it is connected.
+    if (w.kind === 'model') return () => actions.openSheet({ kind: home.proposals?.open.length ? 'proposals' : 'claude' });
+    switch (w.agent) {
+      case 'scout': return () => actions.openSheet({ kind: 'targeting' });
+      case 'watcher': return () => actions.openSheet({ kind: 'watchlist' });
+      case 'writer': return () => actions.openSheet(w.state === 'setup' ? { kind: 'offer' } : { kind: 'queue' });
+      case 'researcher': return () => actions.openSheet({ kind: 'projects' });
+      default: return null;
+    }
+  };
+  return (
+    <>
+      <h3>Your crew</h3>
+      <p className="desc">
+        Who works each part of your engine, read from when each last ran and what it made — never from what it says about itself.
+        Agents research and draft on their own; contacting somebody as you, or spending money, comes back to you.
+      </p>
+      <p className={`cp2-er-crewsum${crewLine.trouble ? ' bad' : ''}`}>{crewLine.line}</p>
+      <div className="cp-sheet-embed">
+        <div className="cp-list cp2-rows cp2-er-crewlist">
+          {crew.map((w) => {
+            const tap = go(w);
+            const body = (
+              <>
+                <span className={`cp2-er-face lg ${w.kind} ${w.state}`} aria-hidden><WorkerGlyph w={w} /><i /></span>
+                <span className="cp2-row-main">
+                  <span className="cp2-er-wtop">
+                    <span className="t">{w.name}</span>
+                    {/* "You · You" says nothing: the kind is shown where it is not the name. */}
+                    {WORKER_KIND_LABEL[w.kind] !== w.name && <span className={`cp2-er-wkind ${w.kind}`}>{WORKER_KIND_LABEL[w.kind]}</span>}
+                    <span className={`cp2-er-wstate ${w.state}`}><i />{WORKER_STATE_LABEL[w.state]}</span>
+                  </span>
+                  <span className="s">{w.role}</span>
+                  <span className="cp2-agent-line">{w.line}</span>
+                  {w.parts.length > 0 && <span className="cp2-er-wparts">Works on {w.parts.map((k) => LINK_LABEL[k].toLowerCase()).join(', ')}</span>}
+                </span>
+              </>
+            );
+            if (w.agent === 'planner') {
+              return (
+                <div key={w.key} className="cp2-row">
+                  {body}
+                  <button className="cp-connect ghost" disabled={briefing} onClick={() => void actions.runBrief('manual')}>{briefing ? 'Running' : 'Run now'}</button>
+                </div>
+              );
+            }
+            return tap
+              ? <button key={w.key} className="cp2-row" onClick={tap}>{body}<IconChevron /></button>
+              : <div key={w.key} className="cp2-row">{body}</div>;
+          })}
+        </div>
+      </div>
+      {home.workerConnected && (
+        <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'handover' })}>Give the crew a job</button>
       )}
     </>
   );

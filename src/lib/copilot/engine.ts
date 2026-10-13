@@ -28,9 +28,10 @@
 //
 // Pure: no DB import. The screen (ProofTab.tsx) maps `StepGo` onto its actions.
 
-import type { LinkKey } from './business';
+import type { LinkKey, Verdict } from './business';
 import { dateLabel, daysPhrase, goalDue } from './due';
 import { creditedGoalId } from './goalcard';
+import type { HistoryEntry } from './history';
 import { resultLine, type Bet, type BetView, type Talk } from './lab';
 import { betNext, type BetNextGo } from './proof';
 import type { FoundBy, Goal } from './types';
@@ -68,6 +69,13 @@ export type StepKind = 'offer' | 'found' | 'checkpoint' | 'shelf' | 'pick' | 're
 
 export interface Step {
   kind: StepKind;
+  /**
+   * The part of the business the step moves, so the engine room opens on it:
+   * the running bet's part, the part a kept test or a new bet is for, How they
+   * hear for saying how buyers arrive. Null for a step about the whole business —
+   * the offer, the checkpoint.
+   */
+  part: LinkKey | null;
   eyebrow: string;
   /** The step, as a sentence the person can act on. */
   title: string;
@@ -210,7 +218,7 @@ const POST_HINT = 'Their post opens in a new tab. You reply from your own accoun
 export function engineStep(i: StepInput): Step | null {
   if (!i.offerSet) {
     return {
-      kind: 'offer', eyebrow: 'Next step', title: 'Write what you sell',
+      kind: 'offer', part: null, eyebrow: 'Your move', title: 'Write what you sell',
       why: 'Every part of the business is tested against it, and nothing is written from a blank offer.', hint: null,
       primary: { label: 'Write your offer — three minutes', go: { to: 'offer' } }, claude: null, payoff: null,
     };
@@ -221,7 +229,7 @@ export function engineStep(i: StepInput): Step | null {
   if (!view) {
     if (i.checkpoint.due) {
       return {
-        kind: 'checkpoint', eyebrow: 'Next step', title: 'Pivot or persevere?',
+        kind: 'checkpoint', part: null, eyebrow: 'Your move', title: 'Pivot or persevere?',
         why: `${plural(i.checkpoint.ended, 'bet')} ended since you last decided. The next one starts from your answer.`, hint: null,
         primary: { label: 'Answer it', go: { to: 'checkpoint' } }, claude: null, payoff: null,
       };
@@ -229,31 +237,31 @@ export function engineStep(i: StepInput): Step | null {
     const kept = i.shelf[0];
     if (kept) {
       return {
-        kind: 'shelf', eyebrow: 'Next step · kept for later', title: kept.belief,
+        kind: 'shelf', part: kept.part, eyebrow: 'Your move · kept for later', title: kept.belief,
         why: 'You wrote this test down with its line. Start it, and only what happens after counts.', hint: null,
         primary: { label: 'Start it', go: { to: 'shelf', id: kept.id } }, claude: null, payoff: null,
       };
     }
     if (!i.found) {
       return {
-        kind: 'found', eyebrow: 'Next step', title: 'Say how buyers find you',
+        kind: 'found', part: 'reach', eyebrow: 'Your move', title: 'Say how buyers find you',
         why: 'Every part of the business is read that way: by your sends if you write to them, by your own counts if they find you.', hint: null,
         primary: { label: 'Say it', go: { to: 'foundby' } }, claude: null, payoff: null,
       };
     }
     const part: LinkKey = i.weak?.key ?? 'who';
     return {
-      kind: 'pick', eyebrow: 'Next step', title: i.weak ? `Bet on ${i.weak.label.toLowerCase()}` : 'Start your first bet',
+      kind: 'pick', part, eyebrow: 'Your move', title: i.weak ? `Bet on ${i.weak.label.toLowerCase()}` : 'Start your first bet',
       why: i.weak ? clamp(firstSentence(i.weak.why), 140) : 'A belief, a count that could prove it wrong, and a day: written before it starts.', hint: null,
       primary: { label: 'Pick a bet', go: { to: 'bet', part } }, claude: null, payoff: null,
     };
   }
 
   const b = view.bet;
-  const eyebrow = `Next step · day ${view.day} of ${b.days}${view.last === i.today ? ' · last day' : ''}`;
+  const eyebrow = `Your move · day ${view.day} of ${b.days}${view.last === i.today ? ' · last day' : ''}`;
   const talksSince = i.talks.filter((t) => t.on >= b.start && t.on <= view.last).length;
   const why = whyOf(view, talksSince);
-  const common = { eyebrow, why, claude: claudeAsk(view), payoff: payoffOf(b, i.goal, i.today) };
+  const common = { part: b.part, eyebrow, why, claude: claudeAsk(view), payoff: payoffOf(b, i.goal, i.today) };
 
   const v = betVoiced(b) ? i.voices : null;
   if (v) {
@@ -302,6 +310,70 @@ function firstSentence(s: string): string {
 
 function clamp(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1).replace(/\s+\S*$/, '')}…`;
+}
+
+/* ─── The engine room ─────────────────────────────────────────────────────── */
+
+/**
+ * The part the engine room opens on: where the step is, else the weakest part,
+ * else the first. The step leads because the tab is opened to act; a part chosen
+ * by a tap stays chosen until the next visit.
+ */
+export function openPart(step: Pick<Step, 'part'> | null, weak: LinkKey | null): LinkKey {
+  return step?.part ?? weak ?? 'who';
+}
+
+/** The engine's figure: the count that proves it, drawn rather than said. */
+export interface EngineFigure {
+  /** Sales at the price since the pivot that restarted what they pay. Null before there is an offer to sell. */
+  n: number | null;
+  /** The bar, shown after the count while it is not reached. */
+  of: number | null;
+  /** "paid at your $29", or "paid" while no price is said. */
+  unit: string;
+  chip: 'Proven' | 'Not proven' | 'Not started';
+  /** Under the figure: the bar and where the count starts, never the count again. */
+  line: string;
+}
+
+/**
+ * The verdict as the engine draws it: the count big, the bar after it, and one
+ * line under it. Built from the verdict's own sentence and its numbers
+ * (business.ts verdictCount), so "0/3 paid at your $29" and "Not proven yet"
+ * come from the same rows. The line does not say the count a second time.
+ */
+export function engineFigure(v: Verdict, count: { n: number; of: number; price: number | null }, priceLabel: string | null, offerSet: boolean): EngineFigure {
+  const since = v.since ? ` ${v.since}` : '';
+  if (!offerSet) return { n: null, of: null, unit: '', chip: 'Not started', line: v.line };
+  if (v.proven) return { n: count.n, of: null, unit: priceLabel ? `paid at your ${priceLabel} or more` : 'paid', chip: 'Proven', line: `From here it is volume.${since}` };
+  if (count.price == null || !priceLabel) return { n: count.n, of: count.of, unit: 'paid', chip: 'Not proven', line: v.line };
+  const left = count.of - count.n;
+  return { n: count.n, of: count.of, unit: `paid at your ${priceLabel}`, chip: 'Not proven', line: `Proven at ${count.of}${count.n > 0 ? `: ${left} more to go` : ''}.${since}` };
+}
+
+/** What the engine has built that "Built so far" shows before its link to the whole history. */
+export const BUILT_SHOWN = 3;
+
+/**
+ * What the business has to show for itself, newest first: every sale, a bet that
+ * passed, a conversation that ended in money, a project the agent finished, the
+ * first version of anything made — and the plan's experiment that worked. Not
+ * what was only started, decided or called off, and not every redraft of the
+ * offer: those are history, not things built. Read off the history (history.ts),
+ * so the two cannot disagree about what happened.
+ */
+export function builtSoFar(history: HistoryEntry[]): HistoryEntry[] {
+  return history.filter((e) => {
+    switch (e.kind) {
+      case 'win': return true;
+      case 'bet_end': case 'talk': case 'experiment': return e.tone === 'good';
+      // A project the agent finished; one stopped is history's.
+      case 'project': return e.tone !== 'quiet';
+      // The first version of each thing made, by either maker: "Landing page v1: …".
+      case 'asset': return / v1: /.test(e.title);
+      default: return false;
+    }
+  });
 }
 
 /* ─── Posts this device opened ────────────────────────────────────────────── */

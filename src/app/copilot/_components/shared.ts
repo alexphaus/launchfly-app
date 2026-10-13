@@ -145,7 +145,9 @@ export type SheetState =
   /** Proof: every asset, put away ones too. */
   | { kind: 'assets' }
   /** Proof: the projects — handing work over, the ones live, the ones finished. */
-  | { kind: 'projects' };
+  | { kind: 'projects' }
+  /** Engine: the crew — every worker on the engine, how each is doing and the parts it works (crew.ts). */
+  | { kind: 'crew' };
 
 /** The plan's experiment, as a bet sheet opens on it: the bet takes the experiment's verdict when it ends. */
 export interface BetFromExperiment {

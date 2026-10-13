@@ -1,16 +1,27 @@
 'use client';
-// Engine (key `proof`): the one bet being run to find out, and what it needs next.
+// Engine (key `proof`): the business as a machine of five parts, who works each
+// one, and the one move that is the person's.
 //
-//   The step      one sentence and one button, a rule over the rows (engine.ts),
-//                 and the verdict under it: proven or not, the chain, the weak part
-//   The bet       one at a time: the belief, the count against the line written
-//                 before it began, the pass line. How it is counted, the play and
-//                 the work done for it are one tap down. With none running, the
-//                 ideas, the plays from books, and your own. Every couple of
-//                 weeks, the checkpoint
-//   The people    found for a bet about people, and one tap to log what they said
-//   More          conversations, assets and the page, history, projects, agents:
-//                 a line each, a tap to the sheet
+//   The engine    what it sells, whether it is proven — the count, drawn big —
+//                 the five parts in a row with their states and the weakest
+//                 marked, and the crew working them. One card, read at a glance
+//   The part      the part opened (where your move is, else the weakest): its
+//                 state and the rule behind it, your move when it is here, who
+//                 works it and what would move it — and for the bet's part, the
+//                 people found and the bet itself
+//   Built so far  what the business has to show for itself: sales, bets passed,
+//                 projects finished, the first version of anything made
+//   More          conversations, assets and projects: a line each
+//
+// Why it is drawn this way. Its owner's verdict on the tab before it: hard to
+// understand, run by the person rather than by the AI, and nothing that could
+// stand beside what else is on the market — where the want was a startup built
+// by a workforce with its owner steering, and a crew that will one day include
+// newer models, people taken on for a part, and machines. So the chain that was
+// five dots under the step is the screen's spine; each part says who works it
+// (crew.ts); the one move sits on the part it moves; and what was built is the
+// record of the engine running. The parts are tapped through in place, not in a
+// sheet, because a sheet over the engine hides the engine.
 //
 // What it leaves to the other tabs: the plan and the day's move (Path), outreach
 // (Swipe), runway and the bank (Money), the offer, goals and settings (You). A
@@ -19,7 +30,7 @@
 // What it will not do: show a number nobody counted, mark a bet passed, or let a
 // model's draft stand as the person's. A model proposes — ideas for a bet,
 // drafts of an asset — and the rows judge. lib/copilot/proof.ts, lab.ts,
-// assets.ts and history.ts have the rules.
+// engine.ts, crew.ts, assets.ts and history.ts have the rules.
 import { useEffect, useRef, useState } from 'react';
 import { ASSET_LABEL, OFFER_ASSET, type Asset, type AssetGap, type AssetKind } from '@/lib/copilot/assets';
 import {
@@ -27,6 +38,7 @@ import {
   type ChainChange, type LinkKey, type LinkMove, type SeenChain,
 } from '@/lib/copilot/business';
 import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } from '@/lib/copilot/commission';
+import { WORKER_STATE_LABEL, crewHeadline, crewOn, type Worker } from '@/lib/copilot/crew';
 import { historyDay, type HistoryEntry } from '@/lib/copilot/history';
 import {
   BET_STATE_LABEL, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS,
@@ -35,26 +47,40 @@ import {
 } from '@/lib/copilot/lab';
 import { assetMakers, betNext, betWork, ideasStale, pivotWords, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
 import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
+import { moneyLabel } from '@/lib/copilot/review';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import { COMMITMENT_LABEL, COMMITMENTS, dayIn, type Commitment } from '@/lib/copilot/lab';
 import { VOICE_OPENER, VOICE_SEARCHES, betVoiced, betVoices, postedWords, voiceRefusal, voiceTalk, type Voice } from '@/lib/copilot/voices';
-import { OPENED_KEY, clearOpened, engineStep, markOpened, parseOpened, payoffGoal, type Step, type StepGo } from '@/lib/copilot/engine';
+import {
+  BUILT_SHOWN, OPENED_KEY, clearOpened, engineFigure, engineStep, markOpened, openPart, parseOpened, payoffGoal,
+  type Step, type StepGo,
+} from '@/lib/copilot/engine';
 import { pageCounts, pageLine } from '@/lib/copilot/livepage';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
-import { AssetGlyph, IconCheck, IconChevron, IconCross, IconExternal, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph } from './icons2';
+import { AssetGlyph, IconCheck, IconChevron, IconCross, IconExternal, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph, WorkerGlyph } from './icons2';
 import { MoveNote, MoveRow, agentIsFull, orChat, useBrief, useMove, type Brief } from './MoveKit';
-import { Agents } from './ProjectCard';
 
-export default function ProofTab({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
+export default function ProofTab({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
   const changes = useSeen(home, d);
   const brief = useBrief(actions);
   const lab = d.proof.lab;
   const opened = useOpened(home.profile.id);
   const find = useFind(actions, lab.current?.bet.id ?? null);
+  const { step, peopleShown } = useStep(home, d, opened);
+  // A part tapped stays open until the next visit; until then the engine opens where the move is.
+  const [picked, setPicked] = useState<LinkKey | null>(null);
+  const part = picked ?? openPart(step, d.proof.chain.weak);
+  const onBet = lab.current?.bet.part === part;
   return (
     <>
-      <Top home={home} d={d} actions={actions} changes={changes} brief={brief} find={find} opened={opened} />
+      <EngineHero home={home} d={d} actions={actions} part={part} pick={setPicked} changes={changes} />
+      {/* A move about the whole business — the offer, the checkpoint — is no one part's, so it comes before them. */}
+      {step && !step.part && (
+        <div className="cp-card cp2-ns">
+          <NextStep step={step} view={lab.current} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />
+        </div>
+      )}
       {home.pivotLeft && <AfterPivot home={home} left={home.pivotLeft} actions={actions} />}
       {lab.unreadable ? (
         // Refused rather than shown empty: an unread record drawn as "no bet
@@ -67,13 +93,14 @@ export default function ProofTab({ home, d, actions, briefing }: { home: HomeDat
       ) : (
         <>
           {lab.checkpoint.due && <Checkpoint d={d} actions={actions} />}
+          <Station home={home} d={d} actions={actions} part={part} step={step} pick={setPicked} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />
           {lab.current
             ? (
               <>
-                {/* The people it found come before the bet: the step above says to reply to one, and the bet's own card is what they count toward. */}
-                <People home={home} view={lab.current} actions={actions} find={find} opened={opened} />
+                {/* The bet's part carries the bet: the people it found first — the move says to reply to one — then the bet they count toward. */}
+                {onBet && <People home={home} view={lab.current} actions={actions} find={find} opened={opened} />}
                 {/* The bet keeps a slot of its own: errands on the go do not grey out the work it exists to move (commission.ts roomForProject). */}
-                <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={agentIsFull(home, lab.links[lab.current.bet.id] ?? [])} />
+                {onBet && <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={agentIsFull(home, lab.links[lab.current.bet.id] ?? [])} />}
                 <Shelf home={home} d={d} actions={actions} />
               </>
             )
@@ -81,12 +108,13 @@ export default function ProofTab({ home, d, actions, briefing }: { home: HomeDat
               // The person's own kept tests before the generic ones: what they wrote down to run next is what they came back for.
               <>
                 <Shelf home={home} d={d} actions={actions} />
-                <PickABet home={home} d={d} actions={actions} />
+                <PickABet home={home} d={d} actions={actions} part={part} />
               </>
             )}
         </>
       )}
-      <More home={home} d={d} actions={actions} briefing={briefing} />
+      <Built home={home} d={d} actions={actions} />
+      <More home={home} d={d} actions={actions} />
     </>
   );
 }
@@ -123,7 +151,7 @@ function useSeen(home: HomeData, d: Derived): ChainChange[] {
   return changes;
 }
 
-/* ─── The next step, and the verdict under it ────────────────────────────── */
+/* ─── The move ────────────────────────────────────────────────────────────── */
 
 /**
  * Which posts this device opened and has not answered, kept on the device. A
@@ -156,8 +184,8 @@ type Opened = ReturnType<typeof useOpened>;
 
 /**
  * The search for the running bet's people, run from whichever card asks: the
- * step at the top, or "Find more" under the people already found. One state, so
- * a search started in one place is seen in the other and cannot be started twice.
+ * move, or "Find more" under the people already found. One state, so a search
+ * started in one place is seen in the other and cannot be started twice.
  */
 function useFind(actions: Actions, betId: string | null) {
   const [busy, setBusy] = useState(false);
@@ -181,9 +209,8 @@ function scrollToCard(id: string) {
   try { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* an older browser: the card is where it was */ }
 }
 
-function Top({ home, d, actions, changes, brief, find, opened }: {
-  home: HomeData; d: Derived; actions: Actions; changes: ChainChange[]; brief: Brief; find: Find; opened: Opened;
-}) {
+/** The one move, read off the rows (engine.ts engineStep), and whether the people card is up to say what a search did. */
+function useStep(home: HomeData, d: Derived, opened: Opened): { step: Step | null; peopleShown: boolean } {
   const { chain, found, lab } = d.proof;
   const view = lab.current;
   const b = view?.bet ?? null;
@@ -203,12 +230,7 @@ function Top({ home, d, actions, changes, brief, find, opened }: {
     shelf: lab.shelf, weak: weak ? { key: weak.key, label: weak.label, why: weak.why } : null,
     goal: payoffGoal(home.goals, home.recent.today),
   });
-  return (
-    <div className="cp-card cp2-ns">
-      {step && <NextStep step={step} view={view} actions={actions} brief={brief} find={find} opened={opened} peopleShown={!!voices && (voices.searches > 0 || !!read?.unreadable)} />}
-      {!d.noOffer && <Summary home={home} d={d} actions={actions} changes={changes} />}
-    </div>
-  );
+  return { step, peopleShown: !!voices && (voices.searches > 0 || !!read?.unreadable) };
 }
 
 function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
@@ -268,41 +290,161 @@ function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
   );
 }
 
+/* ─── The engine ──────────────────────────────────────────────────────────── */
+
 /**
- * The verdict, one tap under the step: what you sell, whether it is proven by the
- * count against the bar, the chain as five dots and the weak one named. The whole
- * chain, each part with its rule and what would move it, is the sheet it opens.
+ * The business at a glance: what it sells, the count that proves it, the five
+ * parts in order with the track lit through every part that works and stopping
+ * at the first that does not — the constraint — and the crew working them. A
+ * part is a tap: it opens below, in place.
  */
-function Summary({ home, d, actions, changes }: { home: HomeData; d: Derived; actions: Actions; changes: ChainChange[] }) {
-  const { chain } = d.proof;
-  const v = chain.verdict;
-  const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
+function EngineHero({ home, d, actions, part, pick, changes }: {
+  home: HomeData; d: Derived; actions: Actions; part: LinkKey; pick: (k: LinkKey) => void; changes: ChainChange[];
+}) {
+  const { chain, count, crew, crewLine } = d.proof;
+  const head = crewHeadline(crew);
+  const sells = home.profile.offer?.sells?.trim() || null;
+  const fig = engineFigure(chain.verdict, count, count.price != null ? moneyLabel(count.price, d.currency) : null, !d.noOffer);
+  // Lit from the first part through each that works, up to the first that does not.
+  const runs = chain.links.findIndex((l) => l.state !== 'works');
+  const lit = runs === -1 ? chain.links.length - 1 : runs;
   return (
-    <div className="cp2-ns-sum">
-      <button
-        className={`cp2-ns-chain${v.proven ? ' proven' : ''}`} onClick={() => actions.openSheet({ kind: 'chain' })}
-        aria-label={`How it makes money. ${v.title}. ${chain.links.map((l) => `${l.label}, ${LINK_STATE_LABEL[l.state]}`).join('; ')}. Open each part.`}
-      >
-        <span className="cp2-ns-dots" aria-hidden>
-          {chain.links.map((l) => <i key={l.key} className={`${l.state}${l.key === chain.weak ? ' weak' : ''}`} />)}
+    <section className="cp2-er-hero" aria-label="Your engine">
+      <div className="cp2-er-top">
+        <span className="cp2-er-name cp2-clamp1">{sells ?? 'Your engine'}</span>
+        <span className={`cp2-er-chip${fig.chip === 'Proven' ? ' proven' : ''}`}>{fig.chip}</span>
+      </div>
+      {fig.n != null && (
+        <div className="cp2-er-fig">
+          <b>{fig.n}</b>
+          {fig.of != null && <span className="cp2-er-of">/{fig.of}</span>}
+          <span className="cp2-er-unit">{fig.unit}</span>
+        </div>
+      )}
+      <p className="cp2-er-line">{fig.line}</p>
+      <ol className="cp2-er-parts" style={{ '--lit': `${lit * 20}%` } as React.CSSProperties} aria-label="The five parts of the business">
+        {chain.links.map((l) => {
+          const weak = chain.weak === l.key;
+          return (
+            <li key={l.key}>
+              <button
+                className={`cp2-er-part ${l.state}${weak ? ' weak' : ''}${part === l.key ? ' on' : ''}`}
+                aria-pressed={part === l.key} onClick={() => pick(l.key)}
+                aria-label={`${l.label}, ${LINK_STATE_LABEL[l.state]}${weak ? ', the weakest part' : ''}`}
+              >
+                <span className="cp2-er-flag" aria-hidden>{weak ? 'Weakest' : ''}</span>
+                <i className="cp2-er-node" aria-hidden />
+                <span className="cp2-er-pname">{l.label}</span>
+                {/* The word travels with the dot — a colour alone is not a verdict. */}
+                <span className="cp2-er-pstate">{LINK_STATE_LABEL[l.state]}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <button className="cp2-er-crew" onClick={() => actions.openSheet({ kind: 'crew' })} aria-label={`Your crew: ${crewLine.line}`}>
+        <span className="cp2-er-faces" aria-hidden>
+          {crew.map((w) => <span key={w.key} className={`cp2-er-face ${w.kind} ${w.state}`}><WorkerGlyph w={w} /><i /></span>)}
         </span>
-        <span className="cp2-ns-chain-row">
-          <span className="cp2-ns-chain-t">
-            <b>{v.title}</b>
-            <span>{v.line}</span>
-            {/* Said where the count is: "So far: 0" the day after a pivot is the new business's 0, not the old one's. */}
-            <small>{[weak ? `Weak link: ${weak.label.toLowerCase()}.` : v.proven ? 'Every part that sells works.' : null, v.since].filter(Boolean).join(' ')}</small>
-          </span>
-          <IconChevron />
+        {/* What runs without you, then what is not well — a line each beside the faces; the sheet names every one. */}
+        <span className="cp2-er-crewline">
+          <span>{head.working}</span>
+          {head.trouble && <span className="bad">{head.trouble}</span>}
         </span>
+        <IconChevron />
       </button>
-      {/* The tab moving, said: a part whose verdict changed since this device last looked. */}
+      {/* The engine moving, said: a part whose verdict changed since this device last looked. */}
       {changes.length > 0 && (
-        <p className="cp2-bz-moved">
+        <p className="cp2-er-moved">
           Since you last looked: {changes.slice(0, 2).map(changeLine).join('; ')}{changes.length > 2 ? `; and ${changes.length - 2} more` : ''}.
         </p>
       )}
-    </div>
+    </section>
+  );
+}
+
+/**
+ * The part opened: its state and the rule behind it, the move when the move is
+ * here, who works it, and what would move it. The bet's own cards follow it
+ * when the bet is on this part; a move on another part is one tap away.
+ */
+function Station({ home, d, actions, part, step, pick, brief, find, opened, peopleShown }: {
+  home: HomeData; d: Derived; actions: Actions; part: LinkKey; step: Step | null; pick: (k: LinkKey) => void;
+  brief: Brief; find: Find; opened: Opened; peopleShown: boolean;
+}) {
+  const { chain, crew, lab } = d.proof;
+  const move = useMove(actions, brief);
+  const l = chain.links.find((x) => x.key === part);
+  if (!l) return null;
+  const i = chain.links.indexOf(l);
+  const weak = chain.weak === part;
+  const here = step && step.part === part ? step : null;
+  const there = step && step.part && step.part !== part ? step : null;
+  const betHere = lab.current?.bet.part === part ? lab.current : null;
+  const said = !!here?.why && l.why.startsWith(here.why.replace(/…$/, ''));
+  const on = crewOn(crew, part);
+  const full = agentIsFull(home);
+  return (
+    <section className={`cp-card cp2-er-station ${l.state}`} style={{ '--frac': i * 0.2 + 0.1 } as React.CSSProperties} aria-label={l.label}>
+      <div className="cp2-er-shead">
+        <h2>{l.label}</h2>
+        <span className={`cp2-bz-state ${l.state}`}><i />{LINK_STATE_LABEL[l.state]}</span>
+      </div>
+      {/* The move first when it is on this part: the tab is opened to act, and its button belongs above the fold. */}
+      {here && <div className="cp2-er-move"><NextStep step={here} view={lab.current} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} /></div>}
+      <div className="cp2-er-detail">
+        <p className="cp2-er-why">
+          {weak && <b>The weakest part. </b>}
+          {/* A move that is "bet on this part" carries the part's own rule as its reason; said once is enough. */}
+          {said ? (weak ? 'Nothing past it can be tested until it works.' : null) : l.why}
+        </p>
+        {l.what && <p className="cp2-er-what cp2-clamp2">{l.what}</p>}
+        {/* Said once: the engine above already says where the count starts when it is the same pivot. */}
+        {l.since && l.since !== chain.verdict.since && <p className="cp2-er-since">{l.since}</p>}
+      </div>
+      {there && (
+        <button className="cp2-er-elsewhere" onClick={() => pick(there.part!)}>
+          <span><b>Your move is on {LINK_LABEL[there.part!].toLowerCase()}:</b> {there.title}</span>
+          <IconChevron />
+        </button>
+      )}
+      {/* Who works it, each in their word. An agent that stopped is said on the part it stopped (invariant 13). */}
+      {on.length > 0 && (
+        <div className="cp2-er-oncrew">
+          <span className="cp2-er-k">Who works it</span>
+          <div className="cp2-er-chips">
+            {on.map((w) => <CrewChip key={w.key} w={w} />)}
+          </div>
+          {l.runner.problem && <p className="cp2-bz-problem">{l.runner.problem}</p>}
+        </div>
+      )}
+      {/* What would move it, while no bet is on it: the bet's own card holds the work for the part it is on. */}
+      {!betHere && l.moves.length > 0 && (
+        <div className="cp2-er-moves">
+          <span className="cp2-er-k">What would move it</span>
+          {l.moves.map((raw) => {
+            const m = orChat(raw, full);
+            return (
+              <div key={m.key}>
+                <MoveRow m={m} rerouted={m.by !== raw.by} busy={move.busy === m.key} onRun={() => void move.run(m, l.why)} />
+                {move.note?.key === m.key && <MoveNote note={move.note} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** A worker as a chip: who, and in a word how it is. */
+function CrewChip({ w }: { w: Worker }) {
+  return (
+    <span className={`cp2-er-chipw ${w.kind} ${w.state}`}>
+      <span className={`cp2-er-face ${w.kind} ${w.state}`} aria-hidden><WorkerGlyph w={w} /><i /></span>
+      <span>{w.name}</span>
+      <em>{WORKER_STATE_LABEL[w.state]}</em>
+    </span>
   );
 }
 
@@ -931,12 +1073,11 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
  */
 const PLAYS_SHOWN = 2;
 
-function PickABet({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+function PickABet({ home, d, actions, part }: { home: HomeData; d: Derived; actions: Actions; part: LinkKey }) {
   const { chain, found, lab } = d.proof;
-  const [picked, setPicked] = useState<LinkKey | null>(null);
   const [more, setMore] = useState(false);
-  const part = picked ?? chain.weak ?? 'who';
-  const link = chain.links.find((l) => l.key === part) ?? null;
+  // A part tapped in the engine is a new list of plays, folded again.
+  useEffect(() => setMore(false), [part]);
   const last = lab.learned[0] ?? null;
   const { priceLabel } = betPrice(home.profile.offer?.price_band, d.currency);
   const plays = playsFor(part, found.value);
@@ -947,25 +1088,13 @@ function PickABet({ home, d, actions }: { home: HomeData; d: Derived; actions: A
       <div className="cp-eyebrow">No bet running</div>
       <h2 className="cp2-lab-q">What do you believe that you have not tested?</h2>
       <p className="cp2-lede">
-        {chain.weak ? `Your weak link is ${LINK_LABEL[chain.weak].toLowerCase()}, so these start there.` : 'Pick a part, and a play for it.'}
+        {`For ${LINK_LABEL[part].toLowerCase()}${chain.weak === part ? ', the weakest part' : ''}. Tap another part above for its plays.`}
         {' '}You set the line before it starts, and only what happens after counts.
       </p>
       {last && (
         <p className="cp2-lab-lastbet">
           <span className={`cp2-lab-verdict ${last.state}`}>{BET_STATE_LABEL[last.state]}</span>
           <span>Last bet: {last.result} of {last.bet.target} {metricWords(last.bet.metric, last.bet.target, last.bet.priceLabel, last.bet.unit)}{last.ended ? `, ${dayWords(last.ended)}` : ''}</span>
-        </p>
-      )}
-      <div className="cp2-pf-parts" role="group" aria-label="Part of the business">
-        {chain.links.map((l) => (
-          <button key={l.key} className={`cp2-lab-partchip ${l.state}${l.key === part ? ' on' : ''}`} aria-pressed={l.key === part} onClick={() => { setPicked(l.key); setMore(false); }}>
-            <i aria-hidden />{l.label}
-          </button>
-        ))}
-      </div>
-      {link && (
-        <p className="cp2-pf-partwhy">
-          <b>{LINK_STATE_LABEL[link.state]}{chain.weak === link.key ? ', and the weak link' : ''}.</b> {link.why}
         </p>
       )}
       <Ideas home={home} d={d} actions={actions} part={part} priceLabel={priceLabel} />
@@ -1193,16 +1322,43 @@ export function HistoryRow({ e, today, actions }: { e: HistoryEntry; today: stri
     : <div className="cp2-row cp2-pf-hrow">{body}</div>;
 }
 
+/* ─── Built so far ────────────────────────────────────────────────────────── */
+
+/**
+ * What the business has to show for itself, newest first (engine.ts builtSoFar):
+ * a sale, a bet that passed, a project the agent finished, the first version of
+ * anything made. The engine running is what it built, said with who built it;
+ * everything else that happened is one tap away in the history.
+ */
+function Built({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+  const { built, history } = d.proof;
+  return (
+    <>
+      <div className="cp-section cp2-er-h">
+        <span>Built so far</span>
+        {history.length > 0 && <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'history' })}>All history</button>}
+      </div>
+      {built.length ? (
+        <div className="cp-list cp2-rows cp2-er-built">
+          {built.slice(0, BUILT_SHOWN).map((e) => <HistoryRow key={e.key} e={e} today={home.recent.today} actions={actions} />)}
+        </div>
+      ) : (
+        <p className="cp2-er-none">The first sale, a bet that passes, a project finished and the first version of anything you make land here, each dated.</p>
+      )}
+    </>
+  );
+}
+
 /* ─── More ────────────────────────────────────────────────────────────────── */
 
 /**
- * Everything else the tab used to lay out, a line each and a tap to the sheet that
- * has it whole: the conversations, the assets and the page, the history, the
- * projects and the agents. None of it is read to decide what to do next, so none
- * of it sits above the bet. They are here and not on another tab because no other
- * tab holds them; a row dropped here would be a sheet nobody can open.
+ * The records the engine keeps, a line each and a tap to the sheet that has it
+ * whole: the conversations, the assets and the page, the projects. None of it is
+ * read to decide the move, so none of it sits above the engine. The agents are
+ * the crew, on the engine itself; the history is under Built so far. A row
+ * dropped here would be a sheet nobody can open.
  */
-function More({ home, d, actions, briefing }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
+function More({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
   const talks = d.proof.lab.talks;
   const c = talkCounts(talks, home.recent.today);
   const intros = d.proof.intros;
@@ -1221,7 +1377,6 @@ function More({ home, d, actions, briefing }: { home: HomeData; d: Derived; acti
   const assetsLine = online
     ? `Page online · v${online.n}${counted ? ` · ${counted}` : ' · nobody has opened it yet'}`
     : live.length ? assetMakers(d.proof.assets).line || `${live.length} made` : 'A demo, a script, a page, a price to test';
-  const entries = d.proof.history;
   return (
     <>
       <AssetGaps home={home} d={d} actions={actions} />
@@ -1250,13 +1405,6 @@ function More({ home, d, actions, briefing }: { home: HomeData; d: Derived; acti
           </span>
           <IconChevron />
         </button>
-        <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'history' })}>
-          <span className="cp2-row-main">
-            <span className="t">History</span>
-            <span className="s cp2-clamp1">{entries.length ? `${entries.length} things tried, made, decided and paid` : 'Every bet and how it ended lands here'}</span>
-          </span>
-          <IconChevron />
-        </button>
         <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'projects' })}>
           <span className="cp2-row-main">
             <span className="t">Projects</span>
@@ -1264,7 +1412,6 @@ function More({ home, d, actions, briefing }: { home: HomeData; d: Derived; acti
           </span>
           <IconChevron />
         </button>
-        <Agents agents={d.team} line={d.proof.team} actions={actions} briefing={briefing} />
       </div>
     </>
   );

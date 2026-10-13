@@ -240,6 +240,8 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 @keyframes cp2-voice-ring { from { transform: scale(0.92); opacity: 0.7; } to { transform: scale(1.32); opacity: 0; } }
 /* A card answered on the Swipe tab leaves from wherever the thumb let it go. */
 @keyframes cp2-swp-writing { 50% { opacity: 0.45; } }
+/* Engine: a worker at work breathes on its face; nothing else on the engine moves. */
+@keyframes cp2-er-pulse { 50% { box-shadow: 0 0 0 4px rgba(92, 201, 175, 0.28); } }
 
 /* Setup error */
 .cp-setup { padding: 60px 24px; text-align: center; }
@@ -1160,7 +1162,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 
 /* The verdict: proven, or the bar and the count against it. Green only when
    it is proven; a tint is not a verdict until the rows say so. */
-.cp-root[data-theme="soft"] .cp2-bz-moved { margin-top: 10px; font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--blue); }
 
 
 /* The chain. One rail down the left, drawn on the part rather than inside its
@@ -1244,32 +1245,12 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-bz-fault .cp-btn { flex: none; }
 
 
-/* Agents: one line, every agent that is not well named on it; the roster folds under it. */
-.cp-root[data-theme="soft"] .cp2-bz-team .s { font-size: 13px; font-weight: 500; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-bz-team .s.cp2-bz-team-bad { color: var(--bad); }
-.cp-root[data-theme="soft"] .cp2-bz-team[aria-expanded="true"] .cp2-chev { transform: rotate(90deg); }
 .cp-root[data-theme="soft"] .cp2-owner { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
 .cp-root[data-theme="soft"] .cp2-owner.ai { background: var(--ai-tint); color: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-owner.you { background: var(--line); color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-owner.both { background: var(--tint); color: var(--blue); }
 
-.cp-root[data-theme="soft"] .cp2-agent {
-  flex: none; align-self: flex-start; width: 36px; height: 36px; border-radius: 12px;
-  display: inline-flex; align-items: center; justify-content: center; background: var(--tint); color: var(--blue);
-}
-.cp-root[data-theme="soft"] .cp2-agent svg { width: 18px; height: 18px; }
-.cp-root[data-theme="soft"] .cp2-agent-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cp-root[data-theme="soft"] .cp2-agent-line { font-size: 12px; line-height: 1.45; font-weight: 500; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-state { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
-.cp-root[data-theme="soft"] .cp2-state.working { color: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-state.working i { background: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-state.ready { color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-state.ready i { background: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-state.setup { color: var(--warn); }
-.cp-root[data-theme="soft"] .cp2-state.setup i { background: var(--warn); }
-.cp-root[data-theme="soft"] .cp2-state.failed { color: var(--bad); }
-.cp-root[data-theme="soft"] .cp2-state.failed i { background: var(--bad); }
 .cp-root[data-theme="soft"] .cp2-team .cp-connect { flex: none; align-self: center; }
 
 /* ── Bets (v2/ProofTab.tsx, LabSheets.tsx): one at a time, judged by the rows
@@ -1340,13 +1321,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-opt.on b { color: var(--blue); }
 
 /* A part of the business as a chip, its verdict's dot beside its name. */
-.cp-root[data-theme="soft"] .cp2-lab-partchip { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; white-space: nowrap; padding: 8px 13px; border-radius: 999px; background: var(--surface); color: var(--muted); box-shadow: var(--shadow-sm); }
-.cp-root[data-theme="soft"] .cp2-lab-partchip i { width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--dim); }
-.cp-root[data-theme="soft"] .cp2-lab-partchip.works i { background: var(--ai); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-lab-partchip.testing i { background: var(--blue); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-lab-partchip.stuck i { background: var(--bad); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-lab-partchip.missing i { box-shadow: none; border: 1.5px dashed var(--dim); }
-.cp-root[data-theme="soft"] .cp2-lab-partchip.on { background: var(--ink); color: #fff; }
 .cp-root[data-theme="soft"] .cp2-lab-play-t { font-size: 15px; font-weight: 700; line-height: 1.35; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-play-how { font-size: 13px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-play-pass { font-size: 12px; line-height: 1.45; color: var(--muted); margin-bottom: 4px; }
@@ -1445,26 +1419,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-ns-step .cp-help { margin-top: 8px; }
 .cp-root[data-theme="soft"] .cp2-ns-pay { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--line); font-size: 12.5px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-ns-pay .cp2-link { display: inline; padding: 0; }
-.cp-root[data-theme="soft"] .cp2-ns-sum { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-.cp-root[data-theme="soft"] .cp2-ns-step + .cp2-ns-sum { margin-top: 16px; }
-.cp-root[data-theme="soft"] .cp2-ns > .cp2-ns-sum:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-.cp-root[data-theme="soft"] .cp2-ns-chain { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--line); text-align: left; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-ns-chain.proven { background: var(--ai-tint); }
-.cp-root[data-theme="soft"] .cp2-ns-dots { position: relative; display: flex; justify-content: space-between; padding: 0 4px; }
-.cp-root[data-theme="soft"] .cp2-ns-dots::before { content: ''; position: absolute; left: 8px; right: 8px; top: 6px; height: 2px; background: var(--fill-quiet); opacity: .5; }
-.cp-root[data-theme="soft"] .cp2-ns-dots i { position: relative; box-sizing: border-box; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--dim); }
-.cp-root[data-theme="soft"] .cp2-ns-dots i.works { background: var(--ai); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-ns-dots i.testing { background: var(--blue); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-ns-dots i.stuck { background: var(--bad); box-shadow: none; }
-.cp-root[data-theme="soft"] .cp2-ns-dots i.missing { box-shadow: none; border: 1.5px dashed var(--dim); }
-.cp-root[data-theme="soft"] .cp2-ns-dots i.weak { outline: 4px solid var(--tint); }
-.cp-root[data-theme="soft"] .cp2-ns-dots i.weak.stuck { outline-color: var(--bad-tint); }
-.cp-root[data-theme="soft"] .cp2-ns-chain-row { display: flex; align-items: center; gap: 10px; }
-.cp-root[data-theme="soft"] .cp2-ns-chain-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.cp-root[data-theme="soft"] .cp2-ns-chain-t b { font-family: var(--display); font-size: 14px; font-weight: 700; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-ns-chain.proven .cp2-ns-chain-t b { color: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-ns-chain-t span { font-size: 13px; line-height: 1.45; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-ns-chain-t small { font-size: 12px; line-height: 1.45; color: var(--muted); }
 /* What a pivot on who buys left behind (era.ts pivotLeft): said once, answered by a tap. */
 .cp-root[data-theme="soft"] .cp2-pv-left .cp2-lab-q { margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-pv-said { font-size: 13.5px; line-height: 1.5; color: var(--ink); margin-top: 8px; }
@@ -1515,9 +1469,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pf-hand-row .cp-btn { flex: none; }
 
 /* No bet running: the parts, the ideas written for this business, the books, your own. */
-.cp-root[data-theme="soft"] .cp2-pf-parts { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 2px; }
-.cp-root[data-theme="soft"] .cp2-pf-partwhy { margin: 8px 0 2px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-pf-partwhy b { font-weight: 600; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-pf-ideas { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .cp-root[data-theme="soft"] .cp2-pf-ideas-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .cp-root[data-theme="soft"] .cp2-pf-ideas-top .cp2-link:disabled { color: var(--dim); }
@@ -2504,3 +2455,142 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-askit-line { color: var(--muted); }
 .cp-root[data-theme="soft"] .cp-askit-counted { color: var(--dim); }
 .cp-root[data-theme="soft"] .cp-askit-chip { border: 0; background: var(--surface); box-shadow: var(--shadow-sm); font-weight: 500; }
+
+/* ── Engine: the engine room (v2/ProofTab.tsx, lib/copilot/crew.ts) ─────────
+   Prefixed cp2-er- throughout: .cp-steps, .cp2-link and .cp2-state already mean
+   other things in this file, and a reused name inside .cp-root is the collision
+   scoping cannot catch. The engine is the one dark card in the calm theme: an
+   instrument, read at a glance, with the white cards under it as its readouts. */
+.cp-root[data-theme="soft"] .cp2-er-hero {
+  --er-ink: #FFFFFF; --er-muted: rgba(255, 255, 255, 0.64); --er-dim: rgba(255, 255, 255, 0.38); --er-track: rgba(255, 255, 255, 0.14);
+  --er-works: #5CC9AF; --er-testing: #9AA8FF; --er-stuck: #F0A06B; --er-weak: #FFC46B;
+  margin: 4px 22px 14px; padding: 20px 18px 16px; border-radius: 26px; color: var(--er-ink);
+  background: radial-gradient(120% 90% at 100% 0%, #2E3A6B 0%, rgba(46, 58, 107, 0) 60%), linear-gradient(165deg, #1C2132 0%, #161A27 100%);
+  box-shadow: 0 16px 34px rgba(22, 26, 39, 0.28);
+}
+.cp-root[data-theme="soft"] .cp2-er-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-er-name { min-width: 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--er-muted); }
+.cp-root[data-theme="soft"] .cp2-er-chip { flex: none; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--er-weak); background: rgba(255, 196, 107, 0.14); }
+.cp-root[data-theme="soft"] .cp2-er-chip.proven { color: var(--er-works); background: rgba(92, 201, 175, 0.16); }
+.cp-root[data-theme="soft"] .cp2-er-fig { display: flex; align-items: baseline; gap: 2px; margin-top: 10px; }
+.cp-root[data-theme="soft"] .cp2-er-fig b { font-family: var(--cp-font-display, var(--display)); font-size: 42px; font-weight: 700; letter-spacing: -1.5px; line-height: 1; }
+.cp-root[data-theme="soft"] .cp2-er-of { font-family: var(--cp-font-display, var(--display)); font-size: 22px; font-weight: 600; color: var(--er-dim); }
+.cp-root[data-theme="soft"] .cp2-er-unit { margin-left: 10px; font-size: 14px; font-weight: 600; color: var(--er-muted); }
+.cp-root[data-theme="soft"] .cp2-er-line { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--er-muted); }
+
+/* The five parts: a track lit through each part that works, stopping at the first that does not. */
+.cp-root[data-theme="soft"] .cp2-er-parts { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); margin: 14px -6px 0; padding: 0; list-style: none; }
+.cp-root[data-theme="soft"] .cp2-er-parts::before,
+.cp-root[data-theme="soft"] .cp2-er-parts::after { content: ''; position: absolute; top: 27px; height: 2px; border-radius: 2px; left: 10%; }
+.cp-root[data-theme="soft"] .cp2-er-parts::before { right: 10%; background: var(--er-track); }
+.cp-root[data-theme="soft"] .cp2-er-parts::after { width: var(--lit, 0%); background: var(--er-works); }
+.cp-root[data-theme="soft"] .cp2-er-part { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 0 2px 6px; border-radius: 14px; text-align: center; color: var(--er-muted); }
+.cp-root[data-theme="soft"] .cp2-er-flag { height: 16px; padding: 0 6px; border-radius: 999px; font-size: 9.5px; font-weight: 700; line-height: 16px; letter-spacing: 0.02em; color: transparent; }
+.cp-root[data-theme="soft"] .cp2-er-part.weak .cp2-er-flag { color: #2A1F0A; background: var(--er-weak); }
+.cp-root[data-theme="soft"] .cp2-er-node { position: relative; z-index: 1; box-sizing: border-box; width: 16px; height: 16px; border-radius: 50%; background: #1A1F2E; box-shadow: inset 0 0 0 2px var(--er-dim); }
+.cp-root[data-theme="soft"] .cp2-er-part.works .cp2-er-node { background: var(--er-works); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-er-part.testing .cp2-er-node { background: var(--er-testing); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-er-part.stuck .cp2-er-node { background: var(--er-stuck); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp2-er-part.missing .cp2-er-node { box-shadow: none; border: 2px dashed var(--er-dim); }
+.cp-root[data-theme="soft"] .cp2-er-part.weak .cp2-er-node { outline: 4px solid rgba(255, 196, 107, 0.28); }
+.cp-root[data-theme="soft"] .cp2-er-part.on .cp2-er-node { outline: 2px solid #FFFFFF; outline-offset: 3px; }
+.cp-root[data-theme="soft"] .cp2-er-pname { margin-top: 4px; font-size: 11px; font-weight: 600; line-height: 1.25; }
+.cp-root[data-theme="soft"] .cp2-er-pstate { font-size: 10px; font-weight: 700; color: var(--er-dim); }
+.cp-root[data-theme="soft"] .cp2-er-part.works .cp2-er-pstate { color: var(--er-works); }
+.cp-root[data-theme="soft"] .cp2-er-part.testing .cp2-er-pstate { color: var(--er-testing); }
+.cp-root[data-theme="soft"] .cp2-er-part.stuck .cp2-er-pstate { color: var(--er-stuck); }
+.cp-root[data-theme="soft"] .cp2-er-part.on { background: rgba(255, 255, 255, 0.07); color: var(--er-ink); }
+
+/* The crew, under the parts: a face per worker, its state a dot on it. */
+.cp-root[data-theme="soft"] .cp2-er-crew { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 14px; padding: 12px 2px 0; border-top: 1px solid var(--er-track); text-align: left; color: var(--er-muted); }
+.cp-root[data-theme="soft"] .cp2-er-faces { display: flex; flex: none; }
+.cp-root[data-theme="soft"] .cp2-er-faces .cp2-er-face + .cp2-er-face { margin-left: -8px; }
+.cp-root[data-theme="soft"] .cp2-er-crewline { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--er-ink); }
+.cp-root[data-theme="soft"] .cp2-er-crewline .bad { color: var(--er-stuck); }
+.cp-root[data-theme="soft"] .cp2-er-crew .cp2-chev { flex: none; width: 16px; height: 16px; color: var(--er-dim); }
+.cp-root[data-theme="soft"] .cp2-er-moved { margin: 10px 0 0; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--er-testing); }
+
+/* A worker's face. On the light cards its tint is the kind's; in the engine, brighter on the dark. */
+.cp-root[data-theme="soft"] .cp2-er-face { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-er-face svg { width: 14px; height: 14px; }
+.cp-root[data-theme="soft"] .cp2-er-face i { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%; background: var(--dim); box-shadow: 0 0 0 2px var(--surface); }
+.cp-root[data-theme="soft"] .cp2-er-face.agent { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-er-face.model { background: rgba(124, 92, 214, 0.11); color: #7C5CD6; }
+.cp-root[data-theme="soft"] .cp2-er-face.you, .cp-root[data-theme="soft"] .cp2-er-face.person { background: var(--tint); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-er-face.robot { background: rgba(214, 158, 46, 0.14); color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-er-face.working i { background: var(--ai); animation: cp2-er-pulse 1.8s ease-in-out infinite; }
+.cp-root[data-theme="soft"] .cp2-er-face.waiting i { background: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-er-face.stopped i { background: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-er-face.setup i { background: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face { border: 2px solid #1B2030; box-sizing: content-box; }
+.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face i { box-shadow: 0 0 0 2px #1B2030; }
+.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.agent { background: #1F3B3A; color: var(--er-works); }
+.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.model { background: #2E2848; color: #C3A6FF; }
+.cp-root[data-theme="soft"] .cp2-er-hero :is(.cp2-er-face.you, .cp2-er-face.person) { background: #262E52; color: #B4BEFF; }
+.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.robot { background: #3A3020; color: var(--er-weak); }
+.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.working i { background: var(--er-works); }
+.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.waiting i { background: var(--er-testing); }
+.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.stopped i { background: var(--er-stuck); }
+.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.setup i { background: var(--er-weak); }
+.cp-root[data-theme="soft"] .cp2-er-hero :is(.cp2-er-face.ready, .cp2-er-face.idle) i { background: rgba(255, 255, 255, 0.4); }
+@media (prefers-reduced-motion: reduce) { .cp-root[data-theme="soft"] .cp2-er-face.working i { animation: none; } }
+
+/* The part opened. Right under the engine, a notch points at its part. */
+.cp-root[data-theme="soft"] .cp2-er-station { position: relative; }
+/* The parts' grid runs from 12px inside the engine's edge to 12px short of the
+   other (its 18px padding less its -6px margin), and this card is as wide as the
+   engine — so a part's centre is 12px + (width - 24px) x its fraction. */
+.cp-root[data-theme="soft"] .cp2-er-hero + .cp2-er-station::before { content: ''; position: absolute; top: -7px; left: calc(12px + (100% - 24px) * var(--frac, 0.5) - 8px); width: 16px; height: 16px; border-radius: 3px; background: var(--surface); transform: rotate(45deg); }
+.cp-root[data-theme="soft"] .cp2-er-shead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-er-shead h2 { margin: 0; font-family: var(--display); font-size: 19px; font-weight: 700; letter-spacing: -0.2px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-er-what { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-er-why { margin: 10px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-er-why b { font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-er-why b { color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-er-since { margin: 4px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-er-move { margin-top: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-er-move .cp2-ns-t { font-size: 20px; }
+.cp-root[data-theme="soft"] .cp2-er-detail > :first-child { margin-top: 12px; }
+.cp-root[data-theme="soft"] .cp2-er-elsewhere { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 14px; padding: 10px 12px; border-radius: 12px; background: var(--tint); color: var(--blue); font-size: 12.5px; line-height: 1.45; text-align: left; }
+.cp-root[data-theme="soft"] .cp2-er-elsewhere span { flex: 1; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-er-elsewhere b { font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-er-k { display: block; margin-bottom: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cp-root[data-theme="soft"] :is(.cp2-er-oncrew, .cp2-er-moves) { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-er-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-root[data-theme="soft"] .cp2-er-chipw { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px 3px 3px; border-radius: 999px; background: var(--line); font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-er-chipw .cp2-er-face { width: 24px; height: 24px; }
+.cp-root[data-theme="soft"] .cp2-er-chipw .cp2-er-face i { box-shadow: 0 0 0 2px var(--line); }
+.cp-root[data-theme="soft"] .cp2-er-chipw em { font-style: normal; font-size: 11px; font-weight: 600; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-er-chipw.stopped em { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-er-chipw.working em { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-er-chipw.waiting em { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-er-moves .cp2-bz-move + .cp2-bz-move, .cp-root[data-theme="soft"] .cp2-er-moves > div + div { margin-top: 6px; }
+
+/* Built so far, and the section heads with a link at their end. */
+.cp-root[data-theme="soft"] .cp2-er-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cp-root[data-theme="soft"] .cp2-er-h .cp2-link { letter-spacing: 0; text-transform: none; }
+.cp-root[data-theme="soft"] .cp2-er-none { margin: 0 24px 16px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-er-built { margin-bottom: 16px; }
+
+/* The crew, whole (ProofSheets.tsx CrewSheet). */
+.cp-root[data-theme="soft"] .cp2-er-crewsum { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-er-crewsum.bad { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-er-crewlist .cp2-row { align-items: flex-start; }
+.cp-root[data-theme="soft"] .cp2-er-face.lg { width: 38px; height: 38px; }
+.cp-root[data-theme="soft"] .cp2-er-face.lg svg { width: 18px; height: 18px; }
+.cp-root[data-theme="soft"] .cp2-er-wtop { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cp-root[data-theme="soft"] .cp2-er-wkind { padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-er-wkind.agent { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-er-wkind.model { background: rgba(124, 92, 214, 0.11); color: #7C5CD6; }
+.cp-root[data-theme="soft"] .cp2-er-wkind.you { background: var(--tint); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-er-wstate { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-er-wstate i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-er-wstate.working { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-er-wstate.working i { background: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-er-wstate.waiting { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-er-wstate.waiting i { background: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-er-wstate.stopped { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-er-wstate.stopped i { background: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-er-wstate.setup { color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-er-wstate.setup i { background: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-er-wparts { font-size: 11.5px; line-height: 1.45; color: var(--muted); }

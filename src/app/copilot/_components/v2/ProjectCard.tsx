@@ -7,11 +7,9 @@ import { useState } from 'react';
 import { suggestedAsks, type LinkMove } from '@/lib/copilot/business';
 import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, blockedOn, commissionChip, lapsedOn } from '@/lib/copilot/commission';
 import { dayWords } from '@/lib/copilot/lab';
-import { AGENT_STATE_LABEL, type Agent } from '@/lib/copilot/machine';
 import type { CommissionThread, HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
-import { AgentGlyph, IconChevron } from './icons2';
 import { MoveNote, type Brief } from './MoveKit';
 
 /**
@@ -176,57 +174,5 @@ export function Project({ thread, actions, today }: { thread: CommissionThread; 
       {c.status === 'draft' && !lapsed && <button className="cp2-bz-job-go" onClick={open}>Read it and approve →</button>}
       {error && <p className="cp-help cp2-err">{error}</p>}
     </div>
-  );
-}
-
-/**
- * The team, as one line. Each agent's work is on the part of the business it
- * runs (the chain); what is left for a roster is whether each is well, and that
- * fits on a line — with every one that is not named on it. The rows fold under
- * it, the Planner's Run now among them.
- */
-export function Agents({ agents, line, actions, briefing }: { agents: Agent[]; line: { line: string; trouble: number }; actions: Actions; briefing: boolean }) {
-  const [open, setOpen] = useState(false);
-  const go = (a: Agent) => {
-    if (a.key === 'scout') actions.openSheet({ kind: 'targeting' });
-    else if (a.key === 'watcher') actions.openSheet({ kind: 'watchlist' });
-    else if (a.key === 'writer') actions.openSheet(a.state === 'setup' ? { kind: 'offer' } : { kind: 'queue' });
-    else if (a.key === 'researcher') actions.openSheet({ kind: 'projects' });
-  };
-  return (
-    <>
-      <button className="cp2-row cp2-bz-team" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
-        <span className="cp2-row-main">
-          <span className="t">Agents</span>
-          <span className={`s ${line.trouble ? 'cp2-bz-team-bad' : ''}`}>{line.line}</span>
-        </span>
-        <IconChevron />
-      </button>
-      {open && agents.map((a) => {
-        const body = (
-          <>
-            <span className={`cp2-agent ${a.key}`}><AgentGlyph agent={a.key} /></span>
-            <span className="cp2-row-main">
-              <span className="cp2-agent-top">
-                <span className="t">{a.name}</span>
-                <span className={`cp2-state ${a.state}`}><i />{AGENT_STATE_LABEL[a.state]}</span>
-              </span>
-              <span className="s">{a.role}</span>
-              <span className="cp2-agent-line">{a.line}</span>
-            </span>
-          </>
-        );
-        // The Planner is the one agent a tap cannot configure — it runs on the
-        // nightly schedule — so its row carries the one thing you can do: run it now.
-        return a.key === 'planner' ? (
-          <div key={a.key} className="cp2-row">
-            {body}
-            <button className="cp-connect ghost" disabled={briefing} onClick={() => void actions.runBrief('manual')}>{briefing ? 'Running' : 'Run now'}</button>
-          </div>
-        ) : (
-          <button key={a.key} className="cp2-row" onClick={() => go(a)}>{body}<IconChevron /></button>
-        );
-      })}
-    </>
   );
 }

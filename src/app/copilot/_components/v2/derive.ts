@@ -13,7 +13,9 @@
 import { useMemo } from 'react';
 import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster } from '@/lib/copilot/machine';
-import { businessChain, teamLine, waitingOnYou } from '@/lib/copilot/business';
+import { businessChain, verdictCount, waitingOnYou } from '@/lib/copilot/business';
+import { crewLine, crewOf } from '@/lib/copilot/crew';
+import { builtSoFar } from '@/lib/copilot/engine';
 import { lapsedOn } from '@/lib/copilot/commission';
 import { assetGaps } from '@/lib/copilot/assets';
 import { historyOf } from '@/lib/copilot/history';
@@ -281,13 +283,14 @@ export function derive(home: HomeData) {
   // bets, conversations and assets the person keeps for what the app cannot see.
   const said = saidOf(home);
   const found = foundOf(home);
-  const chain = businessChain(chainInputOf(home, {
+  const chainInput = chainInputOf(home, {
     agents: team,
     worthAMessage: good.filter((i) => i.from === 'business').length,
     webReady,
     currency,
     topOpening: d.openings[0]?.term ?? null,
-  }));
+  });
+  const chain = businessChain(chainInput);
   const running = home.commissions.filter((t) => t.commission.status === 'active' || t.commission.status === 'blocked').length;
 
   /* Proof — the verdict, the bet that moves it, the assets, the history. One
@@ -298,8 +301,37 @@ export function derive(home: HomeData) {
   const lab = labView(home.lab, { runwayMonths: home.metrics.runway_months, links: chain.links, today: home.recent.today });
   const assets = home.assets?.assets ?? [];
   const states = Object.fromEntries(chain.links.map((l) => [l.key, l.state]));
+  // Who works each part (crew.ts): the roster placed where the chain names it,
+  // Claude, and the person with what waits on them.
+  const crew = crewOf({
+    agents: team,
+    links: chain.links,
+    asks: asks.length,
+    proposals: home.proposals?.open.length ?? 0,
+    bet: lab.current
+      ? {
+        part: lab.current.bet.part,
+        projects: (lab.links[lab.current.bet.id] ?? []).filter((id) => home.commissions.some((t) => t.commission.id === id && (t.commission.status === 'active' || t.commission.status === 'blocked'))).length,
+      }
+      : null,
+  });
+  const history = historyOf({
+    bets: home.lab?.bets ?? [],
+    checkpoints: home.lab?.checkpoints ?? [],
+    talks: home.lab?.talks ?? [],
+    assets,
+    projects: home.commissions.map((t) => ({ id: t.commission.id, objective: t.commission.objective, status: t.commission.status, outcome: t.commission.outcome, closedAt: t.commission.closed_at })),
+    wins: home.wins ?? [],
+    experiments: home.roadmap?.experiments ?? [],
+    currency,
+    timezone: home.profile.timezone,
+  });
   const proof = {
     chain,
+    /** The verdict's count as numbers, for the engine's figure (business.ts verdictCount). */
+    count: verdictCount(chainInput),
+    crew,
+    crewLine: crewLine(crew),
     said,
     found,
     lab,
@@ -308,18 +340,9 @@ export function derive(home: HomeData) {
     assets,
     assetsUnreadable: home.assets?.unreadable ?? null,
     gaps: assetGaps({ assets, offer: home.profile.offer, weak: chain.weak, foundBy: found.value, states, online: home.page ? (home.page.unreadable ? undefined : home.page.live?.asset ?? null) : undefined }),
-    history: historyOf({
-      bets: home.lab?.bets ?? [],
-      checkpoints: home.lab?.checkpoints ?? [],
-      talks: home.lab?.talks ?? [],
-      assets,
-      projects: home.commissions.map((t) => ({ id: t.commission.id, objective: t.commission.objective, status: t.commission.status, outcome: t.commission.outcome, closedAt: t.commission.closed_at })),
-      wins: home.wins ?? [],
-      experiments: home.roadmap?.experiments ?? [],
-      currency,
-      timezone: home.profile.timezone,
-    }),
-    team: teamLine(team),
+    history,
+    /** What the engine has to show for itself, newest first (engine.ts builtSoFar). */
+    built: builtSoFar(history),
     waiting: waitingOnYou(home.commissions, home.recent.today),
     /** Projects waiting on a day that has passed: said under Projects with Stop, counted as neither waiting nor a slot. */
     lapsed: home.commissions.filter((t) => !!lapsedOn(t.commission, home.recent.today)).length,

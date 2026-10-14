@@ -44,6 +44,16 @@ export function pageKey(): Buffer {
   return createHmac('sha256', secret()).update('copilot-page-v1').digest();
 }
 
+/**
+ * The key an account connect in progress is sealed with (accounts.ts): the
+ * PKCE verifier and where the person is being sent, held in a cookie for the
+ * minutes a consent screen takes. Derived like the others, so it can never pass
+ * for a session cookie, a link or a page address.
+ */
+export function accountsKey(): Buffer {
+  return createHmac('sha256', secret()).update('copilot-accounts-v1').digest();
+}
+
 function sign(profileId: string): string {
   return createHmac('sha256', secret()).update(profileId).digest('hex');
 }

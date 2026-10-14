@@ -27,7 +27,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 88 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 91 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -167,6 +167,36 @@ connection; each has to be added again. Proposing (`copilot.propose`) is a tick
 on the consent screen: a connection made before it, or without the tick, only
 reads — disconnect it under You → Claude and connect again to let it propose.
 
+**Workers** (who a handed-over job goes to, `src/lib/copilot/workers.ts`) need no
+migration: hand-overs, the app's checks, a session's reports and the calls
+waiting on an OK are `copilot_events` rows. With none registered nothing picks a
+job up, and the card says so. The **Writer** is on whenever the app has a model
+(`COPILOT_AI_API_KEY`) and takes every writing job; the **n8n worker** is
+`COPILOT_JOBS_URL`, as before; `COPILOT_WORKERS` adds more (the env block in
+COPILOT.md), and a bad entry is refused rather than repaired — the crew sheet and
+`/api/copilot/health` say why. **The Claude agent** needs `ANTHROPIC_API_KEY` and
+the two ids `npx tsx scripts/managed/setup.ts --networking unrestricted` prints.
+Networking is asked for, never defaulted (`--networking limited --hosts a.com,b.com`
+keeps the web tools to those hosts). Run it again whenever `AGENT_CONFIG_VERSION`
+in `managedwire.ts` changes; it updates the same agents rather than adding new
+ones. Its webhook is optional: under Claude Console → Manage → Webhooks add
+`<NEXT_PUBLIC_APP_URL>/api/copilot/workers/claude/webhook` for the `session.*`
+events and set `ANTHROPIC_WEBHOOK_SIGNING_KEY` to its `whsec_` secret. Without
+the key the route refuses every delivery and each run of the commission job
+(the nightly pass, Run again) reads the sessions back instead — results land
+then rather than within seconds. A job's dollar cap is its minutes ×
+`COPILOT_MANAGED_CENTS_PER_MINUTE` (5¢), never under 50¢ or over
+`COPILOT_MANAGED_MAX_CENTS` (1500).
+
+**Your accounts** (You → Your accounts) show only while the Claude agent is
+registered, and need no migration. They need `NEXT_PUBLIC_APP_URL`: an
+account's consent screen sends the person back to
+`/api/copilot/accounts/callback` on it. The tokens go straight into a vault at
+Anthropic under the app's `ANTHROPIC_API_KEY` and never into a row. Only an
+account whose server speaks MCP over HTTPS can be connected — through its own
+OAuth (discovery, dynamic client registration, PKCE) or a token the person
+pastes.
+
 **Testing the connector:** Allow on the consent screen answers with a 303 to
 claude.ai, and a Playwright route handler does not see a redirect's target — read
 the `Location` of the `/api/copilot/oauth/authorize` response instead. The whole
@@ -184,6 +214,21 @@ tap, the owner's visit not counted — runs against a dev server whose
 `NEXT_PUBLIC_SUPABASE_URL` points at an in-memory PostgREST stand-in. Open the page
 in a context without the session cookie: the owner's own visits are not counted, by
 design. A forged code answers 404, and a `GET` on the count's address counts nothing.
+
+**Testing the work layer:** `COPILOT_ANTHROPIC_BASE_URL` points the Managed
+Agents calls (sessions, their events, vaults) at a stand-in; the Writer's one
+call goes to `COPILOT_AI_BASE_URL` like every other model call. Sign a webhook
+delivery with the `standardwebhooks` package the SDK already pulls in
+(`new Webhook(whsec).sign(id, date, body)`, sent as `webhook-id`,
+`webhook-timestamp` in seconds and `webhook-signature`): the route answers 204
+and reads the session back in `after()`, so assert on what reached the stand-in,
+not on the response. `COPILOT_LINKCHECK=off` when the links in a stand-in's
+reports go nowhere (they read "not checked", which never fails a delivery), and
+`COPILOT_ACCOUNTS_ALLOW_LOCAL=1` to connect an account whose MCP server is on
+localhost — otherwise the account flow refuses http and private addresses. Start
+a dev server a test spawns `detached`, stop its process group in a `finally`,
+and still check the port before the next run (above): one outlived its test
+here.
 
 **Testing offline:** Playwright's `setOffline` does not cover a service
 worker's own requests, and `public/sw.js` passes the page's API calls through

@@ -18,6 +18,7 @@ import { loadCommissions, loadHome } from '@/lib/copilot/store';
 import { rateLimit } from '@/lib/copilot/limits';
 import { fail, json, profileIdOr401 } from '@/lib/copilot/http';
 import { dueCommissions } from '@/lib/copilot/commission';
+import { registry } from '@/lib/copilot/hands';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -38,8 +39,8 @@ export async function POST() {
   if (!due.length) {
     return fail('Nothing to run — work has to be approved before anything picks it up.');
   }
-  if (!process.env.COPILOT_JOBS_URL) {
-    return fail('No worker is connected to this deployment, so there is nothing to hand this to. Set COPILOT_JOBS_URL.');
+  if (!registry().workers.length) {
+    return fail('No worker is connected to this deployment, so there is nothing to hand this to. Connect the Claude agent, set COPILOT_JOBS_URL, or give the app a model for writing.');
   }
 
   const rl = await rateLimit(`copilot:commission-run:${auth.pid}`, PER_DAY, 86400);

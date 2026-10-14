@@ -11,6 +11,7 @@
 // So: one page that says which ones are missing. Names and booleans only, never
 // a value. Signed-in users and the cron may read it; nobody else, because the
 // list of variables a deployment lacks is a map of what to try next.
+import { registry } from '@/lib/copilot/hands';
 import { copilotDb } from '@/lib/copilot/db';
 import { NO_STORE, fail } from '@/lib/copilot/http';
 import { priceIdFor } from '@/lib/copilot/plans';
@@ -109,6 +110,7 @@ export async function GET(req: Request) {
     }
   }
 
+  const hands = registry();
   // Each entry is "the feature is on" plus, when it is not, the variable to set.
   const capabilities = {
     sessions: { ok: has('COPILOT_SESSION_SECRET'), needs: ['COPILOT_SESSION_SECRET'] },
@@ -123,6 +125,23 @@ export async function GET(req: Request) {
     push: { ok: has('COPILOT_VAPID_PUBLIC_KEY') && has('COPILOT_VAPID_PRIVATE_KEY'), needs: ['COPILOT_VAPID_PUBLIC_KEY', 'COPILOT_VAPID_PRIVATE_KEY', 'COPILOT_VAPID_SUBJECT'] },
     agent: { ok: has('COPILOT_AI_API_KEY', 'OPENAI_API_KEY', 'DEEPSEEK_API_KEY'), needs: ['COPILOT_AI_API_KEY'], note: 'Falls back to the deterministic starter brief when absent — degraded, not broken.' },
     mapsSupply: { ok: has('APIFY_API_TOKEN'), needs: ['APIFY_API_TOKEN'], note: 'Without it only the free adapters run.' },
+    // Who handed-over work goes to (workers.ts), and every registry entry that
+    // was refused — a typo there leaves a worker off the crew with nothing said
+    // anywhere else.
+    workers: {
+      ok: hands.workers.length > 0 && hands.problems.length === 0,
+      needs: ['ANTHROPIC_API_KEY + COPILOT_MANAGED_AGENT_ID + COPILOT_MANAGED_ENVIRONMENT_ID (the Claude agent)', 'or COPILOT_JOBS_URL', 'or COPILOT_AI_API_KEY (writing only)'],
+      note: hands.workers.length
+        ? `${hands.workers.map((w) => w.name).join(', ')}${hands.problems.length ? ` · left out: ${hands.problems.join('; ')}` : ''}`
+        : 'No worker: handed-over work is written down and nothing picks it up.',
+    },
+    // Only asked of a deployment with the Claude agent: without it results land
+    // with the nightly pass instead of within seconds of the agent reporting.
+    claudeWebhook: {
+      ok: !hands.workers.some((w) => w.via === 'managed') || has('ANTHROPIC_WEBHOOK_SIGNING_KEY'),
+      needs: ['ANTHROPIC_WEBHOOK_SIGNING_KEY'],
+      note: 'Register /api/copilot/workers/claude/webhook in the Claude Console for the session.* events, and set the whsec_ secret it shows.',
+    },
   };
 
   // Optional, and only when the app is what the operator sells: each new

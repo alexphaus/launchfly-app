@@ -467,6 +467,13 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     // A file shared from another app, or the Log money shortcut: kept for the
     // tab that handles it, since the URL is cleaned below before it mounts.
     // Words shared are not a file and open a sheet instead (takeText).
+    // Back from an account's own consent screen (api/copilot/accounts/callback):
+    // the sheet it was connected from, and what happened, said.
+    const account = params.get('account');
+    if (account) {
+      setStack((st) => [...st, { kind: 'accounts' }]);
+      say(account === 'connected' ? 'Connected. Work can go out from it now, each message with your OK.' : account.slice(0, 200));
+    }
     const shared = params.get('shared');
     if (shared === 'text') void takeText(params.get('why'));
     else if (shared || params.get('add')) {
@@ -709,10 +716,14 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         if (action === 'approve') say(r.started ? 'Approved. It is starting now.' : 'Approved. It runs tonight.');
         // Two different things happened, and which one decides whether the
         // worker stops asking. Saying "carrying on" for both would hide it.
+        // A third: nothing carried on, because a message from the person's own
+        // account still waits for their OK. The route says so in `note`, and
+        // "Carrying on" over a job that did not move is the calm screen
+        // invariant 13 refuses.
         if (action === 'unblock') {
-          say(answer?.trim()
+          say(r.note ?? (answer?.trim()
             ? (r.started ? 'Sent. It carries on with your answer now.' : 'Sent. It gets your answer on the next run.')
-            : 'Carrying on. It picks up tonight.');
+            : 'Carrying on. It picks up tonight.'));
         }
         // The toast reports whether the verdict LANDED, not merely that the
         // mandate closed. A worth answer that did not reach the ledger changes
@@ -724,6 +735,29 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         return { ok: true, note: r.note ?? null };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not update that' };
+      }
+    },
+    async workAction(id, body) {
+      try {
+        const r = await post<{ home?: HomeData }>(`/commissions/${encodeURIComponent(id)}`, body);
+        if (r.home) setHome(r.home);
+        if (body.action === 'confirm') say(body.allow ? 'OK given. It carries on.' : 'Told it no.');
+        if (body.action === 'repeat') say(body.every === 'off' ? 'It will not repeat.' : 'It will run again on its own.');
+        if (body.action === 'assign') say(body.worker ? 'Noted: it goes to them.' : 'It goes to whoever fits best.');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not do that' };
+      }
+    },
+    async accountAction(body) {
+      try {
+        const r = await post<{ home?: HomeData; go?: string }>('/accounts', body);
+        if (r.home) setHome(r.home);
+        if (body.action === 'token') say('Connected.');
+        if (body.action === 'remove') say('Removed. Nothing goes out from it now.');
+        return { ok: true, go: r.go };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not do that' };
       }
     },
     async runCommissionsNow() {

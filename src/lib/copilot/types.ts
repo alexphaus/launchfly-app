@@ -22,6 +22,9 @@ import type { PipelineStage } from './pipeline';
 import type { SourceYield } from './watch/yield';
 import type { WorkingEntry } from './working';
 import type { Commission, CommissionReport } from './commission';
+import type { JobKind } from './contract';
+import type { RepeatEvery } from './repeats';
+import type { HiredKind, WorkerCard } from './workers';
 import type { PlanKey, PlanStatus } from './plans';
 import type { RecentLedger } from './review';
 import type { Hunt } from './hunts';
@@ -391,6 +394,39 @@ export interface CommissionThread {
   report: CommissionReport;
   /** Counts and state, never adjectives. See commissionLine. */
   line: string;
+  /** Who has it and what waits on it (workers.ts, worklog.ts). Absent on an older fixture. */
+  work?: ThreadWork;
+}
+
+/** The work layer's view of one job, for its card and sheet. Never a URL, a secret or a session id. */
+export interface ThreadWork {
+  job: JobKind;
+  /** Who has it now: the newest hand-over that reached them. */
+  with: { key: string; name: string; kind: HiredKind } | null;
+  /** Why the newest hand-over did not get there, when it is newer than the last that did. */
+  unreached: string | null;
+  /** Who it would go to now, for a job nobody has yet: so the person sees who before they say yes. */
+  wouldGo: string | null;
+  /** Why no worker here may take it, when none may. Said on the card instead of waited out. */
+  noWorker: string | null;
+  /** The workers the person may choose for it. */
+  choosable: Array<{ key: string; name: string }>;
+  /** The one the person chose, if they did. */
+  assigned: string | null;
+  /** Calls through the person's own accounts waiting for their OK, oldest first. */
+  asks: Array<{ call: string; tool: string; account: string | null; event: string | null }>;
+  /** Its repeat, when it or the job it is a run of is set to one. */
+  repeat: { every: RepeatEvery; line: string; template: string } | null;
+  /** The dollar cap, for a job the Claude agent holds or would. */
+  cap: string | null;
+}
+
+/** The person's own accounts, connected for work that goes out under their name (accounts.ts). */
+export interface AccountsHome {
+  list: Array<{ id: string; name: string; server: string; how: 'oauth' | 'token'; at: string }>;
+  /** Whether connecting one is possible here: the Claude agent, the vault behind it. Invariant 7. */
+  canConnect: boolean;
+  unreadable: string | null;
 }
 
 export interface HomeData {
@@ -523,6 +559,18 @@ export interface HomeData {
   ai?: boolean;
   /** False when no worker is configured, so a mandate would never be picked up. */
   workerConnected: boolean;
+  /**
+   * Every worker this deployment can hand a job to, with the record the app
+   * counted for each (workers.ts). Absent on an older fixture.
+   */
+  workers?: WorkerCard[];
+  /** Workers registered wrongly and left out, said where the crew is (invariant 13). */
+  workerProblems?: string[];
+  /** Two workers being compared on the person's own jobs, each side's record. */
+  compareLine?: string | null;
+  /** Why the hand-over record could not be read, when it could not. */
+  workUnreadable?: string | null;
+  accounts?: AccountsHome;
   /**
    * Per-source record, keyed by source id: how many Moves each feed produced and
    * how many survived. Computed from copilot_moves, never stored — see

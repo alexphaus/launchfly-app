@@ -18,7 +18,7 @@
 //
 // Pure: no DB import. The rows come from HomeData; the tab renders them.
 
-import { blockedOn, lapsedOn } from './commission';
+import { blockedOn, lapsedOn, refusal } from './commission';
 import type { CaptureAsk } from './capture';
 import type { MotionRow } from './motion';
 import type { RecentOutcome } from './review';
@@ -291,7 +291,10 @@ export function needsYou(input: NeedsInput): AskRow[] {
     if (on === 'you') {
       questions.push({ key: `q:${c.id}`, kind: 'question', title: t.report.yours[0]?.summary ?? 'It stopped to ask you something', detail: c.objective, id: c.id });
     } else if (on === 'worker') {
-      fixes.push({ key: `f:${c.id}`, kind: 'fix', title: c.objective, detail: 'The worker could not finish — one tap tries it again', id: c.id });
+      // A delivery the app would not take is not a crash: say which check it failed.
+      const refused = refusal(t.report);
+      const failed = refused?.checks.find((k) => k.state === 'fail')?.line;
+      fixes.push({ key: `f:${c.id}`, kind: 'fix', title: c.objective, detail: refused ? `Its work did not pass the app's checks${failed ? `: ${failed}` : ''} — one tap tries it again` : 'The worker could not finish — one tap tries it again', id: c.id });
     }
   }
 

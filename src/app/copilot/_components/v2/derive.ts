@@ -308,6 +308,7 @@ export function derive(home: HomeData) {
     links: chain.links,
     asks: asks.length,
     proposals: home.proposals?.open.length ?? 0,
+    hired: home.workers ?? [],
     bet: lab.current
       ? {
         part: lab.current.bet.part,

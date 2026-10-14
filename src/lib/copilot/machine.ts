@@ -150,7 +150,9 @@ export function agentRoster(input: RosterInput): Agent[] {
   const faulted = live.filter((t) => blockedOn(t.commission, t.report) === 'worker');
   const asking = live.filter((t) => blockedOn(t.commission, t.report) === 'you');
   const finished = input.commissions.filter((t) => t.commission.status === 'done' || t.commission.status === 'stopped').length;
-  const researcherRole = 'Takes on work you hand over — research, comparisons, drafts';
+  // The app's side of a hand-over: it picks the hands and checks what comes back
+  // (workers.ts, contract.ts). The hands themselves are on the crew by name.
+  const researcherRole = 'Hands your projects to the right worker, and checks what comes back';
   const researcher: Agent = !input.workerConnected
     ? { key: 'researcher', name: 'Researcher', role: researcherRole, state: 'setup', line: 'No worker is connected to this server, so handed-over work is not picked up' }
     : faulted.length || broken.researcher.length

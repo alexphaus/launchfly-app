@@ -562,6 +562,35 @@ Declined: a chat with the crew (Claude has the record and is better at talk), a
 score of how automated the business is (no row measures it, invariant 2), and any
 worker that acts past `read` without the person's tap.
 
+**Then — the work layer: the app as principal, the workers as hands.** Its owner
+asked how agents should come into the app so that it gets more done as newer ones
+arrive — vertical agents, n8n, one LangGraph, a Claude or Grok connector with
+automations — for the most upside. The answer taken was that none of them is the
+architecture. The app is the principal: it holds the mandate, the ring, the
+record and the judging, and any of them is a pair of hands behind the contract
+the commission already was. Their own Projects sheet showed that contract
+leaking first. "Draft one reusable reply", a writing job, went to a browsing
+agent, which tried to send it; a guesthouse search under Research and draft
+planned "proceed toward a booking confirmation" as its own next step; and a done
+was the worker's word, because nothing in the app could tell a list whose links
+open from one whose links do not. Each is now closed in the app, for every
+worker, by the same code: writing in one model call held to the draft rules,
+every step held to the ring, every done checked for the count, the links and the
+dates before it may close. Then the hands: a registry in place of one address; a
+Claude agent per job with the app's own checks as its rubric and a dollar cap
+from the minutes granted; each worker's record counted from the app's rows,
+never its reports; the person's own accounts connected through their own consent
+screens into a vault the app never reads, each message from one its own OK; and
+research already said yes to, done again on a schedule. It passes the survival
+test on the record, not the agent: a harness runs agents better than this app
+would, and none can say which of a worker's jobs passed a check the worker did
+not write, or what it was allowed to do when it did it. Declined: a step runner
+in the app (running is what the workers are for), a standing grant to contact
+anyone (a repeat is research only, and every message from an account is asked
+for), a worker's own word on whether it finished (invariant 10, now with a check
+behind it), and a worker shown or offered before one is registered (invariant
+7). See COPILOT.md → **The work layer**.
+
 ---
 
 ## Where it actually stands
@@ -600,6 +629,12 @@ direction better than "copilot" does.
 
 ## Open, and honest
 
+- **Whether the hands deliver.** No Claude agent session and no connected
+  account has run against the live API yet; the whole work layer has only met
+  stand-ins. The count to watch is on the crew sheet: each worker's jobs done
+  out of handed, and sent back, from the app's own rows. If the agent is sent
+  back as often as the n8n flow, the comparison (`COPILOT_COMPARE`) shows it,
+  and the cheaper one should keep the work.
 - **Whether a verdict changes what gets built.** Work now says which part of the
   business is the weak link and offers the work that would move it. If the parts it
   names are the ones projects get handed over for, and the states move after, the

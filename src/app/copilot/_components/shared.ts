@@ -2,6 +2,7 @@ import type { PipelineStage } from '@/lib/copilot/pipeline';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { WorkingSection } from '@/lib/copilot/working';
 import type { Authority } from '@/lib/copilot/commission';
+import type { RepeatEvery } from '@/lib/copilot/repeats';
 import type { WorthKind } from '@/lib/copilot/worth';
 import type { AskAnswer } from '@/lib/copilot/ask';
 import type { Connection } from '@/lib/copilot/oauth';
@@ -147,7 +148,9 @@ export type SheetState =
   /** Proof: the projects — handing work over, the ones live, the ones finished. */
   | { kind: 'projects' }
   /** Engine: the crew — every worker on the engine, how each is doing and the parts it works (crew.ts). */
-  | { kind: 'crew' };
+  | { kind: 'crew' }
+  /** You: the person's own accounts, connected so work can go out under their name (lib/copilot/accounts.ts). */
+  | { kind: 'accounts' };
 
 /** The plan's experiment, as a bet sheet opens on it: the bet takes the experiment's verdict when it ends. */
 export interface BetFromExperiment {
@@ -342,6 +345,22 @@ export interface Actions {
    * only thing that can — commissionJob cannot fit in the brief route's budget.
    */
   runCommissionsNow(): Promise<{ ok: boolean; asked?: number; error?: string }>;
+  /**
+   * The work layer on one job: the person's OK or no on a call through their
+   * own account, a repeat set or cleared, or the worker they chose for it.
+   */
+  workAction(id: string, body:
+    | { action: 'confirm'; allow: boolean; call?: string; note?: string }
+    | { action: 'repeat'; every: RepeatEvery | 'off' }
+    | { action: 'assign'; worker: string | null }): Promise<{ ok: boolean; error?: string }>;
+  /**
+   * The person's own accounts: start connecting one (answers with where to go
+   * to consent), give one a token, or remove one.
+   */
+  accountAction(body:
+    | { action: 'start'; server: string; name: string }
+    | { action: 'token'; server: string; name: string; token: string }
+    | { action: 'remove'; id: string }): Promise<{ ok: boolean; error?: string; go?: string }>;
   removeWatchSource(id: string): Promise<void>;
   /**
    * Record that a deep link was opened. Fire and forget, by beacon — the page is

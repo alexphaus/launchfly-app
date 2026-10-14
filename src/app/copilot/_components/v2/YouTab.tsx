@@ -421,6 +421,11 @@ function Settings({ home, d, actions }: { home: HomeData; d: Derived; actions: A
       : { key: 'plan', l: plan, s: used, onClick: () => void actions.openBilling() },
     // Talking it over is Claude's to do; reading the record is this app's to give it (lib/copilot/mcp.ts).
     { key: 'claude', l: 'Connect to Claude', s: 'Talk it over in Claude, with your record in front of it', onClick: () => actions.openSheet({ kind: 'claude' }) },
+    // Your own accounts, for work that contacts people as you — only where the
+    // Claude agent can send through one (invariant 7).
+    ...(home.accounts?.canConnect
+      ? [{ key: 'accounts', l: 'Your accounts', s: home.accounts.list.length ? `${home.accounts.list.map((x) => x.name).join(', ')} · each message asks you first` : 'Let a job send from your own email, one OK at a time', onClick: () => actions.openSheet({ kind: 'accounts' }) }]
+      : []),
     // The way back. Two layouts over one app, and neither is the real one until one of them is the one that gets opened.
     { key: 'classic', l: 'Classic layout', s: 'The same account and data, in two tabs', href: '/lifeos' },
     { key: 'reset', l: 'Forget this device', s: `Signed in here as ${p.name}`, onClick: () => actions.openSheet({ kind: 'reset' }) },

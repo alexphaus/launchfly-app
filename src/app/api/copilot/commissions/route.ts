@@ -7,7 +7,12 @@
 // commission that arrives already approved has quietly deleted it.
 
 import { createCommission, insertLabEvent, loadCommissionEvents, loadCommissions, loadHome } from '@/lib/copilot/store';
-import { MAX_BUDGET_MINUTES, MIN_BUDGET_MINUTES, OBJECTIVE_MAX, WHY_MAX, isAuthority, normalizePlan } from '@/lib/copilot/commission';
+import { MAX_BUDGET_MINUTES, MIN_BUDGET_MINUTES, OBJECTIVE_MAX, WHY_MAX, isAuthority, normalizePlan, type Authority } from '@/lib/copilot/commission';
+import { jobKindOf } from '@/lib/copilot/contract';
+import { registry } from '@/lib/copilot/hands';
+import { canTake } from '@/lib/copilot/workers';
+import { WORK_ASSIGNED } from '@/lib/copilot/worklog';
+import { recordWork } from '@/lib/copilot/workstore';
 import { LAB_LINK } from '@/lib/copilot/lab';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
@@ -45,18 +50,33 @@ export async function POST(req: Request) {
       bet = { id: running.bet.id, linked: home!.lab!.links?.[running.bet.id] ?? [] };
       today = home!.recent.today;
     }
+    // Anything unrecognised lands on 'read', which is the level that cannot
+    // touch the world. A typo must never widen a mandate.
+    const authority: Authority = isAuthority(b.authority) ? b.authority : 'read';
+    // The worker the person chose, if they did — checked before anything is
+    // written, so a job is never created for hands that may not take it.
+    const workerKey = typeof b.worker === 'string' && b.worker ? b.worker : null;
+    if (workerKey) {
+      const w = registry().workers.find((x) => x.key === workerKey);
+      if (!w) return fail('No worker by that name is connected.');
+      if (!canTake(w, jobKindOf(objective).kind, authority)) return fail(`${w.name} does not take this kind of job.`);
+    }
     const commission = await createCommission(auth.pid, {
       objective,
       why: typeof b.why === 'string' ? b.why.trim().slice(0, WHY_MAX) : null,
       goal_id: typeof b.goal_id === 'string' ? b.goal_id : null,
-      // Anything unrecognised lands on 'read', which is the level that cannot
-      // touch the world. A typo must never widen a mandate.
-      authority: isAuthority(b.authority) ? b.authority : 'read',
+      authority,
       budget_minutes: Number.isFinite(budget) ? Math.min(MAX_BUDGET_MINUTES, Math.max(MIN_BUDGET_MINUTES, budget)) : undefined,
+      // Held to the ring by createCommission, like every other way a job is written.
       plan: normalizePlan(b.plan),
       today,
       forBet: bet?.linked,
     });
+    let unassigned: string | null = null;
+    if (commission && workerKey) {
+      try { await recordWork(auth.pid, WORK_ASSIGNED, { commission_id: commission.id, worker: workerKey }); }
+      catch (e) { unassigned = e instanceof Error ? e.message : 'it did not save'; }
+    }
     // Said, not swallowed: the project is written either way, and a tie that did
     // not save leaves it under Projects with the reason (invariant 13).
     let tied = false;
@@ -65,7 +85,7 @@ export async function POST(req: Request) {
       try { await insertLabEvent(auth.pid, LAB_LINK, { bet: bet.id, commission: commission.id }); tied = true; }
       catch (e) { untied = e instanceof Error ? e.message : 'it did not save'; }
     }
-    return json({ ok: true, commission, tied, untied, home: await loadHome(auth.pid) });
+    return json({ ok: true, commission, tied, untied, unassigned, home: await loadHome(auth.pid) });
   } catch (e) {
     return fail(e instanceof Error ? e.message : 'Could not write that commission');
   }

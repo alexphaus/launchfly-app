@@ -25,6 +25,7 @@
 // Pure: no DB import, so copilot-core.test.ts can cover the whole state
 // machine. store.ts reads and writes; jobs/commission.ts dispatches.
 
+import type { Check, JobKind } from './contract';
 import type { ArtifactKind, MoveDraft } from './moves';
 import type { Goal, Profile } from './types';
 
@@ -81,6 +82,17 @@ export const AUTHORITY: Record<Authority, AuthorityMeta> = {
   },
 };
 
+/**
+ * The gate under a ring, as this deployment can actually do it. `reach` has a
+ * different answer once the person's own account is connected and a worker
+ * sends through it one OK at a time: the gate is still there — every message
+ * waits — but it is no longer "connect your own email first".
+ */
+export function gateFor(a: Authority, ctx: { askEach: boolean }): string | null {
+  if (a === 'reach' && ctx.askEach) return 'Messages go from your own account, and each one waits for your OK in the app before it goes.';
+  return AUTHORITY[a].gate;
+}
+
 export function isAuthority(v: unknown): v is Authority {
   return typeof v === 'string' && (AUTHORITIES as readonly string[]).includes(v);
 }
@@ -114,6 +126,15 @@ export interface CommissionStep {
   do: string;
   state: StepState;
   note?: string;
+  /**
+   * The step is the person's, and why: it spends or promises (`commit`), it
+   * contacts someone and there is no account of theirs to send from (`reach`),
+   * or it goes from their own account one OK at a time (`ask`). Set by the
+   * app's ring guard (contract.ts guardPlan), never by a worker: normalizeStep
+   * drops it, so a worker cannot take a step off the person's list by omitting
+   * the field.
+   */
+  yours?: 'commit' | 'reach' | 'ask';
 }
 
 export interface Commission {
@@ -187,6 +208,12 @@ const str = (v: unknown, max: number): string | undefined =>
 export interface CommissionBrief {
   kind: 'commission';
   commission_id: string;
+  /**
+   * Writing or research (contract.ts jobKindOf). A worker that is handed a
+   * writing job is not to go looking for anything; one handed research is not to
+   * write from memory.
+   */
+  job: JobKind;
   objective: string;
   why: string | null;
   /** What it may do without asking. Anything beyond comes back as needs_you. */
@@ -221,6 +248,15 @@ export interface CommissionBrief {
    * with it.
    */
   log: BriefLogLine[];
+  /**
+   * Why its last "done" was not accepted, in the app's words: the count, the
+   * links, the dates (contract.ts verdictOf). Empty when nothing was sent back.
+   *
+   * Without it a worker whose list of five arrived as three would be handed the
+   * same brief and report the same three, because nothing in the log said what
+   * was wrong — the log is its own words, and it thought it was done.
+   */
+  checked: string[];
 }
 
 export interface BriefLogLine {
@@ -297,11 +333,12 @@ export function commissionBrief(
   profile: Profile,
   goal: Goal | null,
   resultUrl: string | null,
-  ctx: { working?: string; events?: CommissionEvent[]; now?: Date } = {},
+  ctx: { working?: string; events?: CommissionEvent[]; now?: Date; job?: JobKind; checked?: string[] } = {},
 ): CommissionBrief {
   return {
     kind: 'commission',
     commission_id: c.id,
+    job: ctx.job ?? 'research',
     objective: c.objective,
     why: c.why,
     may: c.authority,
@@ -315,6 +352,7 @@ export function commissionBrief(
     goal: goal ? { title: goal.title, target: goal.target_value, unit: goal.unit } : null,
     today: dayIn(profile.timezone, ctx.now ?? new Date()),
     log: briefLog(ctx.events ?? []),
+    checked: (ctx.checked ?? []).slice(0, 6),
   };
 }
 
@@ -438,7 +476,18 @@ export function normalizeResult(raw: unknown): CommissionResult {
  * finished, however it labelled its own run — otherwise "done" becomes the way
  * an unapproved action slips past the person who was supposed to approve it.
  */
-export function nextStatus(current: CommissionStatus, events: Array<{ kind: CommissionEventKind }>): CommissionStatus {
+export function nextStatus(
+  current: CommissionStatus,
+  events: Array<{ kind: CommissionEventKind }>,
+  /**
+   * The app's own check of a done (contract.ts verdictOf). A done that fails it
+   * is not done: it goes back to the worker with what was wrong, and on the last
+   * send-back (`final`) it stops for the person, who can accept it as it is or
+   * have it tried again. Invariant 10 already refused the worker's claimed
+   * status; this refuses its claimed delivery.
+   */
+  verdict?: { passed: boolean; final: boolean } | null,
+): CommissionStatus {
   // Terminal states are the user's to leave, not a worker's to reopen.
   if (current === 'draft' || current === 'stopped' || current === 'done') return current;
   // And so is 'blocked'. The first version fell through to 'active' here, which
@@ -450,7 +499,10 @@ export function nextStatus(current: CommissionStatus, events: Array<{ kind: Comm
   if (current === 'blocked') return 'blocked';
   if (events.some((e) => e.kind === 'needs_you')) return 'blocked';
   if (events.some((e) => e.kind === 'blocked' || e.kind === 'failed')) return 'blocked';
-  if (events.some((e) => e.kind === 'done')) return 'done';
+  if (events.some((e) => e.kind === 'done')) {
+    if (verdict && !verdict.passed) return verdict.final ? 'blocked' : 'active';
+    return 'done';
+  }
   return 'active';
 }
 
@@ -556,7 +608,27 @@ export function dueCommissions(all: Commission[], max = MAX_ACTIVE_COMMISSIONS):
 
 /* ─── What the user reads ─────────────────────────────────────────────────── */
 
+/**
+ * The app's last check of a done on this job (deliver.ts writes it as a
+ * `commission_check` event; contract.ts verdictOf computes it).
+ */
+export interface CommissionCheck {
+  at: string;
+  passed: boolean;
+  /** The last send-back: the job stopped for the person rather than going back again. */
+  final: boolean;
+  checks: Check[];
+  /** What the worker was told. */
+  sendBack: string[];
+}
+
 export interface CommissionReport {
+  /**
+   * The app's last check of a done, or null when nothing was ever checked. Its
+   * own field rather than a line in `did`: the log is the worker's words and
+   * the user's answers, and this is neither.
+   */
+  check: CommissionCheck | null;
   /** What got done. Newest first, already trimmed to what is worth reading. */
   did: CommissionEvent[];
   /**
@@ -587,11 +659,12 @@ export interface CommissionReport {
   fresh: number;
 }
 
-export function reportOf(c: Commission, events: CommissionEvent[], max = 6): CommissionReport {
+export function reportOf(c: Commission, events: CommissionEvent[], max = 6, check: CommissionCheck | null = null): CommissionReport {
   const newest = [...events].sort((a, b) => b.at.localeCompare(a.at));
   const seen = c.seen_at ? Date.parse(c.seen_at) : 0;
 
   return {
+    check,
     // 'planned' is housekeeping, not work — it says the plan changed, which the
     // plan itself already shows. Leaving it in buries the two lines that matter.
     did: newest.filter((e) => e.kind === 'worked' || e.kind === 'found' || e.kind === 'done').slice(0, max),
@@ -657,10 +730,26 @@ export type BlockedOn = 'you' | 'worker';
  * recorded at all falls to 'you': there is no reason to show, and the user
  * should always be able to clear it.
  */
+/**
+ * The app's check that stopped the job, when that is the newest reason it is
+ * the worker's: a delivery refused after the last send-back. Nothing for the
+ * person to answer — the list is short or its links are dead — so it is the
+ * worker's, like a breakage: a retry, or the person accepting it as it is.
+ * Null when a breakage since is the newer reason, so the screen says that one.
+ */
+export function refusal(r: Pick<CommissionReport, 'check' | 'stopped'>): CommissionCheck | null {
+  const k = r.check;
+  if (!k || k.passed || !k.final) return null;
+  const f = r.stopped[0];
+  return !f || k.at >= f.at ? k : null;
+}
+
 export function blockedOn(c: Pick<Commission, 'status'>, r: CommissionReport): BlockedOn | null {
   if (c.status !== 'blocked') return null;
   const ask = r.yours[0];
   const fault = r.stopped[0];
+  const refused = refusal(r);
+  if (refused && (!ask || refused.at >= ask.at)) return 'worker';
   if (ask && fault) return ask.at >= fault.at ? 'you' : 'worker';
   return fault ? 'worker' : 'you';
 }
@@ -700,6 +789,8 @@ export function commissionTerms(c: Commission): string {
   return `${AUTHORITY[c.authority].label} · up to ${c.budget_minutes} min`;
 }
 
+const firstFailure = (k: CommissionCheck) => k.checks.find((x) => x.state === 'fail')?.line ?? 'it did not pass';
+
 /**
  * The line on the card.
  *
@@ -714,9 +805,15 @@ export function commissionLine(c: Commission, r: CommissionReport): string {
   // A mandate the worker could not finish says so plainly and on its own.
   // Pairing it with "0 of 4 done" reports a shortfall the user did not cause,
   // in the same breath as the reason they did not cause it.
-  if (blockedOn(c, r) === 'worker') return 'The worker could not finish — it can be tried again';
+  if (blockedOn(c, r) === 'worker') {
+    const refused = refusal(r);
+    return refused ? `Its work did not pass the app's checks: ${firstFailure(refused)}` : 'The worker could not finish — it can be tried again';
+  }
 
   const parts: string[] = [];
+  // Sent back and not yet re-delivered: the reason first, because it is why
+  // nothing is finished although the worker said it was.
+  if (c.status === 'active' && r.check && !r.check.passed) parts.push(`Sent back: ${firstFailure(r.check)}`);
   // Only once something has actually moved. "0 of 4 done" on a mandate that has
   // never run is a progress report about no progress.
   if (r.progress.done > 0) parts.push(`${r.progress.done} of ${r.progress.total} done`);
@@ -725,7 +822,8 @@ export function commissionLine(c: Commission, r: CommissionReport): string {
   // "1 needs you" for the rest of its life — including immediately after the
   // user answered, which made answering look like it had done nothing.
   if (c.status === 'blocked' && r.yours.length) parts.push(`${r.yours.length} need${r.yours.length === 1 ? 's' : ''} you`);
-  else if (!r.did.length) parts.push('Nothing back yet');
+  // Not after a send-back: something did come back, and it was not good enough.
+  else if (!r.did.length && !(c.status === 'active' && r.check && !r.check.passed)) parts.push('Nothing back yet');
   return parts.join(' · ');
 }
 

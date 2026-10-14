@@ -11,7 +11,10 @@ import { WATCH_INTENTS, startersFor, type WatchIntent } from '@/lib/copilot/watc
 import { pruneSuggestions, yieldLine } from '@/lib/copilot/watch/yield';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import { BODY_MAX, SECTION, SECTIONS, type WorkingSection } from '@/lib/copilot/working';
-import { AUTHORITIES, AUTHORITY, blockedOn, type Authority } from '@/lib/copilot/commission';
+import { AUTHORITIES, AUTHORITY, MAX_ACTIVE_COMMISSIONS, blockedOn, gateFor, refusal, type Authority } from '@/lib/copilot/commission';
+import { YOURS_TAG, jobKindOf } from '@/lib/copilot/contract';
+import { takerOf } from '@/lib/copilot/workers';
+import { REPEAT_EVERY, REPEAT_LABEL, type RepeatEvery } from '@/lib/copilot/repeats';
 import { WORTH, WORTH_KINDS, WORTH_NOTE_MAX, type WorthKind } from '@/lib/copilot/worth';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
@@ -30,6 +33,7 @@ import { BetSheet, IntroSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
 import { NoteSheet, ToldChooser, ToldLine } from './v2/TellSheets';
 import type { ToldMeta, ToldOffer } from '@/lib/copilot/tell';
 import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, CrewSheet, FoundBySheet, HistorySheet, PivotSheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
+import { AccountsSheet } from './v2/AccountsSheet';
 import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
 import { dayLabel } from '@/lib/copilot/money/ledger';
 
@@ -48,7 +52,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'capacity': return <CapacitySheet current={home.profile.capacity} onPick={actions.setCapacity} />;
     case 'action': return <ActionSheet home={home} id={sheet.id} actions={actions} />;
     case 'opp': return <OppSheet home={home} id={sheet.id} actions={actions} />;
-    case 'goal': return <GoalSheet goal={home.goals.find((g) => g.id === sheet.id)} actions={actions} />;
+    case 'goal': return <GoalSheet goal={home.goals.find((g) => g.id === sheet.id)} actions={actions} home={home} />;
     case 'reset': return <ResetSheet actions={actions} />;
     case 'finance': return <RunwaySheet home={home} actions={actions} />;
     case 'moneyin': return <MoneyInSheet home={home} actions={actions} />;
@@ -87,6 +91,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'assets': return <AssetsSheet home={home} actions={actions} />;
     case 'projects': return <ProjectsSheet home={home} actions={actions} />;
     case 'crew': return <CrewSheet home={home} actions={actions} briefing={briefing} />;
+    case 'accounts': return <AccountsSheet home={home} actions={actions} />;
   }
 }
 
@@ -531,7 +536,7 @@ function OpeningSheet({ home, term, actions }: { home: HomeData; term: string; a
 
 const METRICS: Array<{ v: GoalMetric; l: string }> = [{ v: 'currency', l: 'Money' }, { v: 'number', l: 'Count' }, { v: 'percent', l: 'Percent' }, { v: 'none', l: 'Just a goal' }];
 
-function GoalSheet({ goal, actions }: { goal: Goal | undefined; actions: Actions }) {
+function GoalSheet({ goal, actions, home }: { goal: Goal | undefined; actions: Actions; home?: HomeData }) {
   const [title, setTitle] = useState(goal?.title ?? '');
   const [metric, setMetric] = useState<GoalMetric>(goal?.metric ?? 'currency');
   const [unit, setUnit] = useState(goal?.unit ?? (goal ? '' : '$'));
@@ -584,7 +589,7 @@ function GoalSheet({ goal, actions }: { goal: Goal | undefined; actions: Actions
           never show — goal, the bet that moves it, the work, today's move —
           starts at the link that makes it true rather than at a form floating
           on its own. */}
-      {goal && <HandoverForm goalId={goal.id} goalTitle={goal.title} actions={actions} embedded />}
+      {goal && <HandoverForm goalId={goal.id} goalTitle={goal.title} actions={actions} embedded home={home} />}
     </>
   );
 }
@@ -620,7 +625,7 @@ export const OBJECTIVE_EXAMPLES = [
 ];
 
 function HandoverForm({
-  goalId, goalTitle, goals, actions, onDone, embedded = false,
+  goalId, goalTitle, goals, actions, onDone, embedded = false, home,
 }: {
   goalId?: string;
   goalTitle?: string;
@@ -630,6 +635,8 @@ function HandoverForm({
   onDone?: () => void;
   /** Inside the goal sheet it is a section that opens; on its own it is the sheet. */
   embedded?: boolean;
+  /** For who would take it and what reach means here; absent, the form says neither. */
+  home?: HomeData;
 }) {
   const [open, setOpen] = useState(!embedded);
   const [objective, setObjective] = useState('');
@@ -685,6 +692,8 @@ function HandoverForm({
           onChange={(e) => { setObjective(e.target.value); setError(null); }}
           placeholder={OBJECTIVE_EXAMPLES[0]}
         />
+        {/* Who would take it, said while it is typed (contract.ts jobKindOf, workers.ts takerOf). */}
+        {home?.workers && objective.trim().length > 8 && <p className="cp-help">{takerLine(home, objective, authority)}</p>}
         {/* A worker is only as specific as its brief. */}
         {!objective.trim() && (
           <div className="cp-chips" style={{ marginTop: 8 }}>
@@ -725,7 +734,7 @@ function HandoverForm({
             <button key={a} className={`cp-fchip ${authority === a ? 'active' : ''}`} onClick={() => setAuthority(a)}>{AUTHORITY[a].label}</button>
           ))}
         </div>
-        <p className="cp-help">{AUTHORITY[authority].blurb} {AUTHORITY[authority].gate ?? ''}</p>
+        <p className="cp-help">{AUTHORITY[authority].blurb} {gateFor(authority, { askEach: !!home?.accounts?.canConnect && (home?.accounts?.list.length ?? 0) > 0 }) ?? ''}</p>
       </div>
 
       {error && <div className="cp-note">{error}</div>}
@@ -738,8 +747,17 @@ function HandoverForm({
   );
 }
 
+/** What kind of job the objective reads as, and who here would take it at this ring. */
+function takerLine(home: HomeData, objective: string, authority: Authority): string {
+  const job = jobKindOf(objective).kind;
+  const taker = takerOf(home.workers ?? [], job, authority);
+  if (!taker) return `Reads as ${job === 'write' ? 'writing' : 'research'} — nothing here takes that at "${AUTHORITY[authority].label}".`;
+  if (taker.agent === 'writer') return 'Reads as writing: the app writes it itself, in your words.';
+  return `Reads as ${job === 'write' ? 'writing' : 'research'}: it goes to ${taker.name}.`;
+}
+
 function HandoverSheet({ home, actions }: { home: HomeData; actions: Actions }) {
-  return <HandoverForm goals={home.goals} actions={actions} onDone={() => actions.closeSheet()} />;
+  return <HandoverForm goals={home.goals} actions={actions} onDone={() => actions.closeSheet()} home={home} />;
 }
 
 /* ─── You: finance, targeting, account ──────────────────────────────────── */
@@ -1366,6 +1384,9 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState('');
+  // Why not, on a call through the person's account: its own field, because a
+  // question and a call can both be waiting and each has its own answer.
+  const [callNote, setCallNote] = useState('');
   // Which close is being made, or null while the buttons are still just buttons.
   // Closing is a two-step act now: the second step is the only moment this app
   // ever gets to ask what a piece of work was actually worth, and it is also the
@@ -1402,10 +1423,24 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   // the sentence "the web-search tool returned an internal request error".
   const waiting = blockedOn(c, thread.report);
   const ask = waiting === 'you' ? thread.report.yours[0] : null;
-  const fault = waiting === 'worker' ? thread.report.stopped[0] : null;
+  // The delivery the app refused, when that is why it stopped; else a breakage.
+  const refused = waiting === 'worker' ? refusal(thread.report) : null;
+  const fault = waiting === 'worker' && !refused ? thread.report.stopped[0] : null;
+  const work = thread.work;
+  // A call through the person's own account waiting for their OK: an OK or a
+  // no, with what it would send in front of them — never a text box. Its own
+  // words are the question it raised (matched by id), never whichever question
+  // happens to be newest: an OK must be to the message it sends.
+  const call = c.status === 'blocked' ? work?.asks[0] ?? null : null;
+  const callEvent = call ? thread.report.yours.find((e) => e.id === call.event) ?? null : null;
+  // An ordinary question, when there is one besides the call.
+  const question = ask && ask.id !== call?.event ? ask : null;
+  const check = thread.report.check;
+  const askEach = !!home.accounts?.canConnect && (home.accounts?.list.length ?? 0) > 0;
+  const gate = gateFor(c.authority, { askEach });
   // Rendered beside the field that answers it, and therefore left out of the log
   // below — the same sentence in two places is what this screen keeps deleting.
-  const olderAsks = ask ? thread.report.yours.slice(1) : thread.report.yours;
+  const olderAsks = (ask ? thread.report.yours.slice(1) : thread.report.yours).filter((e) => e.id !== callEvent?.id);
   const olderFaults = fault ? thread.report.stopped.slice(1) : thread.report.stopped;
 
   // Unblock, then hand it straight back. A stopped job is not in dueCommissions,
@@ -1418,6 +1453,26 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
     const run = await actions.runCommissionsNow();
     setBusy(false);
     if (!run.ok) setError(run.error ?? 'Restarted, but it could not be handed over just now');
+  };
+
+  const confirm = async (allow: boolean) => {
+    setBusy(true); setError(null);
+    const r = await actions.workAction(id, { action: 'confirm', allow, call: call?.call, note: allow ? undefined : callNote.trim() || undefined });
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? 'Could not pass that on');
+    setCallNote('');
+  };
+  const setRepeat = async (every: RepeatEvery | 'off') => {
+    setBusy(true); setError(null);
+    const r = await actions.workAction(id, { action: 'repeat', every });
+    setBusy(false);
+    if (!r.ok) setError(r.error ?? 'Could not set that');
+  };
+  const assign = async (worker: string | null) => {
+    setBusy(true); setError(null);
+    const r = await actions.workAction(id, { action: 'assign', worker });
+    setBusy(false);
+    if (!r.ok) setError(r.error ?? 'Could not set that');
   };
 
   const act = async (action: 'approve' | 'unblock' | 'stop' | 'done', answer?: string) => {
@@ -1473,17 +1528,38 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
       {/* What is being authorised, as one block rather than four grey lines. This
           is the thing the user is actually saying yes to. */}
       <div className="cp-grant">
-        <div className="t">{meta.label} · up to {c.budget_minutes} min</div>
+        <div className="t">{meta.label} · up to {c.budget_minutes} min{work?.cap ? ` · ${work.cap} cap` : ''}</div>
         <div className="d">{meta.blurb}</div>
+        {/* Who has it, or who it would go to: the person sees the hands before
+            they say yes, and the record of the ones that had it (workers.ts). */}
+        {work?.with && c.status !== 'done' && c.status !== 'stopped' && <div className="cp-wk-with">With {work.with.name}</div>}
+        {work && !work.with && work.wouldGo && <div className="cp-wk-with">Goes to {work.wouldGo} when it starts</div>}
         {/* Why it will not act by itself, in the same words every time. A
             capability the app hedges about is one nobody can plan around. */}
-        {meta.gate && <div className="gate">{meta.gate}</div>}
+        {gate && <div className="gate">{gate}</div>}
         {/* An idle contractor and an absent one look identical from the card,
             and only one of them is worth waiting for. */}
         {!home.workerConnected && (
-          <div className="gate">No worker is connected to this deployment, so nothing will pick this up. Set <code>COPILOT_JOBS_URL</code>.</div>
+          <div className="gate">No worker is connected to this deployment, so nothing will pick this up. Connect the Claude agent, set <code>COPILOT_JOBS_URL</code>, or give the app a model for writing.</div>
         )}
+        {home.workerConnected && work?.noWorker && <div className="gate">{work.noWorker}</div>}
+        {work?.unreached && <div className="gate">Not reached the last time it was handed over: {work.unreached}</div>}
       </div>
+
+      {/* Who does it, when there is more than one that may: the person's pick
+          wins over the record (workers.ts pickWorker). Only before it is
+          finished, and only the hands that may take this kind of job. */}
+      {work && work.choosable.length > 1 && (c.status === 'draft' || c.status === 'active' || c.status === 'blocked') && (
+        <div className="cp-field">
+          <label className="cp-label">Who does it</label>
+          <div className="cp-chips">
+            <button className={`cp-fchip ${!work.assigned ? 'active' : ''}`} disabled={busy} onClick={() => void assign(null)}>Best fit</button>
+            {work.choosable.map((w) => (
+              <button key={w.key} className={`cp-fchip ${work.assigned === w.key ? 'active' : ''}`} disabled={busy} onClick={() => void assign(w.key)}>{w.name}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {c.status === 'draft' && (
         <>
@@ -1509,10 +1585,31 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
           own question out of the window — and gating on `ask` then rendered
           neither block, leaving a blocked job with no way to carry on at all.
           The question is shown when there is one; the way forward always is. */}
-      {waiting === 'you' && (
+      {/* A call through the person's own account. The message is written out
+          in full above the buttons: an OK is to what it says, not to a summary
+          of it, and a no can say why so the agent can change it. */}
+      {call && (
+        <>
+          <div className="cp-section"><span className="lead">Waiting for your OK</span>{(work?.asks.length ?? 0) > 1 && <span className="count">1 of {work!.asks.length}</span>}</div>
+          <p className="desc">{callEvent?.summary ?? `OK to ${call.tool} from ${call.account ?? 'your account'}?`}</p>
+          {callEvent?.artifact && <Artifact value={callEvent.artifact.value} />}
+          <input
+            className="cp-input sm" style={{ marginTop: 10 }} maxLength={300} value={callNote}
+            onChange={(e) => { setCallNote(e.target.value); setError(null); }}
+            placeholder="If no, why — it can change it and ask again"
+          />
+          <div className="cp-btn-row" style={{ marginTop: 10 }}>
+            <button className="cp-btn primary" disabled={busy} onClick={() => void confirm(true)}>{busy ? 'Sending…' : 'OK, go ahead'}</button>
+            <button className="cp-btn ghost" disabled={busy} onClick={() => void confirm(false)}>No</button>
+          </div>
+          <p className="cp-help">It goes from {call.account ?? 'your account'} exactly as written. Each message asks you again.</p>
+        </>
+      )}
+
+      {waiting === 'you' && (!call || question) && (
         <>
           <div className="cp-section"><span className="lead">Your answer</span></div>
-          {ask && <p className="desc">{ask.summary}</p>}
+          {question && <p className="desc">{question.summary}</p>}
           <textarea
             id={`cp-answer-${id}`} className="cp-input sm" rows={3} maxLength={300}
             value={answer} onChange={(e) => { setAnswer(e.target.value); setError(null); }}
@@ -1523,17 +1620,24 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
               blue — the strongest affordance on the screen given to the outcome
               you least want. It earns the emphasis once there is something to
               send. */}
-          <button
-            className={`cp-btn block ${answer.trim() ? 'primary' : 'ghost'}`}
-            style={{ marginTop: 10 }} disabled={busy}
-            onClick={() => void act('unblock', answer)}
-          >
-            {busy ? 'Sending…' : answer.trim() ? 'Send this and carry on' : 'Carry on without an answer'}
-          </button>
+          {/* While a call waits for its OK nothing here can carry the job on:
+              an answer is kept for the agent's next hand-over, and an empty
+              "carry on" would be a button that does nothing. */}
+          {(!call || answer.trim()) && (
+            <button
+              className={`cp-btn block ${answer.trim() ? 'primary' : 'ghost'}`}
+              style={{ marginTop: 10 }} disabled={busy}
+              onClick={() => void act('unblock', answer)}
+            >
+              {busy ? 'Sending…' : call ? 'Keep this for it' : answer.trim() ? 'Send this and carry on' : 'Carry on without an answer'}
+            </button>
+          )}
           <p className="cp-help">
-            {answer.trim()
-              ? 'It goes to the worker with your answer, so the question is not asked again.'
-              : 'Not every question needs typing — but without one it has nothing new to go on and may ask again.'}
+            {call
+              ? 'It carries on once you answer the OK above. Your answer goes to it with the next hand-over.'
+              : answer.trim()
+                ? 'It goes to the worker with your answer, so the question is not asked again.'
+                : 'Not every question needs typing — but without one it has nothing new to go on and may ask again.'}
           </p>
         </>
       )}
@@ -1557,18 +1661,66 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
         </>
       )}
 
+      {/* The app's own check of the last done: what was asked for, against what
+          came back (contract.ts verdictOf). A refused delivery has two ways
+          on — another go, or the person taking it as it is — and both are
+          theirs: the check decides what done is, not what is good enough. */}
+      {check && (c.status !== 'done' || !check.passed) && (
+        <>
+          <div className="cp-section">
+            <span className="lead">Checked by the app</span>
+            <span className="count">{check.passed ? 'Passed' : refused ? 'Not accepted' : c.status === 'active' ? 'Sent back' : 'Did not pass'}</span>
+          </div>
+          {check.checks.map((k) => (
+            <div key={k.key} className={`cp-wk-check ${k.state}`}>
+              <span className="m" aria-hidden>{k.state === 'pass' ? '✓' : k.state === 'fail' ? '✕' : '–'}</span>
+              <span className="l">{k.state === 'fail' ? 'Failed: ' : k.state === 'unknown' ? 'Not checked: ' : ''}{k.line}</span>
+            </div>
+          ))}
+          {refused ? (
+            <>
+              <div className="cp-btn-row" style={{ marginTop: 10 }}>
+                <button className="cp-btn primary" disabled={busy} onClick={() => void retry()}>{busy ? 'Trying again…' : 'Try it again'}</button>
+                <button className="cp-btn ghost" disabled={busy} onClick={() => { setClosing('done'); setWorth(null); }}>Take it as it is</button>
+              </div>
+              <p className="cp-help">It was sent back twice with what to fix. Another go starts the count again.</p>
+            </>
+          ) : !check.passed && c.status === 'active' ? (
+            <p className="cp-help">Sent back{work?.with ? ` to ${work.with.name}` : ''} with exactly what to fix. It reports again when it has.</p>
+          ) : null}
+        </>
+      )}
+
       {c.plan.length > 0 && (
         <>
           <div className="cp-section"><span className="lead">The plan</span><span className="count">{thread.report.progress.done} of {thread.report.progress.total} done</span></div>
           {c.plan.map((s) => (
-            <div key={s.n} className={`cp-step ${s.state}`}>
+            <div key={s.n} className={`cp-step ${s.state}${s.yours ? ' yours' : ''}`}>
               <span className="n">{s.n}</span>
               <div>
                 <div className="d">{s.do}</div>
+                {/* A step this job cannot do by itself, said as the person's —
+                    the ring guard's mark (contract.ts guardPlan), never a worker's. */}
+                {s.yours && <span className={`cp-wk-yours ${s.yours}`}>{YOURS_TAG[s.yours]}</span>}
                 {s.note && <div className="nt">{s.note}</div>}
               </div>
             </div>
           ))}
+        </>
+      )}
+
+      {/* Again, on its own: a standing yes to a research job already said yes to
+          once (repeats.ts). Never for one that contacts people or spends. */}
+      {c.authority === 'read' && c.status !== 'draft' && c.status !== 'stopped' && (
+        <>
+          <div className="cp-section"><span className="lead">Do it again</span></div>
+          <div className="cp-chips">
+            <button className={`cp-fchip ${!work?.repeat ? 'active' : ''}`} disabled={busy} onClick={() => void setRepeat('off')}>Just once</button>
+            {REPEAT_EVERY.map((e) => (
+              <button key={e} className={`cp-fchip ${work?.repeat?.every === e ? 'active' : ''}`} disabled={busy} onClick={() => void setRepeat(e)}>{REPEAT_LABEL[e]}</button>
+            ))}
+          </div>
+          <p className="cp-help">{work?.repeat ? `${work.repeat.line}. Each run is its own job, checked like this one, inside your ${MAX_ACTIVE_COMMISSIONS} on the go.` : 'A fresh run on its own schedule, approved by this one yes. Research and drafts only.'}</p>
         </>
       )}
 

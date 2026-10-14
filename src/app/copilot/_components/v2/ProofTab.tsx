@@ -342,7 +342,8 @@ function EngineHero({ home, d, actions, part, pick, changes }: {
           );
         })}
       </ol>
-      <button className="cp2-er-crew" onClick={() => actions.openSheet({ kind: 'crew' })} aria-label={`Your crew: ${crewLine.line}`}>
+      {/* Past seven faces the line goes under them: beside ten, it was a column one word wide. */}
+      <button className={`cp2-er-crew${crew.length > 7 ? ' wide' : ''}`} onClick={() => actions.openSheet({ kind: 'crew' })} aria-label={`Your crew: ${crewLine.line}`}>
         <span className="cp2-er-faces" aria-hidden>
           {crew.map((w) => <span key={w.key} className={`cp2-er-face ${w.kind} ${w.state}`}><WorkerGlyph w={w} /><i /></span>)}
         </span>

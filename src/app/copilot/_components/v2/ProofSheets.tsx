@@ -104,7 +104,11 @@ export function ChainSheet({ home, actions }: { home: HomeData; actions: Actions
 export function CrewSheet({ home, actions, briefing }: { home: HomeData; actions: Actions; briefing: boolean }) {
   const d = useDerived(home);
   const { crew, crewLine } = d.proof;
+  // The hands from the registry, by their crew key: what each takes, for its row.
+  const hired = new Map((home.workers ?? []).map((c) => [`hired:${c.key}`, c]));
   const go = (w: Worker): (() => void) | null => {
+    // A worker a job can be handed to: where its jobs are.
+    if (hired.has(w.key)) return () => actions.openSheet({ kind: 'projects' });
     // Claude's proposals, when it left some; else where it is connected.
     if (w.kind === 'model') return () => actions.openSheet({ kind: home.proposals?.open.length ? 'proposals' : 'claude' });
     switch (w.agent) {
@@ -138,6 +142,7 @@ export function CrewSheet({ home, actions, briefing }: { home: HomeData; actions
                     <span className={`cp2-er-wstate ${w.state}`}><i />{WORKER_STATE_LABEL[w.state]}</span>
                   </span>
                   <span className="s">{w.role}</span>
+                  {hired.get(w.key) && <span className="cp2-er-wtakes">Takes {hired.get(w.key)!.takes.charAt(0).toLowerCase()}{hired.get(w.key)!.takes.slice(1)}</span>}
                   <span className="cp2-agent-line">{w.line}</span>
                   {w.parts.length > 0 && <span className="cp2-er-wparts">Works on {w.parts.map((k) => LINK_LABEL[k].toLowerCase()).join(', ')}</span>}
                 </span>
@@ -157,6 +162,12 @@ export function CrewSheet({ home, actions, briefing }: { home: HomeData; actions
           })}
         </div>
       </div>
+      {/* Two workers on the same kind of job, split between them, each side's
+          record from the app's own count (workers.ts compareLine). */}
+      {home.compareLine && <p className="cp-help">Comparing on your own jobs — {home.compareLine}.</p>}
+      {/* A worker registered wrongly is left out, and said (invariant 13). */}
+      {(home.workerProblems ?? []).length > 0 && <div className="cp-note">Left off the crew: {home.workerProblems!.join(' · ')}</div>}
+      {home.workUnreadable && <div className="cp-note">The record of hand-overs could not be read just now, so these counts may be short: {home.workUnreadable}</div>}
       {home.workerConnected && (
         <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'handover' })}>Give the crew a job</button>
       )}
@@ -821,7 +832,7 @@ export function ProjectsSheet({ home, actions }: { home: HomeData; actions: Acti
   return (
     <>
       <h3>Projects</h3>
-      <p className="desc">Hand over anything you would otherwise do yourself. It researches, compares and drafts while you do something else, reports every step, and never contacts anyone or spends anything.</p>
+      <p className="desc">Hand over anything you would otherwise do yourself. It researches, compares and drafts while you do something else, reports every step, and never contacts anyone as you without your OK, or spends anything.</p>
       <div className="cp-sheet-embed cp2-pf-sheetlist">
         <Composer home={home} d={d} actions={actions} brief={brief} full={full} />
         {live.length > 0 && (

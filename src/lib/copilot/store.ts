@@ -45,6 +45,12 @@ import {
   type CommissionStatus, type CommissionStep,
 } from './commission';
 import type { CommissionThread } from './types';
+import { registry } from './hands';
+import { guardPlan } from './contract';
+import { threadWorkOf } from './threadwork';
+import { compareLine, recordsOf, workerCards } from './workers';
+import { sentBackIds } from './worklog';
+import { loadAccounts, loadRepeats, loadWork, loadWorth } from './workstore';
 import type { SentMessage } from './silence';
 import type { OpenedDraft, UnresolvedReply } from './capture';
 import type { Obligation, ObligationDirection, ObligationStatus } from './obligations';
@@ -408,7 +414,11 @@ export async function setMoveStatus(profileId: string, id: string, status: 'done
   // Only on 'done': dismissing the card is not an answer.
   if (status === 'done' && row.job === 'commission') {
     const commissionId = commissionIdFromMove(row.external_id);
-    if (commissionId) await unblockCommission(profileId, commissionId).catch(() => {});
+    // Not while a call through the person's own account waits for its OK: that
+    // is answered on the job, where the message is written out, and clearing the
+    // job here would leave the agent's session waiting on an OK nobody can give.
+    const calls = commissionId ? (await loadWork(profileId, [commissionId])).log.asks.get(commissionId)?.length ?? 0 : 0;
+    if (commissionId && !calls) await unblockCommission(profileId, commissionId).catch(() => {});
   }
 }
 
@@ -887,10 +897,23 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   );
   const eventsByCommission = new Map<string, CommissionEvent[]>();
   for (const e of commissionEvents) eventsByCommission.set(e.commission_id, [...(eventsByCommission.get(e.commission_id) ?? []), e]);
+  // Who has each job, what the app checked, what waits on the person, what
+  // repeats (workers.ts, worklog.ts, repeats.ts). Each read degrades on its own
+  // and says so: an empty hand-over log is also what a new account looks like.
+  const hands = registry();
+  const commissionIds = commissionRows.map((c) => c.id);
+  const [work, acct, reps, worthBy] = await Promise.all([
+    loadWork(profileId, commissionIds), loadAccounts(profileId), loadRepeats(profileId), loadWorth(profileId, commissionIds),
+  ]);
+  const records = recordsOf({ dispatches: work.log.dispatches, commissions: commissionRows, sentBack: sentBackIds(work.log), worth: worthBy });
+  const createdOf = (id: string) => commissionRows.find((c) => c.id === id)?.created_at ?? null;
   const commissionThreads: CommissionThread[] = commissionRows.map((c) => {
     const events = eventsByCommission.get(c.id) ?? [];
-    const report = reportOf(c, events);
-    return { commission: c, report, line: commissionLine(c, report) };
+    const report = reportOf(c, events, 6, work.log.checks.get(c.id)?.[0] ?? null);
+    return {
+      commission: c, report, line: commissionLine(c, report),
+      work: threadWorkOf(c, { registry: hands, log: work.log, records, repeats: reps, createdOf, env: process.env }),
+    };
   });
 
   // Anything in the send queue is rendered there, not in the plan too.
@@ -1152,6 +1175,17 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
      * an absent one. The sheet says which.
      */
     workerConnected: jobKeys.includes('commission'),
+    workers: workerCards(hands, records),
+    workerProblems: hands.problems,
+    compareLine: compareLine(hands, records),
+    workUnreadable: work.unreadable ?? reps.unreadable,
+    accounts: {
+      list: acct.accounts.map((a) => ({ id: a.id, name: a.name, server: a.server, how: a.how, at: a.at })),
+      // Only where something can use one: the Claude agent is the worker that
+      // sends through an account (invariant 7).
+      canConnect: hands.workers.some((w) => w.via === 'managed'),
+      unreadable: acct.unreadable,
+    },
     /**
      * What each source has actually produced, keyed by source id. An object
      * rather than a Map because this crosses the wire as JSON, and a Map
@@ -2607,7 +2641,10 @@ export async function createCommission(profileId: string, input: {
     // act — the approve button is the entire point of this layer, and a
     // commission that begins approved has quietly removed it.
     status: 'draft',
-    plan: input.plan ?? [],
+    // Held to the ring however it was written — by the person, a proposal, a
+    // plan step or a repeat: a step this mandate cannot do by itself is drawn as
+    // the person's from the start (contract.ts guardPlan).
+    plan: guardPlan(input.plan ?? [], input.authority ?? 'read'),
   }).select(COMMISSION_COLS).maybeSingle();
   if (error) throw error;
   await logEvent(profileId, 'commission_created', { objective: input.objective.slice(0, 80), authority: input.authority ?? 'read' });
@@ -2681,6 +2718,19 @@ export async function unblockCommission(profileId: string, id: string, answer?: 
 }
 
 /**
+ * The person's reply on a job, written without clearing the job: for a job that
+ * has asked more than one thing at once (two messages waiting for an OK), where
+ * answering one must not start it again while the other still waits. Throws,
+ * for the same reason unblockCommission refuses to move without it.
+ */
+export async function insertAnswered(profileId: string, id: string, answer: string): Promise<void> {
+  const { error } = await copilotDb().from('copilot_commission_events').insert({
+    commission_id: id, profile_id: profileId, kind: 'answered', step: null, summary: answer.trim().slice(0, SUMMARY_MAX), artifact: null,
+  });
+  if (error) throw new Error('Could not record your answer. The 20260919 migration may not be applied yet.');
+}
+
+/**
  * Close a mandate, and record what it turned out to be worth.
  *
  * Two writes, in this order, and the order is the whole design.
@@ -2751,6 +2801,15 @@ export async function closeCommission(
   }
 }
 
+/**
+ * A job handed over with nothing back yet — to the Claude agent, whose results
+ * arrive later through its session. Moving last_run_at keeps dueCommissions
+ * handing the night's jobs out oldest-first rather than the same one first.
+ */
+export async function touchCommissionRun(profileId: string, id: string): Promise<void> {
+  await copilotDb().from('copilot_commissions').update({ last_run_at: new Date().toISOString() }).eq('profile_id', profileId).eq('id', id);
+}
+
 /** Mark the thread read, so "since you last looked" means something. */
 export async function markCommissionSeen(profileId: string, id: string): Promise<void> {
   await copilotDb().from('copilot_commissions').update({ seen_at: new Date().toISOString() })
@@ -2769,6 +2828,8 @@ export async function recordCommissionWork(
   profileId: string,
   commission: Commission,
   result: CommissionResult,
+  /** The app's check of a done in this result (deliver.ts acceptWork). A done that failed it does not close the job. */
+  verdict: { passed: boolean; final: boolean } | null = null,
 ): Promise<{ status: CommissionStatus; events: CommissionEvent[] }> {
   const db = copilotDb();
   // Insert and select back, so the caller gets the rows WITH their real ids.
@@ -2791,7 +2852,7 @@ export async function recordCommissionWork(
     else written = (data ?? []) as unknown as CommissionEvent[];
   }
 
-  const status = nextStatus(commission.status, result.events);
+  const status = nextStatus(commission.status, result.events, verdict);
   const patch: Record<string, unknown> = { last_run_at: new Date().toISOString(), status };
   if (result.plan) patch.plan = result.plan;
   if (status === 'done') {

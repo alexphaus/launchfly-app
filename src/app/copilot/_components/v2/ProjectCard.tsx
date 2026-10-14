@@ -5,8 +5,10 @@
 // the projects tied to it on its own card (ProofTab.tsx).
 import { useState } from 'react';
 import { suggestedAsks, type LinkMove } from '@/lib/copilot/business';
-import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, blockedOn, commissionChip, lapsedOn } from '@/lib/copilot/commission';
+import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, blockedOn, commissionChip, lapsedOn, refusal } from '@/lib/copilot/commission';
+import { jobKindOf, verdictLine } from '@/lib/copilot/contract';
 import { dayWords } from '@/lib/copilot/lab';
+import { takerOf } from '@/lib/copilot/workers';
 import type { CommissionThread, HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
@@ -57,6 +59,9 @@ export function Composer({ home, d, actions, brief, full }: { home: HomeData; d:
         placeholder="What should it build, find or work out?"
         onChange={(e) => { setText(e.target.value); setNote(null); if (picked && e.target.value !== picked.ask) setPicked(null); }}
       />
+      {/* Who would take it, said while it is typed: writing stays in the app,
+          research goes to hands that read the web (contract.ts jobKindOf). */}
+      {text.trim().length > 8 && home.workers && <p className="cp-help cp2-bz-who">{whoTakes(home, text)}</p>}
       {asks.length > 0 && (
         <div className="cp-chips">
           {asks.map((m) => (
@@ -77,10 +82,19 @@ export function Composer({ home, d, actions, brief, full }: { home: HomeData; d:
       {/* Said before the tap, not after it: three projects is the cap the server keeps. */}
       {full && !note && <p className="cp-help">{MAX_ACTIVE_COMMISSIONS} projects are on the go. Finish or stop one to hand over another.</p>}
       {!home.workerConnected && !full && !note && (
-        <p className="cp-help">No worker is connected to this server, so a project you hand over is written down but nothing picks it up. Copy it for Claude instead, or set <code>COPILOT_JOBS_URL</code>.</p>
+        <p className="cp-help">No worker is connected to this server, so a project you hand over is written down but nothing picks it up. Copy it for Claude instead, or connect one: the Claude agent, <code>COPILOT_JOBS_URL</code>, or a model for writing.</p>
       )}
     </div>
   );
+}
+
+/** The composer's line: what kind of job this reads as, and who would take it. */
+function whoTakes(home: HomeData, text: string): string {
+  const job = jobKindOf(text).kind;
+  const taker = takerOf(home.workers ?? [], job, 'read');
+  if (!taker) return job === 'write' ? 'Reads as writing — nothing here writes it yet: the app needs a model.' : 'Reads as research — nothing here takes research yet.';
+  if (taker.agent === 'writer') return 'Reads as writing: the app writes it itself, in your words.';
+  return `Reads as ${job === 'write' ? 'writing' : 'research'}: it goes to ${taker.name}.`;
 }
 
 /**
@@ -100,8 +114,17 @@ export function Project({ thread, actions, today }: { thread: CommissionThread; 
   const chip = lapsed ? { label: 'Its day has passed', tone: 'stopped' as const } : commissionChip(c, r);
   const waiting = lapsed ? null : blockedOn(c, r);
   const ask = waiting === 'you' ? r.yours[0] ?? null : null;
-  const fault = waiting === 'worker' ? r.stopped[0] ?? null : null;
+  const refused = waiting === 'worker' ? refusal(r) : null;
+  const fault = waiting === 'worker' && !refused ? r.stopped[0] ?? null : null;
   const last = r.did[0] ?? null;
+  // A call through the person's own account waiting for their OK: answered with
+  // an OK or a no, never typed — the call is already written out. It takes the
+  // card's one slot over an ordinary question, which the sheet still shows, and
+  // its words are its own question's, matched by id.
+  const call = !lapsed && c.status === 'blocked' ? thread.work?.asks[0] ?? null : null;
+  const callEvent = call ? r.yours.find((e) => e.id === call.event) ?? null : null;
+  // The app's own check of a done it would not take (contract.ts verdictOf).
+  const sentBack = r.check && !r.check.passed ? r.check : null;
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +148,12 @@ export function Project({ thread, actions, today }: { thread: CommissionThread; 
     setBusy(false);
     if (!run.ok) setError(run.error ?? 'Restarted, but it could not be handed over just now');
   };
+  const confirm = async (allow: boolean) => {
+    setBusy(true); setError(null);
+    const res = await actions.workAction(c.id, { action: 'confirm', allow, call: call?.call });
+    setBusy(false);
+    if (!res.ok) setError(res.error ?? 'Could not pass that on');
+  };
   const stop = async () => {
     setBusy(true); setError(null);
     const res = await actions.commissionAction(c.id, 'stop');
@@ -139,13 +168,25 @@ export function Project({ thread, actions, today }: { thread: CommissionThread; 
           <span className={`cp2-bz-chip ${chip.tone}`}>{c.status === 'draft' && !lapsed ? 'Waiting for your OK' : chip.label}</span>
           {r.progress.total > 0 && c.status !== 'draft' && <span className="cp2-bz-job-n">{r.progress.done} of {r.progress.total} done</span>}
           {r.fresh > 0 && <span className="cp2-bz-job-new">{r.fresh} new</span>}
+          {thread.work?.with && c.status !== 'done' && c.status !== 'stopped' && <span className="cp2-bz-job-who">{thread.work.with.name}</span>}
         </span>
         <span className="cp2-bz-job-ob">{c.objective}</span>
         {/* What it got done last — one line, enough to tell whether it is worth keeping. */}
-        {!fault && !ask && last && <span className="cp2-bz-job-did">{last.summary}</span>}
+        {c.status === 'active' && sentBack && <span className="cp2-bz-job-did bad">Sent back: {verdictLine(sentBack)}</span>}
+        {!fault && !ask && last && !(c.status === 'active' && sentBack) && <span className="cp2-bz-job-did">{last.summary}</span>}
         {c.status === 'active' && !last && <span className="cp2-bz-job-did quiet">Nothing back yet.</span>}
       </button>
-      {ask && (
+      {call && (
+        <div className="cp2-bz-ask">
+          <p className="cp2-bz-ask-q">{callEvent?.summary ?? `OK to ${call.tool} from ${call.account ?? 'your account'}?`}</p>
+          {callEvent?.artifact && <pre className="cp2-bz-call">{callEvent.artifact.value}</pre>}
+          <div className="cp-btn-row">
+            <button className="cp-btn primary sm" disabled={busy} onClick={() => void confirm(true)}>{busy ? 'Sending' : 'OK, send it'}</button>
+            <button className="cp-btn ghost sm" disabled={busy} onClick={() => void confirm(false)}>No</button>
+          </div>
+        </div>
+      )}
+      {ask && !call && (
         <div className="cp2-bz-ask">
           <p className="cp2-bz-ask-q">{ask.summary}</p>
           <div className="cp2-bz-ask-row">
@@ -159,6 +200,12 @@ export function Project({ thread, actions, today }: { thread: CommissionThread; 
         </div>
       )}
       {/* A breakage, said once and plainly, with the one useful thing: another go. Nobody can answer a 500. */}
+      {refused && (
+        <div className="cp2-bz-fault">
+          <p>Its work did not pass the app&rsquo;s checks: {verdictLine(refused)}.</p>
+          <button className="cp-btn sm" disabled={busy} onClick={() => void retry()}>{busy ? 'Trying again…' : 'Try again'}</button>
+        </div>
+      )}
       {fault && (
         <div className="cp2-bz-fault">
           <p>{fault.summary}</p>

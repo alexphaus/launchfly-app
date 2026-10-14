@@ -111,7 +111,9 @@ export function WorkerGlyph({ w }: { w: Pick<Worker, 'kind' | 'agent'> }) {
     case 'model': return (<svg {...base}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M17.7 6.3l-2.5 2.5M8.8 15.2l-2.5 2.5" /></svg>);
     // A robot's head: a machine doing the work.
     case 'robot': return (<svg {...base}><rect x="5" y="8" width="14" height="11" rx="3" /><path d="M12 4v4M9.5 13h.01M14.5 13h.01M9 16.5h6" /></svg>);
-    case 'agent':
+    // A cube: hands that run somewhere else — the Claude agent, a workflow —
+    // and report back. Not a person: a face would say somebody is there.
+    case 'agent': return (<svg {...base}><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" /><path d="M4 7.5l8 4.5 8-4.5M12 12v9" /></svg>);
     case 'person':
     case 'you':
       return (<svg {...base}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>);

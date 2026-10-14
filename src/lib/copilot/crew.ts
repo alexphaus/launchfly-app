@@ -8,9 +8,10 @@
 // worked by newer models, by people taken on for a part, and by machines doing
 // physical work. So a worker is described by what it is and what it may do, not
 // by which of today's five agents it happens to be, and `person` and `robot`
-// are kinds the screen already knows how to draw. Nothing produces them yet,
-// and nothing on screen offers them: a worker appears here only when a row says
-// it exists (invariant 7).
+// are kinds the screen already knows how to draw. The hands a job can be given
+// to come from the registry (workers.ts): the Claude agent, the n8n workflow, a
+// person or a robot on a webhook — each shown only when it is registered
+// (invariant 7), with the record the app counted for it, never one it claimed.
 //
 // What each worker says is read, never claimed. An agent's state and line are
 // the roster's (machine.ts), computed from when it last ran and what it last
@@ -22,6 +23,7 @@
 
 import type { BusinessLink, LinkKey } from './business';
 import type { Agent, AgentKey } from './machine';
+import type { WorkerCard } from './workers';
 
 export const WORKER_KINDS = ['agent', 'model', 'you', 'person', 'robot'] as const;
 export type WorkerKind = (typeof WORKER_KINDS)[number];
@@ -70,6 +72,8 @@ export interface CrewInput {
   proposals: number;
   /** The part the running bet is on, and how many live projects are tied to it. */
   bet: { part: LinkKey; projects: number } | null;
+  /** The registered hands (workers.ts workerCards). One that is the app's own roster agent is not drawn twice. */
+  hired?: WorkerCard[];
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -85,9 +89,10 @@ function agentState(a: Agent): WorkerState {
 }
 
 /**
- * The crew, in a fixed order — the agents as the roster lists them, then Claude,
- * then the person — so a worker keeps its place on screen from one day to the
- * next and a change of state is the only thing that moves.
+ * The crew, in a fixed order — the agents as the roster lists them, the hands
+ * as the registry lists them, then Claude, then the person — so a worker keeps
+ * its place on screen from one day to the next and a change of state is the
+ * only thing that moves.
  */
 export function crewOf(i: CrewInput): Worker[] {
   const agents: Worker[] = i.agents.map((a) => {
@@ -97,6 +102,17 @@ export function crewOf(i: CrewInput): Worker[] {
     if (a.key === 'researcher' && i.bet && i.bet.projects > 0 && !parts.includes(i.bet.part)) parts.push(i.bet.part);
     return { key: `agent:${a.key}`, name: a.name, kind: 'agent', role: a.role, state: agentState(a), line: a.line, parts, agent: a.key };
   });
+  // The hands, after the app's own agents: each registered worker with what it
+  // has on now and what it has delivered. Unreachable is a stop, said by name.
+  const hired: Worker[] = (i.hired ?? []).filter((h) => !h.agent).map((h) => ({
+    key: `hired:${h.key}`, name: h.name, kind: h.kind, role: h.role,
+    state: h.record.unreachable ? 'stopped' : h.record.live ? 'working' : 'ready',
+    line: h.record.unreachable ? h.line : h.record.live ? `${plural(h.record.live, 'job')} on the go · ${h.line}` : h.line,
+    parts: [], agent: null,
+  }));
+  // The Writer also takes the writing that is handed over, when the app has a model to write it with.
+  const writes = (i.hired ?? []).some((h) => h.agent === 'writer');
+  for (const a of agents) if (writes && a.agent === 'writer') a.role = 'Drafts openers in your words, and writes what you hand over';
   const claude: Worker = {
     key: 'model:claude', name: 'Claude', kind: 'model', role: 'Thinks it through with your whole record', state: 'ready',
     line: i.proposals ? `${plural(i.proposals, 'proposal')} for you to keep or drop` : 'On call: Ask Claude hands it your record',
@@ -109,7 +125,7 @@ export function crewOf(i: CrewInput): Worker[] {
     parts: i.links.filter((l) => l.runner.by === 'you' || l.runner.by === 'both').map((l) => l.key),
     agent: null,
   };
-  return [...agents, claude, you];
+  return [...agents, ...hired, claude, you];
 }
 
 /** Who works one part: the ones the chain names on it. */

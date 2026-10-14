@@ -8,6 +8,7 @@
 // POST { action: 'mark', item, state } is the person saying a step is done,
 // set aside, or back on. It is the only way anything on the plan becomes done:
 // the model is shown these marks and can never write one (lib/copilot/roadmap.ts).
+import { registry } from '@/lib/copilot/hands';
 import { after } from 'next/server';
 import { drawRoadmap, startRoadmap } from '@/lib/copilot/agent/roadmap';
 import { refreshCallFromPlan } from '@/lib/copilot/brief';
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
   // tapped (handOverStep). Looked up on the plan, never taken from the request.
   if (b.action === 'handover') {
     if (typeof b.item !== 'string') return fail('Which step?');
-    if (!process.env.COPILOT_JOBS_URL) return fail('No agent is connected to this deployment, so there is nothing to hand this to.');
+    if (!registry().workers.length) return fail('No worker is connected to this deployment, so there is nothing to hand this to.');
     const runs = await loadRoadmapRuns(auth.pid);
     if (runs.unreadable) return fail(`Could not read the plan: ${runs.unreadable}`, 500);
     const found = roadmapStep(runs.current?.roadmap ?? null, b.item);

@@ -8,7 +8,7 @@
 // commission goes out with an id; this is what it reports to.
 //
 //   POST /api/copilot/commissions/<id>/result
-//   Authorization: Bearer $COPILOT_INBOUND_SECRET
+//   Authorization: Bearer $COPILOT_INBOUND_SECRET   (or the worker's own inbound_secret_env)
 //   {
 //     "events": [
 //       { "kind": "found", "step": 2, "summary": "Three suppliers quote under $400",
@@ -27,10 +27,13 @@
 // homework, and reporting success would otherwise be the cheapest way to look
 // successful.
 
-import { copilotDb } from '@/lib/copilot/db';
-import { loadCommissions, recordCommissionWork } from '@/lib/copilot/store';
+import { loadCommissions } from '@/lib/copilot/store';
 import { logEvent } from '@/lib/copilot/base';
 import { normalizeResult } from '@/lib/copilot/commission';
+import { acceptWork } from '@/lib/copilot/deliver';
+import { inboundConfigured, registry, workerForBearer } from '@/lib/copilot/hands';
+import { lastDispatch } from '@/lib/copilot/worklog';
+import { commissionOwner, loadWork } from '@/lib/copilot/workstore';
 import { fail, json, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
@@ -39,18 +42,26 @@ export const maxDuration = 60;
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   // Fail closed, exactly as /moves/inbound does: an unconfigured secret must not
   // leave a write endpoint open to anyone who can guess the path.
-  const secret = process.env.COPILOT_INBOUND_SECRET || process.env.COPILOT_JOBS_SECRET;
-  if (!secret) return fail('COPILOT_INBOUND_SECRET is not configured; refusing to accept work.', 503);
-  if (req.headers.get('authorization') !== `Bearer ${secret}`) return fail('Unauthorized', 401);
+  const reg = registry();
+  if (!inboundConfigured(reg)) return fail('COPILOT_INBOUND_SECRET is not configured; refusing to accept work.', 503);
+  const who = workerForBearer(req.headers.get('authorization'), reg);
+  if (!who) return fail('Unauthorized', 401);
 
   const { id } = await ctx.params;
   // The commission id is the address, so the profile is read from the row
   // rather than taken from the body. A worker holding the shared secret can
   // report against a commission; it cannot name which account to write to.
-  const { data: row } = await copilotDb().from('copilot_commissions')
-    .select('profile_id').eq('id', id).maybeSingle();
-  if (!row) return fail('No such commission', 404);
-  const profileId = (row as { profile_id: string }).profile_id;
+  const profileId = await commissionOwner(id);
+  if (!profileId) return fail('No such commission', 404);
+
+  // A worker with a key of its own reports only on work handed to it: a
+  // person's key must not be able to write into a job the Claude agent holds.
+  // The shared secret keeps its old reach — it is the n8n worker's, and every
+  // worker set up before the registry carries it.
+  const { log } = await loadWork(profileId, [id]);
+  if (!who.shared && lastDispatch(log, id)?.worker !== who.worker) {
+    return fail('That job was not handed to you.', 403);
+  }
 
   const commission = (await loadCommissions(profileId, 50)).find((c) => c.id === id);
   if (!commission) return fail('No such commission', 404);
@@ -69,7 +80,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return json({ ok: true, accepted: 0, note: 'Nothing passed the floor: every event needs a known kind and a summary.' });
   }
 
-  await recordCommissionWork(profileId, commission, result);
-  await logEvent(profileId, 'commission_work', { commission_id: id, events: result.events.length });
-  return json({ ok: true, accepted: result.events.length, planned: !!result.plan });
+  // The one door every result comes in through: the ring guard, the app's own
+  // check of a done, then the record (deliver.ts). The answer says what the
+  // check found, so a worker posting a short list learns why it is not done.
+  const acc = await acceptWork(profileId, commission, result, { log });
+  await logEvent(profileId, 'commission_work', { commission_id: id, events: result.events.length, by: who.worker ?? 'shared' });
+  return json({
+    ok: true,
+    accepted: acc.accepted,
+    planned: !!result.plan,
+    status: acc.status,
+    checked: acc.verdict ? { passed: acc.verdict.passed, checks: acc.verdict.checks, send_back: acc.verdict.passed ? [] : acc.verdict.sendBack } : null,
+    ...(acc.breaches ? { breaches: acc.breaches } : {}),
+    ...(acc.note ? { note: acc.note } : {}),
+  });
 }

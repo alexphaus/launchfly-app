@@ -11778,3 +11778,517 @@ async function engineRoomSuite() {
 }
 
 engineRoomSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The work layer: what a worker may be handed, by whom, and what it brought back ─── */
+
+import {
+  BREACH_PREFIX as wkBreach, MAX_SENDBACKS as wkMaxSendbacks, NOTHING_ABOVE_READ_RUNS_ALONE as wkNothingAlone, claimedRing as wkClaimed,
+  countAskedFor as wkCount, expectationsOf as wkExpect, guardEvents as wkGuardEvents, guardPlan as wkGuardPlan, itemsDelivered as wkItems,
+  jobKindOf as wkKind, linksDelivered as wkLinks, ringOf as wkRing, verdictLine as wkVerdictLine, verdictOf as wkVerdict, worthChecking as wkWorth,
+} from '../../src/lib/copilot/contract';
+import { WORKER_EVENT_KINDS as wkWorkerKinds, blockedOn as wkBlockedOn, commissionBrief as wkBrief, commissionLine as wkLine, gateFor as wkGate, nextStatus as wkNext, refusal as wkRefusal, reportOf as wkReport, type Commission as WkCommission, type CommissionCheck as WkCheck, type CommissionEvent as WkEvent } from '../../src/lib/copilot/commission';
+import { canTake as wkCanTake, compareLine as wkCompareLine, pickWorker as wkPick, recordLine as wkRecordLine, recordsOf as wkRecords, registryFrom as wkRegistry, takerOf as wkTaker, workerCards as wkCards, type Dispatch as WkDispatch } from '../../src/lib/copilot/workers';
+import { WORK_ASSIGNED as wkAssigned, WORK_CHECK as wkCheckEv, WORK_DISPATCH as wkDispatchEv, WORK_TOOL_ANSWER as wkAnswerEv, WORK_TOOL_ASK as wkAskEv, WORK_UNBLOCKED as wkUnblockedEv, lastDispatch as wkLast, sendBackRound as wkRound, sentBackIds as wkSentBack, workOf as wkWorkOf } from '../../src/lib/copilot/worklog';
+import { REPORT_TOOL_DEF as wkReportTool, askOf as wkAskOf, budgetCents as wkCents, readSession as wkRead, reportReply as wkReply, resumeEvents as wkResume, rubricFor as wkRubric, sessionEnd as wkEnd, sessionPlan as wkPlan, toolWords as wkToolWords, webToolset as wkWebTools } from '../../src/lib/copilot/managedwire';
+import { checkWritten as wkCheckWritten, notWritten as wkNotWritten, writtenResult as wkWritten } from '../../src/lib/copilot/writer';
+import { briefText as wkBriefText } from '../../src/lib/copilot/brieftext';
+import { ACCOUNT_CONNECTED as wkAcctOn, ACCOUNT_REMOVED as wkAcctOff, ACCOUNT_VAULT as wkVault, accountsOf as wkAccounts, authorizeUrl as wkAuthorize, credentialFromTokens as wkCred, mcpUrlOk as wkMcpOk, parseAuthServerMetadata as wkAsMeta, parseResourceMetadata as wkPrm, pkceChallenge as wkChallenge, resourceMetadataUrls as wkPrmUrls, sealConnect as wkSeal, sessionMcp as wkSessionMcp, slugFor as wkSlug, unsealConnect as wkUnseal } from '../../src/lib/copilot/accounts';
+import { REPEAT_OFF as wkRepOff, REPEAT_ON as wkRepOn, REPEAT_SKIPPED as wkRepSkip, REPEAT_SPAWNED as wkRepRun, dueRepeats as wkDueRepeats, nextRunDay as wkNextRun, repeatLine as wkRepeatLine, repeatsOf as wkRepeats, ruleFor as wkRuleFor } from '../../src/lib/copilot/repeats';
+import { crewOf as wkCrew } from '../../src/lib/copilot/crew';
+import { threadWorkOf as wkThreadWork } from '../../src/lib/copilot/threadwork';
+import type { Profile as WkProfile } from '../../src/lib/copilot/types';
+
+async function workLayerSuite() {
+  const src = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
+
+  /* 1. Writing stays in the app; anything that needs the world is research. */
+  for (const [o, k] of [
+    ['Write three subject lines for the launch email', 'write'],
+    ['Draft a follow-up to Ana about the quote', 'write'],
+    ['Rewrite my offer for dentists', 'write'],
+    ['Write and send a follow-up to Ana', 'write'],
+    ['List guesthouses in Manila for Oct 5', 'research'],
+    ['Find 5 suppliers of eco packaging under $400', 'research'],
+    ['Draft a post comparing the best CRMs for freelancers', 'research'],
+    ['Write a summary of reviews of Casa Ana', 'research'],
+    ['Research how competitors price coaching', 'research'],
+  ] as const) assert.equal(wkKind(o).kind, k, o);
+
+  /* 2. The count asked for, never a date, a unit or a price. */
+  assert.equal(wkCount('List 5 guesthouses in Makati'), 5);
+  assert.equal(wkCount('Find three suppliers'), 3);
+  assert.equal(wkCount('Give me the top 10 leads in Makati'), 10);
+  assert.equal(wkCount('Get quotes from 3 printers'), 3);
+  assert.equal(wkCount('Write 3 subject lines'), 3);
+  assert.equal(wkCount('List guesthouses in Manila for Oct 5'), null, 'the 5 of a date');
+  assert.equal(wkCount('Find a guesthouse for 2 nights'), null, 'a constraint on each item');
+  assert.equal(wkCount('Find a laptop under $1,000'), null);
+  assert.equal(wkCount('List 3 bedroom apartments in BGC'), null, 'three bedrooms, not three apartments');
+  assert.deepEqual(wkExpect('List 5 guesthouses in Makati for Oct 5', '2026-10-01T09:00:00Z', 'research'), { count: 5, links: true, dates: ['2026-10-05'] });
+  assert.equal(wkExpect('Write 3 subject lines', '2026-10-01', 'write').links, false, 'writing has no sources to check');
+
+  /* 3. The ring a step needs, read off its verb. */
+  for (const [t, r] of [
+    ['Proceed toward a booking confirmation', 'commit'], ['Book the cheapest one', 'commit'], ['If available, book it', 'commit'],
+    ['Pay the deposit', 'commit'], ['Make a reservation', 'commit'], ['Order 50 business cards', 'commit'], ['Then finalize the purchase', 'commit'],
+    ['Confirm the booking with the host', 'commit'], ['Compare prices, then book the cheapest', 'commit'],
+    ['Email the three hosts to ask availability', 'reach'], ['Ask the hosts about late check-in', 'reach'], ['Call the three venues', 'reach'],
+    ['Book a call with the supplier', 'reach'], ['Sign up for the newsletter', 'reach'], ['Post an update on LinkedIn', 'reach'], ['Request quotes from three printers', 'reach'],
+    ['Search for guesthouses in Makati', 'read'], ['Compare prices before booking', 'read'], ['Draft the email to the host', 'read'],
+    ['Send the shortlist to the owner', 'read'], ['Ask the owner which one to book', 'read'], ['Check out the venue website', 'read'],
+    ['Confirm the rate is still valid', 'read'], ['Order the results by price', 'read'], ['Booking sites: compare', 'read'],
+    ['Find the deposit policy', 'read'], ['Payment methods each accepts', 'read'], ['Rent prices in Makati', 'read'], ['Contact details for each', 'read'],
+    ['Prepare the booking for your approval', 'read'], ['Make a shortlist', 'read'],
+  ] as const) assert.equal(wkRing(t), r, t);
+  assert.ok(wkNothingAlone, 'the notes below say reach and commit never run alone; if that changes they are wrong');
+
+  /* 4. The plan held to the ring: the person's steps marked, never left done. */
+  const plan = [
+    { n: 1, do: 'Search for guesthouses', state: 'done' as const },
+    { n: 2, do: 'Proceed toward a booking confirmation', state: 'done' as const },
+    { n: 3, do: 'Email the hosts', state: 'todo' as const },
+  ];
+  const guarded = wkGuardPlan(plan, 'read');
+  assert.equal(guarded[0].yours, undefined);
+  assert.deepEqual([guarded[1].yours, guarded[1].state], ['commit', 'todo'], 'a worker under read cannot have booked anything');
+  assert.match(guarded[1].note!, /spends money or makes a promise/);
+  assert.equal(guarded[2].yours, 'reach');
+  assert.equal(wkGuardPlan([plan[2]], 'reach', { askEach: true })[0].yours, 'ask', 'from their own account, one OK at a time');
+  assert.equal(wkGuardPlan([plan[2]], 'read', { askEach: true })[0].yours, 'reach', 'an account does not widen a research mandate');
+  assert.equal(wkGuardPlan([{ n: 1, do: 'Search again', state: 'todo', yours: 'commit' }], 'read')[0].yours, undefined, 'a mark that no longer applies goes');
+  assert.equal(wkGuardPlan(guarded, 'read')[1].yours, 'commit', 'idempotent');
+
+  /* 5. A claim to have acted outside the ring is a question for the owner. */
+  const ev = (kind: string, summary: string, artifact: WkEvent['artifact'] = null) => ({ kind, step: null, summary, artifact }) as never;
+  const claims = wkGuardEvents([ev('done', 'Booked the room at Casa Ana'), ev('worked', 'Sent you the shortlist'), ev('found', 'Found 3 places under $40'), ev('worked', 'Emailed the host')]);
+  assert.equal(claims.breaches, 2);
+  assert.deepEqual(claims.events.map((e) => e.kind), ['needs_you', 'worked', 'found', 'needs_you']);
+  assert.ok(claims.events[0].summary.startsWith(wkBreach));
+  assert.equal(wkGuardEvents([ev('worked', 'Emailed the host')], ['read', 'reach']).breaches, 0, 'reach that went out through an OK they gave');
+  assert.equal(wkGuardEvents([ev('worked', 'Paid the deposit')], ['read', 'reach']).breaches, 1, 'commit never');
+  assert.equal(wkClaimed('Shared the list with you'), 'read');
+  assert.equal(wkClaimed('Confirmed availability for Oct 5'), 'read');
+
+  /* 6. The verdict: the screenshot's guesthouses — three of five, one dead link, one wrong night. */
+  const x = wkExpect('List 5 guesthouses in Makati for Oct 5', '2026-10-01T09:00:00Z', 'research');
+  const art = (label: string, href: string) => ({ kind: 'link' as const, label, value: label, href });
+  const delivery = [
+    ev('found', 'Casa Ana, 40 USD a night, free on Oct 5', art('Casa Ana', 'https://casa-ana.example/rooms')),
+    ev('found', 'Hostel Uno, 25 USD, available Oct 12', art('Uno', 'https://uno.example')),
+    ev('found', 'Bahay Inn, 35 USD', art('Bahay', 'https://bahay.example/')),
+    ev('done', 'Three guesthouses found', { kind: 'text', label: 'The list', value: '1. Casa Ana https://casa-ana.example/rooms\n2. Hostel Uno https://uno.example\n3. Bahay Inn https://bahay.example' }),
+  ];
+  assert.equal(wkItems(delivery).length, 3, 'the same place in a find and in the list is one item');
+  assert.equal(wkLinks(delivery).length, 3);
+  assert.ok(wkWorth(x, delivery));
+  const v = wkVerdict(x, delivery, [
+    { url: 'https://casa-ana.example/rooms', state: 'ok', code: 200 },
+    { url: 'https://uno.example', state: 'dead', code: 404 },
+    { url: 'https://bahay.example/', state: 'unknown', code: 403 },
+  ], '2026-10-01');
+  assert.equal(v.passed, false);
+  assert.deepEqual(v.checks.map((c) => [c.key, c.state, c.line]), [
+    ['count', 'fail', '3 of 5 asked for'],
+    ['links', 'fail', '1 of 3 links does not open'],
+    ['dates', 'fail', '1 of 2 dated findings not for 5 Oct'],
+  ]);
+  assert.match(v.sendBack[1], /https:\/\/uno\.example \(404\)/);
+  assert.ok(v.sendBack.every((l) => l.endsWith('whole list in its artifact.')), 'a re-delivery is checked on its own');
+  assert.equal(wkVerdictLine(v), '3 of 5 asked for');
+  const good = wkVerdict(x, [...delivery.slice(0, 1), ev('found', 'Inn Two on Oct 5', art('Two', 'https://two.example')), ev('done', 'Done', { kind: 'text', label: 'List', value: '- a https://a.example\n- b https://b.example\n- c https://c.example\n- d https://d.example\n- e https://e.example' })],
+    ['https://casa-ana.example/rooms', 'https://two.example', 'https://a.example', 'https://b.example', 'https://c.example', 'https://d.example', 'https://e.example'].map((url) => ({ url, state: 'unknown' as const, code: 403 })), '2026-10-01');
+  assert.equal(good.passed, true, 'a site that refuses a robot is not a dead link');
+  assert.equal(good.checks.find((c) => c.key === 'links')!.state, 'unknown');
+  const behind = wkVerdict({ count: 5, links: false, dates: [] }, [ev('done', 'All in the doc', art('The sheet', 'https://docs.example/sheet'))], [], '2026-10-01');
+  assert.deepEqual(behind.checks.map((c) => c.state), ['unknown'], 'a list behind a link is not counted, and not failed');
+  assert.equal(wkWorth({ count: null, links: false, dates: [] }, delivery), false, 'nothing to check, nothing checked');
+
+  /* 7. A done the app refused is not done; the last refusal stops for the person. */
+  assert.equal(wkNext('active', [{ kind: 'done' }], { passed: false, final: false }), 'active', 'sent back');
+  assert.equal(wkNext('active', [{ kind: 'done' }], { passed: false, final: true }), 'blocked');
+  assert.equal(wkNext('active', [{ kind: 'done' }], { passed: true, final: false }), 'done');
+  assert.equal(wkNext('active', [{ kind: 'done' }, { kind: 'needs_you' }], { passed: true, final: false }), 'blocked', 'a needs_you still outranks a done');
+  assert.equal(wkMaxSendbacks, 2);
+
+  const c0: WkCommission = {
+    id: 'c1', goal_id: null, objective: 'List 5 guesthouses in Makati for Oct 5', why: null, authority: 'read', budget_minutes: 60,
+    status: 'active', plan: [], created_at: '2026-10-01T09:00:00Z', approved_at: '2026-10-01T09:01:00Z', last_run_at: null, closed_at: null, outcome: null, seen_at: null,
+  };
+  const row = (o: Partial<WkEvent>): WkEvent => ({ id: 'e', commission_id: 'c1', kind: 'worked', step: null, summary: 's', artifact: null, at: '2026-10-02T10:00:00Z', ...o });
+  const failCheck = (at: string, final: boolean): WkCheck => ({ at, passed: false, final, checks: v.checks, sendBack: v.sendBack });
+  const sent = wkReport(c0, [row({ kind: 'done', summary: 'Three found' })], 6, failCheck('2026-10-02T10:00:01Z', false));
+  assert.equal(wkLine(c0, sent), 'Sent back: 3 of 5 asked for');
+  const stuck = { ...c0, status: 'blocked' as const };
+  const refusedR = wkReport(stuck, [row({ kind: 'needs_you', summary: 'Old question', at: '2026-10-01T10:00:00Z' }), row({ kind: 'done', summary: 'Three found' })], 6, failCheck('2026-10-02T10:00:01Z', true));
+  assert.equal(wkBlockedOn(stuck, refusedR), 'worker', 'a refused delivery is the worker’s, not a question');
+  assert.ok(wkRefusal(refusedR));
+  assert.equal(wkLine(stuck, refusedR), 'Its work did not pass the app\'s checks: 3 of 5 asked for');
+  const brokeSince = wkReport(stuck, [row({ kind: 'blocked', summary: 'Search died', at: '2026-10-03T00:00:00Z' })], 6, failCheck('2026-10-02T10:00:01Z', true));
+  assert.equal(wkRefusal(brokeSince), null, 'a newer breakage is the reason said');
+  assert.equal(wkGate('reach', { askEach: true }), 'Messages go from your own account, and each one waits for your OK in the app before it goes.');
+  assert.match(wkGate('reach', { askEach: false })!, /Connect your own email/);
+
+  /* 8. The registry: the old worker keeps working, the new ones are entries. */
+  const reg = wkRegistry({
+    COPILOT_JOBS_URL: 'https://n8n.example/webhook/copilot-worker',
+    ANTHROPIC_API_KEY: 'sk-x', COPILOT_MANAGED_AGENT_ID: 'agent_1', COPILOT_MANAGED_ENVIRONMENT_ID: 'env_1',
+    COPILOT_WORKERS: JSON.stringify([
+      { key: 'ana', name: 'Ana (assistant)', kind: 'person', url: 'https://hooks.example/ana', takes: ['research'], max_ring: 'reach', inbound_secret_env: 'ANA_INBOUND' },
+      { key: 'bot', name: 'Bot', kind: 'android', url: 'https://x.example' },
+      { key: 'Bad Key', name: 'x', kind: 'agent', url: 'https://x.example' },
+      { key: 'plain', name: 'Plain', kind: 'agent', url: 'http://not-local.example' },
+      { key: 'n8n', name: 'Another', kind: 'agent', url: 'https://y.example' },
+    ]),
+    COPILOT_COMPARE: 'claude,n8n',
+  }, { llm: true });
+  assert.deepEqual(reg.workers.map((w) => w.key), ['writer', 'claude', 'n8n', 'ana'], 'built-ins first, in the order a job prefers them');
+  assert.equal(reg.workers.find((w) => w.key === 'writer')!.agent, 'writer', 'the app’s own Writer, not a second one');
+  assert.equal(reg.problems.length, 4, reg.problems.join(' | '));
+  assert.ok(reg.problems.some((p) => /kind must be/.test(p)) && reg.problems.some((p) => /url must be https/.test(p)) && reg.problems.some((p) => /Two workers/.test(p)));
+  assert.deepEqual(reg.compare, ['claude', 'n8n']);
+  assert.match(wkRegistry({ COPILOT_COMPARE: 'claude,nope', ANTHROPIC_API_KEY: 'k', COPILOT_MANAGED_AGENT_ID: 'a', COPILOT_MANAGED_ENVIRONMENT_ID: 'e' }, { llm: false }).problems[0], /needs two registered workers/);
+  assert.deepEqual(wkRegistry({}, { llm: false }).workers, [], 'nothing configured, nothing on the crew');
+  assert.match(wkRegistry({ COPILOT_WORKERS: '{not json' }, { llm: false }).problems[0], /not a JSON list/);
+
+  /* 9. Who gets it. */
+  const solo = { ...reg, compare: [] };
+  const pick = (o: Partial<Parameters<typeof wkPick>[0]> = {}) => wkPick({ commission: { id: 'job-1', authority: 'read' }, job: 'research', registry: solo, assigned: null, last: null, records: {}, ...o });
+  assert.equal(pick({ job: 'write' }).worker?.key, 'writer', 'writing stays in the app');
+  assert.equal(pick().worker?.key, 'claude', 'research, no record yet: the registry’s order');
+  assert.equal(pick({ last: 'n8n' }).worker?.key, 'n8n', 'a job goes back to whoever has it');
+  assert.equal(pick({ last: 'n8n', assigned: 'ana' }).worker?.key, 'ana', 'the person’s pick wins');
+  assert.equal(pick({ records: { claude: { handed: 4, done: 0, sentBack: 4, stopped: 0, worth: 0, live: 0, unreachable: null }, n8n: { handed: 4, done: 4, sentBack: 0, stopped: 0, worth: 0, live: 0, unreachable: null } } }).worker?.key, 'n8n', 'the record decides when nothing else does');
+  const reachPick = pick({ commission: { id: 'job-2', authority: 'reach' } });
+  assert.ok(reachPick.worker && ['claude', 'ana'].includes(reachPick.worker.key), 'only hands that may be handed reach');
+  assert.equal(pick({ commission: { id: 'job-3', authority: 'commit' } }).worker, null);
+  assert.match(pick({ commission: { id: 'job-3', authority: 'commit' } }).why, /may be handed "Spend and commit"/);
+  assert.match(wkPick({ commission: { id: 'j', authority: 'read' }, job: 'research', registry: wkRegistry({}, { llm: true }), assigned: null, last: null, records: {} }).why, /Nothing here takes research/);
+  const split = new Set(Array.from({ length: 40 }, (_, i) => wkPick({ commission: { id: `job-${i}`, authority: 'read' }, job: 'research', registry: reg, assigned: null, last: null, records: {} }).worker!.key));
+  assert.deepEqual([...split].sort(), ['claude', 'n8n'], 'a comparison splits new jobs between both');
+  assert.equal(wkPick({ commission: { id: 'job-7', authority: 'read' }, job: 'research', registry: reg, assigned: null, last: null, records: {} }).worker!.key,
+    wkPick({ commission: { id: 'job-7', authority: 'read' }, job: 'research', registry: reg, assigned: null, last: null, records: {} }).worker!.key, 'the same job lands on the same side every time');
+  assert.ok(!wkCanTake(reg.workers[0], 'research', 'read'), 'the Writer does not research');
+
+  /* 10. The record, from the app’s rows: the newest successful hand-over owns the job. */
+  const d = (commission_id: string, worker: string, at: string, ok = true, error: string | null = null): WkDispatch => ({ commission_id, worker, job: 'research', ok, error, session: null, at });
+  const records = wkRecords({
+    dispatches: [d('a', 'n8n', '2026-10-01'), d('a', 'claude', '2026-10-02'), d('b', 'claude', '2026-10-03'), d('c', 'n8n', '2026-10-04'), d('x', 'n8n', '2026-10-05', false, '404: no such webhook')],
+    commissions: [{ id: 'a', status: 'done' }, { id: 'b', status: 'active' }, { id: 'c', status: 'stopped' }],
+    sentBack: new Set(['a']),
+    worth: new Map([['a', 'won'], ['c', 'nothing']]),
+  });
+  assert.deepEqual(records.claude, { handed: 2, done: 1, sentBack: 1, stopped: 0, worth: 1, live: 1, unreachable: null });
+  assert.deepEqual(records.n8n, { handed: 1, done: 0, sentBack: 0, stopped: 1, worth: 0, live: 0, unreachable: '404: no such webhook' });
+  assert.equal(wkRecordLine(records.claude), '2 jobs handed · 1 done · 1 sent back · 1 worth something');
+  assert.equal(wkRecordLine(undefined), 'Nothing handed to it yet');
+  assert.match(wkCompareLine(reg, records)!, /^Claude agent: 2 jobs handed/);
+  const cards = wkCards(reg, records);
+  assert.equal(cards.find((c) => c.key === 'n8n')!.line, 'Not reached: 404: no such webhook');
+  assert.ok(cards.every((c) => !('url' in c) && !('secretEnv' in c)), 'the screen never gets an address or a secret’s name');
+  assert.equal(wkTaker(cards, 'write', 'read')!.agent, 'writer');
+  assert.equal(wkTaker(cards, 'research', 'reach')!.name, 'Claude agent');
+
+  /* 11. The work log: hand-overs, checks newest first, calls minus answers, and the count since the last go. */
+  const wr = (event_type: string, payload: Record<string, unknown>, created_at: string) => ({ event_type, payload, created_at });
+  const log = wkWorkOf([
+    wr(wkDispatchEv, { commission_id: 'c1', worker: 'claude', job: 'research', ok: true, session: 'sesn_1' }, '2026-10-02T00:00:00Z'),
+    wr(wkCheckEv, { commission_id: 'c1', passed: false, final: false, checks: v.checks, sendBack: v.sendBack }, '2026-10-02T01:00:00Z'),
+    wr(wkUnblockedEv, { commission_id: 'c1' }, '2026-10-02T02:00:00Z'),
+    wr(wkCheckEv, { commission_id: 'c1', passed: false, final: false, checks: v.checks, sendBack: v.sendBack }, '2026-10-02T03:00:00Z'),
+    wr(wkAskEv, { commission_id: 'c1', session: 'sesn_1', tool_use_id: 'sevt_1', event_id: 'e1', tool: 'send_email', account: 'My Gmail' }, '2026-10-02T04:00:00Z'),
+    wr(wkAskEv, { commission_id: 'c1', session: 'sesn_1', tool_use_id: 'sevt_2', event_id: 'e2', tool: 'send_email', account: 'My Gmail' }, '2026-10-02T04:00:01Z'),
+    wr(wkAnswerEv, { commission_id: 'c1', tool_use_id: 'sevt_1', allow: true }, '2026-10-02T05:00:00Z'),
+    wr(wkAssigned, { commission_id: 'c1', worker: 'ana' }, '2026-10-02T06:00:00Z'),
+    wr(wkAssigned, { commission_id: 'c1', worker: null }, '2026-10-02T07:00:00Z'),
+    wr(wkDispatchEv, { commission_id: 'c1', worker: 'claude', ok: false, error: 'overloaded' }, '2026-10-02T08:00:00Z'),
+    wr('something_else', { commission_id: 'c1' }, '2026-10-02T09:00:00Z'),
+  ]);
+  assert.equal(wkLast(log, 'c1')!.session, 'sesn_1', 'the newest that got there');
+  assert.equal(wkLast(log, 'c1', false)!.error, 'overloaded');
+  assert.equal(log.checks.get('c1')!.length, 2);
+  assert.equal(log.checks.get('c1')![0].at, '2026-10-02T03:00:00Z', 'newest first');
+  assert.deepEqual(log.asks.get('c1')!.map((a) => a.tool_use_id), ['sevt_2'], 'an answered call is not waiting');
+  assert.ok(log.askIds.has('sevt_1'), 'but it was asked, and is never asked again');
+  assert.equal(log.assigned.has('c1'), false, 'choosing best fit again clears the pick');
+  assert.equal(wkRound(log, 'c1'), 2, 'one failure since the person’s retry, and this would be the second');
+  assert.ok(wkSentBack(log).has('c1'));
+
+  /* 12. The Claude agent's wire. */
+  assert.equal(wkCents(60), 300, 'an hour is three dollars');
+  assert.equal(wkCents(5), 50, 'never under fifty cents');
+  assert.equal(wkCents(480), 1500, 'never over the ceiling');
+  assert.equal(wkCents(60, { COPILOT_MANAGED_CENTS_PER_MINUTE: '10' }), 600);
+  assert.deepEqual(wkReportTool.input_schema.properties.events.items.properties.kind.enum, [...wkWorkerKinds], 'a worker can never post answered');
+  assert.ok(!wkWebTools().configs.some((c) => ['bash', 'write', 'edit'].includes(c.name)) && wkWebTools().default_config.enabled === false, 'no shell, no files: only the web');
+
+  const profile = { id: 'p1', name: 'Alex', headline: 'Runs a booking agency', offer: { sells: 'WhatsApp booking automations', for_who: 'resorts', price_band: '$400-1,500 per build' }, location: 'Manila', timezone: 'Asia/Manila', target_segments: ['resorts'], target_area: 'Makati' } as unknown as WkProfile;
+  const brief = wkBrief(c0, profile, null, 'https://app.example/api/copilot/commissions/c1/result', { job: 'research', checked: v.sendBack, now: new Date('2026-10-02T03:00:00Z'),
+    events: [row({ kind: 'needs_you', summary: 'Which area?', at: '2026-10-01T10:00:00Z' }), row({ kind: 'answered', summary: 'Makati only', at: '2026-10-01T11:00:00Z' })] });
+  assert.equal(brief.job, 'research');
+  assert.equal(brief.checked.length, 3);
+  const rubric = wkRubric(brief, x);
+  assert.match(rubric, /\(checked\) It holds at least 5 distinct items/);
+  assert.match(rubric, /\(checked\) Every finding links the page it came from, and every link opens/);
+  assert.match(rubric, /\(checked\) Every finding that names a day is for 5 Oct 2026/);
+  assert.match(rubric, /Nothing was booked, bought, paid/);
+  const sp = wkPlan(brief, x, { cents: 300, accounts: [], vault: null, worker: 'claude' });
+  assert.deepEqual(sp.metadata, { commission_id: 'c1', worker: 'claude', app: 'copilot' }, 'the job’s id, never the person’s');
+  assert.deepEqual(sp.budget, { type: 'limit', max_list_cost: { amount: '300', currency: 'USD' } });
+  assert.deepEqual(sp.initial_events.map((e) => e.type), ['user.message', 'user.define_outcome'], 'the brief, then the job as an outcome');
+  assert.equal(sp.overrides, null);
+  assert.deepEqual(sp.vault_ids, []);
+  const account = { id: 'cred_1', vault: 'vlt_1', name: 'My Gmail', server: 'https://gmail.mcp.example/mcp', slug: 'my_gmail', how: 'oauth' as const, at: '2026-10-01' };
+  assert.deepEqual(wkPlan(brief, x, { cents: 300, accounts: [account], vault: 'vlt_1', worker: 'claude' }).vault_ids, [], 'a research job never carries the accounts');
+  const reachBrief = { ...brief, may: 'reach' as const };
+  const rp = wkPlan(reachBrief, x, { cents: 300, accounts: [account], vault: 'vlt_1', worker: 'claude' });
+  assert.deepEqual(rp.vault_ids, ['vlt_1']);
+  assert.deepEqual(rp.initial_events.map((e) => e.type), ['user.message'], 'sending is not one artifact for a grader');
+  assert.ok(JSON.stringify(rp.overrides).includes('"always_ask"') && !JSON.stringify(rp.overrides!.tools.slice(2)).includes('"auto"'), 'every call through an account asks');
+  assert.deepEqual(wkSessionMcp([account]).toolsets[0].default_config, { permission_policy: { type: 'always_ask' } });
+  assert.deepEqual(wkResume(brief, x, '2026-10-01T10:30:00Z', true, false).map((e) => e.type), ['user.message'], 'one outcome at a time');
+  assert.deepEqual(wkResume(brief, x, '2026-10-01T10:30:00Z', false, false).map((e) => e.type), ['user.message', 'user.define_outcome']);
+  assert.match(JSON.stringify(wkResume(brief, x, '2026-10-01T10:30:00Z', true, false)), /THE OWNER ANSWERED: Makati only/);
+
+  const sev = (o: Record<string, unknown>) => o as never;
+  const read = wkRead([
+    sev({ id: 'u1', type: 'user.define_outcome' }),
+    sev({ id: 's1', type: 'session.status_running' }),
+    sev({ id: 't1', type: 'agent.custom_tool_use', name: 'report', input: { events: [] } }),
+    sev({ id: 't0', type: 'agent.custom_tool_use', name: 'report', input: {} }),
+    sev({ id: 'r0', type: 'user.custom_tool_result', custom_tool_use_id: 't0' }),
+    sev({ id: 't2', type: 'agent.custom_tool_use', name: 'search_db', input: {} }),
+    sev({ id: 'm1', type: 'agent.mcp_tool_use', name: 'send_email', mcp_server_name: 'my_gmail', evaluated_permission: 'ask', input: { body: 'Hi', to: 'host@casa.example', subject: 'Oct 5' } }),
+    sev({ id: 'm0', type: 'agent.mcp_tool_use', name: 'send_email', mcp_server_name: 'my_gmail', evaluated_permission: 'ask', input: {} }),
+    sev({ id: 'c0', type: 'user.tool_confirmation', tool_use_id: 'm0' }),
+    sev({ id: 'w1', type: 'agent.tool_use', name: 'web_fetch', evaluated_permission: 'ask' }),
+    sev({ id: 'a1', type: 'agent.message', content: [{ type: 'text', text: 'Working on it.' }] }),
+    sev({ id: 'i1', type: 'session.status_idle', stop_reason: { type: 'requires_action', event_ids: ['t1'] } }),
+  ]);
+  assert.deepEqual(read.reports.map((r) => r.id), ['t1'], 'an answered report is not pending');
+  assert.deepEqual(read.strays.map((r) => r.name), ['search_db']);
+  assert.deepEqual(read.asks.map((a) => a.id), ['m1']);
+  assert.deepEqual(read.webAsks.map((a) => a.id), ['w1']);
+  assert.deepEqual([read.status, read.stop, read.outcomeActive, read.lastMessage], ['idle', 'requires_action', true, 'Working on it.']);
+  assert.equal(wkEnd(read, 'active', 300), null, 'something is waiting: not a stop');
+  const quiet = wkRead([sev({ id: 'm', type: 'agent.message', content: [{ type: 'text', text: 'I could not find five.' }] }), sev({ id: 'i', type: 'session.status_idle', stop_reason: { type: 'end_turn' } })]);
+  assert.match(wkEnd(quiet, 'active', 300)!.events[0].summary, /^It stopped without reporting the job done/);
+  assert.equal(wkEnd(quiet, 'active', 300)!.events[0].artifact!.value, 'I could not find five.', 'its last words are kept');
+  assert.equal(wkEnd(quiet, 'blocked', 300), null, 'a job waiting on the person did not stop');
+  const broke = wkRead([sev({ id: 'i', type: 'session.status_idle', stop_reason: { type: 'budget_reached' } })]);
+  assert.match(wkEnd(broke, 'active', 300)!.events[0].summary, /used its \$3\.00 budget/);
+  assert.equal(wkEnd(wkRead([sev({ id: 'g', type: 'user.define_outcome' }), sev({ id: 'h', type: 'span.outcome_evaluation_end', result: 'satisfied' })]), 'done', 1), null);
+  assert.equal(wkRead([sev({ id: 'g', type: 'user.define_outcome' }), sev({ id: 'h', type: 'span.outcome_evaluation_end', result: 'needs_revision' })]).outcomeActive, true);
+
+  assert.match(wkReply({ accepted: 2, status: 'active', verdict: v, final: false, breaches: 0 }), /Your done was sent back[\s\S]*FAILED: 3 of 5 asked for[\s\S]*Then report done again/);
+  assert.match(wkReply({ accepted: 1, status: 'done', verdict: { ...v, passed: true, checks: [], sendBack: [] }, final: false, breaches: 0 }), /Accepted as done[\s\S]*End your turn now/);
+  assert.match(wkReply({ accepted: 1, status: 'blocked', verdict: null, final: false, breaches: 1 }), /owner has been asked to check[\s\S]*waits on the owner/);
+  assert.match(wkReply({ accepted: 0, status: 'stopped', verdict: null, final: false, breaches: 0, refused: 'This job is called off and is not taking work.' }), /Stop now/);
+  const ask = wkAskOf(read.asks[0], { name: 'My Gmail' });
+  assert.equal(ask.summary, 'OK to send email from My Gmail?');
+  assert.equal(ask.artifact.value, 'to: host@casa.example\nsubject: Oct 5\nbody: Hi', 'who, then what, then the words');
+  assert.equal(wkToolWords('gmail__sendDraft'), 'send draft');
+
+  /* 13. The brief as every worker reads it. */
+  const text = wkBriefText(brief);
+  assert.ok(text.startsWith('TODAY: 2026-10-02 (Asia/Manila).'), 'the date first, always');
+  assert.match(text, /JOB: RESEARCH/);
+  assert.match(text, /THE OWNER HAS ANSWERED YOU/);
+  assert.match(text, /THE APP CHECKED YOUR LAST "DONE" AND SENT IT BACK:\n {2}- 3 of 5 asked for/);
+  assert.match(text, /You never spend money, book, buy, sign/);
+  assert.match(wkBriefText({ ...brief, plan: wkGuardPlan(plan, 'read') }), /\[the owner's\] Proceed toward a booking confirmation[\s\S]*Steps marked \[the owner's\] are theirs/);
+  assert.match(wkBriefText({ ...brief, job: 'write' }), /JOB: WRITING\. .*Do not search/);
+
+  /* 14. The Writer: held to every draft rule in the app. */
+  const wb = wkBrief({ ...c0, objective: 'Write 3 subject lines for the launch email' }, profile, null, null, { job: 'write' });
+  assert.deepEqual(wkCheckWritten({ title: 'Subject lines', body: '1. Book while you sleep\n2. Your resort, answering at 3am\n3. Never miss a booking again', kind: 'text' }, wb), { ok: true, title: 'Subject lines', body: '1. Book while you sleep\n2. Your resort, answering at 3am\n3. Never miss a booking again', kind: 'text' });
+  assert.match((wkCheckWritten({ body: 'Get 73% more bookings' }, wb) as { why: string }).why, /number that is not yours \(73/);
+  assert.match((wkCheckWritten({ body: 'Hi [Name], quick one' }, wb) as { why: string }).why, /placeholder/);
+  assert.match((wkCheckWritten({ body: 'See https://elsewhere.example' }, wb) as { why: string }).why, /link you did not give/);
+  assert.equal(wkCheckWritten({ body: 'From $400 per build' }, wb).ok, true, 'their own price is theirs to use');
+  const written = wkWritten({ ...wb, objective: 'Write and send a follow-up to Ana' }, { ok: true, title: 'Follow-up', body: 'Hi Ana', kind: 'message' });
+  assert.deepEqual(written.plan!.map((s) => s.do), ['Write it: Follow-up', 'Send it'], 'the sending is said, and the guard makes it the person’s');
+  assert.equal(wkGuardPlan(written.plan!, 'read')[1].yours, 'reach');
+  assert.equal(wkNotWritten('no model').events[0].kind, 'blocked', 'a breakage with a retry, never Nothing back yet');
+  const wv = wkVerdict(wkExpect(wb.objective, c0.created_at, 'write'), wkWritten(wb, { ok: true, title: 'S', body: '1. a\n2. b\n3. c', kind: 'text' }).events.map((e) => ({ ...e })) as never, [], '2026-10-01');
+  assert.deepEqual([wv.passed, wv.checks.map((c) => c.line)], [true, ['3 of 3 asked for']]);
+
+  /* 15. Accounts: the person's own, through its own consent screen. */
+  assert.ok(wkMcpOk('https://mcp.example.com/mcp'));
+  for (const bad of ['http://mcp.example.com', 'https://localhost/mcp', 'https://10.0.0.5/mcp', 'https://intranet/mcp', 'https://x.internal/mcp', 'https://u:p@mcp.example.com', 'javascript:alert(1)']) assert.ok(!wkMcpOk(bad), bad);
+  assert.ok(wkMcpOk('http://localhost:9999/mcp', { allowLocal: true }), 'a test stand-in, only when allowed');
+  assert.equal(wkSlug('My Gmail', new Set()), 'my_gmail');
+  assert.equal(wkSlug('My Gmail', new Set(['my_gmail'])), 'my_gmail_2');
+  assert.deepEqual(wkPrmUrls('https://mcp.example.com/v1/mcp/'), ['https://mcp.example.com/.well-known/oauth-protected-resource/v1/mcp', 'https://mcp.example.com/.well-known/oauth-protected-resource']);
+  assert.deepEqual(wkPrm({ authorization_servers: ['https://auth.example.com'], scopes_supported: ['mail.send'] }), { servers: ['https://auth.example.com'], scopes: ['mail.send'] });
+  assert.equal(wkPrm({}), null);
+  const asm = { authorization_endpoint: 'https://auth.example.com/authorize', token_endpoint: 'https://auth.example.com/token', registration_endpoint: 'https://auth.example.com/register' };
+  assert.deepEqual(wkAsMeta(asm), { authorize: asm.authorization_endpoint, token: asm.token_endpoint, register: asm.registration_endpoint });
+  assert.equal(wkAsMeta({ ...asm, code_challenge_methods_supported: ['plain'] }), null, 'no S256, no connect');
+  const au = new URL(wkAuthorize(wkAsMeta(asm)!, { clientId: 'cid', redirect: 'https://app.example/api/copilot/accounts/callback', state: 'st', verifier: 'v'.repeat(43), scope: 'mail.send', resource: 'https://mcp.example.com/mcp' }));
+  assert.deepEqual(['response_type', 'code_challenge_method', 'resource', 'scope'].map((k) => au.searchParams.get(k)), ['code', 'S256', 'https://mcp.example.com/mcp', 'mail.send']);
+  assert.equal(au.searchParams.get('code_challenge'), wkChallenge('v'.repeat(43)));
+  const key = Buffer.alloc(32, 7);
+  const pending = { pid: 'p1', server: 'https://mcp.example.com/mcp', name: 'Mail', clientId: 'cid', tokenUrl: asm.token_endpoint, verifier: 'ver', state: 'st', redirect: 'https://app.example/cb', exp: 2_000_000_000 };
+  const sealed = wkSeal(pending, key);
+  assert.deepEqual(wkUnseal(sealed, key, 1_900_000_000, 'p1'), pending);
+  assert.equal(wkUnseal(sealed, key, 1_900_000_000, 'p2'), null, 'another person’s connect');
+  assert.equal(wkUnseal(sealed, key, 2_000_000_001, 'p1'), null, 'ran out');
+  assert.equal(wkUnseal(`${sealed.slice(0, -2)}xx`, key, 1_900_000_000, 'p1'), null, 'tampered');
+  assert.equal(wkUnseal(sealed, Buffer.alloc(32, 8), 1_900_000_000, 'p1'), null, 'another key');
+  const cred = wkCred(pending, { access_token: 'at', refresh_token: 'rt', expires_in: 3600 }, 1_900_000_000);
+  assert.ok(cred.ok);
+  if (cred.ok) {
+    assert.deepEqual(cred.params.auth, { type: 'mcp_oauth', mcp_server_url: pending.server, access_token: 'at', expires_at: new Date(1_900_003_600_000).toISOString(), refresh: { refresh_token: 'rt', client_id: 'cid', token_endpoint: asm.token_endpoint, token_endpoint_auth: { type: 'none' } } });
+    assert.equal(cred.refreshes, true);
+  }
+  assert.deepEqual(wkCred(pending, { error: 'invalid_grant', error_description: 'Code expired' }, 1), { ok: false, why: 'Code expired' });
+  const acc = wkAccounts([
+    wr(wkVault, { vault: 'vlt_1' }, '2026-10-01T00:00:00Z'),
+    wr(wkAcctOn, { id: 'cred_1', vault: 'vlt_1', server: 'https://a.example/mcp', name: 'A', slug: 'a', how: 'oauth' }, '2026-10-01T00:01:00Z'),
+    wr(wkAcctOn, { id: 'cred_2', vault: 'vlt_1', server: 'https://b.example/mcp', name: 'B', slug: 'b', how: 'token' }, '2026-10-01T00:02:00Z'),
+    wr(wkAcctOff, { id: 'cred_1' }, '2026-10-02T00:00:00Z'),
+  ]);
+  assert.deepEqual([acc.vault, acc.accounts.map((a) => [a.id, a.how])], ['vlt_1', [['cred_2', 'token']]]);
+  assert.ok(!src('src/lib/copilot/accountlink.ts').includes('access_token:') && !src('src/lib/copilot/workstore.ts').includes('access_token'), 'no token is ever written to this app’s rows');
+
+  /* 16. Repeats: a standing yes to research, one run at a time. */
+  const reps = wkRepeats([
+    wr(wkRepOn, { commission_id: 't1', every: 'week' }, '2026-09-01T00:00:00Z'),
+    wr(wkRepOn, { commission_id: 't2', every: 'day' }, '2026-09-01T00:00:00Z'),
+    wr(wkRepOff, { commission_id: 't2' }, '2026-09-02T00:00:00Z'),
+    wr(wkRepOn, { commission_id: 't3', every: 'week' }, '2026-09-01T00:00:00Z'),
+    wr(wkRepOn, { commission_id: 't4', every: 'week' }, '2026-09-01T00:00:00Z'),
+    wr(wkRepRun, { commission_id: 'r1', from: 't1' }, '2026-10-05T21:00:00Z'),
+    wr(wkRepSkip, { commission_id: 't1', why: 'You have 3 things on the go.' }, '2026-10-13T21:00:00Z'),
+  ]);
+  assert.deepEqual(reps.rules.map((r) => r.template).sort(), ['t1', 't3', 't4'], 'off is off');
+  const tmpl = (id: string, o: Partial<WkCommission> = {}) => ({ ...c0, id, status: 'done' as const, created_at: '2026-09-01T00:00:00Z', ...o });
+  const pool = [tmpl('t1'), tmpl('r1', { created_at: '2026-10-05T21:00:00Z' }), tmpl('t3', { authority: 'reach' }), tmpl('t4', { status: 'stopped' })];
+  assert.deepEqual(wkDueRepeats(reps.rules, reps.runs, pool, '2026-10-12').map((d2) => d2.rule.template), ['t1'], 'a week after its last run; never reach; never called off');
+  assert.deepEqual(wkDueRepeats(reps.rules, reps.runs, pool, '2026-10-11'), [], 'not yet');
+  assert.deepEqual(wkDueRepeats(reps.rules, reps.runs, [tmpl('t1'), tmpl('r1', { status: 'active' })], '2026-10-20'), [], 'one run at a time');
+  assert.equal(wkRuleFor('r1', reps.rules, reps.runs)?.template, 't1', 'a run falls under the rule of the job it is a run of');
+  assert.equal(wkNextRun('2026-01-31', 'month'), '2026-02-28', 'the month’s last day when it is shorter');
+  assert.equal(wkNextRun('2026-10-05T21:00:00Z', 'week'), '2026-10-12');
+  assert.equal(wkRepeatLine(reps.rules.find((r) => r.template === 't1')!, reps.runs, reps.skips, '2026-09-01'), 'Runs weekly · 1 run so far · skipped 13 Oct: You have 3 things on the go.');
+
+  /* 17. The crew: the hands appear when registered, with the app’s count. */
+  const crew = wkCrew({ agents: [{ key: 'writer', name: 'Writer', role: 'Drafts openers', state: 'ready', line: '0 drafts' }], links: [], asks: 0, proposals: 0, bet: null, hired: cards });
+  assert.deepEqual(crew.map((w) => w.key), ['agent:writer', 'hired:claude', 'hired:n8n', 'hired:ana', 'model:claude', 'you'], 'the Writer is not drawn twice');
+  assert.equal(crew.find((w) => w.key === 'hired:n8n')!.state, 'stopped', 'unreachable is a stop, said by name');
+  assert.equal(crew.find((w) => w.key === 'hired:claude')!.state, 'working');
+  assert.equal(crew.find((w) => w.key === 'hired:ana')!.kind, 'person');
+  assert.match(crew[0].role, /writes what you hand over/);
+  assert.deepEqual(wkCrew({ agents: [], links: [], asks: 0, proposals: 0, bet: null }).map((w) => w.key), ['model:claude', 'you'], 'nothing registered, nothing drawn (invariant 7)');
+
+  /* 18. One job’s place: who has it, who it would go to, what waits on the person. */
+  const tw = wkThreadWork(c0, { registry: solo, log, records, repeats: reps, createdOf: () => null, env: {} });
+  assert.deepEqual([tw.job, tw.with?.name, tw.unreached, tw.cap, tw.asks.map((a) => a.call)], ['research', 'Claude agent', 'overloaded', '$3.00', ['sevt_2']]);
+  const fresh = wkThreadWork({ ...c0, id: 'c9', status: 'draft', objective: 'Write 3 subject lines' }, { registry: solo, log, records, repeats: reps, createdOf: () => null, env: {} });
+  assert.deepEqual([fresh.with, fresh.wouldGo, fresh.cap], [null, 'Writer', null], 'the person sees who before they say yes');
+  assert.match(wkThreadWork({ ...c0, id: 'c8', status: 'draft', authority: 'commit' }, { registry: solo, log, records, repeats: reps, createdOf: () => null, env: {} }).noWorker!, /may be handed "Spend and commit"/);
+
+  /* 19. The doors and the gates, in the source. */
+  const job = src('src/lib/copilot/jobs/commission.ts');
+  assert.ok(!/recordCommissionWork\(/.test(job), 'every result goes through acceptWork, never around it');
+  assert.ok(!/recordCommissionWork\(/.test(src('src/lib/copilot/managed.ts')));
+  assert.match(src('src/app/api/copilot/commissions/[id]/result/route.ts'), /await acceptWork\(profileId, commission, result, \{ log \}\)/);
+  assert.match(src('src/app/api/copilot/commissions/[id]/result/route.ts'), /That job was not handed to you\./, 'a worker with its own key reports only on its own jobs');
+  assert.match(src('src/app/api/copilot/workers/claude/webhook/route.ts'), /webhooks\.unwrap\(body, \{ headers: Object\.fromEntries\(req\.headers\.entries\(\)\), key \}\)/);
+  assert.match(src('src/app/api/copilot/workers/claude/webhook/route.ts'), /if \(!key\) return fail\(/, 'fails closed');
+  assert.match(src('src/lib/copilot/linkcheck.ts'), /redirect: 'manual'/, 'a link is never chased to wherever it points');
+  assert.match(src('src/app/copilot/_components/v2/YouTab.tsx'), /\.\.\.\(home\.accounts\?\.canConnect\s*\?/, 'invariant 7: accounts only where something can use one');
+  assert.match(src('src/app/api/copilot/commissions/[id]/route.ts'), /if \(c\.authority !== 'read'\) return fail\('Only research-and-draft jobs repeat/);
+  assert.match(src('src/lib/copilot/hands.ts'), /if \(offerIsEmpty\(brief\.who\.offer\)\) return notWritten\(BLANK_OFFER\)/, 'invariant 1');
+
+  console.log('copilot-core: work layer checks passed');
+}
+
+workLayerSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── The work layer, after review: the bugs it had, pinned ─── */
+
+import { itemsDelivered as wrItems, verdictOf as wrVerdict, expectationsOf as wrExpect } from '../../src/lib/copilot/contract';
+import { needsYou as wrNeeds } from '../../src/lib/copilot/today';
+import { reportOf as wrReport, type Commission as WrCommission, type CommissionEvent as WrEvent } from '../../src/lib/copilot/commission';
+import { threadWorkOf as wrThreadWork } from '../../src/lib/copilot/threadwork';
+import { registryFrom as wrRegistry } from '../../src/lib/copilot/workers';
+import { workOf as wrWorkOf } from '../../src/lib/copilot/worklog';
+import type { CommissionThread as WrThread } from '../../src/lib/copilot/types';
+
+async function workLayerReviewSuite() {
+  const src = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
+  const ev = (kind: string, summary: string, artifact: WrEvent['artifact'] = null) => ({ kind, summary, artifact }) as never;
+  const link = (label: string, href: string) => ({ kind: 'link' as const, label, value: label, href });
+
+  /* 1. The commonest delivery: finds with links, then a done listing the same places without them. */
+  const n8nShape = [
+    ev('found', 'Casa Ana, 40 USD a night, free on Oct 5', link('Casa Ana', 'https://casa-ana.example/rooms')),
+    ev('found', 'Hostel Uno, 25 USD, free on Oct 5', link('Hostel Uno', 'https://uno.example')),
+    ev('found', 'Bahay Inn, 35 USD, free on Oct 5', link('Bahay Inn', 'https://bahay.example')),
+    ev('done', 'Three guesthouses', { kind: 'text', label: 'The list', value: '1. Casa Ana — $40\n2. Hostel Uno — $25\n3. Bahay Inn — $35' }),
+  ];
+  const items = wrItems(n8nShape);
+  assert.equal(items.length, 3, 'three places, not six: the list is the deliverable');
+  assert.ok(items.every((i) => i.hrefs.length === 1), 'each line takes its link from the find it names');
+  const x = wrExpect('List 5 guesthouses in Makati for Oct 5', '2026-10-01', 'research');
+  const v = wrVerdict(x, n8nShape, ['https://casa-ana.example/rooms', 'https://uno.example', 'https://bahay.example'].map((url) => ({ url, state: 'ok' as const, code: 200 })), '2026-10-01');
+  assert.deepEqual(v.checks.map((c) => [c.key, c.state, c.line]), [
+    ['count', 'fail', '3 of 5 asked for'],
+    ['links', 'pass', '3 links open'],
+    ['dates', 'pass', 'For 5 Oct'],
+  ], 'short, but every line sourced and for the right night');
+  // A label that names nothing is never matched against a line.
+  const generic = wrItems([ev('found', 'A page', link('Link', 'https://x.example')), ev('done', 'Done', { kind: 'text', label: 'List', value: '1. Link to nowhere in particular' })]);
+  assert.deepEqual(generic[0].hrefs, [], '"Link" is not a name');
+  // No list in the done: the finds are the items, once each.
+  assert.equal(wrItems([...n8nShape.slice(0, 3), n8nShape[0], ev('done', 'Three found')]).length, 3);
+
+  /* 2. A refused delivery says which check it failed on the Path, not "could not finish". */
+  const c: WrCommission = {
+    id: 'c1', goal_id: null, objective: 'List 5 guesthouses in Makati for Oct 5', why: null, authority: 'read', budget_minutes: 60,
+    status: 'blocked', plan: [], created_at: '2026-10-01T00:00:00Z', approved_at: '2026-10-01T00:00:00Z', last_run_at: null, closed_at: null, outcome: null, seen_at: null,
+  };
+  const check = { at: '2026-10-02T00:00:00Z', passed: false, final: true, checks: v.checks, sendBack: v.sendBack };
+  const thread: WrThread = { commission: c, report: wrReport(c, [], 6, check), line: '' };
+  const rows = wrNeeds({ commissions: [thread], capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false, today: '2026-10-01' });
+  assert.equal(rows[0].kind, 'fix');
+  assert.equal(rows[0].detail, "Its work did not pass the app's checks: 3 of 5 asked for — one tap tries it again");
+
+  /* 3. "No worker may take it" is said once, as the reason, not again as a worker that was not reached. */
+  const reg = wrRegistry({ COPILOT_JOBS_URL: 'https://n8n.example/hook' }, { llm: false });
+  const log = wrWorkOf([{ event_type: 'commission_dispatch', payload: { commission_id: 'c2', worker: 'none', job: 'research', ok: false, error: 'No worker here may be handed "Spend and commit" work' }, created_at: '2026-10-02T00:00:00Z' }]);
+  const tw = wrThreadWork({ ...c, id: 'c2', status: 'active', authority: 'commit' }, { registry: reg, log, records: {}, repeats: { rules: [], runs: [], skips: [] }, createdOf: () => null, env: {} });
+  assert.equal(tw.unreached, null);
+  assert.match(tw.noWorker!, /may be handed "Spend and commit"/);
+
+  /* 4. The doors that must not clear a job a call through the person's account still waits on. */
+  assert.match(src('src/app/api/copilot/commissions/[id]/route.ts'), /const pending = \(await loadWork\(auth\.pid, \[id\]\)\)\.log\.asks\.get\(id\)\?\.length \?\? 0;\s*if \(pending\) \{/, 'answering a question keeps a job with a pending OK blocked');
+  assert.match(src('src/lib/copilot/store.ts'), /if \(commissionId && !calls\) await unblockCommission\(profileId, commissionId\)/, 'ticking a Move does not clear a pending OK');
+  assert.match(src('src/lib/copilot/jobs/commission.ts'), /some\(\(a\) => a\.event_id === report\.yours\[0\]\?\.id\)\) continue;/, 'a call is never raised as a Move');
+  const sheet = src('src/app/copilot/_components/SheetContent.tsx');
+  assert.match(sheet, /const callEvent = call \? thread\.report\.yours\.find\(\(e\) => e\.id === call\.event\) \?\? null : null;/, 'an OK is to the message it sends, matched by id');
+
+  /* 5. A repeat is set on the job its runs come from; a run is tied to its rule before it is approved. */
+  assert.match(src('src/app/api/copilot/commissions/[id]/route.ts'), /const template = reps\.runs\.find\(\(r\) => r\.id === id\)\?\.from \?\? id;/);
+  const job = src('src/lib/copilot/jobs/commission.ts');
+  assert.ok(job.indexOf('REPEAT_SPAWNED, { commission_id: run.id') < job.indexOf('await approveCommission(pid, run.id'), 'tied, then approved');
+  assert.match(job, /checked: latest && !latest\.passed \? latest\.sendBack : \[\],/, 'a retry after the last refusal still says what failed');
+
+  /* 6. Every plan, however it was written, is held to the ring. */
+  assert.match(src('src/lib/copilot/store.ts'), /plan: guardPlan\(input\.plan \?\? \[\], input\.authority \?\? 'read'\),/);
+
+  /* 7. Addresses a person typed are fetched only through the guarded fetch. */
+  const link2 = src('src/lib/copilot/accountlink.ts');
+  assert.equal((link2.match(/\bfetch\(/g) ?? []).length, 1, 'one raw fetch, inside safeFetch');
+  assert.match(link2, /redirect: 'manual'/);
+  assert.match(link2, /if \(where === 'private'\) throw/);
+
+  /* 8. A session is read back only when there is something in it to answer. */
+  assert.match(src('src/app/api/copilot/workers/claude/webhook/route.ts'), /if \(READ_ON\.has\(type\)/);
+  assert.match(src('src/lib/copilot/managed.ts'), /o\.log\.askIds\.add\(a\.id\);/, 'one call is one question however many times its session is read');
+
+  console.log('copilot-core: work layer review checks passed');
+}
+
+workLayerReviewSuite().catch((e) => { console.error(e); process.exit(1); });

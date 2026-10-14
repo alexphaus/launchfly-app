@@ -1131,12 +1131,13 @@ else does — the chain — instead of hiding it as five dots under the step.
   two short lines (`crewHeadline`): how many are at work, and the one worker not
   well by name or how many by count — every name is on the crew's sheet, a tap away
   (invariant 13). A worker is described by its kind and what it may do, not by
-  which of today's agents it is: `person` and `robot` are kinds the screen already
-  draws, and nothing produces them yet, so nothing offers them (invariant 7). The
-  seam they would come through already exists: a project is a mandate with an
-  authority ring, handed to whatever worker `COPILOT_JOBS_URL` names, and judged by
-  the events it posts back (**Commissions — the principal layer**). The sheet
-  offers "Give the crew a job" only where a worker is connected.
+  which of today's agents it is. The hands a job can go to come from the registry
+  (`workers.ts`, **The work layer** below) — the Claude agent, the n8n workflow, a
+  person or a robot on a webhook — each drawn after the roster's agents with the
+  record the app counted for it, and only when it is registered (invariant 7). The
+  app's own Writer is the roster's Writer, not a second face. Past seven faces the
+  crew's line goes under them. The sheet offers "Give the crew a job" only where a
+  worker is connected.
 - **Built so far** (`builtSoFar`): the engine running is what it built — every sale,
   a bet that passed, a conversation that ended in money, a project the agent
   finished, the first version of anything made, the plan's experiment that worked —
@@ -2058,6 +2059,24 @@ COPILOT_AGENT_CAN="..."             # what the agent at COPILOT_JOBS_URL can fin
 #  or
 OPENAI_API_KEY=... / DEEPSEEK_API_KEY=...
 COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL
+#   With a model, the app's own Writer takes every writing job (workers.ts).
+
+# Workers — who handed-over work goes to (workers.ts). Any of these; none = nothing picks a job up.
+ANTHROPIC_API_KEY=...                    # the Claude agent (Managed Agents), with the two ids
+COPILOT_MANAGED_AGENT_ID=agent_...       #   printed by: npx tsx scripts/managed/setup.ts --networking …
+COPILOT_MANAGED_ENVIRONMENT_ID=env_...
+ANTHROPIC_WEBHOOK_SIGNING_KEY=whsec_...  # its webhook: Console → Manage → Webhooks → /api/copilot/workers/claude/webhook, session.* events
+COPILOT_MANAGED_CENTS_PER_MINUTE=5       # a job's dollar cap = minutes granted × this, never under 50¢,
+COPILOT_MANAGED_MAX_CENTS=1500           #   never over this
+COPILOT_WORKERS='[{"key":"ana","name":"Ana (assistant)","kind":"person","url":"https://…",
+  "takes":["research"],"max_ring":"read","secret_env":"ANA_SECRET","inbound_secret_env":"ANA_INBOUND"}]'
+#   kind: agent | model | person | robot · via: webhook (default) | managed (+ agent_id, environment_id)
+#   takes: write and/or research · max_ring: the most it may be HANDED (read | reach | commit)
+#   secret_env / inbound_secret_env NAME env vars; values never go in this list, which is shown.
+COPILOT_COMPARE=claude,n8n               # split new jobs between two workers; each side's record on the crew
+COPILOT_LINKCHECK=off                    # no way out from the container: links read "not checked", never "open"
+COPILOT_ANTHROPIC_BASE_URL=              # tests only: the Managed Agents API on a stand-in
+COPILOT_ACCOUNTS_ALLOW_LOCAL=1           # tests only: an account's MCP server on localhost
 # The plan's own model (optional; unset = the brief's). The plan is drawn in the
 # background, so it can take a slower, stronger model than the 30s brief.
 COPILOT_PLAN_MODEL / COPILOT_PLAN_API_KEY / COPILOT_PLAN_BASE_URL
@@ -2628,7 +2647,7 @@ whatever the landing page says.
 | `silence` | `fix` | onboarding complete | no |
 | `obligations` | `decide` | typed rows | no |
 | `watch` | any | an active feed | yes — to judge each item |
-| `commission` | `decide` | `COPILOT_JOBS_URL` | no — it dispatches |
+| `commission` | `decide` | any registered worker (`workers.ts`) | the Writer's one call, for writing jobs |
 | `propose` | any | a model, and onboarding | yes — one call a night |
 | `remote` | any of the eight | `COPILOT_JOBS_URL` | remote's business |
 
@@ -3384,8 +3403,11 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET/POST | `/api/copilot/working` | the working file: write a line, confirm or decline a reading |
 | DELETE | `/api/copilot/working?id=` | remove a line |
 | GET/POST | `/api/copilot/commissions` | read the thread · write a mandate (always as a draft) |
-| POST | `/api/copilot/commissions/[id]` | `approve` · `unblock` · `stop` · `done` · `seen`. `approve`, and `unblock` with an `answer`, hand the work to the worker in `after()` and answer `started`. `stop` and `done` carry the close-out verdict `{ worth, amount?, note? }`, and answer with `recorded` plus a `note` when it did not reach the ledger |
-| POST | `/api/copilot/commissions/[id]/result` | **the worker's return leg** (Bearer `COPILOT_INBOUND_SECRET`) |
+| POST | `/api/copilot/commissions/[id]` | `approve` · `unblock` · `stop` · `done` · `seen` · `confirm` · `repeat` · `assign`. `approve`, and `unblock` with an `answer`, hand the work to the worker in `after()` and answer `started`; `unblock` keeps a job blocked while a call through the person's account still waits for its OK. `stop` and `done` carry the close-out verdict `{ worth, amount?, note? }`, answer with `recorded` plus a `note` when it did not reach the ledger, and tell a Claude agent still on the job to stop. `confirm { allow, call?, note? }` passes the person's OK or no on one call through their account to its session. `repeat { every: day \| week \| month \| off }` sets the standing grant on the job the runs come from (research only). `assign { worker \| null }` picks the hands |
+| POST | `/api/copilot/commissions/[id]/result` | **the worker's return leg**: Bearer `COPILOT_INBOUND_SECRET`, or a worker's own `inbound_secret_env`, which reports only on jobs handed to it. Through `acceptWork`; answers with the app's `checked` verdict |
+| POST | `/api/copilot/workers/claude/webhook` | Anthropic's session webhook (HMAC, `ANTHROPIC_WEBHOOK_SIGNING_KEY`): answers 204 and reads the session back in `after()` |
+| GET/POST | `/api/copilot/accounts` | the person's own accounts: list · `start { server, name }` (discovery, registration, PKCE; answers `go`, the consent screen) · `token { server, name, token }` · `remove { id }` |
+| GET | `/api/copilot/accounts/callback` | back from an account's consent screen: the code exchanged, the credential put in the person's vault, `/copilot2?tab=you&account=…` |
 | POST | `/api/copilot/commissions/run` | hand live mandates over now (25s budget) |
 | POST | `/api/copilot/obligations` | money owed, either way |
 | POST | `/api/copilot/actions/[id]/opened` | `sendBeacon` target — a draft's deep link was tapped |
@@ -3503,6 +3525,118 @@ and it raises no Move at all.
 A blocked mandate surfaces as a Move so it competes through `scoreMove` like
 anything else. `MAX_ACTIVE_COMMISSIONS = 3`, enforced at creation (counting
 drafts) and again at approval.
+
+## The work layer — who gets a job, and whether it is done
+
+The commission was a contract with one counterparty: whatever `COPILOT_JOBS_URL`
+named. Two leaks in it showed on a real account's Projects sheet, a third was a
+gap nothing had fallen through yet, and all three are now closed in the app, for
+every worker, by the same code.
+
+**Writing stays in the app** (`contract.ts` `jobKindOf`, `writer.ts`, `hands.ts
+runWriter`). "Draft one reusable reply for any post that states pay" went to the
+browsing agent, which tried to send the reply and stopped at Needs a fix with
+"could not send the reply…". A job is writing only when its first verb is a
+writing verb and nothing in it needs the world (a place, a price to look up, a
+link); everything else is research, and the world's markers win. Writing goes to
+the app's own model in one call, held to every draft rule here: nothing from a
+blank offer (invariant 1), no number, link or placeholder the person did not
+give (invariant 2, `numberOutside`). A failure of any kind is a `blocked` line
+with the reason, so the card offers another go.
+
+**The plan is held to the ring** (`guardPlan`, `guardEvents`). "Proceed toward a
+booking confirmation" was stored as the worker's step on a guesthouse search
+under Research and draft. `ringOf` reads the ring a step needs off its verbs —
+commit (book, pay, buy, sign, confirm a booking…), reach (email, call, message,
+ask the host…), read (everything else; "Compare prices before booking" is read).
+A step the mandate cannot do by itself is marked `yours` (`commit`, `reach`, or
+`ask` when it goes from the person's own account one OK at a time) and never
+left done. The mark is set by the app and `normalizeStep` drops it from a
+worker, so leaving it off cannot take a step off the person's list. A worker's
+claim to have acted outside the ring ("Booked the room at Casa Ana") becomes a
+`needs_you` for the owner to check. `createCommission` guards every plan,
+however it was written.
+
+**Done is checked** (`expectationsOf`, `verdictOf`, `linkcheck.ts`). Done was
+the worker's word. The guesthouse search came back with three priced options and
+their links, and they were good, but nothing in the app could have told them
+from links that do not open, three where five were asked for, or the wrong
+night. The objective is read for what can be checked without a model: the count
+asked for ("List 5", never the 5 of "Oct 5" or the 2 of "for 2 nights"), links
+that open (research only), and the days it names. When the done carries a list,
+the list is the deliverable, one line one item, each line taking its link and
+words from the find it names; a done whose whole list is behind one link is "not
+counted", never failed. A failed check sends the done back with what to fix
+(`checked` in the next brief, or the report tool's answer); the second refusal
+since the person last gave the job a go stops it as **Needs a fix**, where they
+can try again or take it as it is. An `unknown` — a 403 to a robot, a timeout —
+never fails a delivery. The link check fetches only http(s), refuses a host
+whose DNS answer is private, follows no redirect (a 3xx counts as opening) and
+reads no body.
+
+Every result, from any worker, comes in through one door, `deliver.ts
+acceptWork`: guard, check, then `recordCommissionWork`, with `nextStatus`
+taking the verdict. The check is its own row and its own block on the sheet
+("Checked by the app"), never a line in the worker's log.
+
+**The registry** (`workers.ts`). A worker is an entry: `kind` (agent, model,
+person, robot), `takes` (write, research) and `maxRing` — the most it may be
+handed; granting a ring is still not acting in it. Built in, in the order a job
+prefers them with no record: the Writer (`COPILOT_AI_API_KEY`), the Claude agent
+(`ANTHROPIC_API_KEY` + the agent and environment ids), the n8n worker
+(`COPILOT_JOBS_URL`, unchanged). `COPILOT_WORKERS` adds more; a bad entry is
+refused, not repaired, and said on the crew sheet and `/health`. `pickWorker`
+decides in a fixed order: the person's pick, the worker it was last handed to,
+a comparison split (`COPILOT_COMPARE`, by the job's id so a job never changes
+side), the best record (done out of handed, one of each assumed), then the
+registry's order. None may take it: the reason is on the card. Each hand-over is
+a `commission_dispatch` row, reached or not, and `recordsOf` counts each
+worker's record from the app's own rows — handed, done, sent back, stopped,
+worth — never from anything the worker said. A worker with its own
+`inbound_secret_env` reports only on jobs handed to it.
+
+**The Claude agent** (`managed.ts`, `managedwire.ts`, `scripts/managed/setup.ts`).
+A Managed Agents session per job: the brief as a message (`brieftext.ts`, the
+same text every worker reads) and the job as an outcome whose rubric is the
+app's own checks, marked `(checked)`; a dollar cap from the minutes granted
+(`budgetCents`); metadata carrying only the commission id. It reports through a
+custom `report` tool, and the app answers every report — what it accepted, what
+its checks found, what to fix — inside the same session, while the agent still
+has every page it read. A done accepted, or a job now waiting on the person,
+also interrupts it. The agent has web search and fetch and nothing else (no
+shell, no files), and splits a big job across copies of itself and a cheaper
+Web reader (`multiagent`, one level). Anthropic's webhook only says something
+changed, so every path — the webhook, the nightly pass, a tap — ends in
+`syncSession`, which reads the session's own event list and answers what is
+unanswered in it; overlapping reads of one session run once more rather than
+twice. A session that stopped with the job unfinished (end of turn without a
+done, its budget spent, an error) is recorded once, with its last words.
+
+**Your accounts** (`accounts.ts`, `accountlink.ts`, You → Your accounts). The
+gate on `reach` said what would open it — "connect your own email first" — and
+nothing could. An account that speaks MCP is connected through its own consent
+screen: the app reads the server's protected-resource metadata, registers
+itself as a public client, sends the person to consent with PKCE and the token
+bound to that server, and puts the tokens straight into a vault at Anthropic.
+No token is ever written to this app's rows. A job granted `reach` that goes to
+the Claude agent carries the vault and the account's tools, every call
+`always_ask`; each call becomes "OK to send email from My Gmail?" on the job's
+card, with the message written out, and the person's OK or no goes to the
+session as a tool confirmation. Answering a question or ticking a Move never
+clears a job a call still waits on. A research job never carries the accounts.
+
+**Repeats** (`repeats.ts`). A standing yes on a research job already said yes
+to once: every day, week or month the nightly pass writes and approves a fresh
+run, tied to the rule before it is approved. One run at a time, inside the three
+on the go; a run with no room is skipped and said on the job. Never for reach
+or commit: standing authority to contact people is what the rings refuse.
+
+All of it is `copilot_events` keyed by `payload.commission_id` — no migration:
+`commission_dispatch`, `commission_check`, `commission_tool_ask`,
+`commission_tool_answer`, `commission_report`, `commission_session_end`,
+`commission_assigned`, `commission_repeat` / `_off` / `commission_spawned` /
+`commission_repeat_skipped`, and `account_vault` / `account_connected` /
+`account_removed`.
 
 ## The working file — the offer's other half
 

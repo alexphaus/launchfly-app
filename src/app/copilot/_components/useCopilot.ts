@@ -19,7 +19,7 @@ import type { Reading } from '@/lib/copilot/tell';
 import type { Connection } from '@/lib/copilot/oauth';
 import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/lib/copilot/nightly';
 import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
-import { ideaRun, type IdeaRunRow } from '@/lib/copilot/lab';
+import { ideaRun, planBusy, type IdeaRunRow, type PlanRun } from '@/lib/copilot/lab';
 import type { LinkKey } from '@/lib/copilot/business';
 import type { ExperimentState } from '@/lib/copilot/experiment';
 import { importLine, type MoneyImport } from '@/lib/copilot/money/ledger';
@@ -49,6 +49,9 @@ const LAB_SAID: Record<LabInput['action'], string> = {
   link: 'Tied to the bet.',
   // Written in the background now: the card shows them being written, and the set when it lands.
   ideas: 'Writing ideas from your record.',
+  // The card shows each step working, and what it came to when it lands.
+  plan: 'Planned. The crew has started its part.',
+  plan_run: 'Trying it again.',
   found_by: 'Saved. Engine reads your business that way now.',
   checkpoint: 'Decided. The next checkpoint reads it back.',
   // Said with the count it kept (lab() below); this is the line when it says nothing more.
@@ -370,6 +373,43 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     const timer = setInterval(() => { void tick(); }, IDEAS_POLL_MS);
     return () => { over = true; clearInterval(timer); };
   }, [writingIdeas, refresh, say]);
+
+  // A bet's plan starts its crew's steps in after() too (planrun.ts): the tap
+  // answers with each step said to have started, and this follows them — keyed
+  // on the starts still unanswered, so a "Try again" joins the watch — and
+  // reloads when none is, which brings what the crew made onto the bet's card.
+  // A step that failed says so on the card and here; one that worked shows itself.
+  const crewAt = planBusy(home.lab?.planRuns ?? [], new Date())
+    ? (home.lab?.planRuns ?? []).filter((r) => r.state === 'asked').map((r) => `${r.step}@${r.at}`).sort().join(',')
+    : '';
+  useEffect(() => {
+    if (!crewAt) return;
+    let over = false;
+    let misses = 0;
+    const since = crewAt.split(',').map((x) => x.split('@')[1]).sort()[0];
+    const tick = async () => {
+      let runs: PlanRun[];
+      try {
+        runs = (await get<{ runs: PlanRun[] }>('/lab?plan=1')).runs ?? [];
+        misses = 0;
+      } catch (e) {
+        misses += 1;
+        if (misses === NIGHTLY_MISSES) say(`Cannot check on your crew: ${e instanceof Error ? e.message : 'no connection'}. Still trying.`);
+        return;
+      }
+      if (over || planBusy(runs, new Date())) return;
+      over = true;
+      clearInterval(timer);
+      try { await refresh(); } catch {
+        say('Your crew finished its steps, but this screen could not reload. Reopen the app to see them.');
+        return;
+      }
+      const failed = runs.find((r) => r.state === 'failed' && r.at >= since);
+      if (failed) say(`A step of the plan did not finish: ${(failed.why ?? 'no reason given').replace(/[.\s]+$/, '')}. It is on the bet's card, and tried again tonight.`);
+    };
+    const timer = setInterval(() => { void tick(); }, IDEAS_POLL_MS);
+    return () => { over = true; clearInterval(timer); };
+  }, [crewAt, refresh, say]);
 
   // A PDF or a screenshot is read in after(), so the upload returns while it is
   // still being read. Follow it — keyed on the ids being read, so a second
@@ -1098,9 +1138,11 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async lab(input) {
       try {
-        const r = await post<{ home: HomeData; kept?: number; why?: string | null; set?: { businesses: number; drafts: number; segments: string[] } }>('/lab', input);
+        const r = await post<{ home: HomeData; kept?: number; why?: string | null; set?: { businesses: number; drafts: number; segments: string[] }; planError?: string | null }>('/lab', input);
         setHome(r.home);
-        say(input.action === 'checkpoint' && input.checkpoint.decision === 'pivot' ? PIVOTED
+        // The bet is running either way; a plan that did not save, or a crew that could not start, is said in its place.
+        say(r.planError ? r.planError
+          : input.action === 'checkpoint' && input.checkpoint.decision === 'pivot' ? PIVOTED
           : input.action === 'voices' ? (r.kept ? `Found ${r.kept} ${r.kept === 1 ? 'post' : 'posts'} where somebody said it.` : 'Searched. Nobody new this time.')
           : input.action === 'pivot_left' && r.set ? setAsideSaid(r.set)
           : LAB_SAID[input.action]);

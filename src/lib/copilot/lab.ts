@@ -80,7 +80,15 @@ export const LAB_INTRO = 'lab_intro';
 export const LAB_SHELF = 'lab_shelf';
 /** A shelf entry taken off without being started: the last word on it. */
 export const LAB_SHELF_GONE = 'lab_shelf_gone';
-export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS, LAB_INTRO, LAB_SHELF, LAB_SHELF_GONE] as const;
+/** A bet's plan, written by the tap that starts it (or plans it later): the work, split between the crew and you (betplan.ts). */
+export const LAB_PLAN = 'lab_plan';
+export const LAB_EVENTS = [LAB_BET, LAB_STOP, LAB_TALK, LAB_CHECKPOINT, LAB_COUNT, LAB_LINK, LAB_IDEAS, LAB_INTRO, LAB_SHELF, LAB_SHELF_GONE, LAB_PLAN] as const;
+/**
+ * One crew step of a plan asked for, done or failed, with why (planrun.ts).
+ * Read on their own, never in LAB_EVENTS' window, like the asks for ideas: a
+ * step retried every night for a month must not push a bet out of it.
+ */
+export const LAB_PLAN_RUN = 'lab_plan_run';
 /**
  * Ideas asked for, being written in the background (proofai.ts startIdeas):
  * a reasoning model needs longer than a tap can wait behind the proxy, so the
@@ -288,6 +296,62 @@ export type ShelfDraft = Omit<ShelfEntry, 'id' | 'at'>;
 
 /** What the shelf holds. Past it a shelf is a backlog, and a backlog is where tests go to be forgotten. */
 export const SHELF_MAX = 10;
+
+/**
+ * A bet's plan as stored (betplan.ts draws it and reads it): the work that makes
+ * its count possible, each step the crew's or yours. Stored on its own row by the
+ * tap that starts the bet, so what the crew was told is what the person saw before
+ * Start — never redrawn under them when the catalogue or the server changes.
+ */
+export const PLAN_KINDS = ['find', 'draft', 'job', 'reply', 'page', 'adopt'] as const;
+export type PlanKind = (typeof PLAN_KINDS)[number];
+/** Who does a step, by the role on the engine. A worker's own name is on its project. */
+export const PLAN_WHO = ['Scout', 'Writer', 'Researcher', 'You'] as const;
+export type PlanWho = (typeof PLAN_WHO)[number];
+
+export interface PlanStep {
+  kind: PlanKind;
+  by: 'crew' | 'you';
+  who: PlanWho;
+  /** The step, one line. */
+  do: string;
+  /** What a draft step drafts. */
+  asset?: AssetKind;
+  /** What a project is handed over as: the play's own words, or the Researcher's search. Never a draft's ask, which is the owner's. */
+  ask?: string;
+}
+
+export interface BetPlan { bet: string; steps: PlanStep[]; at: string }
+
+export const PLAN_RUN_STATES = ['asked', 'done', 'failed'] as const;
+export type PlanRunState = (typeof PLAN_RUN_STATES)[number];
+
+/** One crew step started, finished or failed. `ref` is what it made: the project's id, the asset's. */
+export interface PlanRun { bet: string; step: PlanKind; state: PlanRunState; why: string | null; ref: string | null; at: string }
+
+/**
+ * A step started and not heard from after this belongs to a process that is
+ * gone: a redeploy kills after() work, and a function past its limit says
+ * nothing. Read as stopped (betplan.ts), so it is tried again rather than shown
+ * as busy forever. Here, beside the rows, so the hook that follows them does not
+ * pull the whole planner into every shell.
+ */
+export const PLAN_RUN_MS = 6 * 60_000;
+
+/** Whether a crew step was started and has not been heard from yet: what the screen polls for. The newest row of a step is its state. */
+export function planBusy(runs: PlanRun[], now: Date): boolean {
+  const newest = new Map<PlanKind, PlanRun>();
+  for (const r of runs) {
+    const seen = newest.get(r.step);
+    if (!seen || r.at > seen.at) newest.set(r.step, r);
+  }
+  return [...newest.values()].some((r) => r.state === 'asked' && now.getTime() - Date.parse(r.at) < PLAN_RUN_MS);
+}
+
+export const PLAN_STEP_MAX = 240;
+/** A project's objective holds 200 (commission.ts OBJECTIVE_MAX), and an ask becomes one as it stands. */
+export const PLAN_ASK_MAX = 200;
+export const PLAN_WHY_MAX = 240;
 
 export const COMMITMENTS = ['none', 'time', 'intro', 'money'] as const;
 export type Commitment = (typeof COMMITMENTS)[number];
@@ -766,6 +830,8 @@ export interface LabLedger {
   intros: Map<string, IntroClose>;
   /** Tests kept for later, newest first: not taken off, and not started. */
   shelf: ShelfEntry[];
+  /** Bet id → its plan: the first written for it, which is the one the crew was told. */
+  plans: Map<string, BetPlan>;
 }
 
 /** A shelf entry as stored, reshaped rather than trusted: the lengths, counts and lines a bet is held to. */
@@ -827,6 +893,60 @@ function storedBet(p: Record<string, unknown>, id: string, at: string): Bet | nu
 /** A tap's own word, sent with "Start the bet": the same on a retry of that tap, new on the next one. */
 export const isOpenNonce = (v: unknown): v is string => typeof v === 'string' && /^[\w-]{8,64}$/.test(v);
 
+const isPlanKind = (v: unknown): v is PlanKind => typeof v === 'string' && (PLAN_KINDS as readonly string[]).includes(v);
+
+/**
+ * A stored step, reshaped rather than trusted. A crew step is never "You" and
+ * yours is never a crew member's; a draft with nothing to draft and a project
+ * with nothing to hand over cannot run, so none of them is a step.
+ */
+function planStepOf(v: unknown): PlanStep | null {
+  const o = obj(v);
+  const by = o.by === 'crew' || o.by === 'you' ? o.by : null;
+  const who = (PLAN_WHO as readonly string[]).includes(o.who as string) ? (o.who as PlanWho) : null;
+  const what = text(o.do, PLAN_STEP_MAX);
+  if (!isPlanKind(o.kind) || !by || !who || !what || (by === 'you') !== (who === 'You')) return null;
+  const step: PlanStep = { kind: o.kind, by, who, do: what };
+  if (typeof o.asset === 'string' && ASSET_KIND_SET.has(o.asset)) step.asset = o.asset as AssetKind;
+  const ask = text(o.ask, PLAN_ASK_MAX);
+  if (ask) step.ask = ask;
+  if (o.kind === 'draft' && !step.asset) return null;
+  // The crew hands a project over by its ask, and so does a find the Researcher does.
+  if (by === 'crew' && (o.kind === 'job' || (o.kind === 'find' && who === 'Researcher')) && !step.ask) return null;
+  return step;
+}
+
+/** A stored plan: one step of each kind, the first kept, or null when nothing in it holds together. */
+export function planOf(p: unknown, bet: string, at: string): BetPlan | null {
+  const raw = obj(p).steps;
+  const steps: PlanStep[] = [];
+  for (const s of Array.isArray(raw) ? raw : []) {
+    const step = planStepOf(s);
+    // The card and the runner find a step by its kind, so two of one kind would be one read twice.
+    if (step && !steps.some((x) => x.kind === step.kind)) steps.push(step);
+  }
+  return steps.length ? { bet, steps, at } : null;
+}
+
+/** A stored run of a step, reshaped rather than trusted. */
+export function planRunOf(p: unknown, at: string): PlanRun | null {
+  const o = obj(p);
+  if (typeof o.bet !== 'string' || !o.bet || !isPlanKind(o.step) || !(PLAN_RUN_STATES as readonly string[]).includes(o.state as string)) return null;
+  return {
+    bet: o.bet.slice(0, 64), step: o.step, state: o.state as PlanRunState,
+    why: text(o.why, PLAN_WHY_MAX), ref: typeof o.ref === 'string' && /^[\w-]{1,64}$/.test(o.ref) ? o.ref : null, at,
+  };
+}
+
+/** The runs in the rows given, newest first. */
+export function planRunsOf(rows: LabEventRow[]): PlanRun[] {
+  return rows
+    .filter((r) => r.event_type === LAB_PLAN_RUN)
+    .map((r) => planRunOf(r.payload, r.created_at))
+    .filter((r): r is PlanRun => !!r)
+    .sort((a, b) => b.at.localeCompare(a.at));
+}
+
 /** Written first: by when it was opened, then by the table's own order for two opened in the same instant. */
 function openedBefore(a: Pick<Bet, 'id' | 'openedAt'>, b: Pick<Bet, 'id' | 'openedAt'>): boolean {
   if (a.openedAt !== b.openedAt) return a.openedAt < b.openedAt;
@@ -856,7 +976,7 @@ export function openRace(bets: Array<Pick<BetView, 'state'> & { bet: Pick<Bet, '
 }
 
 export function labFromEvents(rows: LabEventRow[]): LabLedger {
-  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {}, intros: new Map(), shelf: shelfFromEvents(rows) };
+  const out: LabLedger = { bets: [], stopped: new Map(), talks: [], checkpoints: [], tallies: [], links: new Map(), ideas: {}, intros: new Map(), shelf: shelfFromEvents(rows), plans: new Map() };
   for (const r of [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     const p = obj(r.payload);
     const id = String(r.id);
@@ -903,6 +1023,11 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
       const talk = talkRef(p.talk);
       // The last word wins: asked for on Monday, fallen through by Friday.
       if (talk && (INTRO_OUTCOMES as readonly string[]).includes(p.outcome as string)) out.intros.set(talk, { outcome: p.outcome as IntroOutcome, at: r.created_at });
+    } else if (r.event_type === LAB_PLAN) {
+      const bet = typeof p.bet === 'string' ? p.bet : null;
+      // The first plan is the one: a second tap on "Plan it" does not rewrite what the crew was told.
+      const plan = bet && !out.plans.has(bet) ? planOf(p, bet, r.created_at) : null;
+      if (plan) out.plans.set(plan.bet, plan);
     }
   }
   out.bets.reverse();
@@ -1108,6 +1233,10 @@ export interface LabHome {
   eras?: Record<string, EraCounts>;
   /** The public posts found for bets, and the ones set aside (voices.ts). Optional: a payload from before them has none. */
   voices?: VoicesHome;
+  /** Bet id → its plan (betplan.ts). Optional: a payload from before plans has none, and its bets read as they did. */
+  plans?: Record<string, BetPlan>;
+  /** The running bet's crew steps started, finished or failed, newest first. Optional, as above. */
+  planRuns?: PlanRun[];
   /** The read's failure, said on the tab — never shown as an empty Lab (invariant 13). */
   unreadable: string | null;
 }
@@ -1135,6 +1264,8 @@ export interface LabInput {
   shelfEvents?: LabEventRow[];
   /** Asks for ideas and their failures (LAB_IDEAS_ASKED, LAB_IDEAS_FAILED), read on their own. */
   ideaRunEvents?: LabEventRow[];
+  /** The plans' crew steps run (LAB_PLAN_RUN), read on their own. */
+  planRunEvents?: LabEventRow[];
 }
 
 /**
@@ -1162,17 +1293,23 @@ export function labHome(i: LabInput): LabHome {
     signals: i.signals ?? [],
     pageHits: i.pageHits ?? [],
   };
+  const views = bets.map((b) => {
+    const stop = ledger.stopped.get(b.id);
+    const view = betView(b, stop ? dayIn(stop.at, i.timezone) : null, rows, i.today);
+    // Only the running bet is read this way — the card and Claude show no other —
+    // so forty finished bets do not cost nine counts each on every load. Read to
+    // today, never past the last day: after it, the next bet's sends are not this one's.
+    return view.state === 'running'
+      ? { ...view, note: stop?.note ?? null, reading: readingOf(b, minDay(i.today, view.last), rows) }
+      : { ...view, note: stop?.note ?? null };
+  });
+  const running = views.find((v) => v.state === 'running')?.bet.id ?? null;
   return {
-    bets: bets.map((b) => {
-      const stop = ledger.stopped.get(b.id);
-      const view = betView(b, stop ? dayIn(stop.at, i.timezone) : null, rows, i.today);
-      // Only the running bet is read this way — the card and Claude show no other —
-      // so forty finished bets do not cost nine counts each on every load. Read to
-      // today, never past the last day: after it, the next bet's sends are not this one's.
-      return view.state === 'running'
-        ? { ...view, note: stop?.note ?? null, reading: readingOf(b, minDay(i.today, view.last), rows) }
-        : { ...view, note: stop?.note ?? null };
-    }),
+    bets: views,
+    // The plans of the bets on hand, so an ended bet can be read against the work done for it.
+    plans: Object.fromEntries([...ledger.plans].filter(([id]) => views.some((v) => v.bet.id === id))),
+    // Only the running bet's runs: what the crew is on now, and why a step stopped.
+    planRuns: running ? planRunsOf(i.planRunEvents ?? []).filter((r) => r.bet === running) : [],
     talks: ledger.talks.slice(0, MAX_TALKS),
     checkpoints: ledger.checkpoints.slice(0, MAX_CHECKPOINTS),
     tallies: ledger.tallies.slice(0, MAX_TALLIES),
@@ -1703,6 +1840,10 @@ export interface LabView {
   intros: Record<string, IntroClose>;
   /** Tests kept for later, newest first. */
   shelf: ShelfEntry[];
+  /** The running bet's plan, or null: none running, or one started before plans (it can be planned from its card). */
+  plan: BetPlan | null;
+  /** Its crew steps run, newest first. */
+  planRuns: PlanRun[];
   line: string;
   unreadable: string | null;
 }
@@ -1723,6 +1864,8 @@ export function labView(lab: LabHome | undefined, ctx: { runwayMonths: number | 
     links: lab?.links ?? {},
     intros: lab?.intros ?? {},
     shelf: lab?.shelf ?? [],
+    plan: current ? lab?.plans?.[current.bet.id] ?? null : null,
+    planRuns: current ? (lab?.planRuns ?? []).filter((r) => r.bet === current.bet.id) : [],
     line: labLine(current, checkpoint.due),
     unreadable: lab?.unreadable ?? null,
   };

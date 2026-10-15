@@ -68,6 +68,22 @@ export function offerLines(o: OfferIn | null, foundBy: string | null): string[] 
 const hereLine = (h: { title: string; line?: string | null }) => `${h.title}${clean(h.line) ? ` — ${clean(h.line)}` : ''}`;
 
 export interface NowIn { title: string; why: string | null; size: string | null }
+
+/**
+ * The move now, as Claude reads it. While today's call waits on an answer the
+ * Path's move is the call, and the call's card carries its words — so the move
+ * itself has no title, and the read said "The move now:" with nothing after it.
+ * The call's own headline is read instead, and a move with no words is left out
+ * rather than said blank.
+ */
+export function nowIn(now: { kind: string; title: string; why: string | null; size: string | null } | null, call: { headline: string; because: string[] } | null): NowIn | null {
+  if (!now) return null;
+  if (now.kind === 'call') {
+    const title = call?.headline?.trim();
+    return title ? { title, why: call!.because.find((w) => w?.trim())?.trim() ?? null, size: null } : null;
+  }
+  return now.title.trim() ? { title: now.title, why: now.why, size: now.size } : null;
+}
 export interface AskIn { kind: string; title: string; detail: string }
 
 function nextLines(now: NowIn | null, asks: AskIn[]): string[] {
@@ -99,12 +115,14 @@ export interface BetIn {
    * count it is decided on is still nothing.
    */
   reading?: string | null;
+  /** The running bet's plan, said as the work (betplan.ts betPlanText). Absent on a bet with none. */
+  plan?: string | null;
 }
 
 const BET_STATE: Record<BetIn['state'], string> = { running: 'running', passed: 'passed', failed: 'did not pass', stopped: 'called off' };
 
 function runningLine(b: BetIn): string {
-  return `"${b.belief}" — on ${b.part.toLowerCase()}. Day ${b.day} of ${b.days}: ${b.result}. It passes at ${b.pass}.${b.play ? ` The play: ${b.play}.` : ''}${b.reading ? ` ${b.reading}` : ''}`;
+  return `"${b.belief}" — on ${b.part.toLowerCase()}. Day ${b.day} of ${b.days}: ${b.result}. It passes at ${b.pass}.${b.play ? ` The play: ${b.play}.` : ''}${b.reading ? ` ${b.reading}` : ''}${b.plan ? ` ${b.plan}` : ''}`;
 }
 
 /* ─── get_overview ────────────────────────────────────────────────────────── */

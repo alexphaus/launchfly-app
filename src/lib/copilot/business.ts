@@ -909,7 +909,10 @@ function deliverLink(i: ChainInput, c: Ctx): BusinessLink {
       why: passed ? `A bet on delivery passed${passed.when ? ` on ${passed.when}` : ''}: ${passed.line}. Nothing is written down yet.` : 'Nobody has written how a client goes from yes to delivered.',
       moves: [
         { key: 'deliver-write', label: 'Write how you deliver', by: 'you', go: { sheet: 'working' } },
-        { key: 'deliver-onboard', label: 'Client onboarding', by: c.ai, ask: 'Plan how I take a new client from the first yes to delivered, step by step' },
+        // "Write", not "Plan": a job is sorted by its first verb (contract.ts jobKindOf), and
+        // "Plan how I take…" went as research, held to links a plan of yours has none of,
+        // and was sent back by the link check every time.
+        { key: 'deliver-onboard', label: 'Client onboarding', by: c.ai, ask: 'Write how I take a new client from the first yes to delivered, step by step' },
       ] };
   }
   // Delivery is judged by its own bets, where there are any: a step handed

@@ -201,6 +201,9 @@ export type LabInput =
   | { action: 'uncount'; id: string }
   | { action: 'link'; bet: string; commission: string }
   | { action: 'ideas'; part: LinkKey }
+  /** The running bet's plan, for a bet started before plans; and "Try again" on its crew's steps (betplan.ts). */
+  | { action: 'plan'; bet: string }
+  | { action: 'plan_run' }
   | { action: 'found_by'; found_by: FoundBy | null }
   | { action: 'checkpoint'; checkpoint: { decision: LabDecision; part?: LinkKey | null; note?: string; chain: Partial<Record<LinkKey, LinkState>> } };
 

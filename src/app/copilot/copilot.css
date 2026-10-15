@@ -1328,6 +1328,38 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-prep-k { font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-lab-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
 .cp-root[data-theme="soft"] .cp2-lab-actions .cp2-link { margin-left: auto; padding: 8px 2px; }
+/* The bet's plan (BetPlan.tsx): the crew's steps and yours under the count, each with what the rows show.
+   Distinctive names on purpose: .cp-steps already sizes every span inside it, and a plan of "steps" is the obvious collision. */
+.cp-root[data-theme="soft"] .cp2-bplan { margin-top: 14px; padding: 12px; border-radius: 16px; background: var(--line); }
+.cp-root[data-theme="soft"] .cp2-bplan.preview { margin: 14px 0 4px; }
+.cp-root[data-theme="soft"] .cp2-bplan-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.cp-root[data-theme="soft"] .cp2-bplan-sum { font-size: 12px; font-weight: 600; color: var(--ink); text-align: right; }
+.cp-root[data-theme="soft"] .cp2-bplan-lead { font-size: 12.5px; line-height: 1.45; color: var(--ink); margin: 0 0 8px; }
+.cp-root[data-theme="soft"] .cp2-bplan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cp-root[data-theme="soft"] .cp2-bplan-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; }
+.cp-root[data-theme="soft"] button.cp2-bplan-row { box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-bplan-row > .cp2-chev { flex: none; align-self: center; width: 15px; height: 15px; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-bplan-mark {
+  flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; line-height: 1; box-shadow: inset 0 0 0 1.5px var(--fill-quiet); color: var(--muted);
+}
+.cp-root[data-theme="soft"] .cp2-bplan-mark svg { width: 12px; height: 12px; }
+.cp-root[data-theme="soft"] .cp2-bplan-mark.done { background: var(--ai); box-shadow: none; color: #fff; }
+/* A crew step at work breathes, as a worker at work does on the engine: the same pulse, the same meaning. */
+.cp-root[data-theme="soft"] .cp2-bplan-mark.working { box-shadow: inset 0 0 0 2px var(--ai); animation: cp2-er-pulse 1.6s ease-in-out infinite; }
+.cp-root[data-theme="soft"] .cp2-bplan-mark.needs { background: var(--tint); box-shadow: inset 0 0 0 1.5px var(--blue); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-bplan-mark.failed { background: var(--bad-tint); box-shadow: inset 0 0 0 1.5px var(--bad); color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-bplan-mark.stopped { color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-bplan-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-root[data-theme="soft"] .cp2-bplan-who { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bplan-main > b { font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-bplan-state { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-bplan-state.done { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-bplan-state.needs { color: var(--blue); font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-bplan-state.failed { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-bplan-retry { display: inline-block; margin-top: 8px; padding: 6px 2px; }
+.cp-root[data-theme="soft"] .cp2-bplan-foot { font-size: 11.5px; line-height: 1.45; color: var(--muted); margin: 8px 2px 0; }
+.cp-root[data-theme="soft"] .cp2-bplan-go { margin-top: 10px; }
 .cp-root[data-theme="soft"] .cp2-lab-stop { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .cp-root[data-theme="soft"] .cp2-lab-stop p { font-size: 13px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-stop .cp-btn-row { margin-top: 0; }

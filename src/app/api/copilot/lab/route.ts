@@ -3,7 +3,8 @@
 // it off, log a conversation or a count, say how an introduction went, tie a
 // project to a bet, answer the checkpoint, ask for ideas, say how buyers find
 // you, search for the running bet's people or set one aside (voices.ts), and
-// answer what a pivot on who buys left behind (era.ts pivotLeft). Each is
+// answer what a pivot on who buys left behind (era.ts pivotLeft), and start a
+// bet's plan or try its crew's steps again (betplan.ts, planrun.ts). Each is
 // validated by lib/copilot/lab.ts or its own module and stored as an event. A verdict is never posted here — there is no "mark it passed" —
 // because it is computed from the rows on every load (invariant 10's
 // reasoning: a bet the person could pass by tapping would be graded by the one
@@ -11,11 +12,14 @@
 
 import { after } from 'next/server';
 import { todayIso } from '@/lib/copilot/db';
+import { planCapsOf, planFor, type PlanReason } from '@/lib/copilot/betplan';
+import { runJobs } from '@/lib/copilot/jobs';
+import { VoiceRefused, claimPlanSteps, runPlanSteps, searchVoicesFor } from '@/lib/copilot/planrun';
 import { LINK_KEYS, type LinkKey } from '@/lib/copilot/business';
 import {
-  LAB_BET, LAB_CHECKPOINT, LAB_COUNT, LAB_INTRO, LAB_LINK, LAB_SHELF, LAB_SHELF_GONE, LAB_STOP, LAB_TALK, NOTE_MAX,
+  LAB_BET, LAB_CHECKPOINT, LAB_COUNT, LAB_INTRO, LAB_LINK, LAB_PLAN, LAB_SHELF, LAB_SHELF_GONE, LAB_STOP, LAB_TALK, NOTE_MAX,
   betPrice, countRefusal, isOpenNonce, labFromEvents, normalizeBet, normalizeCheckpoint, normalizeIntroClose, normalizeShelf, normalizeTalk, normalizeTally,
-  openRace, shelfRefusal,
+  openRace, shelfRefusal, type PlanKind, type PlanStep,
 } from '@/lib/copilot/lab';
 import { foundOf } from '@/lib/copilot/proof';
 import { salesCurrency } from '@/lib/copilot/metrics';
@@ -23,14 +27,11 @@ import { isFoundBy } from '@/lib/copilot/offer';
 import { ProofModelError, ProofRefusal, startIdeas, writeIdeas } from '@/lib/copilot/proofai';
 import {
   PIVOT_KEPT, claimProposal, deleteLabTalk, deleteLabTally, getProfile, insertExperimentMark, insertLabEvent, insertPivotAnswer, insertVoiceEvent,
-  loadHome, loadIdeaRuns, loadLabEvents, loadVoices, setAsidePivot, setFoundBy, unclaimProposal, withdrawLabBet,
+  insertPlanRun, loadHome, loadIdeaRuns, loadLabEvents, loadPlanRuns, loadVoices, setAsidePivot, setFoundBy, unclaimProposal, withdrawLabBet,
 } from '@/lib/copilot/store';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
-import { offerIsEmpty } from '@/lib/copilot/offer';
-import { bumpUsage, periodKey } from '@/lib/copilot/usage';
-import { LAB_VOICE_GONE, LAB_VOICES, betVoiced, betVoices, isVoiceId, voiceRefusal, voicesSeen } from '@/lib/copilot/voices';
-import { findVoices } from '@/lib/copilot/voicefind';
-import { exaConfigured } from '@/lib/copilot/watch/exa';
+import { LAB_VOICE_GONE, isVoiceId } from '@/lib/copilot/voices';
+import type { HomeData } from '@/lib/copilot/types';
 
 export const runtime = 'nodejs';
 // Ideas are written in after(), for up to two and a half minutes (proofai.ts):
@@ -46,7 +47,16 @@ export const maxDuration = 300;
 export async function GET(req: Request) {
   const auth = await profileIdOr401();
   if ('res' in auth) return auth.res;
-  if (new URL(req.url).searchParams.get('ideas') !== '1') return fail('Unknown read');
+  const q = new URL(req.url).searchParams;
+  // ?plan=1: the crew's steps started, finished or failed — what Engine polls while a plan's steps run in after().
+  if (q.get('plan') === '1') {
+    try {
+      return json({ ok: true, runs: await loadPlanRuns(auth.pid) });
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : 'Could not read what your crew is doing', 500);
+    }
+  }
+  if (q.get('ideas') !== '1') return fail('Unknown read');
   try {
     return json({ ok: true, runs: await loadIdeaRuns(auth.pid) });
   } catch (e) {
@@ -68,6 +78,69 @@ async function talksOnRecord(pid: string) {
   const events = await loadLabEvents(pid);
   if (events.unreadable) throw new Error(`Your conversations could not be read just now, so the introduction cannot be checked: ${events.unreadable}`);
   return labFromEvents(events.rows).talks;
+}
+
+/** The dispatch a Start's project waits for, as approving one on its own starts it (commissions/[id]). */
+const DISPATCH_BUDGET_MS = 90_000;
+
+/**
+ * A bet's plan, written: drawn from what this server can do now (betplan.ts),
+ * never taken from the request, so a request cannot hand the crew a step the
+ * person was not shown. A plan with no steps is not written. The error is said
+ * with the answer: the bet runs either way, and its card offers to plan it.
+ */
+async function writePlan(pid: string, home: HomeData, betId: string): Promise<{ steps: PlanStep[]; error: string | null }> {
+  const view = home.lab?.bets.find((x) => x.bet.id === betId);
+  if (!view) return { steps: [], error: 'Its plan did not save: the bet could not be read back. Plan it from its card.' };
+  const steps = planFor(view.bet, planCapsOf(home), home.profile.offer ?? {});
+  if (!steps.length) return { steps, error: null };
+  try {
+    await insertLabEvent(pid, LAB_PLAN, { bet: betId, steps });
+    return { steps, error: null };
+  } catch (e) {
+    return { steps: [], error: `Its plan did not save: ${e instanceof Error ? e.message : 'no reason given'}. Plan it from its card.` };
+  }
+}
+
+/** The home as it is now that the plan is written, without reading it all again. */
+const withPlan = (home: HomeData, bet: string, steps: PlanStep[]): HomeData =>
+  home.lab ? { ...home, lab: { ...home.lab, plans: { ...home.lab.plans, [bet]: { bet, steps, at: new Date().toISOString() } } } } : home;
+
+/**
+ * The crew's part: the due steps said to have started before the answer goes
+ * (planrun.ts claimPlanSteps), so the card shows them working and follows them;
+ * then run once the answer is on its way, and a project it handed over goes to a
+ * worker now rather than at 21:00. A step's failure is its own row on the card.
+ * A run that dies before finishing leaves its starts unanswered, and the card
+ * reads those as stopped after a few minutes and the nightly pass takes them up.
+ */
+async function startCrew(pid: string, home: HomeData, reason: PlanReason): Promise<string | null> {
+  let claim: Awaited<ReturnType<typeof claimPlanSteps>>;
+  try {
+    claim = await claimPlanSteps(pid, home, reason);
+  } catch (e) {
+    return `The crew could not start: ${e instanceof Error ? e.message : 'no reason given'}. The nightly pass tries again.`;
+  }
+  if ('idle' in claim || !claim.steps.length) return null;
+  after(async () => {
+    let held: Array<{ step: PlanKind; ref: string }> = [];
+    try {
+      const r = await runPlanSteps(pid, claim, { holdProjects: true });
+      held = r.held;
+      if (r.handed) await runJobs(pid, { deadline: Date.now() + DISPATCH_BUDGET_MS, only: ['commission'] });
+    } catch (e) {
+      console.error('[copilot/lab] the plan stopped part way; its steps read as stopped and the nightly pass takes them up', e instanceof Error ? e.message : e);
+    } finally {
+      // The worker has had its go, or the dispatch broke and the commission job
+      // says so on the project: either way the step's own run is over, and the
+      // screen following it reloads onto the project as it now stands.
+      for (const h of held) {
+        await insertPlanRun(pid, { bet: claim.bet, step: h.step, state: 'done', ref: h.ref })
+          .catch((e) => console.error('[copilot/lab] a plan step could not be closed; it reads as stopped in a few minutes', e instanceof Error ? e.message : e));
+      }
+    }
+  });
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -114,16 +187,48 @@ export async function POST(req: Request) {
           await withdrawLabBet(auth.pid, id);
           return race.same ? json({ ok: true, home: await loadHome(auth.pid) }) : fail(RUNNING);
         }
+        // The plan the sheet showed, written with the bet: one Start is the bet
+        // and the crew's part of it (betplan.ts).
+        const planned = after ? await writePlan(auth.pid, after, id) : { steps: [], error: 'Its plan did not save: your record could not be read back. Plan it from its card.' };
+        const planError = planned.error ?? (planned.steps.length && after ? await startCrew(auth.pid, withPlan(after, id, planned.steps), 'start') : null);
         // The plan's experiment, made a bet: it is being tried now, and the bet
         // will give it its verdict (lab.ts experimentVerdicts).
         if (v.value.experiment) {
           const marks = home.roadmap?.experiments ?? [];
           if (!marks.some((m) => m.id === v.value.experiment && m.state === 'started')) {
             await insertExperimentMark(auth.pid, { id: v.value.experiment, title: v.value.idea?.label ?? v.value.belief, angle: null, state: 'started' });
-            return json({ ok: true, home: await loadHome(auth.pid) });
+            return json({ ok: true, planError, home: await loadHome(auth.pid) });
           }
         }
-        return json({ ok: true, home: after });
+        return json({ ok: true, planError, home: planned.steps.length ? await loadHome(auth.pid) : after });
+      }
+      case 'plan': {
+        // A bet started before plans, planned from its card: the same plan a
+        // Start writes, and the crew's part started by this tap.
+        const home = await loadHome(auth.pid);
+        if (!home) return fail('Not found', 404);
+        if (home.lab?.unreadable) return fail(`Your bets could not be read just now: ${home.lab.unreadable}`);
+        const view = home.lab?.bets.find((x) => x.bet.id === str(b.bet));
+        if (!view || view.state !== 'running') return fail('That bet is not running.');
+        if (home.lab?.plans?.[view.bet.id]) return json({ ok: true, home });
+        // The card offers this only where the crew has a step, and so does the route.
+        if (!planFor(view.bet, planCapsOf(home), home.profile.offer ?? {}).some((x) => x.by === 'crew')) return fail('Nothing connected here can take a step of this bet: every part of it is yours.');
+        const planned = await writePlan(auth.pid, home, view.bet.id);
+        if (planned.error) return fail(planned.error);
+        const crewError = await startCrew(auth.pid, withPlan(home, view.bet.id, planned.steps), 'start');
+        return json({ ok: true, planError: crewError, home: await loadHome(auth.pid) });
+      }
+      case 'plan_run': {
+        // "Try again" on a step that failed: every crew step that can run, now,
+        // whatever ran tonight. The answer returns at once; the card follows the run.
+        const home = await loadHome(auth.pid);
+        if (!home) return fail('Not found', 404);
+        if (home.lab?.unreadable) return fail(`Your bets could not be read just now: ${home.lab.unreadable}`);
+        const view = home.lab?.bets.find((x) => x.state === 'running');
+        if (!view || !home.lab?.plans?.[view.bet.id]) return fail('No running bet has a plan to run.');
+        const crewError = await startCrew(auth.pid, home, 'retry');
+        if (crewError) return fail(crewError);
+        return json({ ok: true, home: await loadHome(auth.pid) });
       }
       case 'shelve': {
         const home = await loadHome(auth.pid);
@@ -234,30 +339,17 @@ export async function POST(req: Request) {
       }
       case 'voices': {
         // People who said it, for the running bet (voices.ts): the searches run
-        // here, in the tap — seconds, not minutes — and what they kept is stored
-        // and metered like the matches it is.
+        // here, in the tap — seconds, not minutes — through the one function the
+        // plan's Scout uses too (planrun.ts), refused for the same reasons.
         const home = await loadHome(auth.pid);
         if (!home) return fail('Not found', 404);
-        if (home.lab?.unreadable) return fail(`Your bets could not be read just now: ${home.lab.unreadable}`);
-        // Unread, a search could bring back the people already on the card and charge for them twice.
-        if (home.lab?.voices?.unreadable) return fail(`The people already found could not be read just now, so a search cannot tell who is new: ${home.lab.voices.unreadable}`);
-        const view = home.lab?.bets.find((x) => x.bet.id === str(b.bet));
-        if (!view) return fail('That bet is not in your record.');
-        const mine = betVoices(home.lab?.voices, view.bet, home.lab?.talks ?? []);
-        const remaining = home.billing.matches.remaining;
-        const no = voiceRefusal({ running: view.state === 'running', voiced: betVoiced(view.bet), searches: mine.searches, ready: exaConfigured(), remaining });
-        if (no) return fail(no);
-        // A search worked out from nothing is not the person's (invariant 1).
-        if (offerIsEmpty(profile.offer)) return fail('Say what you sell and who for first: the search is written from it.');
-        const found = await findVoices({ offer: profile.offer ?? {}, bet: view.bet, seen: voicesSeen(home.lab?.voices), today, max: remaining });
-        // Stored even when it kept nobody: "searched, nobody new" is an answer, and
-        // the next search should know this one ran.
-        await insertVoiceEvent(auth.pid, LAB_VOICES, {
-          bet: view.bet.id, queries: found.queries, from: found.from, voices: found.voices,
-          ...(found.why ? { why: found.why } : {}),
-        });
-        if (found.voices.length) await bumpUsage(auth.pid, periodKey(profile.timezone), 'matches', found.voices.length);
-        return json({ ok: true, kept: found.voices.length, why: found.why, home: await loadHome(auth.pid) });
+        try {
+          const found = await searchVoicesFor(auth.pid, profile, home, str(b.bet), today);
+          return json({ ok: true, kept: found.kept, why: found.why, home: await loadHome(auth.pid) });
+        } catch (e) {
+          if (e instanceof VoiceRefused) return fail(e.message);
+          throw e;
+        }
       }
       case 'voice_gone': {
         if (!isVoiceId(b.voice)) return fail('Which post?');

@@ -616,6 +616,28 @@ play needs is a rule, and a model picking what to do is the morning brief), a st
 the crew may tick itself, and any step that sends, posts or spends — answering
 people stays yours (invariant 4). See COPILOT.md → **A bet starts with its plan**.
 
+**Then — one bet, researched.** Its owner, looking at the tab with no bet running,
+asked whether typing a bet or reading a list of ideas was the product, against a
+mockup whose Planner picked today's move; then asked how ideas drawn from the
+record alone could ever know what works in the world. Both were fair. The list —
+three ideas, six plays, your own — was a reading assignment where a decision was
+wanted; and "use only what you are told" kept every idea inside what had already
+been tried. So the card now offers one bet with its line set and the plan that
+starts with it, one tap to start it as it stands, the rest behind "Show other
+bets"; and before ideas are written, two web searches find what others selling the
+same thing did, the model cites those pages by number, and each idea says how it
+would work and what a fail would say. The record still holds the business's facts
+and the rows still judge; a page is a reason to try something, never evidence it
+worked here, and an idea with a page behind it ranks above one from the model's
+memory (invariant 3). It passes the survival test on the join, not the advice: a
+chat can suggest a playbook; it cannot start it in one tap against a line set
+before it, cite the pages, and grade it from rows. Declined again, narrowed: a
+second model call choosing the move — which bet comes first is a rule over the
+order the model already wrote its ideas in. Not yet: "this play passed for 4 of
+11 businesses like yours", which needs many accounts' bets and is the one ranking
+input nobody else has. See COPILOT.md → **One bet, not a list** and **Researched
+ideas**.
+
 ---
 
 ## Where it actually stands

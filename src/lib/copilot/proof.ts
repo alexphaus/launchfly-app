@@ -21,7 +21,10 @@
 
 import { ASSET_KINDS, type Asset, type AssetKind } from './assets';
 import { talkTotals } from './ideas';
-import { CHECKPOINT_DAYS, daysBetween, dayWords, resultLine, type BetView, type IdeaSet, type LabMetric, type Talk, type Tally } from './lab';
+import {
+  CHECKPOINT_DAYS, countRefusal, daysBetween, dayWords, playsFor, resultLine,
+  type BetIdea, type BetView, type Idea, type IdeaSet, type LabMetric, type Play, type Talk, type Tally,
+} from './lab';
 import { LINK_KEYS, LINK_LABEL, PIVOT_REACH, restartsOf, type ChainBet, type ChainInput, type LinkKey } from './business';
 import type { Angle } from './experiment';
 import type { Agent } from './machine';
@@ -237,6 +240,53 @@ export function ideasStale(set: Pick<IdeaSet, 'at'> | null | undefined, bets: Be
   const written = set.at.slice(0, 10);
   if (daysBetween(written, today) >= CHECKPOINT_DAYS) return true;
   return bets.some((b) => b.state !== 'running' && !!b.ended && b.ended > written);
+}
+
+/* ─── The next bet ────────────────────────────────────────────────────────── */
+
+/**
+ * The one bet the tab offers to start, when none runs. Its owner's verdict on
+ * the list before it: three ideas, six plays and a box to write your own, each
+ * a paragraph, read before anything could start — a reading assignment where a
+ * decision was wanted. So one is offered, with its line already set, and the
+ * rest wait behind a tap.
+ *
+ * Which one is a rule, not a second model call: the model already ranked its
+ * ideas, with a page behind an idea ranking it above one without (rankIdeas), so
+ * the first idea this business can count is the bet; with none written, the
+ * first play from the books for the part. Never one whose count the business
+ * cannot keep — that bet could only be refused at Start.
+ */
+export type NextBet =
+  | { kind: 'idea'; idea: Idea; pick: string | null }
+  | { kind: 'play'; play: Play };
+
+export function nextBet(i: { part: LinkKey; set: IdeaSet | null | undefined; found: FoundBy | null }): NextBet | null {
+  const ideas = i.set?.part === i.part ? i.set.ideas : [];
+  const idea = ideas.find((x) => !countRefusal(x.metric, x.tries, i.found));
+  if (idea) return { kind: 'idea', idea, pick: idea === ideas[0] ? i.set?.pick ?? null : null };
+  const play = playsFor(i.part, i.found).find((p) => !countRefusal(p.metric, p.tries ?? null, i.found));
+  return play ? { kind: 'play', play } : null;
+}
+
+/** Where an idea came from, kept on the bet it becomes — the same words the bet sheet keeps. */
+export function ideaFrom(idea: Idea): BetIdea {
+  return { label: idea.label, how: idea.how, from: idea.book ? `AI, after ${idea.book}` : 'AI, from your record', prep: idea.prep };
+}
+
+/**
+ * The bet the one tap starts: the same request the bet sheet sends for the same
+ * play or idea with its line untouched, so starting from the card and from the
+ * sheet are one bet. The belief is the sheet's first draft (suggestBelief), shown
+ * on the card before the tap — never a model's sentence put in the person's mouth
+ * (invariant 12).
+ */
+export function nextBetRequest(n: NextBet, part: LinkKey, belief: string) {
+  const p = n.kind === 'idea' ? n.idea : n.play;
+  return {
+    part, belief, play: n.kind === 'play' ? n.play.key : null, idea: n.kind === 'idea' ? ideaFrom(n.idea) : null,
+    metric: p.metric, unit: p.unit ?? null, target: p.target, tries: p.tries ?? null, days: p.days, experiment: null, shelf: null,
+  };
 }
 
 /** How many assets in use the AI made and the person made, by the version in use: "2 by AI · 3 by you". */

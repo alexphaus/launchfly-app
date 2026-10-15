@@ -155,3 +155,28 @@ export async function exaSearch(query: string, budgetMs = EXA_TIMEOUT_MS): Promi
     clearTimeout(t);
   }
 }
+
+/**
+ * Pages anywhere on the web about how others did a thing, for a bet's ideas
+ * (idearesearch.ts): no domain or date filter, a sentence from each page as the
+ * page has it and the index's one-line summary. The page's words are what an
+ * idea may cite; a model's account of a page is not. Throws with the status, so
+ * the ideas can say the search failed rather than that it found nothing.
+ */
+export async function exaPages(query: string, opts: { numResults?: number; budgetMs?: number; highlight?: string } = {}): Promise<ExaHit[]> {
+  const key = process.env.EXA_API_KEY?.trim();
+  if (!key) throw new Error('EXA_API_KEY is not set.');
+  const res = await fetch(exaEndpoint(), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': key },
+    body: JSON.stringify({
+      query,
+      type: 'auto',
+      numResults: opts.numResults ?? 5,
+      contents: { summary: true, highlights: { query: opts.highlight ?? query, numSentences: 2, highlightsPerUrl: 1 } },
+    }),
+    signal: AbortSignal.timeout(Math.max(1_000, opts.budgetMs ?? 15_000)),
+  });
+  if (!res.ok) throw new Error(`Exa ${res.status}: ${(await res.text().catch(() => '')).slice(0, 160)}`);
+  return exaHits(await res.json());
+}

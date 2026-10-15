@@ -24,7 +24,9 @@ import {
   assetDraftPrompt, checkAssetDraft, type AssetDraftContext, type AssetKind,
 } from './assets';
 import { LINK_STATE_LABEL, businessChain, type LinkKey } from './business';
-import { IDEAS_SYSTEM, ideaSources, ideasPrompt, normalizeIdeas, talkTotals, type IdeasContext } from './ideas';
+import { IDEAS_SYSTEM, firstWhyOf, ideaSources, ideasPrompt, normalizeIdeas, talkTotals, type IdeasContext } from './ideas';
+import { RESEARCH_PER_QUERY, RESEARCH_TIMEOUT_MS, evidenceFrom, rankIdeas, researchQueries, type IdeaResearch } from './idearesearch';
+import { exaConfigured, exaPages } from './watch/exa';
 import { LAB_IDEAS, LAB_IDEAS_ASKED, LAB_IDEAS_FAILED, heardFrom, heardLine, ideaRun, passLine, playForModel, resultLine, talkCounts } from './lab';
 import { rateLimit } from './limits';
 import { matchFeed } from './matches';
@@ -121,6 +123,27 @@ export async function writeIdeas(pid: string, part: LinkKey): Promise<{ ok: true
   }
 }
 
+/**
+ * What others did, for this part: two searches at once, their pages numbered for
+ * the model to cite. Never throws — a search that did not run is a set written
+ * without one, and the reason travels with the set to the screen (invariant 13):
+ * "no web search" must never read as "the web had nothing".
+ */
+async function researchIdeas(part: LinkKey, home: HomeData): Promise<IdeaResearch> {
+  const queries = researchQueries(part, home.profile.offer ?? {});
+  if (!exaConfigured()) return { evidence: [], queries: [], why: 'this server has no search key' };
+  if (!queries.length) return { evidence: [], queries, why: 'your offer does not say what you sell' };
+  const runs = await Promise.allSettled(queries.map((q) => exaPages(q, { numResults: RESEARCH_PER_QUERY, budgetMs: RESEARCH_TIMEOUT_MS })));
+  const done = runs.filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof exaPages>>> => r.status === 'fulfilled').map((r) => r.value);
+  const failed = runs.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+  const failWhy = failed ? (failed.reason instanceof Error ? failed.reason.message : String(failed.reason)).slice(0, 160) : null;
+  const evidence = evidenceFrom(done);
+  const why = !done.length ? `the search failed: ${failWhy ?? 'no answer'}`
+    : failWhy ? `one of the two searches failed: ${failWhy}`
+    : !evidence.length ? 'the search found no pages' : null;
+  return { evidence, queries, why };
+}
+
 async function composeIdeas(pid: string, part: LinkKey): Promise<number> {
   const cfg = resolveLlmConfig();
   if (!cfg) throw new ProofRefusal('There is no model on this server, so ideas come from the books for now.');
@@ -138,6 +161,7 @@ async function composeIdeas(pid: string, part: LinkKey): Promise<number> {
     shelf: (home.lab?.shelf ?? []).map((e) => ({ belief: e.belief, play: playForModel(e) })),
     assets: assetKindsOf(home.assets?.assets ?? []),
   };
+  ctx.research = await researchIdeas(part, home);
   let text: string;
   try {
     ({ text } = await generateText({
@@ -147,7 +171,8 @@ async function composeIdeas(pid: string, part: LinkKey): Promise<number> {
       // Higher than a draft's: the point is ideas the catalogue would not have.
       temperature: 0.8,
       maxRetries: 0,
-      maxOutputTokens: maxOutputTokens() ?? 1600,
+      // Each idea now carries how it would work, what a fail says and its sources: room for three of those.
+      maxOutputTokens: maxOutputTokens() ?? 2400,
       abortSignal: AbortSignal.timeout(IDEAS_TIMEOUT_MS),
     }));
   } catch (e) {
@@ -155,9 +180,15 @@ async function composeIdeas(pid: string, part: LinkKey): Promise<number> {
   }
   let parsed: unknown;
   try { parsed = extractJson(text); } catch { throw new ProofModelError('No new ideas: the model did not answer in the shape asked for. Try again.'); }
-  const ideas = normalizeIdeas(parsed, { part, foundBy: found.value, sources: ideaSources(ctx) });
-  if (!ideas.length) throw new ProofModelError('No new ideas: none of the model\'s held to what a bet needs — a count this business can keep and a line in range. Try again.');
-  await insertLabEvent(pid, LAB_IDEAS, { part, ideas, model: cfg.model });
+  const evidence = ctx.research?.evidence ?? [];
+  const held = normalizeIdeas(parsed, { part, foundBy: found.value, sources: ideaSources(ctx), evidence });
+  if (!held.length) throw new ProofModelError('No new ideas: none of the model\'s held to what a bet needs — a count this business can keep and a line in range. Try again.');
+  // The model's order, except that an idea resting on a page goes before one resting on its memory (invariant 3).
+  const { ideas, pick } = rankIdeas(held, firstWhyOf(parsed, { sources: ideaSources(ctx), evidence }));
+  await insertLabEvent(pid, LAB_IDEAS, {
+    part, ideas, model: cfg.model, pick,
+    research: { pages: evidence.length, why: ctx.research?.why ?? null, queries: ctx.research?.queries ?? [] },
+  });
   return ideas.length;
 }
 

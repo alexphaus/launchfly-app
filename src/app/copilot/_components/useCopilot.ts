@@ -19,7 +19,7 @@ import type { Reading } from '@/lib/copilot/tell';
 import type { Connection } from '@/lib/copilot/oauth';
 import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/lib/copilot/nightly';
 import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
-import { ideaRun, planBusy, type IdeaRunRow, type PlanRun } from '@/lib/copilot/lab';
+import { ideaRun, newestRuns, openStarts, planBusy, type IdeaRunRow, type PlanRun } from '@/lib/copilot/lab';
 import type { LinkKey } from '@/lib/copilot/business';
 import type { ExperimentState } from '@/lib/copilot/experiment';
 import { importLine, type MoneyImport } from '@/lib/copilot/money/ledger';
@@ -379,8 +379,12 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
   // on the starts still unanswered, so a "Try again" joins the watch — and
   // reloads when none is, which brings what the crew made onto the bet's card.
   // A step that failed says so on the card and here; one that worked shows itself.
+  // Keyed on the starts still open — the newest row of a step, when it is a start —
+  // not on every start the bet ever made: those are answered, and the oldest of
+  // them made "since" reach back to the bet's first night, so a failure from a
+  // week ago was toasted at the end of a run that went fine.
   const crewAt = planBusy(home.lab?.planRuns ?? [], new Date())
-    ? (home.lab?.planRuns ?? []).filter((r) => r.state === 'asked').map((r) => `${r.step}@${r.at}`).sort().join(',')
+    ? openStarts(home.lab?.planRuns ?? []).map((r) => `${r.step}@${r.at}`).sort().join(',')
     : '';
   useEffect(() => {
     if (!crewAt) return;
@@ -404,7 +408,8 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         say('Your crew finished its steps, but this screen could not reload. Reopen the app to see them.');
         return;
       }
-      const failed = runs.find((r) => r.state === 'failed' && r.at >= since);
+      // How this watch ended for each step it watched: the newest row of the step, failed, and written during it.
+      const failed = newestRuns(runs).find((r) => r.state === 'failed' && r.at >= since);
       if (failed) say(`A step of the plan did not finish: ${(failed.why ?? 'no reason given').replace(/[.\s]+$/, '')}. It is on the bet's card, and tried again tonight.`);
     };
     const timer = setInterval(() => { void tick(); }, IDEAS_POLL_MS);

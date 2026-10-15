@@ -966,6 +966,44 @@ Million Dollar Weekend, Built to Sell, The E-Myth — each something to do with 
 count, never advice dressed as a test. Then your own. Without a model on the
 server there is no ideas button at all (invariant 7); the books are there.
 
+**One bet, not a list** (`proof.ts` `nextBet`, `NextBetCard` in `ProofTab.tsx`).
+Three ideas, six plays and a box for your own, each a paragraph, was a reading
+assignment where a decision was wanted. So the card offers one: the first idea
+written for the part that this business can count, else the first play from the
+books for it — never one whose count would be refused at Start. It shows what you
+would be testing (the bet sheet's own first draft of the belief, `suggestBelief`,
+never a model's sentence), the pass line, how it would work and what a fail would
+say, the pages it rests on, and the plan that starts with it (`PlanPreview`, the
+same rule the sheet uses). **Start this bet** sends exactly the request the sheet
+sends for that play or idea untouched (`nextBetRequest`, with the sheet's nonce
+rule), so the card and the sheet are one bet; **Change it first** opens the sheet.
+The other ideas, the plays and your own wait behind **Show other bets**. The
+step's "Pick a bet" scrolls to the card. The choice is a rule over an order the
+model already gave, not a second model call.
+
+**Researched ideas** (`idearesearch.ts`, `proofai.ts researchIdeas`). Ideas were
+written from the record alone, and "use only what you are told" kept every one
+inside it: its owner asked how the app could know what works anywhere else. So
+before the model writes, two web searches run (`exaPages`), worded by a rule from
+the offer's first phrases and the part — how others selling the same thing got
+their first customers, where these buyers ask about the problem. The pages come
+back numbered, each with a sentence in its own words, and the model cites the ones
+an idea rests on by number: only a number the search returned becomes a link, so
+an address a model writes is never one. The model is now told to keep two kinds of
+knowledge apart — this business's facts only from the record, how businesses like
+it win from what is known and the pages — and to say, per idea, **how it would
+work** (the cause it relies on) and **what a fail would say**, both held to the
+reason rules (no placeholder, no number from nowhere; a page's number counts as the
+page's). It lists the ideas best first with `first_why`; `rankIdeas` keeps that
+order except that an idea with a page behind it goes before one from memory
+(invariant 3), and drops the reason once its idea is no longer first. Everything is
+said to "you": `the owner's` is rewritten to `your`, and a line still saying "the
+owner" is not kept. The set records the search (`research: { pages, why }`), and
+the card says "from your record and 6 pages found on the web" or why there were
+none — no key, a failed search — never a set that looks researched when it was not
+(invariant 13). A page is a reason to try something, never evidence it worked
+here: only the count decides the bet.
+
 **The shelf** (`lab.ts` `ShelfEntry`, `Shelf` in `ProofTab.tsx`). Ideas were
 replaced the next time they were asked for, and a bet the person was not ready to
 start had nowhere to wait. A test is **kept for later** from the bet sheet — every

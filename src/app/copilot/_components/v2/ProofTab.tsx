@@ -41,11 +41,12 @@ import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } f
 import { WORKER_STATE_LABEL, crewHeadline, crewOn, type Worker } from '@/lib/copilot/crew';
 import { historyDay, type HistoryEntry } from '@/lib/copilot/history';
 import {
-  BET_STATE_LABEL, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS,
+  BET_STATE_LABEL, METRIC, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS, suggestBelief,
   betPrice, countedFrom, dayWords, decisionWords, gradeWords, ideaRun, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
-import { assetMakers, betNext, betWork, ideasStale, pivotWords, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
+import { assetMakers, betNext, betWork, ideasStale, nextBet, nextBetRequest, pivotWords, type BetNextGo, type BetWork, type NextBet } from '@/lib/copilot/proof';
+import { hostOf, researchLine } from '@/lib/copilot/idearesearch';
 import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
 import { moneyLabel } from '@/lib/copilot/review';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
@@ -61,7 +62,8 @@ import type { Actions } from '../shared';
 import type { Derived } from './derive';
 import { AssetGlyph, IconCheck, IconChevron, IconCross, IconExternal, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph, WorkerGlyph } from './icons2';
 import { MoveNote, MoveRow, agentIsFull, orChat, useBrief, useMove, type Brief } from './MoveKit';
-import { BetPlan, PlanIt } from './BetPlan';
+import { BetPlan, PlanIt, PlanPreview } from './BetPlan';
+import { newMoveId } from './bookLocal';
 
 export default function ProofTab({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
   const changes = useSeen(home, d);
@@ -249,7 +251,8 @@ function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
       case 'checkpoint': return scrollToCard('cp2-checkpoint');
       case 'find': return void find.run();
       case 'people': return scrollToCard('cp2-people');
-      case 'bet': return actions.openSheet({ kind: 'bet', part: g.part });
+      // The one bet waits on this tab, ready to start: the move scrolls to it. The sheet is for when it is not drawn.
+      case 'bet': return document.getElementById('cp2-nextbet') ? scrollToCard('cp2-nextbet') : actions.openSheet({ kind: 'bet', part: g.part });
       case 'shelf': return actions.openSheet({ kind: 'bet', shelf: g.id });
       case 'next': return view ? goTo(g.go, actions, view.bet.id) : undefined;
       case 'tab': return actions.setTab(g.tab);
@@ -390,6 +393,8 @@ function Station({ home, d, actions, part, step, pick, brief, find, opened, peop
   const said = !!here?.why && l.why.startsWith(here.why.replace(/…$/, ''));
   const on = crewOn(crew, part);
   const full = agentIsFull(home);
+  // The move above already is "Bet on how they hear"; the same words again under it read as a second thing to do.
+  const moves = here ? l.moves.filter((m) => m.label !== here.title) : l.moves;
   return (
     <section className={`cp-card cp2-er-station ${l.state}`} style={{ '--frac': i * 0.2 + 0.1 } as React.CSSProperties} aria-label={l.label}>
       <div className="cp2-er-shead">
@@ -425,10 +430,10 @@ function Station({ home, d, actions, part, step, pick, brief, find, opened, peop
         </div>
       )}
       {/* What would move it, while no bet is on it: the bet's own card holds the work for the part it is on. */}
-      {!betHere && l.moves.length > 0 && (
+      {!betHere && moves.length > 0 && (
         <div className="cp2-er-moves">
           <span className="cp2-er-k">What would move it</span>
-          {l.moves.map((raw) => {
+          {moves.map((raw) => {
             const m = orChat(raw, full);
             return (
               <div key={m.key}>
@@ -1086,53 +1091,139 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
 /* ─── No bet running ──────────────────────────────────────────────────────── */
 
 /**
- * Book plays shown before "more": two when they are all there is, none when a
- * model has written ideas for this part — those come first, and a card of
- * three ideas and two plays is a reading assignment.
+ * When no bet runs: one bet, ready to start — the best idea written for this
+ * part, else the first play from the books (proof.ts nextBet) — with its line
+ * set, what it tests, how it would work and what starts with it. One tap starts
+ * it as it stands; "Change it first" opens the sheet. Every other idea, the
+ * books' plays and a bet of your own wait behind "Show other bets": the list
+ * this replaced was a reading assignment where a decision was wanted.
  */
-const PLAYS_SHOWN = 2;
-
 function PickABet({ home, d, actions, part }: { home: HomeData; d: Derived; actions: Actions; part: LinkKey }) {
-  const { chain, found, lab } = d.proof;
-  const [more, setMore] = useState(false);
-  // A part tapped in the engine is a new list of plays, folded again.
-  useEffect(() => setMore(false), [part]);
+  const { found, lab } = d.proof;
+  const [others, setOthers] = useState(false);
+  // A part tapped in the engine is a new bet to offer, with the others folded again.
+  useEffect(() => setOthers(false), [part]);
   const last = lab.learned[0] ?? null;
   const { priceLabel } = betPrice(home.profile.offer?.price_band, d.currency);
-  const plays = playsFor(part, found.value);
-  const folded = lab.ideas[part]?.ideas.length ? 0 : PLAYS_SHOWN;
-  const shown = more ? plays : plays.slice(0, folded);
+  const set = lab.ideas[part] ?? null;
+  const top = nextBet({ part, set, found: found.value });
+  const topKey = top ? (top.kind === 'idea' ? top.idea.key : top.play.key) : null;
+  const plays = playsFor(part, found.value).filter((p) => p.key !== topKey);
+  const moreIdeas = (set?.ideas ?? []).filter((x) => x.key !== topKey).length;
+  const count = [moreIdeas ? `${moreIdeas} more ${moreIdeas === 1 ? 'idea' : 'ideas'}` : null, plays.length ? `${plays.length} from books` : null, 'your own'].filter(Boolean).join(' · ');
   return (
-    <div className="cp-card cp2-pf-pick">
-      <div className="cp-eyebrow">No bet running</div>
-      <h2 className="cp2-lab-q">What do you believe that you have not tested?</h2>
-      <p className="cp2-lede">
-        {`For ${LINK_LABEL[part].toLowerCase()}${chain.weak === part ? ', the weakest part' : ''}. Tap another part above for its plays.`}
-        {' '}You set the line before it starts, and only what happens after counts.
-      </p>
+    <div className="cp-card cp2-pf-pick" id="cp2-nextbet">
+      <div className="cp-eyebrow">No bet running · {LINK_LABEL[part]}</div>
       {last && (
         <p className="cp2-lab-lastbet">
           <span className={`cp2-lab-verdict ${last.state}`}>{BET_STATE_LABEL[last.state]}</span>
           <span>Last bet: {last.result} of {last.bet.target} {metricWords(last.bet.metric, last.bet.target, last.bet.priceLabel, last.bet.unit)}{last.ended ? `, ${dayWords(last.ended)}` : ''}</span>
         </p>
       )}
-      <Ideas home={home} d={d} actions={actions} part={part} priceLabel={priceLabel} />
-      {shown.length > 0 && <span className="cp2-pf-k cp2-pf-books">From books</span>}
-      {shown.length > 0 && (
+      {top
+        ? <NextBetCard key={`${part}:${topKey}`} home={home} d={d} actions={actions} part={part} top={top} priceLabel={priceLabel} />
+        : <h2 className="cp2-lab-q">What do you believe that you have not tested?</h2>}
+      {/* Mounted while folded: it asks for ideas on opening, and says when they are being written or failed. */}
+      <Ideas home={home} d={d} actions={actions} part={part} priceLabel={priceLabel} skip={topKey} open={others} />
+      <button className="cp2-pf-more" onClick={() => setOthers((x) => !x)} aria-expanded={others}>
+        {others ? 'Fewer bets' : `Show other bets · ${count}`}
+      </button>
+      {others && plays.length > 0 && <span className="cp2-pf-k cp2-pf-books">From books</span>}
+      {others && plays.length > 0 && (
         <div className="cp2-pf-plays">
-          {shown.map((p) => <PlayCard key={p.key} play={p} priceLabel={priceLabel} actions={actions} />)}
+          {plays.map((p) => <PlayCard key={p.key} play={p} priceLabel={priceLabel} actions={actions} />)}
         </div>
       )}
-      {plays.length > folded && (
-        <button className="cp2-pf-more" onClick={() => setMore((x) => !x)}>
-          {more ? 'Fewer from books' : folded ? `${plays.length - folded} more from books` : `${plays.length} ${plays.length === 1 ? 'play' : 'plays'} from books`}
+      {others && (
+        <button className="cp2-lab-own" onClick={() => actions.openSheet({ kind: 'bet', part })}>
+          <span>Write your own bet on {LINK_LABEL[part].toLowerCase()}</span>
+          <IconChevron />
         </button>
       )}
-      <button className="cp2-lab-own" onClick={() => actions.openSheet({ kind: 'bet', part })}>
-        <span>Write your own bet on {LINK_LABEL[part].toLowerCase()}</span>
-        <IconChevron />
-      </button>
     </div>
+  );
+}
+
+/**
+ * The one bet, as it would start: what you would be testing, the line, how it
+ * would work and what a fail would say, the pages it rests on, and what starts
+ * with it (the same plan the bet sheet shows, from the same rule). Start sends
+ * the request the sheet would send for it untouched (proof.ts nextBetRequest).
+ */
+function NextBetCard({ home, d, actions, part, top, priceLabel }: { home: HomeData; d: Derived; actions: Actions; part: LinkKey; top: NextBet; priceLabel: string | null }) {
+  const offer = home.profile.offer ?? {};
+  const found = d.proof.found.value;
+  const belief = suggestBelief(part, offer, priceLabel, found);
+  const req = nextBetRequest(top, part, belief);
+  const p = top.kind === 'idea' ? top.idea : top.play;
+  const idea = top.kind === 'idea' ? top.idea : null;
+  const steps = planFor({ part, belief, play: req.play, idea: req.idea, metric: req.metric, unit: req.unit, tries: req.tries }, planCapsOf(home), offer);
+  // A sale at your price with no price is refused at Start: said here, with the way to fix it, instead.
+  const needsPrice = !!METRIC[req.metric].priced && priceLabel == null;
+  // One word per card, sent with every try: the server answers a retry as it answered the tap (lab.ts openRace).
+  const [nonce] = useState(newMoveId);
+  const going = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const start = async () => {
+    if (going.current) return;
+    going.current = true;
+    setBusy(true); setError(null);
+    const r = await actions.lab({ action: 'open', nonce, bet: req });
+    going.current = false;
+    setBusy(false);
+    if (!r.ok) setError(r.error ?? 'Could not start it');
+  };
+  const change = () => (top.kind === 'idea'
+    ? actions.openSheet({ kind: 'bet', idea: top.idea.key, part })
+    : actions.openSheet({ kind: 'bet', play: top.play.key }));
+  return (
+    <div className="cp2-nextbet">
+      <span className="cp2-pf-src">
+        {idea ? <><i className="cp2-owner ai">By AI</i>{idea.book ? <span>after {idea.book}</span> : null}</> : <span>{top.kind === 'play' ? top.play.book : ''}</span>}
+      </span>
+      <h2 className="cp2-lab-q">{p.label}</h2>
+      <p className="cp2-lab-play-how">{p.how}</p>
+      {idea && <IdeaReasons idea={idea} />}
+      {top.kind === 'idea' && top.pick && <p className="cp2-pf-why"><b>Why this one first:</b> {top.pick}</p>}
+      <div className="cp2-lab-preview">
+        <span className="cp2-lab-preview-k">You would be testing</span>
+        <b>&ldquo;{belief}&rdquo;</b>
+        <span className="cp2-lab-preview-s">Pass line: {playLine(p, priceLabel)}. Only what happens after you start counts.</span>
+      </div>
+      <PlanPreview steps={steps} />
+      {needsPrice ? (
+        <div className="cp-note cp2-lab-warn">
+          A sale at your price needs a price, and your offer does not name one.{' '}
+          <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'offer' })}>Say what it costs</button>
+        </div>
+      ) : (
+        <div className="cp2-nextbet-do">
+          <button className="cp-btn primary" disabled={busy} onClick={() => void start()}>{busy ? 'Starting…' : 'Start this bet'}</button>
+          <button className="cp2-link" disabled={busy} onClick={change}>Change it first</button>
+        </div>
+      )}
+      {error && <p className="cp-help cp2-err">{error}</p>}
+    </div>
+  );
+}
+
+/** How an idea would work, what a fail would say, and the pages it rests on — the model's reasoning, under its label. */
+function IdeaReasons({ idea }: { idea: Idea }) {
+  const sources = idea.sources ?? [];
+  return (
+    <>
+      {idea.works && <p className="cp2-nextbet-r"><b>How it would work:</b> {idea.works}</p>}
+      {idea.fails && <p className="cp2-nextbet-r"><b>If it does not pass:</b> {idea.fails}</p>}
+      {sources.length > 0 && (
+        <p className="cp2-nextbet-src">
+          <span>Rests on</span>
+          {sources.map((x) => (
+            <a key={x.url} href={x.url} target="_blank" rel="noopener noreferrer nofollow" title={x.title}>{hostOf(x.url)} <IconExternal /></a>
+          ))}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -1152,13 +1243,17 @@ function PlayCard({ play: p, priceLabel, actions }: { play: Play; priceLabel: st
 const IDEAS_RETRY_MS = 60 * 60_000;
 
 /**
- * Three ideas a model wrote for this part of this business, from its record.
- * Asked for once a visit when there are none, or when the record has moved
- * since the last were written (ideasStale) — so the tab is not the same every
- * time it is opened — and again on a tap. Without a model on the server there is
- * no button: a button with nothing behind it is a promise the app cannot keep.
+ * Three ideas a model wrote for this part of this business, from its record
+ * and a web search for what others did (idearesearch.ts). Asked for once a visit
+ * when there are none, or when the record has moved since the last were written
+ * (ideasStale) — so the tab is not the same every time it is opened — and again
+ * on a tap. Without a model on the server there is no button: a button with
+ * nothing behind it is a promise the app cannot keep. The first is the next bet
+ * above (`skip`); the rest are shown when the others are (`open`).
  */
-function Ideas({ home, d, actions, part, priceLabel }: { home: HomeData; d: Derived; actions: Actions; part: LinkKey; priceLabel: string | null }) {
+function Ideas({ home, d, actions, part, priceLabel, skip, open }: {
+  home: HomeData; d: Derived; actions: Actions; part: LinkKey; priceLabel: string | null; skip: string | null; open: boolean;
+}) {
   const set = d.proof.lab.ideas[part] ?? null;
   const can = !!home.ai && !d.noOffer;
   const stale = ideasStale(set, d.proof.bets, home.recent.today);
@@ -1189,18 +1284,20 @@ function Ideas({ home, d, actions, part, priceLabel }: { home: HomeData; d: Deri
   }, [can, stale, part]);
 
   if (!can && !set) return null;
+  const rest = (set?.ideas ?? []).filter((x) => x.key !== skip);
   return (
     <div className="cp2-pf-ideas">
       <div className="cp2-pf-ideas-top">
         <span className="cp2-pf-k">Written for your business</span>
         {can && <button className="cp2-link" disabled={writing} onClick={() => void ask(part)}>{writing ? 'Writing…' : failedWhy ? 'Try again' : set ? 'New ideas' : 'Write some'}</button>}
       </div>
-      {writing && <p className="cp2-pf-wait">Writing three from your record. A minute or two — this can stay open or close.</p>}
+      {/* Said only where a search will run: without a key the set is written from the record and the model's knowledge (invariant 7). */}
+      {writing && <p className="cp2-pf-wait">{home.hunting?.webReady ? 'Searching for what others did, then writing three from it and your record.' : 'Writing three from your record.'} A minute or two — this can stay open or close.</p>}
       {!writing && failedWhy && <p className="cp-help cp2-err">{/^No new ideas/.test(failedWhy) ? failedWhy : `No new ideas: ${failedWhy}`}</p>}
-      {set?.ideas.map((idea) => <IdeaCard key={idea.key} idea={idea} priceLabel={priceLabel} actions={actions} />)}
+      {open && rest.map((idea) => <IdeaCard key={idea.key} idea={idea} priceLabel={priceLabel} actions={actions} />)}
       {set && (
         <p className="cp2-pf-ideas-s">
-          By AI from your record, {dayWords(set.at)}. The pass lines are its proposal: you set yours before the bet starts.
+          By AI {researchLine(set.research)}, {dayWords(set.at)}. A page is a reason to try something, not proof it works for you; the pass lines are its proposal, and you set yours before the bet starts.
         </p>
       )}
     </div>
@@ -1214,6 +1311,7 @@ function IdeaCard({ idea, priceLabel, actions }: { idea: Idea; priceLabel: strin
       <b className="cp2-lab-play-t">{idea.label}</b>
       <p className="cp2-lab-play-how">{idea.how}</p>
       {idea.why && <p className="cp2-pf-why">{idea.why}</p>}
+      <IdeaReasons idea={idea} />
       <p className="cp2-lab-play-pass">Pass line: {playLine(idea, priceLabel)}</p>
       <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', idea: idea.key, part: idea.part })}>Make it my bet</button>
     </div>

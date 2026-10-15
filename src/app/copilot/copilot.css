@@ -1543,6 +1543,17 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pf-why { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-pf-more { display: block; margin-top: 10px; padding: 6px 0; font-size: 12.5px; font-weight: 600; color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-pf-pick .cp2-lab-own { margin-top: 10px; }
+/* The one bet offered when none runs (ProofTab NextBetCard): one decision, the rest folded under it. */
+.cp-root[data-theme="soft"] .cp2-nextbet { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 14px; }
+.cp-root[data-theme="soft"] .cp2-nextbet .cp2-lab-q { margin: 2px 0 0; }
+.cp-root[data-theme="soft"] .cp2-nextbet .cp2-lab-preview { margin: 6px 0 0; }
+.cp-root[data-theme="soft"] .cp2-nextbet-r { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-nextbet-r b { font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-nextbet-src { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; margin: 0; font-size: 12px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-nextbet-src a { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; color: var(--blue); font-weight: 600; text-decoration: none; }
+.cp-root[data-theme="soft"] .cp2-nextbet-src svg { width: 12px; height: 12px; }
+.cp-root[data-theme="soft"] .cp2-nextbet-do { display: flex; align-items: center; gap: 16px; margin-top: 6px; }
+.cp-root[data-theme="soft"] .cp2-pf-pick .cp2-pf-more { margin-top: 12px; }
 
 /* Assets and the history: rows, a glyph for what each is, who made it on the right. */
 .cp-root[data-theme="soft"] :is(.cp2-pf-asset, .cp2-pf-gap, .cp2-pf-addrow, .cp2-pf-hrow) { align-items: center; }

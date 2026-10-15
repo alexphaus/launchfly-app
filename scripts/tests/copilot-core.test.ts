@@ -12476,3 +12476,149 @@ async function betPlanSuite() {
 }
 
 betPlanSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Researched ideas and the one next bet (idearesearch.ts, proof.ts nextBet) ─── */
+
+import {
+  citedSources as rsCited, evidenceFrom as rsEvidence, evidenceLines as rsLines, hostOf as rsHost, rankIdeas as rsRank,
+  researchLine as rsLine, researchQueries as rsQueries, type Evidence as RsEvidence,
+} from '../../src/lib/copilot/idearesearch';
+import { IDEAS_SYSTEM as RS_SYSTEM, firstWhyOf as rsFirstWhy, ideasPrompt as rsPrompt, normalizeIdeas as rsNorm } from '../../src/lib/copilot/ideas';
+import {
+  LAB_IDEAS as RS_LAB_IDEAS, ideaFromStored as rsFromStored, labFromEvents as rsLabFromEvents, newestRuns as rsNewest, normalizeBet as rsNormBet,
+  openStarts as rsOpen, planBusy as rsBusy, playsFor as rsPlays, type Idea as RsIdea, type IdeaSet as RsSet, type PlanRun as RsRun,
+} from '../../src/lib/copilot/lab';
+import { nextBet as rsNext, nextBetRequest as rsRequest } from '../../src/lib/copilot/proof';
+import { readFileSync as readResearchFile } from 'node:fs';
+
+async function researchedIdeasSuite() {
+  const src = (f: string) => readResearchFile(f, 'utf8');
+  const offer = { sells: 'Founder OS Copilot App, coaching', for_who: 'Tech indies, freelancers', problem: 'Not knowing what moves the needle.', price_band: '$29/month' };
+
+  /* 1. Two searches a part, written by a rule from the offer's first phrases — none without anything sold. */
+  const reach = rsQueries('reach', offer);
+  assert.equal(reach.length, 2);
+  assert.ok(reach[0].includes('founder OS Copilot App') && !reach[0].includes('coaching'), 'the first thing sold, not the list');
+  assert.ok(reach[1].includes('tech indies') && !reach[1].includes('freelancers') && reach[1].includes('not knowing what moves the needle'), 'the first buyer, and the problem in their words');
+  for (const part of ['who', 'reach', 'close', 'pay', 'deliver'] as const) assert.equal(rsQueries(part, offer).length, 2, part);
+  assert.deepEqual(rsQueries('who', { sells: '  ' }), [], 'nothing to search for from a blank offer (invariant 1)');
+
+  /* 2. Pages taken in turn from both searches, one page reached twice kept once, each numbered from 1. */
+  const hit = (url: string, extra: Record<string, string> = {}) => ({ title: `T ${url}`, url, ...extra });
+  const ev = rsEvidence([
+    [hit('https://a.com/x', { highlight: 'We   got 40 users from one Reddit thread.' }), hit('https://www.b.com/y/'), hit('https://c.com/z')],
+    [hit('https://b.com/y', { summary: 'dup' }), hit('https://d.com/w', { summary: 'A summary.' })],
+  ]);
+  assert.deepEqual(ev.map((e) => [e.n, e.url]), [[1, 'https://a.com/x'], [2, 'https://b.com/y'], [3, 'https://d.com/w'], [4, 'https://c.com/z']], 'in turn, and www.b.com/y/ is b.com/y reached again');
+  assert.deepEqual([ev[0].said, ev[1].said, ev[3].said], ['We got 40 users from one Reddit thread.', 'dup', null], 'the page’s own sentence, else the summary, else nothing');
+  assert.equal(rsEvidence([[hit('https://a.com/1'), hit('https://a.com/2'), hit('https://a.com/3')]], 2).length, 2);
+
+  /* 3. The model is told the pages by number, or that none were searched and why — never silence that reads as "the web had nothing". */
+  const research = { evidence: ev, queries: reach, why: null };
+  const bare = { offer, foundBy: 'inbound' as const, working: null, links: [], bets: [], talks: { n: 0, problem: 0, committed: 0 }, assets: [] };
+  const withPages = rsPrompt({ ...bare, part: 'reach', research });
+  assert.ok(withPages.includes('[1] T https://a.com/x (a.com): "We got 40 users from one Reddit thread."'));
+  assert.ok(withPages.includes('"works"') && withPages.includes('"fails"') && withPages.includes('"sources"') && withPages.includes('"first_why"'));
+  assert.ok(rsPrompt({ ...bare, part: 'reach', research: { evidence: [], queries: [], why: 'this server has no search key' } }).includes('No web search ran for this set (this server has no search key).'));
+  assert.ok(!/web search/.test(rsPrompt({ ...bare, part: 'reach' })), 'no research given, nothing said about one');
+  assert.deepEqual(rsLines(null).slice(1), ['No web search ran for this set. Use what is known about how businesses like this one win and keep customers, and give every idea "sources": [].']);
+
+  /* 4. The system prompt: the record for this business's facts, the world for how businesses win, and "you" throughout. */
+  assert.ok(!RS_SYSTEM.includes('Use only what you are told about this business.'), 'the line that kept every idea inside the record');
+  assert.ok(RS_SYSTEM.includes('never invent a fact, a customer or a number about it') && RS_SYSTEM.includes('proven playbooks'));
+  assert.ok(RS_SYSTEM.includes('never "the owner"'));
+
+  /* 5. A citation is a number the search returned, and only that: an address a model writes is never a link. */
+  assert.deepEqual(rsCited([2, '[1]', 9, 'https://evil.example/page', 2, 4, 3], ev).map((s) => s.url), ['https://b.com/y', 'https://a.com/x', 'https://c.com/z'], 'three at most, a repeat once, an unknown number and a written address dropped');
+  assert.deepEqual(rsCited('2', ev), []);
+
+  /* 6. Ideas: said to "you", how it would work and what a fail says kept as reasons are, sources from the pages. */
+  const ideas = rsNorm({ ideas: [
+    { label: 'Post the answer in one community', how: 'Answer one question the owner\'s buyers ask, with your page at the end.', metric: 'logged', unit: 'sign-ups', target: 5, days: 14,
+      works: 'Others got 40 users from one thread because an answer earns trust a pitch cannot.', fails: 'If nobody signs up, how they hear is not the problem: the offer is.', sources: [1, 7] },
+    { label: 'Warm intros', how: 'Ask the people the owner knows to forward the page.', metric: 'talks', target: 3, days: 7 },
+    { label: 'Ask ten people', how: 'Ask ten people what they tried.', metric: 'talks', target: 3, days: 7, works: 'It converts 35% of the time.', fails: 'Then the owner should change the offer.' },
+  ] }, { part: 'reach', foundBy: 'inbound', sources: ['Founder OS'], evidence: ev });
+  assert.deepEqual(ideas.map((i) => i.label), ['Post the answer in one community', 'Ask ten people'], '"the owner knows" has no safe rewrite: the idea goes');
+  assert.equal(ideas[0].how, 'Answer one question your buyers ask, with your page at the end.', '"the owner’s" is "your"');
+  assert.equal(ideas[0].works, 'Others got 40 users from one thread because an answer earns trust a pitch cannot.', 'a page’s number is the page’s, cited as such');
+  assert.deepEqual(ideas[0].sources, [{ title: 'T https://a.com/x', url: 'https://a.com/x' }]);
+  assert.deepEqual([ideas[1].works, ideas[1].fails, ideas[1].sources], [null, null, []], 'a rate from nowhere and a line about "the owner" are not kept');
+  assert.equal(rsFirstWhy({ first_why: 'It is the cheapest test of how they hear.' }, { sources: [] }), 'It is the cheapest test of how they hear.');
+  assert.equal(rsFirstWhy({ first_why: 'It works for 80% of founders.' }, { sources: [], evidence: ev }), null);
+
+  /* 7. The order: the model's, with a page behind an idea ranking it above memory (invariant 3); its reason for the first only while it is first. */
+  const idea = (label: string, sourced: boolean): RsIdea => ({ key: label, part: 'reach', label, how: 'x', metric: 'talks', unit: null, target: 3, tries: null, days: 7, book: null, why: null, prep: null, sources: sourced ? [{ title: 't', url: 'https://a.com' }] : [] });
+  const [m1, s2, s3] = [idea('memory', false), idea('page', true), idea('page 2', true)];
+  assert.deepEqual(rsRank([m1, s2, s3], 'cheapest').ideas.map((i) => i.label), ['page', 'page 2', 'memory']);
+  assert.equal(rsRank([m1, s2], 'cheapest').pick, null, 'a reason for the idea that is no longer first is not shown beside another');
+  assert.equal(rsRank([s2, m1], 'cheapest').pick, 'cheapest');
+
+  /* 8. As stored: sources reshaped (a web address or nothing), the set's search and its pick read back, an older set read as before. */
+  const stored = rsFromStored({ label: 'x', how: 'y', metric: 'talks', target: 3, days: 7, works: 'w', sources: [{ title: 'A', url: 'https://a.com/1' }, { url: 'javascript:alert(1)' }, { url: 'https://b.com' }] }, 'reach');
+  assert.deepEqual([stored?.works, stored?.fails, stored?.sources], ['w', null, [{ title: 'A', url: 'https://a.com/1' }, { title: 'https://b.com', url: 'https://b.com' }]]);
+  const row = (id: number, at: string, payload: Record<string, unknown>) => ({ id, event_type: RS_LAB_IDEAS, created_at: at, payload });
+  const one = { label: 'x', how: 'y', metric: 'talks', target: 3, days: 7 };
+  const sets = rsLabFromEvents([
+    row(1, '2026-10-01T00:00:00Z', { part: 'who', ideas: [one] }),
+    row(2, '2026-10-02T00:00:00Z', { part: 'reach', ideas: [one], pick: 'Cheapest test.', research: { pages: 6, why: null, queries: ['q'] } }),
+  ]).ideas;
+  assert.deepEqual([sets.who?.pick, sets.who?.research], [null, null], 'a set from before searches says nothing about one');
+  assert.deepEqual([sets.reach?.pick, sets.reach?.research], ['Cheapest test.', { pages: 6, why: null }]);
+  assert.equal(rsLine(sets.reach?.research), 'from your record and 6 pages found on the web');
+  assert.equal(rsLine({ pages: 0, why: 'the search failed: Exa 401' }), 'from your record and what the model knows, with no web search: the search failed: Exa 401');
+  assert.equal(rsLine(null), 'from your record');
+  assert.equal(rsHost('https://www.reddit.com/r/x'), 'reddit.com');
+
+  /* 9. The one next bet: the first idea this business can count, else the first play from the books — never one refused at Start. */
+  const set = (part: 'reach' | 'who', list: RsIdea[], pick: string | null = 'Cheapest test.'): RsSet => ({ part, ideas: list, model: 'm', at: '2026-10-15T00:00:00Z', pick, research: null });
+  const sends: RsIdea = { ...idea('sends', true), metric: 'replied' };
+  assert.deepEqual(rsNext({ part: 'reach', set: set('reach', [s2, m1]), found: 'inbound' }), { kind: 'idea', idea: s2, pick: 'Cheapest test.' });
+  const skipped = rsNext({ part: 'reach', set: set('reach', [sends, m1]), found: 'inbound' });
+  assert.deepEqual(skipped, { kind: 'idea', idea: m1, pick: null }, 'replies are not counted for buyers who find you; the model’s reason was for the one skipped');
+  const fallback = rsNext({ part: 'reach', set: null, found: 'inbound' });
+  assert.ok(fallback?.kind === 'play' && fallback.play.key === rsPlays('reach', 'inbound')[0].key, 'no ideas yet: the books');
+  assert.equal(rsNext({ part: 'reach', set: set('who', [s2]), found: 'inbound' })?.kind, 'play', 'ideas for another part are not this part’s bet');
+
+  /* 10. One tap starts the bet the sheet would start, untouched — and it passes the server's rules as it stands. */
+  const belief = 'Tech indies find me online and get in touch';
+  const ctx = { today: '2026-10-15', price: 29, priceLabel: '$29' };
+  const fromIdea = rsRequest({ kind: 'idea', idea: { ...m1, book: 'Traction', prep: { label: 'The post', asset: 'script' } }, pick: null }, 'reach', belief);
+  assert.deepEqual([fromIdea.play, fromIdea.idea, fromIdea.metric, fromIdea.target, fromIdea.days], [null, { label: 'memory', how: 'x', from: 'AI, after Traction', prep: { label: 'The post', asset: 'script' } }, 'talks', 3, 7]);
+  const okIdea = rsNormBet(fromIdea as unknown as Record<string, unknown>, ctx);
+  assert.ok(okIdea.ok && okIdea.value.belief === belief && okIdea.value.metric === 'talks', okIdea.ok ? '' : okIdea.error);
+  for (const play of rsPlays('reach', 'inbound')) {
+    const r = rsNormBet(rsRequest({ kind: 'play', play }, 'reach', belief) as unknown as Record<string, unknown>, ctx);
+    assert.ok(r.ok && r.value.play === play.key && r.value.target === play.target, `${play.key}: ${r.ok ? '' : r.error}`);
+  }
+
+  /* 11. The crew's watch ends on how it ended: a failure from last week is not this run's. */
+  const run = (step: RsRun['step'], state: RsRun['state'], at: string): RsRun => ({ bet: 'b1', step, state, why: state === 'failed' ? 'old timeout' : null, ref: null, at });
+  const history = [
+    run('draft', 'asked', '2026-10-08T21:00:00Z'), run('draft', 'failed', '2026-10-08T21:01:00Z'),
+    run('draft', 'asked', '2026-10-15T08:00:00Z'), run('find', 'asked', '2026-10-15T08:00:01Z'),
+  ];
+  assert.deepEqual(rsOpen(history).map((r) => r.at).sort(), ['2026-10-15T08:00:00Z', '2026-10-15T08:00:01Z'], 'only the starts still open, not every start the bet made');
+  assert.equal(rsBusy(history, new Date('2026-10-15T08:01:00Z')), true);
+  const since = rsOpen(history).map((r) => r.at).sort()[0];
+  const after = [...history, run('draft', 'done', '2026-10-15T08:02:00Z'), run('find', 'done', '2026-10-15T08:02:30Z')];
+  assert.equal(rsNewest(after).find((r) => r.state === 'failed' && r.at >= since), undefined, 'a run that went fine toasts nothing');
+  const broke = [...history, run('draft', 'failed', '2026-10-15T08:02:00Z'), run('find', 'done', '2026-10-15T08:02:30Z')];
+  assert.equal(rsNewest(broke).find((r) => r.state === 'failed' && r.at >= since)?.at, '2026-10-15T08:02:00Z');
+  const hook = src('src/app/copilot/_components/useCopilot.ts');
+  assert.match(hook, /openStarts\(home\.lab\?\.planRuns \?\? \[\]\)\.map/);
+  assert.match(hook, /newestRuns\(runs\)\.find\(\(r\) => r\.state === 'failed' && r\.at >= since\)/);
+
+  /* 12. Wired: the search runs before the model, its outcome is kept on the set, and the card starts the request the rule built. */
+  const ai = src('src/lib/copilot/proofai.ts');
+  assert.ok(ai.indexOf('ctx.research = await researchIdeas(part, home);') < ai.indexOf('system: IDEAS_SYSTEM,'), 'searched first, then written');
+  assert.match(ai, /research: \{ pages: evidence\.length, why: ctx\.research\?\.why \?\? null/);
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  assert.match(tab, /actions\.lab\(\{ action: 'open', nonce, bet: req \}\)/);
+  assert.match(tab, /const req = nextBetRequest\(top, part, belief\);/);
+  assert.match(tab, /<PlanPreview steps=\{steps\} \/>/, 'what Start starts is on the screen before the tap');
+
+  console.log('copilot-core: researched ideas checks passed');
+}
+
+researchedIdeasSuite().catch((e) => { console.error(e); process.exit(1); });

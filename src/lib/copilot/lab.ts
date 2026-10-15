@@ -340,12 +340,22 @@ export const PLAN_RUN_MS = 6 * 60_000;
 
 /** Whether a crew step was started and has not been heard from yet: what the screen polls for. The newest row of a step is its state. */
 export function planBusy(runs: PlanRun[], now: Date): boolean {
+  return openStarts(runs).some((r) => now.getTime() - Date.parse(r.at) < PLAN_RUN_MS);
+}
+
+/** The newest row of each step, in any order of rows given: what each step is now. */
+export function newestRuns(runs: PlanRun[]): PlanRun[] {
   const newest = new Map<PlanKind, PlanRun>();
   for (const r of runs) {
     const seen = newest.get(r.step);
     if (!seen || r.at > seen.at) newest.set(r.step, r);
   }
-  return [...newest.values()].some((r) => r.state === 'asked' && now.getTime() - Date.parse(r.at) < PLAN_RUN_MS);
+  return [...newest.values()];
+}
+
+/** The starts not yet answered: steps whose newest row is a start, however old. */
+export function openStarts(runs: PlanRun[]): PlanRun[] {
+  return newestRuns(runs).filter((r) => r.state === 'asked');
 }
 
 export const PLAN_STEP_MAX = 240;
@@ -474,13 +484,36 @@ export interface Idea {
   why: string | null;
   /** An asset to draft before it starts. */
   prep: { label: string; asset: AssetKind } | null;
+  /**
+   * How it would work: the cause it relies on, in a sentence. The model's
+   * reasoning, said as the model's, so the person can disagree with it before
+   * the count does. Null for ideas written before it was asked for.
+   */
+  works?: string | null;
+  /** What a fail would tell you: which part is then the problem. */
+  fails?: string | null;
+  /**
+   * The pages it rests on, from the search run for this set (idearesearch.ts):
+   * only addresses the search returned, never one a model wrote. Empty is an idea
+   * from the model's own knowledge, and it ranks below a sourced one (invariant 3).
+   */
+  sources?: IdeaSource[];
 }
+
+export interface IdeaSource { title: string; url: string }
 
 export interface IdeaSet {
   part: LinkKey;
   ideas: Idea[];
   model: string | null;
   at: string;
+  /**
+   * Why the first idea is first, in the model's words — kept only while the
+   * first on screen is the one it ranked first (idearesearch.ts rankIdeas).
+   */
+  pick?: string | null;
+  /** The web search the set was written from: pages found, or why none were. Null for sets from before searches. */
+  research?: { pages: number; why: string | null } | null;
 }
 
 /** The newest ask for ideas on a part that has not ended in a set: still being written, or failed and why. */
@@ -533,6 +566,10 @@ export const UNIT_MAX = 30;
 export const IDEA_LABEL_MAX = 80;
 export const IDEA_HOW_MAX = 320;
 export const IDEA_FROM_MAX = 60;
+/** How an idea would work, and what a fail would say: a sentence each. */
+export const IDEA_REASON_MAX = 240;
+/** Pages one idea may cite. More is a reading list, not a reason. */
+export const IDEA_SOURCES_MAX = 3;
 /** One logging of a count, at most. A thousand sign-ups in a day is a different business. */
 export const TALLY_MAX = 1000;
 /** A week of calls logged on a Sunday is the usual case; a month is the edge of remembering one honestly. */
@@ -807,7 +844,23 @@ export function ideaFromStored(v: unknown, part: LinkKey): Idea | null {
     part, label, how, ...line,
     book: text(o.book, IDEA_FROM_MAX), why: text(o.why, 240),
     prep: prepOf(o.prep),
+    works: text(o.works, IDEA_REASON_MAX), fails: text(o.fails, IDEA_REASON_MAX),
+    sources: ideaSourcesOf(o.sources),
   };
+}
+
+/** The pages an idea rests on, as stored: web addresses only, a few at most. */
+export function ideaSourcesOf(v: unknown): IdeaSource[] {
+  if (!Array.isArray(v)) return [];
+  const out: IdeaSource[] = [];
+  for (const x of v) {
+    const s = obj(x);
+    const url = typeof s.url === 'string' ? s.url.trim() : '';
+    if (!/^https?:\/\/[^\s]+$/i.test(url) || url.length > 500 || out.some((y) => y.url === url)) continue;
+    out.push({ title: text(s.title, 120) ?? url, url });
+    if (out.length >= IDEA_SOURCES_MAX) break;
+  }
+  return out;
 }
 
 /* ─── What was stored ─────────────────────────────────────────────────────── */
@@ -1018,7 +1071,12 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
       const part = p.part;
       const ideas = (Array.isArray(p.ideas) ? p.ideas : []).map((x) => ideaFromStored(x, part)).filter((x): x is Idea => !!x).slice(0, 3);
       // Newest wins: the rows arrive oldest first.
-      if (ideas.length) out.ideas[part] = { part, ideas, model: text(p.model, 80), at: r.created_at };
+      const research = obj(p.research);
+      if (ideas.length) out.ideas[part] = {
+        part, ideas, model: text(p.model, 80), at: r.created_at,
+        pick: text(p.pick, IDEA_REASON_MAX),
+        research: typeof research.pages === 'number' ? { pages: Math.max(0, Math.round(research.pages)), why: text(research.why, 300) } : null,
+      };
     } else if (r.event_type === LAB_INTRO) {
       const talk = talkRef(p.talk);
       // The last word wins: asked for on Monday, fallen through by Friday.

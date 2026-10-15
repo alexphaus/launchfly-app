@@ -28,6 +28,7 @@ import {
   BET_DAYS_MAX, HEARD_ROLES_NOTE, IDEA_HOW_MAX, IDEA_LABEL_MAX, LAB_METRICS, PLANNED_MAX, PLAY_BOOKS, TALK_BACK_DAYS, TALK_ROLES, TALK_ROLE_LABEL,
   TARGET_MAX, TRIES_FOR, isBuyer, metricsFor, unitOf, type BetView, type Idea, type LabMetric, type Talk, type TalkRole,
 } from './lab';
+import { citedSources, evidenceLines, type Evidence, type IdeaResearch } from './idearesearch';
 import { FOUND_BY_LABEL } from './offer';
 import type { FoundBy, Offer } from './types';
 
@@ -66,15 +67,31 @@ export interface IdeasContext {
   shelf?: Array<{ belief: string; play: string | null }>;
   /** Kinds of asset the business already has. */
   assets: AssetKind[];
+  /**
+   * What others did, from the search run for this set (idearesearch.ts). Null
+   * when none ran, said to the model as none; left out, nothing is said — the
+   * prompt as it was before searches.
+   */
+  research?: IdeaResearch | null;
 }
 
 export const IDEAS_SYSTEM = [
   'You suggest experiments for a small business owner: three things to try in the next one to three weeks, each judged by a count.',
   'Each idea is concrete: what to do, to whom, and the one count that would show it worked, with a pass line set before it starts.',
-  'Use only what you are told about this business. Do not repeat an idea the record shows was already tried and did not pass, unless you change what made it fail.',
+  // Two kinds of knowledge, kept apart: the business's facts are only what the
+  // record says; how businesses like it win customers is what the model knows
+  // and what the pages show. "Use only what you are told" kept every idea
+  // inside the record, and its owner asked how it could know what works anywhere else.
+  'About this business, use only what you are told: never invent a fact, a customer or a number about it.',
+  'About how businesses like it win and keep customers, use what is known — proven playbooks, what others did, cause and effect — and the pages given, citing the ones an idea rests on.',
+  'Do not repeat an idea the record shows was already tried and did not pass, unless you change what made it fail.',
   'Where the owner logged what people said, start from it: an idea that answers something a buyer said beats one that could be for anybody.',
   'Where few conversations are logged, or all with one kind of person, one idea may be to talk to the people around the money the owner has not: buyers, people who sell to them, people who run the work, people already earning from them, people who know them.',
   'Never invent a number about the business: no rates, results or figures it did not give you. A number one person said is what they said, not a rate. The pass line is your proposal and the owner can change it.',
+  'For each idea say how it would work — the cause it relies on — and what a fail would tell the owner, so the count teaches something either way.',
+  'List the ideas best first: the one you would run first given the weakest part, what it costs, and how soon it gives an answer.',
+  // The screen reads these to the person: "the owner knows" read as a report about somebody else.
+  'Write label, how, why, works and fails to the owner as "you" and "your", never "the owner".',
   'Name a book only when the idea is genuinely that book\'s, and only from the list given; otherwise use null.',
   'Answer with JSON only.',
 ].join(' ');
@@ -106,6 +123,7 @@ export function ideasPrompt(c: IdeasContext): string {
     c.shelf?.length ? '\nKept on the owner\'s shelf to run later, so do not suggest these again:' : null,
     ...(c.shelf ?? []).slice(0, 10).map((e) => `- "${e.belief}"${e.play ? ` (the play: ${e.play})` : ''}`),
     c.assets.length ? `\nAssets they already have: ${c.assets.join(', ')}.` : null,
+    ...(c.research !== undefined ? evidenceLines(c.research) : []),
     '',
     'Counts an idea can be judged on (use these keys exactly):',
     ...metricLines,
@@ -114,7 +132,8 @@ export function ideasPrompt(c: IdeasContext): string {
     `It may give "prep": an asset to draft first, as {"label": "...", "asset": one of ${ASSET_KINDS.map((k) => `"${k}"`).join(', ')}}.`,
     `Books you may name: ${IDEA_BOOKS.join('; ')}.`,
     '',
-    'Return {"ideas": [{"label": "short name, starting with a verb or a noun", "how": "what to do, in one or two sentences", "metric": "...", "unit": "...", "target": number, "tries": {...}, "days": number, "book": "..." or null, "why": "one sentence on why this, from the record above", "prep": {...}}]}',
+    'Return {"ideas": [{"label": "short name, starting with a verb or a noun", "how": "what to do, in one or two sentences", "metric": "...", "unit": "...", "target": number, "tries": {...}, "days": number, "book": "..." or null, "why": "one sentence on why this, from the record above", "works": "one sentence: the cause it relies on", "fails": "one sentence: if it does not pass, what that says", "sources": [page numbers it rests on], "prep": {...}}], "first_why": "one sentence on why the first idea is the one to run now"}',
+    'Every sentence is to the owner, as "you".',
   ].filter((l): l is string => l !== null).join('\n');
 }
 
@@ -161,6 +180,28 @@ const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object'
 const clean = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim().replace(/\s+/g, ' ') : null);
 const int = (v: unknown) => (typeof v === 'number' ? Math.round(v) : typeof v === 'string' && v.trim() ? Math.round(Number(v)) : NaN);
 const PLACEHOLDER = /\[[^\]]{0,40}\]|\{\{|\}\}|<[a-z][^>]*>/i;
+/**
+ * Said about the person instead of to them. "Your" where the model wrote "the
+ * owner's" reads the same; "the owner knows" has no safe rewrite ("you knows"),
+ * so a line still saying it is not kept — dropped, not repaired, as the rest.
+ */
+const toYou = (s: string | null): string | null => (s ? s.replace(/\bthe owner['’]s\b/gi, (m) => (m[0] === 'T' ? 'Your' : 'your')) : s);
+const ABOUT_THEM = /\bthe (?:business )?owner\b/i;
+const REASON_MAX = 240;
+
+/** A sentence of reasoning, held to the rules a reason is: its own length, no placeholder, no "the owner", no number from nowhere. */
+function reasonOf(v: unknown, sources: string[]): string | null {
+  const r = toYou(clean(v));
+  return r && r.length <= REASON_MAX && !PLACEHOLDER.test(r) && !ABOUT_THEM.test(r) && !numberOutside(r, sources) ? r : null;
+}
+
+/** Why the model put its first idea first: kept as a reason is, or not at all. */
+export function firstWhyOf(raw: unknown, c: { sources: string[]; evidence?: Evidence[] }): string | null {
+  return reasonOf(obj(raw).first_why, [...c.sources, ...evidenceText(c.evidence)]);
+}
+
+/** A page's words count as somewhere a number came from — it is the page's number, cited as the page's. */
+const evidenceText = (e: Evidence[] | undefined) => (e ?? []).flatMap((x) => [x.title, x.said ?? '']);
 
 /**
  * The model's ideas, each held to what a bet is held to. An idea that does not
@@ -169,17 +210,17 @@ const PLACEHOLDER = /\[[^\]]{0,40}\]|\{\{|\}\}|<[a-z][^>]*>/i;
  * A reason that cites a number the person never gave loses the reason, not the
  * idea. A book not on the list is not said.
  */
-export function normalizeIdeas(raw: unknown, c: Pick<IdeasContext, 'part' | 'foundBy'> & { sources: string[] }): Idea[] {
+export function normalizeIdeas(raw: unknown, c: Pick<IdeasContext, 'part' | 'foundBy'> & { sources: string[]; evidence?: Evidence[] }): Idea[] {
   const list = Array.isArray(obj(raw).ideas) ? (obj(raw).ideas as unknown[]) : Array.isArray(raw) ? raw : [];
   const allowed = new Set(metricsFor(c.foundBy));
   const books = new Map(IDEA_BOOKS.map((b) => [b.toLowerCase(), b]));
   const out: Idea[] = [];
   for (const x of list) {
     const o = obj(x);
-    const label = clean(o.label);
-    const how = clean(o.how);
+    const label = toYou(clean(o.label));
+    const how = toYou(clean(o.how));
     if (!label || !how || label.length > IDEA_LABEL_MAX || how.length > IDEA_HOW_MAX) continue;
-    if (PLACEHOLDER.test(label) || PLACEHOLDER.test(how)) continue;
+    if (PLACEHOLDER.test(label) || PLACEHOLDER.test(how) || ABOUT_THEM.test(label) || ABOUT_THEM.test(how)) continue;
     const metric = typeof o.metric === 'string' && (LAB_METRICS as readonly string[]).includes(o.metric) ? (o.metric as LabMetric) : null;
     if (!metric || !allowed.has(metric)) continue;
     const unit = metric === 'logged' ? unitOf(o.unit) : null;
@@ -196,8 +237,9 @@ export function normalizeIdeas(raw: unknown, c: Pick<IdeasContext, 'part' | 'fou
       ? { metric: triesMetric, planned } : null;
     const bookRaw = clean(o.book);
     const book = bookRaw ? books.get(bookRaw.toLowerCase()) ?? null : null;
-    const whyRaw = clean(o.why);
-    const why = whyRaw && whyRaw.length <= 240 && !PLACEHOLDER.test(whyRaw) && !numberOutside(whyRaw, c.sources) ? whyRaw : null;
+    // Why this, now: from the person's record alone. How it would work may lean on a page's numbers, which are the page's.
+    const why = reasonOf(o.why, c.sources);
+    const read = [...c.sources, ...evidenceText(c.evidence)];
     const p = obj(o.prep);
     const prepLabel = clean(p.label);
     const asset = typeof p.asset === 'string' && (ASSET_KINDS as readonly string[]).includes(p.asset) ? (p.asset as AssetKind) : null;
@@ -206,6 +248,8 @@ export function normalizeIdeas(raw: unknown, c: Pick<IdeasContext, 'part' | 'fou
       key: `ai-${out.length}-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}`,
       part: c.part, label, how, metric, unit, target, tries, days, book, why,
       prep: prepLabel && asset && prepLabel.length <= IDEA_LABEL_MAX ? { label: prepLabel, asset } : null,
+      works: reasonOf(o.works, read), fails: reasonOf(o.fails, read),
+      sources: citedSources(o.sources, c.evidence ?? []),
     });
     if (out.length >= IDEAS_PER_ASK) break;
   }

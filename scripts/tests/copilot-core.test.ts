@@ -11239,10 +11239,11 @@ async function voicesSuite() {
 
   /* 12. The card: no section where nothing can search (invariant 7), the opener is fixed words, nothing is sent. */
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
-  // Its own card above the bet, and nothing at all until a search has run or its record cannot be read.
+  // On the bet's own card, under the count they move, and nothing at all until a search has run or its record cannot be read.
   assert.match(tab, /if \(mine\.searches === 0 && !read\?\.unreadable\) return null;/);
-  assert.match(tab, /<People home=\{home\} view=\{lab\.current\} actions=\{actions\} find=\{find\} opened=\{opened\} \/>/);
-  assert.ok(tab.indexOf('<People ') < tab.indexOf('<ThisBet '), 'the people come before the bet they count toward');
+  const betCard = tab.slice(tab.indexOf('function ThisBet('), tab.indexOf('function Reading('));
+  assert.match(betCard, /<People home=\{home\} view=\{view\} actions=\{actions\} find=\{find\} opened=\{opened\} \/>/, 'the people are the bet’s work, on its card');
+  assert.ok(betCard.indexOf('className="cp2-lab-bar"') < betCard.indexOf('<People '), 'under the count they move, not a card above it');
   assert.match(tab, /href=\{v\.url\} target="_blank" rel="noopener noreferrer nofollow"/);
   assert.match(tab, /actions\.openSheet\(\{ kind: 'talk', voice: v\.id \}\)/);
   assert.ok(vxOpener.length < 140 && !/\$|\d/.test(vxOpener), 'a question about their past, with no number in it');
@@ -11620,14 +11621,15 @@ async function engineSuite() {
   const p1 = { ...post(1), author: 'marta_codes', where: 'Indie Hackers' };
   assert.deepEqual(enVoiceTalk(p1, 'time'), { who: 'marta_codes (Indie Hackers)', role: 'buyer', problem: 'unasked', commitment: 'time', voice: p1.id });
 
-  /* 8. The screen: the engine leads, the part opened carries the move, the people are their own card, the tab is Engine. */
+  /* 8. The screen: the engine leads, the part opened carries the move, the bet's card carries its own, the tab is Engine. */
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
-  assert.ok(tab.indexOf('<EngineHero ') < tab.indexOf('<AfterPivot') && tab.indexOf('<AfterPivot') < tab.indexOf('<Station ') && tab.indexOf('<Station ') < tab.indexOf('<People ') && tab.indexOf('<People ') < tab.indexOf('<ThisBet '), 'the engine, then what a pivot left, then the part opened, then the people, then the bet');
+  assert.ok(tab.indexOf('<EngineHero ') < tab.indexOf('<AfterPivot') && tab.indexOf('<AfterPivot') < tab.indexOf('<Station ') && tab.indexOf('<Station ') < tab.indexOf('<ThisBet '), 'the engine, then what a pivot left, then the part opened, then the bet');
   assert.match(tab, /const step = engineStep\(\{/);
   assert.match(tab, /const part = picked \?\? openPart\(step, d\.proof\.chain\.weak\);/, 'the engine opens where the move is');
   assert.match(tab, /\{step && !step\.part && \(/, 'a move about the whole business is no one part’s');
   assert.match(tab, /\{here && <div className="cp2-er-move"><NextStep step=\{here\}/, 'the move sits on the part it moves');
-  assert.match(tab, /actions\.openSheet\(\{ kind: 'crew' \}\)/, 'the crew is a tap on the engine');
+  assert.match(tab, /\{here && <div className="cp2-betq-move"><NextStep step=\{here\} [^>]*inCard \/><\/div>\}/, 'and on the bet’s part, on the bet’s card');
+  assert.match(tab, /\{trouble && \(\s*<button className="cp2-row" onClick=\{\(\) => actions\.openSheet\(\{ kind: 'crew' \}\)\}>/, 'a worker that stopped is a row on Engine (invariant 13); the crew is not drawn otherwise');
   assert.ok(!/<Voices /.test(tab), 'the people are not inside the bet card');
   assert.ok(!/work\.talks && work\.talks\.n > 0/.test(tab), 'the conversations row is gone: the score counts them and Behind it lists them');
   assert.match(tab, /<button className="cp-btn" onClick=\{\(\) => goTo\(next\.go, actions, b\.id\)\}>\{next\.label\}<\/button>/, 'one primary button on the screen: the step’s');
@@ -11647,7 +11649,7 @@ async function engineSuite() {
   ] as const) assert.ok(src(file).includes(text), `${file} names the tab as it is called`);
   assert.ok(!/\bProof\b/.test(src('src/app/copilot/_components/v2/CopilotApp2.tsx').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/ProofTab|Proof'/g, '')), 'no label of the old name left in the shell’s code');
   const css = src('src/app/copilot/copilot.css');
-  for (const c of ['cp2-ns', 'cp2-ns-t', 'cp2-er-hero', 'cp2-er-parts', 'cp2-er-station', 'cp2-vox-card', 'cp2-vox-end']) assert.ok(css.includes(`.cp2-${c.replace(/^cp2-/, '')}`), `${c} is styled`);
+  for (const c of ['cp2-ns', 'cp2-ns-t', 'cp2-er-hero', 'cp2-er-parts', 'cp2-er-station', 'cp2-vox-card', 'cp2-vox-end', 'cp2-betq-move', 'cp2-betq-people', 'cp2-betq-links', 'cp2-pf-trouble']) assert.ok(css.includes(`.cp2-${c.replace(/^cp2-/, '')}`), `${c} is styled`);
 
   console.log('copilot-core: engine checks passed');
 }
@@ -12476,3 +12478,89 @@ async function betPlanSuite() {
 }
 
 betPlanSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Engine, one card for the bet: the plan says what needs a look, the screen says each thing once ─── */
+//
+// On the owner's day nine the tab said "nobody talked to yet" nine ways: the
+// move's reason, the part's line, "You · Needed", "8 found", "0 of 3", "0/10
+// talks", "yours 0 of 1", "0 of 8 talked to · 8 waiting" and "Nothing logged
+// yet" — over a plan whose green tick for the Scout read as progress. The bet is
+// one card now, its plan shows only what needs a look or a tap, and what only
+// repeated it is gone.
+
+import { betPlanText as ocText, planFor as ocFor, planShown as ocShown, planView as ocView, type PlanInput as OcInput, type StepView as OcStepView } from '../../src/lib/copilot/betplan';
+import type { BetView as OcBetView, PlanRun as OcRun } from '../../src/lib/copilot/lab';
+import type { BetVoices as OcVoices } from '../../src/lib/copilot/voices';
+
+async function engineOneCardSuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
+
+  /* 1. What the card shows of a plan: the crew while it needs a look, a result to open, yours still to do. */
+  const sv = (kind: string, by: string, state: string, extra: Partial<OcStepView> = {}) =>
+    ({ step: { kind, by, who: by === 'crew' ? 'Writer' : 'You', do: 'x' }, state, line: '', runnable: false, ...extra }) as OcStepView;
+  const shown = (steps: OcStepView[]) => ocShown({ steps }).map((s) => `${s.step.kind}:${s.state}`);
+  assert.deepEqual(shown([sv('find', 'crew', 'done'), sv('reply', 'you', 'open')]), [], 'the Scout done and its people waiting: the people card is the work, and no tick sits over it');
+  assert.deepEqual(shown([sv('find', 'crew', 'done', { runnable: true })]), ['find:done'], 'it will look again tonight: news');
+  assert.deepEqual(shown([sv('find', 'crew', 'done', { trouble: true })]), ['find:done'], 'its last look failed: said (invariant 13)');
+  for (const st of ['working', 'failed', 'stopped', 'waiting', 'needs']) assert.deepEqual(shown([sv('job', 'crew', st)]), [`job:${st}`], `a crew step ${st} is said`);
+  assert.deepEqual(shown([sv('job', 'crew', 'done', { project: 'c1' }), sv('draft', 'crew', 'done', { asset: 'a1' })]), ['job:done', 'draft:done'], 'a result to open stays');
+  assert.deepEqual(shown([sv('page', 'you', 'open'), sv('adopt', 'you', 'done'), sv('reply', 'you', 'open'), sv('job', 'you', 'open')]), ['page:open', 'job:open'], 'yours: still to do is said, done leaves, answering people is the people card');
+
+  /* 2. Read off the rows, as the card reads them: the owner's day nine is no rows at all, a failed search is one. */
+  const now = new Date('2026-10-15T10:00:00Z');
+  const bet = {
+    id: 'b1', part: 'who', belief: 'People who want a business but do not know how to start have the problem I fix', play: null, idea: null, metric: 'committed', unit: null,
+    target: 3, tries: { metric: 'talks', planned: 10 }, days: 14, start: '2026-10-07', price: 29, priceLabel: '$29', experiment: null, openedAt: '2026-10-07T00:00:00Z',
+  };
+  const view = { bet, state: 'running', result: 0, tries: 0, day: 9, last: '2026-10-20', ended: null, note: null } as unknown as OcBetView;
+  const post = (n: number) => ({ id: `v_0000000${n}`, url: `https://www.indiehackers.com/post/p${n}`, where: 'Indie Hackers', title: `Post ${n}`, said: null, author: null, posted: null });
+  const voices: OcVoices = { open: [1, 2, 3, 4, 5, 6, 7, 8].map(post), talked: 0, found: 8, searches: 1, last: null };
+  const input = (runs: OcRun[]): OcInput => ({
+    view, runs, voices, searchRefusal: null, assets: [], projects: [], pageLive: false, talks: [], tallies: [], found: 'inbound', counted: { link: false, page: false }, timezone: 'Asia/Manila', now,
+  });
+  const plan = { bet: 'b1', steps: ocFor(bet as never, { search: true, draft: true, write: false, research: false }), at: '2026-10-07T00:00:00Z' };
+  assert.deepEqual(plan.steps.map((s) => `${s.kind}:${s.who}`), ['find:Scout', 'reply:You']);
+  const dayNine = ocView(plan, input([]));
+  assert.deepEqual(dayNine.steps.map((s) => [s.state, !!s.trouble]), [['done', false], ['open', false]]);
+  assert.deepEqual(ocShown(dayNine), [], 'day nine: nothing on the plan’s rows, the people under the count are the work');
+  const failed = ocView(plan, input([{ bet: 'b1', step: 'find', state: 'failed', why: 'Exa did not answer', ref: null, at: '2026-10-15T01:00:00Z' }]));
+  assert.deepEqual([failed.steps[0].state, failed.steps[0].trouble, ocShown(failed).map((s) => s.step.kind)], ['done', true, ['find']], 'found people once, and the newest search failed: the row stays to say so');
+  assert.match(ocText(dayNine), /Scout, find people who say this problem in their own words: 8 found\. You, answer them from your own account: 0 of 8 talked to · 8 waiting\./, 'Claude still reads the whole plan: a chat has no card beside it');
+
+  /* 3. One card for the bet: the count, the crew while it needs a look, the move or the people, then the fold. */
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  const card = tab.slice(tab.indexOf('function ThisBet('), tab.indexOf('function Reading('));
+  const at = (s: string) => { const i = card.indexOf(s); assert.ok(i >= 0, `${s} is on the bet’s card`); return i; };
+  assert.ok(at('className="cp2-lab-bar"') < at('<BetPlan ') && at('<BetPlan ') < at('<NextStep ') && at('<NextStep ') < at('<People ') && at('<People ') < at('className="cp2-lab-more"'), 'count, crew, move, people, then the fold');
+  assert.match(card, /const here = step && step\.part === b\.part && !peopleShown \? step : null;/, 'the people are the move whenever they are up: one primary button, not two');
+  assert.match(card, /\{here\?\.kind !== 'count' && <button className="cp-btn" onClick=\{\(\) => goTo\(next\.go, actions, b\.id\)\}>\{next\.label\}<\/button>\}/, 'the count’s way in is not drawn twice');
+  assert.equal((card.match(/claudeAsk\(view\)/g) ?? []).length, 1, 'one Ask Claude on the card');
+  assert.match(tab, /\{!onBet && <Station /, 'the bet’s part is the bet’s card: no second card for it above');
+  assert.match(card, /\{runnerProblem && <p className="cp2-bz-problem">\{runnerProblem\}<\/p>\}/, 'an agent not well on the bet’s part is said on the card that replaced the part’s (invariant 13)');
+
+  /* 4. Off the screen: what a pass pays toward a goal four years out, the crew's faces, what moved, Built so far, the model's ideas. */
+  for (const gone of [/step\.payoff/, /WorkerGlyph/, /cp2-er-crew/, /Since you last looked/, /<Built /, /action: 'ideas'/, /cp2-er-fig/]) assert.ok(!gone.test(tab), `${gone} is off Engine`);
+  assert.match(tab, /const flagged = d\.proof\.lab\.current \? null : chain\.weak;/, 'the weakest part is flagged while a bet can be picked, not beside one running');
+  assert.match(tab, /\{mine\.talked\} of \{mine\.found\} talked to/, 'found against talked to, at nought too: said once, where the people are');
+  const planCard = src('src/app/copilot/_components/v2/BetPlan.tsx');
+  assert.match(planCard, /const shown = planShown\(pv\);/);
+  assert.ok(!/Only the count above decides the bet|pv\.count\.do|planLine/.test(planCard), 'no tally, no count row, no footnote: the plan says it by not ticking');
+
+  /* 5. Records: a line each — the history, the ideas kept while a bet runs, a worker that stopped; the crew behind Projects. */
+  assert.match(tab, /actions\.openSheet\(\{ kind: 'history' \}\)/);
+  assert.match(tab, /\{running && \(\s*<button className="cp2-row" onClick=\{\(\) => actions\.openSheet\(kept \? \{ kind: 'shelf' \} : \{ kind: 'bet', part: d\.proof\.chain\.weak \?\? undefined \}\)\}>/, 'while a bet runs the shelf is a row, and the only way to keep an idea');
+  assert.match(src('src/app/copilot/_components/SheetContent.tsx'), /case 'shelf': return <ShelfSheet home=\{home\} actions=\{actions\} \/>;/);
+  const sheets = src('src/app/copilot/_components/v2/ProofSheets.tsx');
+  assert.match(sheets, /<Shelf home=\{home\} d=\{d\} actions=\{actions\} sheet \/>/);
+  assert.match(sheets.slice(sheets.indexOf('export function ProjectsSheet')), /actions\.openSheet\(\{ kind: 'crew' \}\)/, 'the crew’s sheet is behind Projects');
+
+  /* 6. No bet running: a kept test first, one play, your own, and Claude for one. */
+  assert.match(tab, /const PLAYS_SHOWN = 1;/);
+  assert.match(tab, /label: 'Ask Claude for one', by: 'claude'/);
+  assert.match(tab, /const here = step && step\.part === part && step\.kind !== 'pick' && step\.kind !== 'shelf' \? step : null;/, 'picking a bet and a kept test are the cards under the part, not said on it as well');
+
+  console.log('copilot-core: engine one card checks passed');
+}
+
+engineOneCardSuite().catch((e) => { console.error(e); process.exit(1); });

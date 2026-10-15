@@ -149,6 +149,8 @@ export type SheetState =
   | { kind: 'projects' }
   /** Engine: the crew — every worker on the engine, how each is doing and the parts it works (crew.ts). */
   | { kind: 'crew' }
+  /** Engine, while a bet runs: the tests kept for later, and the way to keep another. */
+  | { kind: 'shelf' }
   /** You: the person's own accounts, connected so work can go out under their name (lib/copilot/accounts.ts). */
   | { kind: 'accounts' };
 

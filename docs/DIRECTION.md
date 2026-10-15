@@ -616,6 +616,27 @@ play needs is a rule, and a model picking what to do is the morning brief), a st
 the crew may tick itself, and any step that sends, posts or spends — answering
 people stays yours (invariant 4). See COPILOT.md → **A bet starts with its plan**.
 
+**Then — Engine, one card for the bet.** Its owner asked how the tab would be
+simplified to what is essential: the 80/20, what overlapped, and what did not need
+more building because it is not the moat. Their own day nine was the answer. One
+fact, nobody talked to yet, was said nine ways across five blocks; three zeros that
+looked alike sat on one screen; four things asked to be looked at; and the people to
+answer were two screens down, under a crew whose "4 at work" was Maps, feeds and the
+nightly pass. By this document's own test, four things on the tab need rows: the bet,
+its line written first and counted by the rows; the one-tap log of how a conversation
+ended, which makes those rows; the joins (posts found against talked to, a page's
+version against its opens, all since the pivot); and the chain's verdict, to pick the
+next bet with. So the bet is one card, the move is its first row of work, the engine
+says its verdict in a line, and the rest is a line each. What left the screen is what
+only repeated those or is given away elsewhere: the crew drawn on the engine (a harness
+runs agents better; a stopped worker is still said), the model's ideas (a chat writes
+better ones; "Ask Claude for one" hands it the record, and a test it proposes is held
+to what a kept one is), "Built so far", the plan's ticks, and what passing a bet pays
+toward, which is the Path's. Nothing below the screen changed but one helper, and the
+code behind what left is for the next pass. The open question below about green ticks
+is the one this answers, and the count to watch is unchanged: posts talked to against
+posts found. See COPILOT.md → **One card for the bet**.
+
 ---
 
 ## Where it actually stands

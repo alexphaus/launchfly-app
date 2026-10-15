@@ -29,7 +29,7 @@ import { Count, talkDay } from './LabSheets';
 import { MoveNote, MoveRow, agentIsFull, orChat, useBrief, useMove } from './MoveKit';
 import { Composer, Project } from './ProjectCard';
 import { ToldLine } from './TellSheets';
-import { AssetRow, HistoryRow, assetBet } from './ProofTab';
+import { AssetRow, HistoryRow, Shelf, assetBet } from './ProofTab';
 
 /* ─── The chain, whole ────────────────────────────────────────────────────── */
 
@@ -833,6 +833,15 @@ export function ProjectsSheet({ home, actions }: { home: HomeData; actions: Acti
     <>
       <h3>Projects</h3>
       <p className="desc">Hand over anything you would otherwise do yourself. It researches, compares and drafts while you do something else, reports every step, and never contacts anyone as you without your OK, or spends anything.</p>
+      {/* Who does the work, and how each is: drawn on the engine until it counted Maps and feeds as "at work" beside a bet
+          none of them was working. A worker that stopped is still said on Engine, as a row of its own (invariant 13). */}
+      <button className="cp2-pf-foundrow" onClick={() => actions.openSheet({ kind: 'crew' })}>
+        <span className="cp2-row-main">
+          <span className="t">Your crew</span>
+          <span className={`s${d.proof.crewLine.trouble ? ' cp2-pf-trouble' : ''}`}>{d.proof.crewLine.line}</span>
+        </span>
+        <IconChevron />
+      </button>
       <div className="cp-sheet-embed cp2-pf-sheetlist">
         <Composer home={home} d={d} actions={actions} brief={brief} full={full} />
         {live.length > 0 && (
@@ -870,6 +879,24 @@ export function ProjectsSheet({ home, actions }: { home: HomeData; actions: Acti
       </div>
       {/* A read that failed is not "nothing was built" (invariant 13). */}
       {home.built?.unreadable && finished.length > 0 && <div className="cp-note">Could not read what the projects produced, so their counts may be short: {home.built.unreadable}</div>}
+    </>
+  );
+}
+
+/* ─── Ideas for later ─────────────────────────────────────────────────────── */
+
+/**
+ * The shelf while a bet runs, opened from "Ideas for later" under Engine's
+ * records: the bet's card is the screen then. The same rows and rules as the
+ * shelf on Engine with no bet running — Start is not offered while one runs —
+ * and the way to keep another.
+ */
+export function ShelfSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  const d = useDerived(home);
+  return (
+    <>
+      <h3>Ideas for later</h3>
+      <Shelf home={home} d={d} actions={actions} sheet />
     </>
   );
 }

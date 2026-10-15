@@ -772,27 +772,27 @@ app's usual one: **a model proposes, the rows judge**. A model writes ideas for 
 bet and drafts of an asset; nothing it writes decides a verdict, and nothing it
 writes is the person's until they keep it.
 
-On the screen, top to bottom:
+On the screen, top to bottom (since **One card for the bet**, below):
 
-- **The next step, and the verdict under it** (`engine.ts`, `Top` in
-  `ProofTab.tsx`). One card. First the step — what to do now, as a sentence, in
-  the person's own numbers, with one primary button — then, one tap under it, the
-  verdict: what you sell, proven or not ("Proven at 3 paid at your $150. So far:
-  0."), the chain as five dots with the weak link named. The offer and the runway are
-  not here: You and Money hold them. A tap on it opens the chain whole (the parts below). "Since you last looked" names a part
-  that moved, per device, under the key Work used.
+- **The engine** (`EngineHero` in `ProofTab.tsx`): what you sell, proven or not
+  in the verdict's own sentence ("Proven at 3 paid at your $29. So far: 0.
+  Counted since 7 Oct, when you pivoted who buys."), and the five parts in a
+  row. The weakest part is flagged only while no bet runs. The offer and the
+  runway are not here: You and Money hold them.
 - **What a pivot on who buys left behind**, until it is answered: the old
   buyers' businesses, the drafts to them and the searches for them.
-- **The people who said it**, for a bet about people: their own card, above the
-  bet, once a search has run.
-- **The bet**, one at a time — or the checkpoint, or the way to pick one.
-- **More**: the first asset the business lacks (a page that is not online, a
+- **The bet**, one card hanging from its part — the belief, the count against
+  the line, the crew's steps while they need a look, then the work: the people
+  it found to answer, or the one step where its next count happens. How it is
+  counted, the play and the work done for it are one tap under its play line.
+  With no bet running: the part opened, a test kept for later, and the way to
+  pick one — or the checkpoint.
+- **Records**: the first asset the business lacks (a page that is not online, a
   script for the weak part) with its one button, then a line each for
-  conversations, assets (a page online says so, with what it counted), history,
-  projects and the agents. Each opens its sheet. They are here because no other
-  tab holds them, and none is read to decide the next move, so none sits above
-  the bet. The bet's own count and pass line are the card; how it is counted,
-  the play and the work done for it are one tap under its play line.
+  conversations, assets (a page online says so, with what it counted),
+  projects, history, ideas kept for later while a bet runs, and a worker that
+  stopped. Each opens its sheet. They are here because no other tab holds them,
+  and none is read to decide the next move, so none sits above the bet.
 
 **Five parts, each a bet with a rule** (`business.ts`). Who buys, how they hear,
 how they say yes, what they pay, how you deliver. Each carries what it is in the
@@ -921,10 +921,18 @@ search beside it.
 **The plan is the work; the count is the verdict.** Every step done passes nothing
 (invariant 10): "the plan was done and nobody bought" is the result a bet exists to
 produce, and it would vanish if finishing the plan could pass one — `lab.ts` does
-not import `betplan.ts`, and the suite holds it. The card says it under the plan.
-Claude reads the plan the same way, over the connector, as the work and not the
-verdict (`betPlanText`). A plan's draft or project replaces "Get it ready" on the
-card, and what a step already shows is not listed again under the work for the bet.
+not import `betplan.ts`, and the suite holds it. The card says it by not ticking:
+it shows only `planShown` — a crew step at work, failed, stopped or not started, a
+crew step's result to open (a draft, a project's report), and a step of yours still
+to do with no other place on the card. Answering the people found is the people
+list itself, the count's way in is the card's own buttons, and the Scout's finished
+search is said only when it will look again tonight or its last look failed
+(`StepView.trouble`). A column of ticks under "0 of 3" was the card of green ticks
+that feels like progress (DIRECTION.md). Claude reads the whole plan, over the
+connector, as the work and not the verdict (`betPlanText`): a chat has no card
+beside it. A plan's draft or project replaces "Get it ready" on the card, and what a
+step on the card already opens is not listed again under the work for the bet; a
+step done leaves the card, so what it made is listed there instead.
 
 **The first reading** (`reading.ts`, `Reading` in `ProofTab.tsx`). A bet whose line
 is a sale shows an empty bar until a sale lands, which for "2 sales at your $150
@@ -948,23 +956,27 @@ reads the same line on a running bet. Short labels that wrap, not columns: five
 equal columns broke "messag/es sent" at 390px, which no assertion could see.
 
 **With none running**, the card asks what you believe that you have not tested,
-on the weak part first, with the last bet's result. First come **ideas a model
-wrote for this business** (`ideas.ts`, `proofai.ts writeIdeas`): three, from the
-person's words, the chain with its rules and numbers, the bets already run and how
-each ended, the conversations logged (who they were with, and what people said
-in their words) and the assets there are — asked for once a
-visit when there are none, or when the record has moved since the last were
-written (a bet ended, or two weeks went by: `ideasStale`), and again on a tap.
-Each is held to what a bet is before it is kept — a count this business can keep,
-a line in range, a plan that is the step before the count, no placeholder — so
-any idea on screen can become a bet as it stands. A reason that cites a number
-the person never gave loses the reason; a book not on the list is not named. Then
-**plays from books** (`PLAYS`), filtered by how buyers find you: The Mom Test,
-Crossing the Chasm, Traction, $100M Leads, The Lean Startup, Building a
+on the part opened — the weak one first — with the last bet's result. Under it, a
+test kept for later comes first (the shelf's card, above), then one **play from
+books** (`PLAYS`, the rest a tap away), filtered by how buyers find you: The Mom
+Test, Crossing the Chasm, Traction, $100M Leads, The Lean Startup, Building a
 StoryBrand, The Referral Engine, Never Split the Difference, $100M Offers,
 Million Dollar Weekend, Built to Sell, The E-Myth — each something to do with a
-count, never advice dressed as a test. Then your own. Without a model on the
-server there is no ideas button at all (invariant 7); the books are there.
+count, never advice dressed as a test. Then your own, and **Ask Claude for one**:
+the record handed to Claude with the ask, because ideas are the half a chat gives
+away (DIRECTION.md), and the app holds the test once there is one — written on the
+sheet, or proposed to the shelf over the connector (`proposals.ts`), where it is
+held to what a kept test is held to.
+
+*Ideas a model wrote for this business* (`ideas.ts`, `proofai.ts writeIdeas`) were
+the first thing on this card until October 2026, and are no longer shown on Engine
+or asked for when it opens; the pipeline is still in the code. They were three,
+from the person's words, the chain with its rules and numbers, the bets already run
+and how each ended, the conversations logged and the assets there are — asked for
+once a visit when the record had moved (`ideasStale`), and again on a tap. Each was
+held to what a bet is before it was kept — a count this business can keep, a line
+in range, a plan that is the step before the count, no placeholder — and a reason
+that cited a number the person never gave lost the reason.
 
 **The shelf** (`lab.ts` `ShelfEntry`, `Shelf` in `ProofTab.tsx`). Ideas were
 replaced the next time they were asked for, and a bet the person was not ready to
@@ -997,7 +1009,10 @@ writes `lab_shelf_gone` — refused with the read's own failure, not "not on you
 shelf", when the record cannot be read. One bet still
 runs at a time, so Start is offered only when the slot is free. While a bet runs
 Proof shows no picker and nothing else opens the sheet, and that is when new ideas
-arrive, so the shelf carries its own "Keep an idea for later" under a running bet.
+arrive, so the shelf has its own way in under Records: **Ideas for later**, which
+opens the shelf as a sheet (`ShelfSheet`) when something is kept, and the bet sheet
+to keep one when nothing is. It was a dashed row of its own between the bet and the
+records, one more thing on the screen for a shelf that is usually empty.
 The idea writer is told the tests already kept — the person's belief, and the
 play's name where a book or the app's ideas gave it, never a shared reply's
 (`playForModel`) — so it does not suggest what is written down, and only the
@@ -1176,6 +1191,8 @@ else does — the chain — instead of hiding it as five dots under the step.
   every part that works and stops at the first that does not: the theory of
   constraints the weak link was always built on (`weakLink`), drawn rather than
   said. The weakest part carries a flag. "Since you last looked" stays, under it.
+  *Since **One card for the bet** (below): the count is said in a line, the
+  weakest part is flagged only while no bet runs, and "since you last looked" is gone.*
 - **A part is tapped open in place, not in a sheet**, because a sheet over the
   engine hides the engine. The card under the engine points at its part with a
   notch, and opens where the move is (`openPart`: the step's part, else the
@@ -1202,17 +1219,60 @@ else does — the chain — instead of hiding it as five dots under the step.
   record the app counted for it, and only when it is registered (invariant 7). The
   app's own Writer is the roster's Writer, not a second face. Past seven faces the
   crew's line goes under them. The sheet offers "Give the crew a job" only where a
-  worker is connected.
+  worker is connected. *Since **One card for the bet**: not drawn on the engine;
+  the sheet opens from the head of Projects, and a worker that stopped is a line
+  under Records.*
 - **Built so far** (`builtSoFar`): the engine running is what it built — every sale,
   a bet that passed, a conversation that ended in money, a project the agent
   finished, the first version of anything made, the plan's experiment that worked —
   newest three, read off the history, with All history beside it. Not what was only
-  started, decided or called off, and not every redraft of the offer.
+  started, decided or called off, and not every redraft of the offer. *Gone since
+  **One card for the bet**: the history is a line under Records.*
 
 What it took away: the Agents row (the crew is on the engine), the History row
 (Built so far carries the link), the verdict card under the step (the engine is the
 verdict), and the bet picker's own row of parts (the engine is the picker: tap a
 part and its plays are below). Nothing was added below the screen.
+
+**One card for the bet** (`ThisBet` · `EngineHero` · `More` in `ProofTab.tsx`,
+`betplan.ts planShown`, `ShelfSheet` in `ProofSheets.tsx`). Its owner asked, on day
+nine of a bet at 0 of 3, what the tab would be with only what it alone can do. The
+screen answered it. One fact — nobody talked to yet — was said nine ways: "no
+conversation logged yet: 10 to have", "A bet on it is running. Nothing counted
+yet", "You · Needed", "8 found", "0 of 3 commitments", "0/10 talks", "yours 0 of
+1", "0 of 8 talked to · 8 waiting", "Nothing logged yet". Three zeros looked alike:
+0/3 paid drawn big, 0 of 3 commitments, 0/10 talks. Four things asked to be looked
+at: the Weakest flag on how they hear, the move on who buys, "Researcher stopped"
+in orange, and the Path's own move. And the people to answer were two screens down,
+under a crew of eight faces whose "4 at work" counted Maps, feeds and the nightly
+pass — none of them the bet. What changed, with nothing below the screen but one
+helper:
+
+- **The bet is one card**, hanging from its part with the notch the part's card
+  had: the belief, the count and the line, the crew's steps only while they need a
+  look (`planShown`), then the work — the people found, opened ones first, or where
+  there are none the step where the next count happens (`NextStep` in the card,
+  without the day and the reason the card already says). One Ask Claude, the
+  count's own button where the step is not already it, and Call it off. The part's
+  card, the step's, the people's, the bet's and the plan's checklist had been five
+  blocks saying it.
+- **The engine says the verdict in a line** — its own sentence, the one Claude
+  reads — and draws the five parts. The weakest is flagged only while a bet can be
+  picked; beside a bet running on another part it read as "you are on the wrong one".
+- **Records are a line each**: conversations; the page and assets; projects, whose
+  sheet opens with the crew; history, said as counts of what it holds (bets, sales,
+  versions, projects), never its newest line, which was an errand; ideas for later,
+  while a bet runs; and *Your crew* only when a worker stopped (invariant 13).
+- **Gone from the screen**: Built so far (an errand the agent finished and a $1
+  sale from the business before the pivot, drawn as progress); what passing the bet
+  pays toward (below); the plan's tally, count row and footnote; the crew on each
+  part; and the model's ideas on the no-bet card, where one play from the books
+  shows and **Ask Claude for one** hands the record to the chat that is better at
+  ideas.
+
+Left for later on purpose: the code behind what left the screen (`payoffOf`,
+`builtSoFar`, the ideas pipeline, the part's move lists, and the tests that hold
+them), and the work layer's breadth.
 
 **The next step first** (`engine.ts`, `NextStep` in `ProofTab.tsx` — on the part it moves since the engine room).
 Proof opened on its verdict — the offer, five dots with five state words, the weak
@@ -1243,7 +1303,11 @@ rule `recordOutcome` applies): "Passing this bet does not pay you. Save Exit PH
 to the Path; a bet counted in sales says "A sale counts toward…" and how many at
 the price it is held to — the same 52 the goal's own outlook says. A tab about
 building a business that lets a person believe a test is income is the opposite of
-a co-founder. And **Ask Claude** (`claudeAsk`, the existing handoff): the bet's
+a co-founder. *Not drawn since **One card for the bet**: the first money goal by
+priority was, on the owner's account, $1M ARR by 2030 — "Passing this bet does not
+pay you. $1M ARR + 500K cash still needs $500,000 by 31 Jan 2030 (1204 days left)"
+was the bet's reason to exist, read four years out — and what pays now is the
+Path's to say.* And **Ask Claude** (`claudeAsk`, the existing handoff): the bet's
 own words and count as the first line, then the whole record, held to what it
 says — the chat does the thinking this app does not, with the rows it never
 collected. With the connector (You → Claude) Claude reads the same numbers live,

@@ -1291,7 +1291,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-lab-verdict.failed { background: var(--bad-tint); color: var(--bad); }
 
 /* The bet: the belief in quotes, then the one number that decides it. */
-.cp-root[data-theme="soft"] .cp2-lab-partname { flex: none; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--line); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
 .cp-root[data-theme="soft"] .cp2-lab-belief { font-family: var(--display); font-size: 18px; font-weight: 700; line-height: 1.35; letter-spacing: -0.2px; margin: 4px 0 14px; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-lab-score { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .cp-root[data-theme="soft"] .cp2-lab-n { font-size: 15px; font-weight: 600; color: var(--muted); }
@@ -1333,7 +1332,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-bplan { margin-top: 14px; padding: 12px; border-radius: 16px; background: var(--line); }
 .cp-root[data-theme="soft"] .cp2-bplan.preview { margin: 14px 0 4px; }
 .cp-root[data-theme="soft"] .cp2-bplan-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
-.cp-root[data-theme="soft"] .cp2-bplan-sum { font-size: 12px; font-weight: 600; color: var(--ink); text-align: right; }
 .cp-root[data-theme="soft"] .cp2-bplan-lead { font-size: 12.5px; line-height: 1.45; color: var(--ink); margin: 0 0 8px; }
 .cp-root[data-theme="soft"] .cp2-bplan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .cp-root[data-theme="soft"] .cp2-bplan-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; }
@@ -1477,8 +1475,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-ns-do .cp2-ext { width: 14px; height: 14px; margin-left: 2px; vertical-align: -2px; }
 .cp-root[data-theme="soft"] .cp2-ns-do .cp2-link { padding: 8px 0; }
 .cp-root[data-theme="soft"] .cp2-ns-step .cp-help { margin-top: 8px; }
-.cp-root[data-theme="soft"] .cp2-ns-pay { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--line); font-size: 12.5px; line-height: 1.5; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-ns-pay .cp2-link { display: inline; padding: 0; }
 /* What a pivot on who buys left behind (era.ts pivotLeft): said once, answered by a tap. */
 .cp-root[data-theme="soft"] .cp2-pv-left .cp2-lab-q { margin-top: 6px; }
 .cp-root[data-theme="soft"] .cp2-pv-said { font-size: 13.5px; line-height: 1.5; color: var(--ink); margin-top: 8px; }
@@ -1528,21 +1524,14 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-pf-hand-row .cp-input { flex: 1; min-width: 0; padding: 10px 13px; font-size: 14px; }
 .cp-root[data-theme="soft"] .cp2-pf-hand-row .cp-btn { flex: none; }
 
-/* No bet running: the parts, the ideas written for this business, the books, your own. */
-.cp-root[data-theme="soft"] .cp2-pf-ideas { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
-.cp-root[data-theme="soft"] .cp2-pf-ideas-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.cp-root[data-theme="soft"] .cp2-pf-ideas-top .cp2-link:disabled { color: var(--dim); }
-.cp-root[data-theme="soft"] .cp2-pf-wait { font-size: 12.5px; font-weight: 600; color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-pf-ideas-s { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+/* No bet running: one play from the books with the rest a tap away, your own, and Claude for one. */
 .cp-root[data-theme="soft"] .cp2-pf-books { display: block; margin-top: 18px; }
 .cp-root[data-theme="soft"] .cp2-pf-plays { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .cp-root[data-theme="soft"] .cp2-pf-play { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 14px 16px; border-radius: 20px; background: var(--surface); box-shadow: 0 4px 14px rgba(31, 41, 68, 0.09); }
 .cp-root[data-theme="soft"] .cp2-pf-play .cp-btn { margin-top: 4px; }
-.cp-root[data-theme="soft"] .cp2-pf-src { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-pf-src .cp2-owner { font-style: normal; }
-.cp-root[data-theme="soft"] .cp2-pf-why { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-pf-more { display: block; margin-top: 10px; padding: 6px 0; font-size: 12.5px; font-weight: 600; color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-pf-pick .cp2-lab-own { margin-top: 10px; }
+.cp-root[data-theme="soft"] .cp2-pf-askc { margin-top: 8px; }
 
 /* Assets and the history: rows, a glyph for what each is, who made it on the right. */
 .cp-root[data-theme="soft"] :is(.cp2-pf-asset, .cp2-pf-gap, .cp2-pf-addrow, .cp2-pf-hrow) { align-items: center; }
@@ -2532,10 +2521,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-er-name { min-width: 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--er-muted); }
 .cp-root[data-theme="soft"] .cp2-er-chip { flex: none; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--er-weak); background: rgba(255, 196, 107, 0.14); }
 .cp-root[data-theme="soft"] .cp2-er-chip.proven { color: var(--er-works); background: rgba(92, 201, 175, 0.16); }
-.cp-root[data-theme="soft"] .cp2-er-fig { display: flex; align-items: baseline; gap: 2px; margin-top: 10px; }
-.cp-root[data-theme="soft"] .cp2-er-fig b { font-family: var(--cp-font-display, var(--display)); font-size: 42px; font-weight: 700; letter-spacing: -1.5px; line-height: 1; }
-.cp-root[data-theme="soft"] .cp2-er-of { font-family: var(--cp-font-display, var(--display)); font-size: 22px; font-weight: 600; color: var(--er-dim); }
-.cp-root[data-theme="soft"] .cp2-er-unit { margin-left: 10px; font-size: 14px; font-weight: 600; color: var(--er-muted); }
 .cp-root[data-theme="soft"] .cp2-er-line { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--er-muted); }
 
 /* The five parts: a track lit through each part that works, stopping at the first that does not. */
@@ -2561,19 +2546,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-er-part.stuck .cp2-er-pstate { color: var(--er-stuck); }
 .cp-root[data-theme="soft"] .cp2-er-part.on { background: rgba(255, 255, 255, 0.07); color: var(--er-ink); }
 
-/* The crew, under the parts: a face per worker, its state a dot on it. */
-.cp-root[data-theme="soft"] .cp2-er-crew { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 14px; padding: 12px 2px 0; border-top: 1px solid var(--er-track); text-align: left; color: var(--er-muted); }
-.cp-root[data-theme="soft"] .cp2-er-faces { display: flex; flex: none; }
-.cp-root[data-theme="soft"] .cp2-er-faces .cp2-er-face + .cp2-er-face { margin-left: -8px; }
-.cp-root[data-theme="soft"] .cp2-er-crewline { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--er-ink); }
-.cp-root[data-theme="soft"] .cp2-er-crewline .bad { color: var(--er-stuck); }
-.cp-root[data-theme="soft"] .cp2-er-crew .cp2-chev { flex: none; width: 16px; height: 16px; color: var(--er-dim); }
-.cp-root[data-theme="soft"] .cp2-er-crew.wide { flex-wrap: wrap; row-gap: 8px; }
-.cp-root[data-theme="soft"] .cp2-er-crew.wide .cp2-er-faces { flex: 1 1 auto; min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-er-crew.wide .cp2-er-crewline { order: 3; flex: 0 0 100%; flex-direction: row; flex-wrap: wrap; gap: 2px 10px; }
-.cp-root[data-theme="soft"] .cp2-er-moved { margin: 10px 0 0; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--er-testing); }
-
-/* A worker's face. On the light cards its tint is the kind's; in the engine, brighter on the dark. */
+/* A worker's face, on the crew's sheet: its tint is the kind's, its state a dot on it. */
 .cp-root[data-theme="soft"] .cp2-er-face { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--line); color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-er-face svg { width: 14px; height: 14px; }
 .cp-root[data-theme="soft"] .cp2-er-face i { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%; background: var(--dim); box-shadow: 0 0 0 2px var(--surface); }
@@ -2585,20 +2558,9 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-er-face.waiting i { background: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-er-face.stopped i { background: var(--bad); }
 .cp-root[data-theme="soft"] .cp2-er-face.setup i { background: var(--warn); }
-.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face { border: 2px solid #1B2030; box-sizing: content-box; }
-.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face i { box-shadow: 0 0 0 2px #1B2030; }
-.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.agent { background: #1F3B3A; color: var(--er-works); }
-.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.model { background: #2E2848; color: #C3A6FF; }
-.cp-root[data-theme="soft"] .cp2-er-hero :is(.cp2-er-face.you, .cp2-er-face.person) { background: #262E52; color: #B4BEFF; }
-.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.robot { background: #3A3020; color: var(--er-weak); }
-.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.working i { background: var(--er-works); }
-.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.waiting i { background: var(--er-testing); }
-.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.stopped i { background: var(--er-stuck); }
-.cp-root[data-theme="soft"] .cp2-er-hero .cp2-er-face.setup i { background: var(--er-weak); }
-.cp-root[data-theme="soft"] .cp2-er-hero :is(.cp2-er-face.ready, .cp2-er-face.idle) i { background: rgba(255, 255, 255, 0.4); }
 @media (prefers-reduced-motion: reduce) { .cp-root[data-theme="soft"] .cp2-er-face.working i { animation: none; } }
 
-/* The part opened. Right under the engine, a notch points at its part. */
+/* The part opened, or the running bet's card, which is its part's. Right under the engine, a notch points at the part. */
 .cp-root[data-theme="soft"] .cp2-er-station { position: relative; }
 /* The parts' grid runs from 12px inside the engine's edge to 12px short of the
    other (its 18px padding less its -6px margin), and this card is as wide as the
@@ -2618,22 +2580,23 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-er-elsewhere span { flex: 1; min-width: 0; }
 .cp-root[data-theme="soft"] .cp2-er-elsewhere b { font-weight: 700; }
 .cp-root[data-theme="soft"] .cp2-er-k { display: block; margin-bottom: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.cp-root[data-theme="soft"] :is(.cp2-er-oncrew, .cp2-er-moves) { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-.cp-root[data-theme="soft"] .cp2-er-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.cp-root[data-theme="soft"] .cp2-er-chipw { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px 3px 3px; border-radius: 999px; background: var(--line); font-size: 12.5px; font-weight: 600; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-er-chipw .cp2-er-face { width: 24px; height: 24px; }
-.cp-root[data-theme="soft"] .cp2-er-chipw .cp2-er-face i { box-shadow: 0 0 0 2px var(--line); }
-.cp-root[data-theme="soft"] .cp2-er-chipw em { font-style: normal; font-size: 11px; font-weight: 600; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-er-chipw.stopped em { color: var(--bad); }
-.cp-root[data-theme="soft"] .cp2-er-chipw.working em { color: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-er-chipw.waiting em { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-er-moves { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .cp-root[data-theme="soft"] .cp2-er-moves .cp2-bz-move + .cp2-bz-move, .cp-root[data-theme="soft"] .cp2-er-moves > div + div { margin-top: 6px; }
+.cp-root[data-theme="soft"] .cp2-er-station > .cp2-bz-problem { margin-top: 10px; }
 
-/* Built so far, and the section heads with a link at their end. */
-.cp-root[data-theme="soft"] .cp2-er-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.cp-root[data-theme="soft"] .cp2-er-h .cp2-link { letter-spacing: 0; text-transform: none; }
-.cp-root[data-theme="soft"] .cp2-er-none { margin: 0 24px 16px; font-size: 13px; line-height: 1.5; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-er-built { margin-bottom: 16px; }
+/* The bet as one card (ThisBet): the move and the people found are its work, under the count they move.
+   Prefixed cp2-betq-: .cp2-ns and .cp2-vox-card were cards of their own, and their spacing assumed it. */
+.cp-root[data-theme="soft"] :is(.cp2-betq-move, .cp2-betq-people) { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp2-betq-move .cp2-ns-t { margin-top: 0; font-size: 18px; }
+.cp-root[data-theme="soft"] .cp2-betq-move .cp2-ns-do { margin-top: 10px; }
+.cp-root[data-theme="soft"] .cp2-betq-links { display: inline-flex; align-items: center; gap: 16px; margin-left: auto; }
+.cp-root[data-theme="soft"] .cp2-lab-actions .cp2-betq-links .cp2-link { margin-left: 0; }
+
+/* Under Records, and at the head of Projects: a worker that stopped, in a failure's colour.
+   Specific enough to beat .cp2-row-main .s, which would keep it grey. */
+.cp-root[data-theme="soft"] .cp2-row-main .s.cp2-pf-trouble { color: var(--bad); font-weight: 600; }
+/* The shelf as a sheet, while a bet runs: its rows without the card around them. */
+.cp-root[data-theme="soft"] .cp-sheet .cp2-shelf-solo { margin: 8px 0 0; }
 
 /* The crew, whole (ProofSheets.tsx CrewSheet). */
 .cp-root[data-theme="soft"] .cp2-er-crewsum { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--ai); }

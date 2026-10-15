@@ -1,17 +1,18 @@
 'use client';
 // A bet's plan on the screen (lib/copilot/betplan.ts): on the bet's card, the
-// crew's steps and yours with what the rows show for each; for a bet started
-// before plans, what planning it would start; and on the bet sheet, what Start
-// starts besides the bet.
+// steps that need a look or a tap (planShown); for a bet started before plans,
+// what planning it would start; and on the bet sheet, what Start starts besides
+// the bet.
 //
-// It sits under the count and is said to be the work, never the verdict: the
-// count above it decides the bet, and every step done passes nothing
-// (invariant 10). A step is tapped through to the thing that is its work — the
-// project, the draft, the people found, the page — so the plan is a way in, not
-// a second copy of what those already show.
+// It sits under the count and is never the verdict: the count above it decides
+// the bet, and every step done passes nothing (invariant 10). That is why a done
+// step leaves the card rather than staying as a tick — a column of ticks under
+// "0 of 3" said the opposite of the count. A step is tapped through to the thing
+// that is its work — the project, the draft, the page — so the plan is a way in,
+// not a second copy of what those already show.
 import { useRef, useState, type ReactNode } from 'react';
 import type { AssetKind } from '@/lib/copilot/assets';
-import { planLine, type PlanView, type StepState, type StepView } from '@/lib/copilot/betplan';
+import { planShown, type PlanView, type StepState, type StepView } from '@/lib/copilot/betplan';
 import type { BetView, PlanStep } from '@/lib/copilot/lab';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
@@ -54,14 +55,16 @@ function Row({ s, open, busy }: { s: StepView; open: (() => void) | null; busy: 
 }
 
 /**
- * The running bet's plan, under its count. The summary line is the plan; the
- * count above is the bet. "Try again" only where a crew step failed and another
- * go could change that — never for a refusal a second try cannot fix.
+ * The running bet's plan, under its count: only what planShown keeps, and
+ * nothing at all once the crew is done and the people card holds the rest.
+ * "Try again" only where a crew step failed and another go could change that —
+ * never for a refusal a second try cannot fix.
  */
 export function BetPlan({ home, view, pv, actions, brief }: { home: HomeData; view: BetView; pv: PlanView; actions: Actions; brief: Brief }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<{ key: string; text: string; bad: boolean; claude: boolean } | null>(null);
+  const shown = planShown(pv);
   const retryable = pv.steps.some((s) => s.step.by === 'crew' && s.state === 'failed' && s.runnable);
   // Disabling the button is a render away, and a second tap can land before it:
   // two retries would draft twice or spend two of the bet's searches.
@@ -87,9 +90,6 @@ export function BetPlan({ home, view, pv, actions, brief }: { home: HomeData; vi
     if (s.project) return () => actions.openSheet({ kind: 'commission', id: s.project! });
     if (s.asset) return () => actions.openSheet({ kind: 'asset', id: s.asset! });
     switch (s.step.kind) {
-      case 'reply': return (home.lab?.voices?.searches ?? []).some((x) => x.bet === view.bet.id)
-        ? () => { try { document.getElementById('cp2-people')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* the card is where it was */ } }
-        : null;
       case 'page': return () => actions.openSheet({ kind: 'asset', ...pageTarget(home, view) });
       case 'draft': return s.step.by === 'you' && s.step.asset ? () => actions.openSheet({ kind: 'asset', assetKind: s.step.asset!, bet: view.bet.id }) : null;
       // Nobody here takes it: the same ask, with the whole record, for a chat.
@@ -98,25 +98,12 @@ export function BetPlan({ home, view, pv, actions, brief }: { home: HomeData; vi
     }
   };
 
+  // The count's way in is not a row: the card's own buttons and the people card are it.
+  if (!shown.length) return null;
   return (
     <div className="cp2-bplan" aria-label="The plan for this bet">
-      <div className="cp2-bplan-top">
-        <span className="cp2-pf-k">The plan</span>
-        <span className="cp2-bplan-sum">{planLine(pv)}</span>
-      </div>
       <ol className="cp2-bplan-list">
-        {pv.steps.map((s) => <Row key={s.step.kind} s={s} open={opener(s)} busy={busy === s.step.kind} />)}
-        {/* How the count gets in: yours, or counted by itself. No button: the one under the bet is it. */}
-        <li>
-          <div className="cp2-bplan-row">
-            <Mark state={pv.count.auto ? 'done' : 'open'} by="you" />
-            <span className="cp2-bplan-main">
-              <span className="cp2-bplan-who">{pv.count.auto ? 'The app' : 'You'}</span>
-              <b className="cp2-clamp2">{pv.count.do}</b>
-              {pv.count.line && <span className="cp2-bplan-state">{pv.count.line}</span>}
-            </span>
-          </div>
-        </li>
+        {shown.map((s) => <Row key={s.step.kind} s={s} open={opener(s)} busy={busy === s.step.kind} />)}
       </ol>
       {note && <MoveNote note={note} />}
       {retryable && (
@@ -125,7 +112,6 @@ export function BetPlan({ home, view, pv, actions, brief }: { home: HomeData; vi
         </button>
       )}
       {error && <p className="cp-help cp2-err">{error}</p>}
-      <p className="cp2-bplan-foot">The plan is the work. Only the count above decides the bet.</p>
     </div>
   );
 }

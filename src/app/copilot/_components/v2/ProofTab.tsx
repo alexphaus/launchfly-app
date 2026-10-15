@@ -1,70 +1,68 @@
 'use client';
-// Engine (key `proof`): the business as a machine of five parts, who works each
-// one, and the one move that is the person's.
+// Engine (key `proof`): the business as a machine of five parts, and the one bet
+// being run on it.
 //
-//   The engine    what it sells, whether it is proven — the count, drawn big —
-//                 the five parts in a row with their states and the weakest
-//                 marked, and the crew working them. One card, read at a glance
-//   The part      the part opened (where your move is, else the weakest): its
-//                 state and the rule behind it, your move when it is here, who
-//                 works it and what would move it — and for the bet's part, the
-//                 people found and the bet itself
-//   Built so far  what the business has to show for itself: sales, bets passed,
-//                 projects finished, the first version of anything made
-//   More          conversations, assets and projects: a line each
+//   The engine    what it sells, whether it is proven — in a line — and the five
+//                 parts in a row with their states. The weakest is flagged only
+//                 while no bet runs: it is where the next bet goes, and a flag on
+//                 another part beside a running bet read as "you are on the
+//                 wrong one"
+//   The bet       one card, hanging from its part: the belief, the count against
+//                 the line, the crew's steps only while they need a look, then the
+//                 work itself — the people found to answer, or the one step where
+//                 the next count happens. With no bet, the part opened and the way
+//                 to pick one: a kept test first, one play, your own, or Claude
+//   Records       conversations, the page and assets, projects, history, and ideas
+//                 kept for later: a line each. A worker that stopped is a line too
 //
-// Why it is drawn this way. Its owner's verdict on the tab before it: hard to
-// understand, run by the person rather than by the AI, and nothing that could
-// stand beside what else is on the market — where the want was a startup built
-// by a workforce with its owner steering, and a crew that will one day include
-// newer models, people taken on for a part, and machines. So the chain that was
-// five dots under the step is the screen's spine; each part says who works it
-// (crew.ts); the one move sits on the part it moves; and what was built is the
-// record of the engine running. The parts are tapped through in place, not in a
-// sheet, because a sheet over the engine hides the engine.
+// Why it is drawn this way. The engine room put everything on the screen at
+// once, and its owner's day nine said what that cost: one fact — nobody talked
+// to yet — said nine ways, three zeros that looked alike (0/3 paid, 0 of 3
+// commitments, 0/10 talks), four things asking to be looked at, and the people
+// to answer two screens under a crew of eight faces, four "at work" on Maps and
+// feeds rather than on the bet. So the bet is the card, the move is its first
+// row, and everything that only repeats it is gone. The parts are still tapped
+// through in place, not in a sheet, because a sheet over the engine hides it.
 //
 // What it leaves to the other tabs: the plan and the day's move (Path), outreach
 // (Swipe), runway and the bank (Money), the offer, goals and settings (You). A
-// number shown here that is shown there is counted twice and will disagree.
+// number shown here that is shown there is counted twice and will disagree —
+// which is why what a bet's pass pays toward is the Path's to say, not this tab's.
 //
 // What it will not do: show a number nobody counted, mark a bet passed, or let a
 // model's draft stand as the person's. A model proposes — ideas for a bet,
 // drafts of an asset — and the rows judge. lib/copilot/proof.ts, lab.ts,
 // engine.ts, crew.ts, assets.ts and history.ts have the rules.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ASSET_LABEL, OFFER_ASSET, type Asset, type AssetGap, type AssetKind } from '@/lib/copilot/assets';
-import {
-  LINK_LABEL, LINK_STATE_LABEL, changeLine, chainChanges, evidenceState, parseSeenChain, snapshotChain,
-  type ChainChange, type LinkKey, type LinkMove, type SeenChain,
-} from '@/lib/copilot/business';
+import { LINK_LABEL, LINK_STATE_LABEL, changeLine, evidenceState, type LinkKey, type LinkMove } from '@/lib/copilot/business';
 import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } from '@/lib/copilot/commission';
-import { WORKER_STATE_LABEL, crewHeadline, crewOn, type Worker } from '@/lib/copilot/crew';
+import { crewHeadline } from '@/lib/copilot/crew';
 import { historyDay, type HistoryEntry } from '@/lib/copilot/history';
 import {
   BET_STATE_LABEL, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS,
-  betPrice, countedFrom, dayWords, decisionWords, gradeWords, ideaRun, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
-  type BetView, type Idea, type LabDecision, type Play,
+  betPrice, countedFrom, dayWords, decisionWords, gradeWords, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
+  type BetView, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
-import { assetMakers, betNext, betWork, ideasStale, pivotWords, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
+import { assetMakers, betNext, betWork, pivotWords, type BetNextGo, type BetWork } from '@/lib/copilot/proof';
 import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
 import { moneyLabel } from '@/lib/copilot/review';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import { COMMITMENT_LABEL, COMMITMENTS, dayIn, type Commitment } from '@/lib/copilot/lab';
 import { VOICE_OPENER, VOICE_SEARCHES, betVoiced, betVoices, postedWords, voiceRefusal, voiceTalk, type Voice } from '@/lib/copilot/voices';
 import {
-  BUILT_SHOWN, OPENED_KEY, clearOpened, engineFigure, engineStep, markOpened, openPart, parseOpened, payoffGoal,
+  OPENED_KEY, claudeAsk, clearOpened, engineFigure, engineStep, markOpened, openPart, parseOpened, payoffGoal,
   type Step, type StepGo,
 } from '@/lib/copilot/engine';
 import { pageCounts, pageLine } from '@/lib/copilot/livepage';
-import { SCOUT_SEARCHING, planCapsOf, planFor, planInputOf, planView, stepBusy } from '@/lib/copilot/betplan';
+import { SCOUT_SEARCHING, planCapsOf, planFor, planInputOf, planShown, planView, stepBusy } from '@/lib/copilot/betplan';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
-import { AssetGlyph, IconCheck, IconChevron, IconCross, IconExternal, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph, WorkerGlyph } from './icons2';
+import { AssetGlyph, IconCheck, IconChevron, IconCross, IconExternal, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph } from './icons2';
 import { MoveNote, MoveRow, agentIsFull, orChat, useBrief, useMove, type Brief } from './MoveKit';
 import { BetPlan, PlanIt } from './BetPlan';
 
 export default function ProofTab({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
-  const changes = useSeen(home, d);
   const brief = useBrief(actions);
   const lab = d.proof.lab;
   const opened = useOpened(home.profile.id);
@@ -73,10 +71,11 @@ export default function ProofTab({ home, d, actions }: { home: HomeData; d: Deri
   // A part tapped stays open until the next visit; until then the engine opens where the move is.
   const [picked, setPicked] = useState<LinkKey | null>(null);
   const part = picked ?? openPart(step, d.proof.chain.weak);
+  // The running bet's card is its part's card: opened on that part, there is no second one above it.
   const onBet = lab.current?.bet.part === part;
   return (
     <>
-      <EngineHero home={home} d={d} actions={actions} part={part} pick={setPicked} changes={changes} />
+      <EngineHero home={home} d={d} part={part} pick={setPicked} />
       {/* A move about the whole business — the offer, the checkpoint — is no one part's, so it comes before them. */}
       {step && !step.part && (
         <div className="cp-card cp2-ns">
@@ -95,62 +94,22 @@ export default function ProofTab({ home, d, actions }: { home: HomeData; d: Deri
       ) : (
         <>
           {lab.checkpoint.due && <Checkpoint d={d} actions={actions} />}
-          <Station home={home} d={d} actions={actions} part={part} step={step} pick={setPicked} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />
+          {!onBet && <Station home={home} d={d} actions={actions} part={part} step={step} pick={setPicked} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />}
           {lab.current
-            ? (
-              <>
-                {/* The bet's part carries the bet: the people it found first — the move says to reply to one — then the bet they count toward. */}
-                {onBet && <People home={home} view={lab.current} actions={actions} find={find} opened={opened} />}
-                {/* The bet keeps a slot of its own: errands on the go do not grey out the work it exists to move (commission.ts roomForProject). */}
-                {onBet && <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={agentIsFull(home, lab.links[lab.current.bet.id] ?? [])} />}
-                <Shelf home={home} d={d} actions={actions} />
-              </>
-            )
+            // The bet keeps a slot of its own: errands on the go do not grey out the work it exists to move (commission.ts roomForProject).
+            ? <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={agentIsFull(home, lab.links[lab.current.bet.id] ?? [])} step={step} find={find} opened={opened} peopleShown={peopleShown} />
             : (
               // The person's own kept tests before the generic ones: what they wrote down to run next is what they came back for.
               <>
                 <Shelf home={home} d={d} actions={actions} />
-                <PickABet home={home} d={d} actions={actions} part={part} />
+                <PickABet home={home} d={d} actions={actions} part={part} brief={brief} />
               </>
             )}
         </>
       )}
-      <Built home={home} d={d} actions={actions} />
       <More home={home} d={d} actions={actions} />
     </>
   );
-}
-
-/* ─── Since you last looked ───────────────────────────────────────────────── */
-
-/**
- * What this device last saw of the chain: each part's verdict and when. Read
- * once per visit, so what moved stays said while you look; written back every
- * time the chain changes. In an effect, never during render — the server has no
- * storage, and a first paint that differed from its render would not hydrate.
- * A convenience about the screen: nothing is decided from it, so storage that
- * keeps nothing costs only the "moved" line. The key is Work's, so what a
- * device saw there carries over.
- */
-function useSeen(home: HomeData, d: Derived): ChainChange[] {
-  const key = `cp2.work.seen:${home.profile.id}`;
-  const prior = useRef<SeenChain | null | undefined>(undefined);
-  const [changes, setChanges] = useState<ChainChange[]>([]);
-  const { links } = d.proof.chain;
-  const signature = links.map((l) => `${l.key}:${l.state}`).join(',');
-  useEffect(() => {
-    if (prior.current === undefined) {
-      let raw: string | null = null;
-      try { raw = window.localStorage.getItem(key); } catch { /* storage refused: no memory, said by nothing moving */ }
-      try { prior.current = parseSeenChain(raw ? JSON.parse(raw) : null); } catch { prior.current = null; }
-    }
-    setChanges(chainChanges(prior.current ?? null, links));
-    try { window.localStorage.setItem(key, JSON.stringify(snapshotChain(home.generatedAt, links))); } catch { /* as above */ }
-    // Keyed on the verdicts and on when the read was made: a refresh with the
-    // same verdicts still moves "last looked" on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature, key, home.generatedAt]);
-  return changes;
 }
 
 /* ─── The move ────────────────────────────────────────────────────────────── */
@@ -238,8 +197,16 @@ function useStep(home: HomeData, d: Derived, opened: Opened): { step: Step | nul
   return { step, peopleShown: !!voices && (voices.searches > 0 || !!read?.unreadable) };
 }
 
-function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
-  step: Step; view: BetView | null; actions: Actions; brief: Brief; find: Find; opened: Opened; peopleShown: boolean;
+/**
+ * The one move: a sentence, its button, and what a tap does where that is not
+ * obvious. On the bet's own card (`inCard`) it is the work's first row, so it
+ * drops what the card already says — the day as an eyebrow, the count as its
+ * reason — and the card carries the one "Ask Claude". What passing the bet pays
+ * toward is not said here: that is the Path's, and a goal four years out read as
+ * the bet's reason to exist.
+ */
+function NextStep({ step, view, actions, brief, find, opened, peopleShown, inCard = false }: {
+  step: Step; view: BetView | null; actions: Actions; brief: Brief; find: Find; opened: Opened; peopleShown: boolean; inCard?: boolean;
 }) {
   const move = useMove(actions, brief);
   const go = (g: StepGo) => {
@@ -258,14 +225,14 @@ function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
   };
   const p = step.primary;
   const searching = find.busy && p.go.to === 'find';
-  const ask: LinkMove | null = step.claude ? { key: 'engine-ask', label: 'Think it through with Claude', by: 'claude', ask: step.claude } : null;
+  const ask: LinkMove | null = step.claude && !inCard ? { key: 'engine-ask', label: 'Think it through with Claude', by: 'claude', ask: step.claude } : null;
   // A search that failed or was cut short is said where it was asked — here, unless the people card is up to say it.
   const said = step.kind === 'find' && !peopleShown;
   return (
     <div className="cp2-ns-step">
-      <div className="cp-eyebrow">{step.eyebrow}</div>
+      {!inCard && <div className="cp-eyebrow">{step.eyebrow}</div>}
       <h2 className="cp2-ns-t">{step.title}</h2>
-      {step.why && <p className="cp2-ns-why">{step.why}</p>}
+      {step.why && !inCard && <p className="cp2-ns-why">{step.why}</p>}
       <div className="cp2-ns-do">
         {p.go.to === 'post' ? (
           // A real link, not a script's window.open: a popup blocker has no quarrel with a tap on an anchor.
@@ -285,12 +252,6 @@ function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
       {said && find.error && <p className="cp-help cp2-err">{find.error}</p>}
       {said && find.why && <p className="cp-help">{find.why[0].toUpperCase() + find.why.slice(1)}.</p>}
       {ask && move.note?.key === ask.key && <MoveNote note={move.note} />}
-      {step.payoff && (
-        <p className="cp2-ns-pay">
-          {step.payoff.line}
-          {step.payoff.link && <> <button className="cp2-link" onClick={() => go(step.payoff!.link!.go)}>{step.payoff.link.label}</button></>}
-        </p>
-      )}
     </div>
   );
 }
@@ -298,18 +259,24 @@ function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
 /* ─── The engine ──────────────────────────────────────────────────────────── */
 
 /**
- * The business at a glance: what it sells, the count that proves it, the five
+ * The business at a glance: what it sells, whether it is proven, and the five
  * parts in order with the track lit through every part that works and stopping
- * at the first that does not — the constraint — and the crew working them. A
- * part is a tap: it opens below, in place.
+ * at the first that does not — the constraint. A part is a tap: it opens below,
+ * in place.
+ *
+ * The proving count is said in the line, not drawn big: the bet's count under
+ * it is the number this tab is opened for, and "0/3 paid" drawn above "0 of 3
+ * commitments" read as one count said twice. The crew is not drawn here: on the
+ * owner's account "4 at work" counted Maps, feeds and the nightly pass, none of
+ * them the bet. A worker that stopped is a line under Records instead.
  */
-function EngineHero({ home, d, actions, part, pick, changes }: {
-  home: HomeData; d: Derived; actions: Actions; part: LinkKey; pick: (k: LinkKey) => void; changes: ChainChange[];
-}) {
-  const { chain, count, crew, crewLine } = d.proof;
-  const head = crewHeadline(crew);
+function EngineHero({ home, d, part, pick }: { home: HomeData; d: Derived; part: LinkKey; pick: (k: LinkKey) => void }) {
+  const { chain, count } = d.proof;
   const sells = home.profile.offer?.sells?.trim() || null;
   const fig = engineFigure(chain.verdict, count, count.price != null ? moneyLabel(count.price, d.currency) : null, !d.noOffer);
+  // The weakest part is where the next bet goes, so it is flagged while one can be picked. Beside a running
+  // bet on another part it read as "you are on the wrong part", and one bet runs at a time.
+  const flagged = d.proof.lab.current ? null : chain.weak;
   // Lit from the first part through each that works, up to the first that does not.
   const runs = chain.links.findIndex((l) => l.state !== 'works');
   const lit = runs === -1 ? chain.links.length - 1 : runs;
@@ -319,17 +286,11 @@ function EngineHero({ home, d, actions, part, pick, changes }: {
         <span className="cp2-er-name cp2-clamp1">{sells ?? 'Your engine'}</span>
         <span className={`cp2-er-chip${fig.chip === 'Proven' ? ' proven' : ''}`}>{fig.chip}</span>
       </div>
-      {fig.n != null && (
-        <div className="cp2-er-fig">
-          <b>{fig.n}</b>
-          {fig.of != null && <span className="cp2-er-of">/{fig.of}</span>}
-          <span className="cp2-er-unit">{fig.unit}</span>
-        </div>
-      )}
-      <p className="cp2-er-line">{fig.line}</p>
+      {/* The verdict's own sentence, as Claude reads it over the connector, and where its count starts. */}
+      <p className="cp2-er-line">{chain.verdict.line}{chain.verdict.since ? ` ${chain.verdict.since}` : ''}</p>
       <ol className="cp2-er-parts" style={{ '--lit': `${lit * 20}%` } as React.CSSProperties} aria-label="The five parts of the business">
         {chain.links.map((l) => {
-          const weak = chain.weak === l.key;
+          const weak = flagged === l.key;
           return (
             <li key={l.key}>
               <button
@@ -347,48 +308,33 @@ function EngineHero({ home, d, actions, part, pick, changes }: {
           );
         })}
       </ol>
-      {/* Past seven faces the line goes under them: beside ten, it was a column one word wide. */}
-      <button className={`cp2-er-crew${crew.length > 7 ? ' wide' : ''}`} onClick={() => actions.openSheet({ kind: 'crew' })} aria-label={`Your crew: ${crewLine.line}`}>
-        <span className="cp2-er-faces" aria-hidden>
-          {crew.map((w) => <span key={w.key} className={`cp2-er-face ${w.kind} ${w.state}`}><WorkerGlyph w={w} /><i /></span>)}
-        </span>
-        {/* What runs without you, then what is not well — a line each beside the faces; the sheet names every one. */}
-        <span className="cp2-er-crewline">
-          <span>{head.working}</span>
-          {head.trouble && <span className="bad">{head.trouble}</span>}
-        </span>
-        <IconChevron />
-      </button>
-      {/* The engine moving, said: a part whose verdict changed since this device last looked. */}
-      {changes.length > 0 && (
-        <p className="cp2-er-moved">
-          Since you last looked: {changes.slice(0, 2).map(changeLine).join('; ')}{changes.length > 2 ? `; and ${changes.length - 2} more` : ''}.
-        </p>
-      )}
     </section>
   );
 }
 
 /**
- * The part opened: its state and the rule behind it, the move when the move is
- * here, who works it, and what would move it. The bet's own cards follow it
- * when the bet is on this part; a move on another part is one tap away.
+ * The part opened, when it is not the running bet's: its state and the rule
+ * behind it, the move when the move is here, and what would move it. The bet's
+ * own part is the bet's card. A move on another part is one tap away.
+ *
+ * The move is here only where no card below already is it: picking a bet is
+ * the card of plays under this one, and a kept test is the shelf's row — drawn
+ * here as well, each said its sentence and its Start twice.
  */
 function Station({ home, d, actions, part, step, pick, brief, find, opened, peopleShown }: {
   home: HomeData; d: Derived; actions: Actions; part: LinkKey; step: Step | null; pick: (k: LinkKey) => void;
   brief: Brief; find: Find; opened: Opened; peopleShown: boolean;
 }) {
-  const { chain, crew, lab } = d.proof;
+  const { chain, lab } = d.proof;
   const move = useMove(actions, brief);
   const l = chain.links.find((x) => x.key === part);
   if (!l) return null;
   const i = chain.links.indexOf(l);
   const weak = chain.weak === part;
-  const here = step && step.part === part ? step : null;
+  const here = step && step.part === part && step.kind !== 'pick' && step.kind !== 'shelf' ? step : null;
   const there = step && step.part && step.part !== part ? step : null;
   const betHere = lab.current?.bet.part === part ? lab.current : null;
   const said = !!here?.why && l.why.startsWith(here.why.replace(/…$/, ''));
-  const on = crewOn(crew, part);
   const full = agentIsFull(home);
   return (
     <section className={`cp-card cp2-er-station ${l.state}`} style={{ '--frac': i * 0.2 + 0.1 } as React.CSSProperties} aria-label={l.label}>
@@ -414,16 +360,8 @@ function Station({ home, d, actions, part, step, pick, brief, find, opened, peop
           <IconChevron />
         </button>
       )}
-      {/* Who works it, each in their word. An agent that stopped is said on the part it stopped (invariant 13). */}
-      {on.length > 0 && (
-        <div className="cp2-er-oncrew">
-          <span className="cp2-er-k">Who works it</span>
-          <div className="cp2-er-chips">
-            {on.map((w) => <CrewChip key={w.key} w={w} />)}
-          </div>
-          {l.runner.problem && <p className="cp2-bz-problem">{l.runner.problem}</p>}
-        </div>
-      )}
+      {/* An agent that stopped is said on the part it stopped (invariant 13). Who else works it is the crew's sheet, under Projects. */}
+      {l.runner.problem && <p className="cp2-bz-problem">{l.runner.problem}</p>}
       {/* What would move it, while no bet is on it: the bet's own card holds the work for the part it is on. */}
       {!betHere && l.moves.length > 0 && (
         <div className="cp2-er-moves">
@@ -440,17 +378,6 @@ function Station({ home, d, actions, part, step, pick, brief, find, opened, peop
         </div>
       )}
     </section>
-  );
-}
-
-/** A worker as a chip: who, and in a word how it is. */
-function CrewChip({ w }: { w: Worker }) {
-  return (
-    <span className={`cp2-er-chipw ${w.kind} ${w.state}`}>
-      <span className={`cp2-er-face ${w.kind} ${w.state}`} aria-hidden><WorkerGlyph w={w} /><i /></span>
-      <span>{w.name}</span>
-      <em>{WORKER_STATE_LABEL[w.state]}</em>
-    </span>
   );
 }
 
@@ -607,17 +534,30 @@ function goTo(go: BetNextGo, actions: Actions, betId: string) {
 
 const pctOf = (n: number, of: number) => Math.min(100, Math.round((n / Math.max(1, of)) * 100));
 
-function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: Derived; view: BetView; actions: Actions; brief: Brief; full: boolean }) {
+/**
+ * The running bet, as one card hanging from its part: the belief, the count
+ * against the line, then the work — the crew's steps only while they need a
+ * look, the one move where the people found are not up, and the people found
+ * when they are. The move used to sit in a card of its own over the people,
+ * over this card, over a plan that listed the same people a third time; on the
+ * owner's day nine "nobody talked to yet" was said nine ways across them.
+ */
+function ThisBet({ home, d, view, actions, brief, full, step, find, opened, peopleShown }: {
+  home: HomeData; d: Derived; view: BetView; actions: Actions; brief: Brief; full: boolean;
+  step: Step | null; find: Find; opened: Opened; peopleShown: boolean;
+}) {
   const b = view.bet;
   const today = home.recent.today;
   const found = d.proof.found.value;
   const play = playOf(b);
+  const move = useMove(actions, brief);
   // The plan, read off the rows (betplan.ts): the work under the count, never the count.
   const plan = d.proof.lab.plan;
   const pv = plan ? planView(plan, planInputOf(home, view, d.now)) : null;
   const work = betWork(view, { links: d.proof.lab.links, commissions: home.commissions, assets: d.proof.assets, talks: d.proof.lab.talks, tallies: d.proof.lab.tallies });
-  // What a step of the plan already shows is not listed again under the work for the bet.
-  const inPlan = new Set((pv?.steps ?? []).flatMap((s) => [s.project, s.asset]).filter((x): x is string => !!x));
+  // What a step on the card already opens is not listed again under the work for the bet. A step done
+  // leaves the card (planShown), so what it made is listed here instead of nowhere.
+  const inPlan = new Set((pv ? planShown(pv) : []).flatMap((s) => [s.project, s.asset]).filter((x): x is string => !!x));
   const workLeft = { ...work, projects: work.projects.filter((t) => !inPlan.has(t.commission.id)), assets: work.assets.filter((a) => !inPlan.has(a.id)) };
   const next = betNext(b.metric, found, b.unit);
   const over = overPlan(view);
@@ -628,6 +568,16 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   const logToo = b.tries?.metric === 'talks' && next.go !== 'talk';
   // Reached by outreach, a sale still comes in from outside the app sometimes — a referral, a walk-in.
   const saleToo = next.go === 'replied' && (b.metric === 'paid' || b.metric === 'paid_at_price');
+  // The move is the work's first row — unless the people found are up, which is the move whenever they are.
+  const here = step && step.part === b.part && !peopleShown ? step : null;
+  const left = Math.max(1, b.days - view.day + 1);
+  // One "Ask Claude" on the card: the bet's own words and count first, then the whole record (engine.ts claudeAsk).
+  const ask: LinkMove = { key: 'bet-ask', label: 'Ask Claude', by: 'claude', ask: claudeAsk(view) };
+  // Where the notch points when the card hangs straight from the engine: the part it is on.
+  const frac = Math.max(0, d.proof.chain.links.findIndex((l) => l.key === b.part)) * 0.2 + 0.1;
+  // An agent not well on the bet's part was said on that part's card, which this card replaced. "Out of
+  // matches" is not a stopped worker, so the crew's row under Records would never say it (invariant 13).
+  const runnerProblem = d.proof.chain.links.find((l) => l.key === b.part)?.runner.problem ?? null;
   const [stopping, setStopping] = useState(false);
   // How it is counted, the play's method and the hand-over box: read once, and
   // between them the card ran two screens tall on a phone, with what to do next
@@ -645,11 +595,9 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   };
 
   return (
-    <div className="cp-card cp2-lab-bet">
-      <div className="cp-call-top">
-        <div className="cp-eyebrow">This bet · day {view.day} of {b.days}{view.last === today ? ' · last day' : ''}</div>
-        <span className="cp2-lab-partname">{LINK_LABEL[b.part]}</span>
-      </div>
+    <div className="cp-card cp2-lab-bet cp2-er-station" style={{ '--frac': frac } as React.CSSProperties}>
+      {/* The part in the line, not a chip beside it: the card hangs from that part, and the chip pushed the day onto a second line. */}
+      <div className="cp-eyebrow">Bet on {LINK_LABEL[b.part].toLowerCase()} · day {view.day} of {b.days}{view.last === today ? ' · last day' : ` · ${left} left`}</div>
       <h2 className="cp2-lab-belief">&ldquo;{b.belief}&rdquo;</h2>
 
       <div className="cp2-lab-score">
@@ -671,9 +619,13 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
       )}
       <p className="cp2-lab-pass"><b>Pass line:</b> {passLine(b, view.last)}.</p>
       {over && <p className="cp2-lab-over">{over}</p>}
+      {runnerProblem && <p className="cp2-bz-problem">{runnerProblem}</p>}
       {pv
         ? <BetPlan home={home} view={view} pv={pv} actions={actions} brief={brief} />
         : !d.proof.lab.unreadable && <PlanIt view={view} steps={planFor(b, planCapsOf(home), home.profile.offer ?? {})} actions={actions} />}
+      {here && <div className="cp2-betq-move"><NextStep step={here} view={view} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} inCard /></div>}
+      {/* The people the bet found are its work, under the count they move — not a card of their own above it. */}
+      <People home={home} view={view} actions={actions} find={find} opened={opened} />
 
       <button className="cp2-lab-more" onClick={() => setMore((v) => !v)} aria-expanded={more}>
         {/* The play's own name, which fits a line; its book is said inside. */}
@@ -708,13 +660,17 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         </div>
       ) : (
         <div className="cp2-lab-actions">
-          {/* The step at the top of the tab is the one primary button on this screen; this one is the same count's way in, close to where the bet ends. */}
-          <button className="cp-btn" onClick={() => goTo(next.go, actions, b.id)}>{next.label}</button>
+          {/* The move is the one primary button; this is the same count's way in, for one that happened anywhere else — and not drawn twice when the move is it. */}
+          {here?.kind !== 'count' && <button className="cp-btn" onClick={() => goTo(next.go, actions, b.id)}>{next.label}</button>}
           {logToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'talk' })}>Log a conversation</button>}
           {saleToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'sale', outcome: 'won' })}>Log a sale</button>}
-          <button className="cp2-link muted" onClick={() => setStopping(true)}>Call it off</button>
+          <span className="cp2-betq-links">
+            <button className="cp2-link" disabled={move.busy === ask.key} onClick={() => void move.run(ask)}>{move.busy === ask.key ? 'Gathering…' : ask.label}</button>
+            <button className="cp2-link muted" onClick={() => setStopping(true)}>Call it off</button>
+          </span>
         </div>
       )}
+      {move.note?.key === ask.key && <MoveNote note={move.note} />}
     </div>
   );
 }
@@ -795,9 +751,9 @@ const VOICES_SHOWN = 3;
 /**
  * People who said it (voices.ts): public posts where somebody says the bet's
  * problem in their own words, each with its link, for the person to answer from
- * their own account. Its own card, above the bet: the step at the top says to
- * reply to one, and the bet is what they count toward. Nothing is sent from
- * here (invariant 4).
+ * their own account. On the bet's card, under the count they move: replying to
+ * one is the move, so they are its first row of work rather than a card above
+ * it. Nothing is sent from here (invariant 4).
  *
  * Each post goes through three states, each a tap. Not opened: Open, or Not a
  * fit. Opened — on this device — it asks "Did they answer?": one tap on how it
@@ -848,10 +804,11 @@ function People({ home, view, actions, find, opened }: { home: HomeData; view: B
   const shown = all ? rows : rows.slice(0, VOICES_SHOWN);
 
   return (
-    <div className="cp-card cp2-vox-card" id="cp2-people">
+    <div className="cp2-vox-card cp2-betq-people" id="cp2-people">
       <div className="cp2-vox-top">
         <div className="cp-eyebrow">People who said it</div>
-        {mine.found > 0 && <span className="cp2-vox-count">{mine.talked ? `${mine.talked} of ${mine.found} talked to` : `${mine.found} found`}</span>}
+        {/* Found against talked to, at nought too: the join the bet is watched by (DIRECTION.md), and the one place it is said. */}
+        {mine.found > 0 && <span className="cp2-vox-count">{mine.talked} of {mine.found} talked to</span>}
       </div>
       {read?.unreadable && <p className="cp-help cp2-err">The people found for this bet could not be read just now: {read.unreadable}</p>}
       {mine.open.length > 0 && (
@@ -1033,9 +990,12 @@ function HandOver({ view, actions, full }: { view: BetView; actions: Actions; fu
  *
  * While a bet runs this is the only way into the bet sheet — the picker is not
  * shown — and that is when new ideas arrive, so it carries its own way to keep
- * one: the sheet says one bet at a time, leaves Start off, and keeps Keep.
+ * one: the sheet says one bet at a time, leaves Start off, and keeps Keep. It is
+ * then a sheet (`sheet`), opened from "Ideas for later" under Records: a dashed
+ * row between the bet and the records was one more thing on the screen for a
+ * shelf that is usually empty.
  */
-function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+export function Shelf({ home, d, actions, sheet = false }: { home: HomeData; d: Derived; actions: Actions; sheet?: boolean }) {
   const shelf = d.proof.lab.shelf;
   const running = !!d.proof.lab.current;
   const [busy, setBusy] = useState<string | null>(null);
@@ -1057,7 +1017,7 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
     if (!r.ok) setError(r.error ?? 'Could not take it off');
   };
   return (
-    <div className="cp-card cp2-shelf">
+    <div className={sheet ? 'cp2-shelf' : 'cp-card cp2-shelf'}>
       <div className="cp-eyebrow">On your shelf · {shelf.length}</div>
       <p className="cp2-shelf-s">
         {running ? 'Each waits with its test written. One bet runs at a time, so the next starts when this one ends.' : 'Each waits with its test written. Start one, or write another below.'}
@@ -1086,22 +1046,28 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
 /* ─── No bet running ──────────────────────────────────────────────────────── */
 
 /**
- * Book plays shown before "more": two when they are all there is, none when a
- * model has written ideas for this part — those come first, and a card of
- * three ideas and two plays is a reading assignment.
+ * Book plays shown before "more": one, with the rest a tap away. Three ideas a
+ * model wrote and two plays under them were a reading assignment, and the ideas
+ * were the half a chat gives away: "Ask Claude for one" hands the record to
+ * Claude, which is better at ideas, and the app holds the test once there is
+ * one — written on the sheet, or proposed to the shelf over the connector.
  */
-const PLAYS_SHOWN = 2;
+const PLAYS_SHOWN = 1;
 
-function PickABet({ home, d, actions, part }: { home: HomeData; d: Derived; actions: Actions; part: LinkKey }) {
+function PickABet({ home, d, actions, part, brief }: { home: HomeData; d: Derived; actions: Actions; part: LinkKey; brief: Brief }) {
   const { chain, found, lab } = d.proof;
+  const move = useMove(actions, brief);
   const [more, setMore] = useState(false);
   // A part tapped in the engine is a new list of plays, folded again.
   useEffect(() => setMore(false), [part]);
   const last = lab.learned[0] ?? null;
   const { priceLabel } = betPrice(home.profile.offer?.price_band, d.currency);
   const plays = playsFor(part, found.value);
-  const folded = lab.ideas[part]?.ideas.length ? 0 : PLAYS_SHOWN;
-  const shown = more ? plays : plays.slice(0, folded);
+  const shown = more ? plays : plays.slice(0, PLAYS_SHOWN);
+  const ask: LinkMove = {
+    key: `ideas-${part}`, label: 'Ask Claude for one', by: 'claude',
+    ask: `Suggest one test for ${LINK_LABEL[part].toLowerCase()} in my business: something I believe and have not tested, one count that could prove it wrong, and the line it has to reach by a day.`,
+  };
   return (
     <div className="cp-card cp2-pf-pick">
       <div className="cp-eyebrow">No bet running</div>
@@ -1116,22 +1082,25 @@ function PickABet({ home, d, actions, part }: { home: HomeData; d: Derived; acti
           <span>Last bet: {last.result} of {last.bet.target} {metricWords(last.bet.metric, last.bet.target, last.bet.priceLabel, last.bet.unit)}{last.ended ? `, ${dayWords(last.ended)}` : ''}</span>
         </p>
       )}
-      <Ideas home={home} d={d} actions={actions} part={part} priceLabel={priceLabel} />
       {shown.length > 0 && <span className="cp2-pf-k cp2-pf-books">From books</span>}
       {shown.length > 0 && (
         <div className="cp2-pf-plays">
           {shown.map((p) => <PlayCard key={p.key} play={p} priceLabel={priceLabel} actions={actions} />)}
         </div>
       )}
-      {plays.length > folded && (
+      {plays.length > PLAYS_SHOWN && (
         <button className="cp2-pf-more" onClick={() => setMore((x) => !x)}>
-          {more ? 'Fewer from books' : folded ? `${plays.length - folded} more from books` : `${plays.length} ${plays.length === 1 ? 'play' : 'plays'} from books`}
+          {more ? 'Fewer from books' : `${plays.length - PLAYS_SHOWN} more from books`}
         </button>
       )}
       <button className="cp2-lab-own" onClick={() => actions.openSheet({ kind: 'bet', part })}>
         <span>Write your own bet on {LINK_LABEL[part].toLowerCase()}</span>
         <IconChevron />
       </button>
+      <div className="cp2-pf-askc">
+        <MoveRow m={ask} rerouted={false} busy={move.busy === ask.key} onRun={() => void move.run(ask)} />
+        {move.note?.key === ask.key && <MoveNote note={move.note} />}
+      </div>
     </div>
   );
 }
@@ -1144,78 +1113,6 @@ function PlayCard({ play: p, priceLabel, actions }: { play: Play; priceLabel: st
       <p className="cp2-lab-play-how">{p.how}</p>
       <p className="cp2-lab-play-pass">Pass line: {playLine(p, priceLabel)}</p>
       <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', play: p.key })}>Make it my bet</button>
-    </div>
-  );
-}
-
-/** After a failed ask, opening the tab does not ask again on its own for this long. The button still does. */
-const IDEAS_RETRY_MS = 60 * 60_000;
-
-/**
- * Three ideas a model wrote for this part of this business, from its record.
- * Asked for once a visit when there are none, or when the record has moved
- * since the last were written (ideasStale) — so the tab is not the same every
- * time it is opened — and again on a tap. Without a model on the server there is
- * no button: a button with nothing behind it is a promise the app cannot keep.
- */
-function Ideas({ home, d, actions, part, priceLabel }: { home: HomeData; d: Derived; actions: Actions; part: LinkKey; priceLabel: string | null }) {
-  const set = d.proof.lab.ideas[part] ?? null;
-  const can = !!home.ai && !d.noOffer;
-  const stale = ideasStale(set, d.proof.bets, home.recent.today);
-  // The ask, as the rows have it: being written in the background (the hook
-  // watches it and reloads when it lands), or failed and why.
-  const run = ideaRun(d.proof.lab.ideaRuns[part], d.now);
-  const [asking, setAsking] = useState<LinkKey | null>(null);
-  const [refused, setRefused] = useState<{ part: LinkKey; why: string } | null>(null);
-  const asked = useRef(new Set<LinkKey>());
-  const writing = asking === part || run?.state === 'writing';
-  const failedWhy = refused?.part === part ? refused.why : run?.state === 'failed' ? run.why : null;
-  // A failure an hour old is worth one more try on opening; a fresh one waits for the tap.
-  const failedLately = run?.state === 'failed' && d.now.getTime() - Date.parse(run.at) < IDEAS_RETRY_MS;
-
-  const ask = async (k: LinkKey) => {
-    asked.current.add(k);
-    setAsking(k); setRefused(null);
-    // Returns once the ask is recorded; the writing goes on in the background.
-    const r = await actions.lab({ action: 'ideas', part: k });
-    setAsking((x) => (x === k ? null : x));
-    if (!r.ok) setRefused({ part: k, why: r.error ?? 'No new ideas just now.' });
-  };
-  useEffect(() => {
-    if (!can || !stale || writing || failedLately || asked.current.has(part)) return;
-    void ask(part);
-    // Once per part per visit: a failure is said, and asking again is a tap.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [can, stale, part]);
-
-  if (!can && !set) return null;
-  return (
-    <div className="cp2-pf-ideas">
-      <div className="cp2-pf-ideas-top">
-        <span className="cp2-pf-k">Written for your business</span>
-        {can && <button className="cp2-link" disabled={writing} onClick={() => void ask(part)}>{writing ? 'Writing…' : failedWhy ? 'Try again' : set ? 'New ideas' : 'Write some'}</button>}
-      </div>
-      {writing && <p className="cp2-pf-wait">Writing three from your record. A minute or two — this can stay open or close.</p>}
-      {!writing && failedWhy && <p className="cp-help cp2-err">{/^No new ideas/.test(failedWhy) ? failedWhy : `No new ideas: ${failedWhy}`}</p>}
-      {set?.ideas.map((idea) => <IdeaCard key={idea.key} idea={idea} priceLabel={priceLabel} actions={actions} />)}
-      {set && (
-        <p className="cp2-pf-ideas-s">
-          By AI from your record, {dayWords(set.at)}. The pass lines are its proposal: you set yours before the bet starts.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function IdeaCard({ idea, priceLabel, actions }: { idea: Idea; priceLabel: string | null; actions: Actions }) {
-  return (
-    <div className="cp2-pf-play ai">
-      <span className="cp2-pf-src"><i className="cp2-owner ai">By AI</i>{idea.book ? <span>after {idea.book}</span> : null}</span>
-      <b className="cp2-lab-play-t">{idea.label}</b>
-      <p className="cp2-lab-play-how">{idea.how}</p>
-      {idea.why && <p className="cp2-pf-why">{idea.why}</p>}
-      <p className="cp2-lab-play-pass">Pass line: {playLine(idea, priceLabel)}</p>
-      <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', idea: idea.key, part: idea.part })}>Make it my bet</button>
     </div>
   );
 }
@@ -1341,41 +1238,21 @@ export function HistoryRow({ e, today, actions }: { e: HistoryEntry; today: stri
     : <div className="cp2-row cp2-pf-hrow">{body}</div>;
 }
 
-/* ─── Built so far ────────────────────────────────────────────────────────── */
-
-/**
- * What the business has to show for itself, newest first (engine.ts builtSoFar):
- * a sale, a bet that passed, a project the agent finished, the first version of
- * anything made. The engine running is what it built, said with who built it;
- * everything else that happened is one tap away in the history.
- */
-function Built({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
-  const { built, history } = d.proof;
-  return (
-    <>
-      <div className="cp-section cp2-er-h">
-        <span>Built so far</span>
-        {history.length > 0 && <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'history' })}>All history</button>}
-      </div>
-      {built.length ? (
-        <div className="cp-list cp2-rows cp2-er-built">
-          {built.slice(0, BUILT_SHOWN).map((e) => <HistoryRow key={e.key} e={e} today={home.recent.today} actions={actions} />)}
-        </div>
-      ) : (
-        <p className="cp2-er-none">The first sale, a bet that passes, a project finished and the first version of anything you make land here, each dated.</p>
-      )}
-    </>
-  );
-}
-
-/* ─── More ────────────────────────────────────────────────────────────────── */
+/* ─── Records ─────────────────────────────────────────────────────────────── */
 
 /**
  * The records the engine keeps, a line each and a tap to the sheet that has it
- * whole: the conversations, the assets and the page, the projects. None of it is
- * read to decide the move, so none of it sits above the engine. The agents are
- * the crew, on the engine itself; the history is under Built so far. A row
- * dropped here would be a sheet nobody can open.
+ * whole: the conversations, the assets and the page, the projects, the history,
+ * and — while a bet runs — the ideas kept for later. None of it is read to decide
+ * the move, so none of it sits above the bet. A row dropped here would be a
+ * sheet nobody can open.
+ *
+ * "Built so far" was three rows of the history above these, and on the owner's
+ * account it showed an errand the agent finished and a $1 sale from the business
+ * they had pivoted away from — progress, drawn from the wrong rows. The history
+ * is one row now. The crew is a sheet behind Projects; a worker that stopped is
+ * a row of its own here, because a failure the screen does not say is one the
+ * person never hears about (invariant 13).
  */
 function More({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
   const talks = d.proof.lab.talks;
@@ -1396,6 +1273,17 @@ function More({ home, d, actions }: { home: HomeData; d: Derived; actions: Actio
   const assetsLine = online
     ? `Page online · v${online.n}${counted ? ` · ${counted}` : ' · nobody has opened it yet'}`
     : live.length ? assetMakers(d.proof.assets).line || `${live.length} made` : 'A demo, a script, a page, a price to test';
+  // Only a worker not well: one by name, more by count, every name on the crew's sheet (crew.ts crewHeadline).
+  const trouble = crewHeadline(d.proof.crew).trouble;
+  const running = !!d.proof.lab.current;
+  const kept = d.proof.lab.shelf.length;
+  // The history as counts of what is in it, never its newest line: an errand finished yesterday is not the business's headline.
+  const tally = (kinds: HistoryEntry['kind'][], one: string, many: string) => {
+    const n = d.proof.history.filter((e) => kinds.includes(e.kind)).length;
+    return n ? `${n} ${n === 1 ? one : many}` : null;
+  };
+  const historyLine = [tally(['bet_start'], 'bet', 'bets'), tally(['win'], 'sale', 'sales'), tally(['asset'], 'version', 'versions'), tally(['project'], 'project', 'projects')]
+    .filter(Boolean).join(' · ');
   return (
     <>
       <AssetGaps home={home} d={d} actions={actions} />
@@ -1431,6 +1319,32 @@ function More({ home, d, actions }: { home: HomeData; d: Derived; actions: Actio
           </span>
           <IconChevron />
         </button>
+        {trouble && (
+          <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'crew' })}>
+            <span className="cp2-row-main">
+              <span className="t">Your crew</span>
+              <span className="s cp2-pf-trouble">{trouble}</span>
+            </span>
+            <IconChevron />
+          </button>
+        )}
+        <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'history' })}>
+          <span className="cp2-row-main">
+            <span className="t">History</span>
+            <span className="s">{historyLine || 'Bets, sales and what you make land here, each dated'}</span>
+          </span>
+          <IconChevron />
+        </button>
+        {/* While a bet runs nothing else opens the bet sheet, and that is when ideas arrive: kept here, not drawn above. */}
+        {running && (
+          <button className="cp2-row" onClick={() => actions.openSheet(kept ? { kind: 'shelf' } : { kind: 'bet', part: d.proof.chain.weak ?? undefined })}>
+            <span className="cp2-row-main">
+              <span className="t">Ideas for later</span>
+              <span className="s">{kept ? `${kept} kept · the next starts when this bet ends` : 'Keep one for when this bet ends'}</span>
+            </span>
+            <IconChevron />
+          </button>
+        )}
       </div>
     </>
   );

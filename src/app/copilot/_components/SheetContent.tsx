@@ -32,7 +32,7 @@ import { ProposalsSheet } from './v2/ProposalsSheet';
 import { BetSheet, IntroSheet, TalkSheet, TalksSheet } from './v2/LabSheets';
 import { NoteSheet, ToldChooser, ToldLine } from './v2/TellSheets';
 import type { ToldMeta, ToldOffer } from '@/lib/copilot/tell';
-import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, CrewSheet, FoundBySheet, HistorySheet, PivotSheet, ProjectsSheet, SaleSheet } from './v2/ProofSheets';
+import { AssetSheet, AssetsSheet, ChainSheet, CountSheet, CrewSheet, FoundBySheet, HistorySheet, PivotSheet, ProjectsSheet, SaleSheet, ShelfSheet } from './v2/ProofSheets';
 import { AccountsSheet } from './v2/AccountsSheet';
 import { CurrencySheet, MoneyInSheet, RunwaySheet } from './MoneySheets';
 import { dayLabel } from '@/lib/copilot/money/ledger';
@@ -91,6 +91,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false, o
     case 'assets': return <AssetsSheet home={home} actions={actions} />;
     case 'projects': return <ProjectsSheet home={home} actions={actions} />;
     case 'crew': return <CrewSheet home={home} actions={actions} briefing={briefing} />;
+    case 'shelf': return <ShelfSheet home={home} actions={actions} />;
     case 'accounts': return <AccountsSheet home={home} actions={actions} />;
   }
 }

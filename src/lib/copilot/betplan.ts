@@ -155,6 +155,8 @@ export interface StepView {
   project?: string;
   /** A crew step that could be started now (dueSteps decides when it is). */
   runnable: boolean;
+  /** Done, and its last go failed all the same: the Scout found people once and its newest search did not run. */
+  trouble?: boolean;
 }
 
 export interface CountStep { do: string; line: string | null; auto: boolean }
@@ -276,7 +278,7 @@ function findView(step: PlanStep, i: PlanInput): StepView {
     // Everyone found answered or set aside, and another search allowed: the Scout looks again.
     const again = v.open.length === 0 && !i.searchRefusal;
     const tail = r.failed ? ` · the last search failed: ${r.failed}` : again ? ' · looks for more tonight' : '';
-    return { step, state: 'done', line: `${v.found} found${v.searches > 1 ? ` in ${v.searches} searches` : ''}${tail}`, runnable: again };
+    return { step, state: 'done', line: `${v.found} found${v.searches > 1 ? ` in ${v.searches} searches` : ''}${tail}`, runnable: again, trouble: !!r.failed };
   }
   // Said rather than retried: the allowance, the cap or the key is not a failure a second try fixes.
   if (i.searchRefusal) return { step, state: 'failed', line: i.searchRefusal, runnable: false };
@@ -379,7 +381,30 @@ export function planView(plan: BetPlan, i: PlanInput): PlanView {
   };
 }
 
-/** "Crew 2 of 3 done · yours 0 of 1": the plan in a line, beside the count, which is the verdict. */
+/**
+ * The steps the bet's card shows, which is not all of them. Drawn whole, the plan
+ * was a checklist under the count: on the owner's day nine a green tick for the
+ * Scout's eight posts sat over "0 of 8 talked to", and both "answer them" and
+ * "say how each ended" restated the people card and the count beside them — the
+ * card of green ticks that feels like progress at 0 of 10 (DIRECTION.md). So the
+ * card shows what needs a look or a tap: a crew step at work, failed, stopped or
+ * not started; a crew step's result that is a thing to open, a draft or a
+ * project's report; and a step of yours still to do that has no other place on
+ * the card. Answering the people found is the people card itself. The Scout's
+ * finished search is said only when it is news — it will look again tonight, or
+ * its last look failed (invariant 13). Claude still reads the whole plan
+ * (betPlanText): a chat has no card beside it.
+ */
+export function planShown(v: Pick<PlanView, 'steps'>): StepView[] {
+  return v.steps.filter((s) => {
+    if (s.step.kind === 'reply') return false;
+    if (s.step.by === 'you') return s.state !== 'done';
+    if (s.state !== 'done') return true;
+    return !!(s.project || s.asset) || s.runnable || !!s.trouble;
+  });
+}
+
+/** "Crew 2 of 3 done · yours 0 of 1": the plan in a line, for Claude, said beside the count, which is the verdict. */
 export function planLine(v: Pick<PlanView, 'crew' | 'yours'>): string {
   return [
     v.crew.of ? `Crew ${v.crew.done} of ${v.crew.of} done` : null,

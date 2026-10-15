@@ -27,7 +27,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 91 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 92 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -196,6 +196,25 @@ Anthropic under the app's `ANTHROPIC_API_KEY` and never into a row. Only an
 account whose server speaks MCP over HTTPS can be connected — through its own
 OAuth (discovery, dynamic client registration, PKCE) or a token the person
 pastes.
+
+**A bet's plan** (Engine, `betplan.ts`, `planrun.ts`) needs no migration: the plan
+and each crew step's runs are `copilot_events` rows (`lab_plan`, `lab_plan_run`).
+Its crew is whatever is configured — the Scout needs `EXA_API_KEY`, drafts and the
+Writer a model, research a worker (`COPILOT_JOBS_URL` or the Claude agent) — and a
+step none of them can take is drawn as the person's. The nightly pass takes every
+running bet's plan up again in its jobs step (`bet_plan`, before `commission`).
+
+**Testing the plan:** the whole loop — Start, the Scout's search, the Writer's
+project dispatched and checked, the card polling to "Done, and checked", "Try
+again" after a failed draft, the night's search once everyone found was set aside —
+runs against a dev server on in-memory stand-ins for PostgREST, the Responses API
+and Exa (`COPILOT_EXA_URL` is Exa's full search address). The PostgREST stand-in
+must fill `copilot_agent_runs`' defaults (`status` 'running', `started_at`) or "Run
+again" fails `unknown status "undefined"`, and the free plan allows one brief a day,
+which the page's own first load spends: delete `copilot_rate_limits` rows before
+starting a pass. A Writer stand-in has to number a list the job names a count for
+("Write five questions") — the check counts only numbered or bulleted lines, as the
+Writer's prompt asks for.
 
 **Testing the connector:** Allow on the consent screen answers with a 303 to
 claude.ai, and a Playwright route handler does not see a redirect's target — read

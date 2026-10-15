@@ -9,6 +9,7 @@ import { copilotDb, todayIso } from '../db';
 import { MAX_RESTATE_DISMISSALS, dismissedStreak, selectMoves, type MoveDraft } from '../moves';
 import { getProfile, loadMoveAnswers, loadStandingRefusals, loadWorking, logEvent, proposeObserved, supersedeMoves } from '../store';
 import { newObserved, observedFrom } from '../working';
+import { betPlanJob } from './betplan';
 import { capabilityGapJob } from './capability-gap';
 import { commissionJob } from './commission';
 import { clientDeliveryJob } from './client-delivery';
@@ -76,6 +77,9 @@ export const JOBS: Job[] = [
   openingGapJob,
   capabilityGapJob,
   watcherJob,
+  // Before the commission job: a project the running bet's plan hands over
+  // tonight is picked up by a worker in the same pass, not tomorrow's.
+  betPlanJob,
   commissionJob,
   // Last, and it reads what the others wrote. It is the only job that proposes
   // work for the APP to do rather than for the user, so it runs after the ones

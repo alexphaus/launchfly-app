@@ -861,6 +861,71 @@ replies; who replied, for a sale or a meeting where buyers are written to; a
 sheet to log a sale, a meeting or a count where they are not — a sale logged
 there carries no business and lands on the goal like any other.
 
+**A bet starts with its plan** (`betplan.ts`, `planrun.ts`, `jobs/betplan.ts`,
+`v2/BetPlan.tsx`). A bet was a belief and a line, and the work for it was a
+free-text box that handed one project at a time to the agent. Its owner's record
+showed where that led: day nine of "ten conversations with people starting out" at
+0 of 10, and four projects finished that week — guesthouses, an exit plan, a
+reusable reply — none of them for the bet. So Start now starts the bet and its
+plan together. The plan is drawn by a rule from the play — never a model, because
+which work a play needs does not improve with a better model, and a model picking
+what to do is the morning brief — and from what this server can do (`planCaps`,
+off the same home fields on the sheet and in the route):
+
+- **The crew's steps.** For a bet about people (`betVoiced`), the **Scout** finds
+  public posts where somebody says the problem (the same search as "Find people",
+  `searchVoicesFor`); without the app's search key, the **Researcher** is handed a
+  project for eight posts with a link to each (`findAsk` — the app's check holds a
+  job to the count it names). The play's prep: an asset the **Writer** drafts for
+  the bet (`draftAsset`, with no ask — what a draft is asked for is read as the
+  owner's words, and a catalogue's sentence is not theirs), or a project for the
+  Writer or the Researcher, by how the job will be sorted (`jobKindOf`). A step
+  nothing here can take is drawn as yours, said as yours (invariant 7).
+- **Yours.** Answer the people found from your own account (invariant 4), put the
+  page online, make a rewritten offer yours. And how the count gets in — not a
+  stored step, because it follows how the count is kept today: one tap per
+  conversation with when you last logged one, or "counts by itself" where the app,
+  the count link or the page counts it.
+
+The plan is stored on its own row (`lab_plan`) by the tap that starts the bet —
+drawn on the server, never taken from the request, and the first one written for a
+bet is the one — so what the crew was told is what the sheet showed. A bet started
+before plans is offered one on its card ("Plan it and start the crew"), only where
+the crew has a step. **Each step's state is read from rows, never from a worker**:
+people found and left to answer (`betVoices`), an asset with a version made for the
+bet, the project the step handed over (by the run's `ref`, else its objective) and
+its status, the page online, the offer in use. A step started and not heard from
+in six minutes (`PLAN_RUN_MS`) reads as stopped, because a redeploy kills `after()`
+work and says nothing.
+
+**How it runs** (`planrun.ts`). Every attempt is a `lab_plan_run` row before it
+starts and one when it ends, done or failed with why, read on their own like the
+asks for ideas, so a month of nightly retries never pushes a bet out of the Lab's
+window. On a tap (`claimPlanSteps`) the due steps' starts are written before the
+answer goes, so the card shows "Searching…" from a row and the hook polls
+`GET /api/copilot/lab?plan=1` until none is in flight; the steps then run in
+`after()` (`runPlanSteps`), each against the home as the last one left it — a
+search spends matches and a project takes the bet's own slot. A project's step
+stays started until the worker's first go comes back, so the card follows the
+Writer to "Done, and checked" instead of stopping at "handed over". At night the
+`bet_plan` job (before the commission job, so a project it hands over goes to a
+worker in the same pass) takes the plan up again until the bet's last day — the
+bet ending is what stops it: a step that failed is tried once a day, and the Scout
+searches again once everyone found has been answered or set aside, within the
+bet's three searches. **Try again** on the card redoes what failed and only that: a
+search that found nobody new is not a failure, and redoing it from that tap spent
+one of the three. While the Scout searches, "Find people" on the step and the
+people card stands down (`SCOUT_SEARCHING`), so one tap cannot start a second
+search beside it.
+
+**The plan is the work; the count is the verdict.** Every step done passes nothing
+(invariant 10): "the plan was done and nobody bought" is the result a bet exists to
+produce, and it would vanish if finishing the plan could pass one — `lab.ts` does
+not import `betplan.ts`, and the suite holds it. The card says it under the plan.
+Claude reads the plan the same way, over the connector, as the work and not the
+verdict (`betPlanText`). A plan's draft or project replaces "Get it ready" on the
+card, and what a step already shows is not listed again under the work for the bet.
+
 **The first reading** (`reading.ts`, `Reading` in `ProofTab.tsx`). A bet whose line
 is a sale shows an empty bar until a sale lands, which for "2 sales at your $150
 by 18 Oct" is most of its life, and a chat answers in seconds. The first bet in
@@ -3006,7 +3071,10 @@ log in their words), `get_record` (the handoff text) and `get_counted_answers`
 tabs' own wiring — so Claude reads the numbers the Path and Proof show, not a
 second count of them. The text speaks to the person as the screens do; a plan a
 model drew is marked as one (invariant 12), and a part of the home that failed to
-load is named at the top rather than read as nothing (invariant 13).
+load is named at the top rather than read as nothing (invariant 13). While today's
+call waits on an answer, the move now is the call's own headline (`nowIn`): the
+Path's move is the call then, and its card carries the words, so the move has no
+title of its own and the read said "The move now:" with nothing after it.
 
 **What it does not do: write.** There is no tool that logs, keeps, starts or
 sends — a test fails if one appears — and what Claude is told at `initialize`
@@ -3374,7 +3442,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/goals` | create / update a goal |
 | POST | `/api/copilot/targeting` | `{ target_segments, target_area }` |
 | POST | `/api/copilot/offer` | `{ sells, for_who, problem, price_band, proof_url, found_by?, bet? }` — every change is recorded as a version of the offer; `bet` ties that version to the bet it was written for |
-| POST | `/api/copilot/lab` | the bets: `open` (with `idea`, `unit`, `experiment`), `stop`, `talk` (with `role`, `via`, the introduction it came through, and `voice`, the post it came from), `intro` (asked for, or fell through), `forget`, `count`, `uncount`, `link` (a project to a bet), `checkpoint`, `ideas` (three from a model, for one part: the ask is recorded and the writing runs in `after()`; `GET ?ideas=1` is what Proof polls), `found_by`, `voices` (`{ bet }`: one search for the running bet's people, in the tap; answers `kept` and `why`), `voice_gone` (`{ voice }`), `pivot_left` (`{ day, keep? }`: set aside, or keep, what a pivot on who buys left behind; answers `set`) — never a verdict |
+| POST | `/api/copilot/lab` | the bets: `open` (with `idea`, `unit`, `experiment`), `stop`, `talk` (with `role`, `via`, the introduction it came through, and `voice`, the post it came from), `intro` (asked for, or fell through), `forget`, `count`, `uncount`, `link` (a project to a bet), `checkpoint`, `ideas` (three from a model, for one part: the ask is recorded and the writing runs in `after()`; `GET ?ideas=1` is what Proof polls), `found_by`, `voices` (`{ bet }`: one search for the running bet's people, in the tap; answers `kept` and `why`), `voice_gone` (`{ voice }`), `pivot_left` (`{ day, keep? }`: set aside, or keep, what a pivot on who buys left behind; answers `set`), `plan` (`{ bet }`: the running bet's plan, for one started before plans, and its crew started) and `plan_run` (the crew's failed steps, again); `open` writes the bet's plan and starts the crew's part, and answers `planError` when either could not be; `GET ?plan=1` is the crew's runs, what Engine polls while a step is in flight — never a verdict |
 | POST | `/api/copilot/page` | your page: `{ action: 'publish', asset, n?, ask?: { kind: whatsapp \| email \| link, to, label? } }` — a landing page's version online; without `ask`, the button it last had · `{ action: 'off' }` |
 | GET | `/p/[code]` | the page online, as a stranger opens it: the version's words, its one button, a nonce-only script that counts. No session; the code is the account, signed |
 | POST | `/api/copilot/page/[code]` | the page's own count: `{ kind: open \| tap }`, nothing else read. The owner's visits are not counted; 410 when offline, 429 past `PAGE_HITS_PER_HOUR`. `GET` counts nothing |
@@ -3542,7 +3610,11 @@ link); everything else is research, and the world's markers win. Writing goes to
 the app's own model in one call, held to every draft rule here: nothing from a
 blank offer (invariant 1), no number, link or placeholder the person did not
 give (invariant 2, `numberOutside`). A failure of any kind is a `blocked` line
-with the reason, so the card offers another go.
+with the reason, so the card offers another go. The rule cuts the other way too:
+the chain's own move for delivery read "Plan how I take a new client…", opened on
+no writing verb, went as research, and the link check sent it back every time — a
+plan of yours has no links to give. It reads "Write how…" now, and the suite holds
+every move the chain hands the agent to the job it means.
 
 **The plan is held to the ring** (`guardPlan`, `guardEvents`). "Proceed toward a
 booking confirmation" was stored as the worker's step on a guesthouse search

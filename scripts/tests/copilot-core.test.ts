@@ -8703,7 +8703,8 @@ async function labSuite() {
   // "shelve" and "unshelve" keep a test for later and take it off: a test with a line and no result, never a verdict on one.
   // "voices" and "voice_gone" find people for the bet and set one aside: who to talk to, never what the talking counted.
   // "pivot_left" sets aside, or keeps, what a pivot left behind: the pool and the drafts, never a bet.
-  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'intro', 'link', 'open', 'pivot_left', 'shelve', 'stop', 'talk', 'uncount', 'unshelve', 'voice_gone', 'voices'], 'a verdict is the rows’, not a request’s');
+  // "plan" and "plan_run" write the running bet's plan and start its crew's steps: the work, never whether it worked.
+  assert.deepEqual(actions, ['checkpoint', 'count', 'forget', 'found_by', 'ideas', 'intro', 'link', 'open', 'pivot_left', 'plan', 'plan_run', 'shelve', 'stop', 'talk', 'uncount', 'unshelve', 'voice_gone', 'voices'], 'a verdict is the rows’, not a request’s');
 
   console.log('copilot-core: lab checks passed');
 }
@@ -11223,14 +11224,18 @@ async function voicesSuite() {
   assert.match(src('src/lib/copilot/voicefind.ts'), /voicesFromHits\(turns, i\.seen,/, 'kept only through the rules');
   assert.match(src('src/lib/copilot/voicefind.ts'), /if \(!done\.length\) throw new Error\(`The search did not run:/, 'a search that never ran is not stored as one that found nobody');
 
-  /* 11. The route: refused the same way the card hides it, stored even when it kept nobody, metered by what it kept. */
+  /* 11. The search, the route's and the plan's Scout's alike (planrun.ts searchVoicesFor): refused the same way the card hides it, stored even when it kept nobody, metered by what it kept. */
   const route = src('src/app/api/copilot/lab/route.ts');
-  const voices = route.slice(route.indexOf("case 'voices'"), route.indexOf("case 'voice_gone'"));
+  const tap = route.slice(route.indexOf("case 'voices'"), route.indexOf("case 'voice_gone'"));
+  assert.match(tap, /await searchVoicesFor\(auth\.pid, profile, home, str\(b\.bet\), today\);/, 'the tap and the Scout are one search');
+  assert.match(tap, /if \(e instanceof VoiceRefused\) return fail\(e\.message\);/, 'a refusal is said as one');
+  const run = src('src/lib/copilot/planrun.ts');
+  const voices = run.slice(run.indexOf('export async function searchVoicesFor'), run.indexOf('async function handOver'));
   assert.match(voices, /const no = voiceRefusal\(\{ running: view\.state === 'running', voiced: betVoiced\(view\.bet\), searches: mine\.searches, ready: exaConfigured\(\), remaining \}\);/);
-  assert.match(voices, /if \(offerIsEmpty\(profile\.offer\)\) return fail/, 'nothing from a blank offer (invariant 1)');
-  assert.ok(voices.indexOf('insertVoiceEvent(auth.pid, LAB_VOICES') < voices.indexOf('bumpUsage('), 'stored before it is billed');
-  assert.match(voices, /if \(found\.voices\.length\) await bumpUsage\(auth\.pid, periodKey\(profile\.timezone\), 'matches', found\.voices\.length\);/, 'a paid search spends the allowance by what it kept (invariant 6 protects only the free ones)');
-  assert.match(voices, /home\.lab\?\.voices\?\.unreadable\) return fail/, 'unread, it cannot tell who is new');
+  assert.match(voices, /if \(offerIsEmpty\(profile\.offer\)\) throw new VoiceRefused/, 'nothing from a blank offer (invariant 1)');
+  assert.ok(voices.indexOf('insertVoiceEvent(pid, LAB_VOICES') < voices.indexOf('bumpUsage('), 'stored before it is billed');
+  assert.match(voices, /if \(found\.voices\.length\) await bumpUsage\(pid, periodKey\(profile\.timezone\), 'matches', found\.voices\.length\);/, 'a paid search spends the allowance by what it kept (invariant 6 protects only the free ones)');
+  assert.match(voices, /home\.lab\?\.voices\?\.unreadable\) throw new VoiceRefused/, 'unread, it cannot tell who is new');
 
   /* 12. The card: no section where nothing can search (invariant 7), the opener is fixed words, nothing is sent. */
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
@@ -12292,3 +12297,182 @@ async function workLayerReviewSuite() {
 }
 
 workLayerReviewSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── A bet's plan: the work split between the crew and you (betplan.ts) ──── */
+
+import {
+  PLAN_RUN_MS as bpRunMs, betPlanText as bpText, countStep as bpCount, dueSteps as bpDue, findAsk as bpFindAsk, planBusy as bpBusy, planCaps as bpCaps, planFor as bpFor,
+  planLine as bpLine, planView as bpView, type PlanCaps as BpCaps, type PlanInput as BpInput,
+} from '../../src/lib/copilot/betplan';
+import { LAB_PLAN as bpLabPlan, LAB_PLAN_RUN as bpLabRun, labFromEvents as bpLedger, planOf as bpPlanOf, planRunsOf as bpRunsOf, type BetView as BpBetView, type PlanRun as BpRun } from '../../src/lib/copilot/lab';
+import { expectationsOf as bpExpect, jobKindOf as bpJobKind } from '../../src/lib/copilot/contract';
+import type { Asset as BpAsset } from '../../src/lib/copilot/assets';
+import type { BetVoices as BpVoices, Voice as BpVoice } from '../../src/lib/copilot/voices';
+import { nowIn as bpNowIn } from '../../src/lib/copilot/mcpread';
+
+async function betPlanSuite() {
+  const { readFileSync } = await import('node:fs');
+  const src = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
+  const now = new Date('2026-10-15T10:00:00Z');
+  const all: BpCaps = { search: true, draft: true, write: true, research: true };
+  const none: BpCaps = { search: false, draft: false, write: false, research: false };
+  const bet = (over: Record<string, unknown> = {}) => ({
+    id: 'b1', part: 'who', belief: 'People starting out have the problem I fix', play: null, idea: null, metric: 'committed', unit: null, target: 3,
+    tries: { metric: 'talks', planned: 10 }, days: 14, start: '2026-10-07', price: 29, priceLabel: '$29', experiment: null, openedAt: '2026-10-07T00:00:00Z', ...over,
+  });
+  const view = (over: Record<string, unknown> = {}) => ({ bet: bet(over), state: 'running', result: 0, tries: 0, day: 9, last: '2026-10-20', ended: null, note: null }) as unknown as BpBetView;
+  const kinds = (steps: Array<{ kind: string; by: string; who: string }>) => steps.map((s) => `${s.kind}:${s.by}:${s.who}`);
+
+  /* 1. Drawn from the play and what this server can do: the crew's where it can, yours where it cannot. */
+  const mom = bpFor(bet({ play: 'mom-test' }), all);
+  assert.deepEqual(kinds(mom), ['find:crew:Scout', 'job:crew:Writer', 'reply:you:You'], 'people found, questions written, answered from your own account');
+  assert.equal(mom[1].ask, 'Write five questions for a problem conversation with the businesses I sell to: about their past, not about my idea');
+  const noSearch = bpFor(bet({ play: 'mom-test' }), { ...all, search: false }, { problem: 'Not knowing what to do that moves the needle.' });
+  assert.deepEqual(kinds(noSearch), ['find:crew:Researcher', 'job:crew:Writer'], 'without the app’s search the Researcher finds them, and there is no card of posts to answer');
+  assert.equal(noSearch[0].ask, 'Find eight recent public posts where people say they have this problem, each with its link: Not knowing what to do that moves the needle');
+  assert.deepEqual(kinds(bpFor(bet({ play: 'mom-test' }), none)), ['find:you:You', 'job:you:You'], 'nothing connected: every step is yours, said as yours (invariant 7)');
+  assert.deepEqual(kinds(bpFor(bet({ play: 'smoke-test', metric: 'logged', unit: 'sign-ups', tries: null }), all)), ['find:crew:Scout', 'draft:crew:Writer', 'reply:you:You', 'page:you:You']);
+  assert.deepEqual(kinds(bpFor(bet({ play: 'smoke-test', metric: 'logged', unit: 'sign-ups', tries: null }), { ...all, draft: false })), ['find:crew:Scout', 'draft:you:You', 'reply:you:You', 'page:you:You'], 'no model: the page is yours to write');
+  assert.deepEqual(kinds(bpFor(bet({ part: 'pay', play: 'guarantee', metric: 'paid_at_price', tries: { metric: 'sent', planned: 10 } }), all)), ['draft:crew:Writer', 'adopt:you:You'], 'a drafted offer is not the offer until you make it yours');
+  assert.deepEqual(kinds(bpFor(bet({ part: 'reach', play: 'bullseye', metric: 'talks', tries: null }), all)), ['find:crew:Scout', 'job:crew:Researcher', 'reply:you:You']);
+  assert.deepEqual(kinds(bpFor(bet({ part: 'reach', play: 'bullseye', metric: 'talks', tries: null }), { ...all, research: false, search: false })), ['find:you:You', 'job:you:You'], 'a research job with no researcher is yours');
+  assert.deepEqual(bpFor(bet({ part: 'pay', play: 'paid-48h', metric: 'paid', tries: null }), all), [], 'a play with nothing to prepare has no plan: the count is the work');
+  // An idea's prep is an asset; the visits it counts go through the page.
+  assert.deepEqual(kinds(bpFor(bet({ part: 'reach', metric: 'logged', unit: 'visits', tries: null, idea: { label: 'Post it where they are', how: 'x', from: 'AI', prep: { label: 'The page', asset: 'landing_page' } } }), all)), ['draft:crew:Writer', 'page:you:You']);
+  // A draft carries no ask: what a draft is asked for is read as the owner's words (invariant 12).
+  for (const p of ['smoke-test', 'clear-line', 'free-audit', 'sales-script', 'guarantee', 'one-package', 'concierge', 'hand-a-step']) {
+    const steps = bpFor(bet({ play: p, metric: 'logged', unit: 'clients', tries: null }), all);
+    assert.ok(steps.every((s) => s.kind !== 'draft' || s.ask === undefined), `${p}: no ask on a draft`);
+  }
+  // Who takes a project is who the job will be sorted to when it is handed over.
+  for (const p of ['mom-test', 'money-five', 'bullseye', 'one-line', 'ask-why-not']) {
+    const job = bpFor(bet({ play: p }), all).find((s) => s.kind === 'job')!;
+    assert.equal(job.who, bpJobKind(job.ask!).kind === 'write' ? 'Writer' : 'Researcher', `${p}: the Writer writes, the Researcher looks things up`);
+  }
+  assert.equal(bpExpect(bpFindAsk(null, 'They have the problem'), '2026-10-15', 'research').count, 8, 'the Researcher is held to the eight it was asked for, each with its link');
+
+  /* 2. What the server can do, read off its registry: a Writer alone takes writing and not research. */
+  assert.deepEqual(bpCaps({ webReady: true, ai: true, offerEmpty: true, workers: [{ name: 'Writer', jobs: ['write'], maxRing: 'read', agent: 'writer' }] }),
+    { search: false, draft: false, write: true, research: false }, 'a blank offer drafts and searches nothing (invariant 1)');
+
+  /* 3. Stored and read back: reshaped, never trusted. */
+  const stored = bpPlanOf({ steps: [...mom, mom[0], { kind: 'job', by: 'crew', who: 'Writer', do: 'x' }, { kind: 'reply', by: 'crew', who: 'You', do: 'x' }, { kind: 'draft', by: 'crew', who: 'Writer', do: 'Draft it' }, { kind: 'mark_passed', by: 'crew', who: 'Writer', do: 'x' }] }, 'b1', '2026-10-07T00:00:00Z')!;
+  assert.deepEqual(kinds(stored.steps), ['find:crew:Scout', 'job:crew:Writer', 'reply:you:You'], 'one of each kind; a crew step is never yours; a draft with nothing to draft, or a kind there is none of, is no step');
+  assert.equal(bpPlanOf({ steps: [] }, 'b1', 'x'), null);
+  const ledger = bpLedger([
+    { id: 1, event_type: bpLabPlan, payload: { bet: 'b1', steps: mom }, created_at: '2026-10-07T00:00:01Z' },
+    { id: 2, event_type: bpLabPlan, payload: { bet: 'b1', steps: [mom[2]] }, created_at: '2026-10-08T00:00:00Z' },
+  ]);
+  assert.equal(ledger.plans.get('b1')!.steps.length, 3, 'the first plan is the one: a second tap does not rewrite what the crew was told');
+  const runRow = (step: string, state: string, at: string, extra: Record<string, unknown> = {}) => ({ id: at, event_type: bpLabRun, payload: { bet: 'b1', step, state, ...extra }, created_at: at });
+  const runs = bpRunsOf([runRow('find', 'asked', '2026-10-15T09:59:00Z'), runRow('draft', 'failed', '2026-10-15T08:00:00Z', { why: 'No model' }), runRow('find', 'bogus', '2026-10-15T09:00:00Z'), { id: 9, event_type: 'lab_talk', payload: {}, created_at: '2026-10-15T09:00:00Z' }]);
+  assert.deepEqual(runs.map((r) => [r.step, r.state]), [['find', 'asked'], ['draft', 'failed']], 'newest first, and only what holds together');
+
+  /* 4. Each step's state, from the rows — never from what a worker says. */
+  const post = (n: number): BpVoice => ({ id: `v_0000000${n}`, url: `https://www.indiehackers.com/post/p${n}`, where: 'Indie Hackers', title: `Post ${n}`, said: null, author: null, posted: null });
+  const voices = (open: number, over: Partial<BpVoices> = {}): BpVoices => ({ open: Array.from({ length: open }, (_, i) => post(i + 1)), talked: 0, found: open, searches: 1, last: null, ...over });
+  const thread = (id: string, objective: string, status: string, progress = { done: 0, total: 0 }) =>
+    ({ commission: { id, objective, status, plan: [], closed_at: null, last_run_at: null, outcome: null, seen_at: null }, report: { did: [], yours: [], stopped: [], said: [], check: null, progress }, line: '' }) as never;
+  const input = (over: Partial<BpInput> = {}): BpInput => ({
+    view: view({ play: 'mom-test' }), runs: [], voices: voices(0, { searches: 0 }), searchRefusal: null, assets: [], projects: [], pageLive: false,
+    talks: [], tallies: [], found: 'inbound', counted: { link: false, page: false }, timezone: 'Asia/Manila', now, ...over,
+  });
+  const plan = { bet: 'b1', steps: mom, at: '2026-10-07T00:00:00Z' };
+  const at = (min: number) => new Date(now.getTime() - min * 60_000).toISOString();
+  const run = (step: string, state: string, atIso: string, extra: Partial<BpRun> = {}): BpRun => ({ bet: 'b1', step: step as BpRun['step'], state: state as BpRun['state'], why: null, ref: null, at: atIso, ...extra });
+
+  const fresh = bpView(plan, input());
+  assert.deepEqual(fresh.steps.map((s) => [s.step.kind, s.state, s.runnable]), [['find', 'waiting', true], ['job', 'waiting', true], ['reply', 'open', false]]);
+  assert.equal(bpLine(fresh), 'Crew 0 of 2 done · yours 0 of 1');
+  const working = bpView(plan, input({ runs: [run('find', 'asked', at(1))] }));
+  assert.deepEqual([working.steps[0].state, working.steps[0].line, working.busy], ['working', 'Searching…', true]);
+  const gone = bpView(plan, input({ runs: [run('find', 'asked', at(bpRunMs / 60_000 + 1))] }));
+  assert.deepEqual([gone.steps[0].state, gone.steps[0].line, gone.steps[0].runnable, gone.busy], ['failed', 'Could not search: It stopped before it finished', true, false], 'a start nobody heard back from is stopped, and tried again');
+  const found = bpView(plan, input({ voices: voices(5) }));
+  assert.deepEqual([found.steps[0].state, found.steps[0].line, found.steps[0].runnable], ['done', '5 found', false], 'people waiting on an answer: no new search');
+  assert.deepEqual([found.steps[2].state, found.steps[2].line], ['open', '0 of 5 talked to · 5 waiting']);
+  const answered = bpView(plan, input({ voices: voices(0, { found: 8, talked: 3, searches: 1 }) }));
+  assert.deepEqual([answered.steps[0].line, answered.steps[0].runnable], ['8 found · looks for more tonight', true], 'everyone answered or set aside: the Scout looks again');
+  assert.deepEqual([answered.steps[2].state, answered.steps[2].line], ['done', '3 of 8 talked to, the rest set aside']);
+  const capped = bpView(plan, input({ voices: voices(0, { found: 8, talked: 3, searches: 3 }), searchRefusal: '3 searches for this bet already. The people they found are the work now.' }));
+  assert.deepEqual([capped.steps[0].state, capped.steps[0].runnable], ['done', false], 'the cap stops the searching, and the eight found stay done');
+  const refused = bpView(plan, input({ searchRefusal: 'Your matches for this month are used up, and each post found counts as one.' }));
+  assert.deepEqual([refused.steps[0].state, refused.steps[0].runnable], ['failed', false], 'an allowance spent is said, not retried every night');
+
+  const ask = mom[1].ask!;
+  const jobState = (status: string, progress?: { done: number; total: number }) => bpView(plan, input({ projects: [thread('c1', ask, status, progress)] })).steps[1];
+  assert.deepEqual([jobState('active', { done: 1, total: 3 }).state, jobState('active', { done: 1, total: 3 }).line], ['working', 'Working on it · 1 of 3 steps']);
+  assert.deepEqual([jobState('done').state, jobState('done').line, jobState('done').project], ['done', 'Done, and checked', 'c1']);
+  assert.deepEqual([jobState('stopped').state, jobState('stopped').runnable], ['stopped', false], 'your stop is the last word: it is not handed over again');
+  assert.equal(jobState('draft').line, 'Waiting for your OK');
+  // Found by the project its run made, even when the objective is not the ask.
+  assert.equal(bpView(plan, input({ projects: [thread('c9', 'Something else', 'done')], runs: [run('job', 'done', at(30), { ref: 'c9' })] })).steps[1].state, 'done');
+  const notHanded = bpView(plan, input({ runs: [run('job', 'failed', at(30), { why: 'You have 3 things on the go. Finish or stop one first.' })] })).steps[1];
+  assert.deepEqual([notHanded.state, notHanded.line, notHanded.runnable], ['failed', 'Not handed over: You have 3 things on the go. Finish or stop one first.', true]);
+
+  const page = { bet: 'b1', steps: bpFor(bet({ play: 'smoke-test', metric: 'logged', unit: 'sign-ups', tries: null, part: 'reach' }), all), at: 'x' };
+  const asset = (by: 'ai' | 'you', betId: string | null, kind = 'landing_page', live: number | null = null): BpAsset => ({
+    id: 'a1', kind, title: 'Page', versions: [{ id: 'v1', asset: 'a1', n: 1, by, at: '2026-10-08T03:00:00Z', title: 'Page', body: null, url: null, note: null, bet: betId, project: null, offer: null, model: null, trimmed: false }],
+    current: null as never, firstBy: by, retired: false, updatedAt: null, live,
+  }) as BpAsset;
+  const pv = (over: Partial<BpInput>) => bpView(page, input({ view: view({ play: 'smoke-test', metric: 'logged', unit: 'sign-ups', tries: null, part: 'reach' }), voices: null, ...over }));
+  assert.deepEqual(pv({ assets: [asset('ai', 'b1')] }).steps.map((s) => [s.step.kind, s.state, s.line]), [['draft', 'done', 'Drafted, 8 Oct'], ['page', 'open', 'Not online yet']]);
+  assert.equal(pv({ assets: [asset('you', 'b1')] }).steps[0].line, 'Written by you, 8 Oct', 'written by hand is done too: the step is the page, not who wrote it');
+  assert.equal(pv({ assets: [asset('ai', null)] }).steps[0].state, 'waiting', 'a page made for nothing in particular is not this bet’s');
+  assert.equal(pv({ pageLive: true }).steps[1].state, 'done');
+  assert.equal(pv({ pageLive: null }).steps[1].line, 'Your page could not be read just now', 'an unread page is never "not online" (invariant 13)');
+  const offerPlan = { bet: 'b1', steps: bpFor(bet({ part: 'pay', play: 'guarantee', metric: 'paid_at_price', tries: null }), all), at: 'x' };
+  const offerAsset = (live: number | null) => ({ ...asset('ai', 'b1', 'offer', live), id: 'offer' }) as BpAsset;
+  assert.equal(bpView(offerPlan, input({ assets: [offerAsset(1)] })).steps[1].line, 'Your offer now');
+  assert.equal(bpView(offerPlan, input({ assets: [offerAsset(null)] })).steps[1].line, 'Drafted, and not your offer yet');
+
+  /* 5. The count's way in is yours unless the app counts it, and says when you last logged. */
+  const talk = (on: string) => ({ id: on, on, at: on, who: null, said: null, role: 'buyer', problem: 'unasked', commitment: 'none', via: null }) as never;
+  assert.deepEqual(bpCount(bet(), { talks: [talk('2026-10-13'), talk('2026-10-01')], tallies: [], found: 'inbound', counted: { link: false, page: false }, last: '2026-10-20' }),
+    { do: 'Say how each conversation ended: one tap', line: 'Last on 13 Oct', auto: false }, 'a conversation from before the bet is not its');
+  assert.equal(bpCount(bet(), { talks: [], tallies: [], found: 'inbound', counted: { link: false, page: false }, last: '2026-10-20' }).line, 'Nothing logged yet');
+  assert.deepEqual(bpCount(bet({ metric: 'logged', unit: 'sign-ups' }), { talks: [], tallies: [], found: 'inbound', counted: { link: true, page: false }, last: '2026-10-20' }),
+    { do: 'Your count link counts sign-ups by itself', line: null, auto: true });
+  assert.equal(bpCount(bet({ metric: 'sent' }), { talks: [], tallies: [], found: 'outreach', counted: { link: false, page: false }, last: '2026-10-20' }).auto, true);
+
+  /* 6. When the crew's steps run: every runnable one on a tap, each once a night at most. */
+  const failedToday = bpView(plan, input({ runs: [run('job', 'failed', '2026-10-15T01:00:00Z', { why: 'timeout' })] }));
+  assert.deepEqual(bpDue(failedToday, { runs: [run('job', 'failed', '2026-10-15T01:00:00Z')], reason: 'nightly', today: '2026-10-15', timezone: 'Asia/Manila' }), ['find'], 'failed this morning: tomorrow, or your own Try again');
+  assert.deepEqual(bpDue(failedToday, { runs: [run('job', 'failed', '2026-10-15T01:00:00Z')], reason: 'retry', today: '2026-10-15', timezone: 'Asia/Manila' }), ['job'], 'Try again redoes what failed, and spends no search that did not');
+  assert.deepEqual(bpDue(failedToday, { runs: [], reason: 'start', today: '2026-10-15', timezone: 'Asia/Manila' }), ['find', 'job'], 'a start runs every step that can run');
+  assert.deepEqual(bpDue(found, { runs: [], reason: 'start', today: '2026-10-15', timezone: 'Asia/Manila' }), ['job'], 'never a search while people are waiting on an answer, never a step of yours');
+  assert.equal(bpBusy([run('find', 'done', at(1)), run('find', 'asked', at(2))], now), false, 'the newest row of a step is its state');
+  assert.equal(bpBusy([run('find', 'asked', at(1))], now), true);
+
+  /* 7. The plan is the work, never the verdict (invariant 10). */
+  const lab = src('src/lib/copilot/lab.ts');
+  assert.ok(!/from '\.\/betplan'/.test(lab), 'the verdict cannot read the plan: betView never sees a step done');
+  const route = src('src/app/api/copilot/lab/route.ts');
+  assert.match(route, /const steps = planFor\(view\.bet, planCapsOf\(home\), home\.profile\.offer \?\? \{\}\);/, 'the plan is drawn on the server');
+  assert.ok(!/obj\(b\.bet\)\.steps|b\.steps|b\.plan\b/.test(route), 'never taken from the request: a request cannot hand the crew a step the person was not shown');
+  assert.match(src('src/lib/copilot/planrun.ts'), /draftAsset\(pid, \{ kind: step\.asset, bet: claim\.bet \}\)/, 'a draft is asked for nothing in the owner’s name');
+  const jobs = src('src/lib/copilot/jobs/index.ts');
+  assert.ok(jobs.indexOf('  betPlanJob,') < jobs.indexOf('  commissionJob,'), 'a project the plan hands over tonight is dispatched tonight');
+
+  /* 8. Every project the chain hands the agent is sorted the way it reads: a plan of yours is writing, not a search with no links. */
+  const business = src('src/lib/copilot/business.ts');
+  const aiAsks = [...business.matchAll(/by: c\.ai,\s*ask: (['`])([^'`]+)\1/g)].map((m) => m[2]);
+  assert.ok(aiAsks.length >= 5, 'every ask the chain hands the agent is read');
+  for (const a of aiAsks.filter((x) => !/^(Find|List|Search)\b/.test(x))) assert.equal(bpJobKind(a).kind, 'write', `"${a}" is writing: sorted as research it fails the link check every time`);
+
+  /* 9a. Claude reads the plan as the work, beside the count that is the verdict. */
+  const said = bpText(bpView(plan, input({ voices: voices(5), projects: [thread('c1', ask, 'done')] })));
+  assert.equal(said, 'The plan, which is the work and not the verdict: Crew 2 of 2 done · yours 0 of 1. Scout, find people who say this problem in their own words: 5 found. Writer, write five questions for a problem conversation with the businesses…: Done, and checked. You, answer them from your own account: 0 of 5 talked to · 5 waiting. You, say how each conversation ended: one tap: Nothing logged yet.');
+  assert.match(src('src/app/api/copilot/mcp/read.ts'), /plan: plan \? betPlanText\(planView\(plan, planInputOf\(home, v, new Date\(home\.generatedAt\)\)\)\) : null,/, 'from the rows the card reads');
+
+  /* 9. The move now, read by Claude: the call's own words while it waits, never "The move now:" and nothing after it. */
+  const call = { kind: 'call', title: '', why: null, size: null };
+  assert.deepEqual(bpNowIn(call, { headline: 'Send the three drafts to the resorts', because: ['', 'They replied twice as often.'] }), { title: 'Send the three drafts to the resorts', why: 'They replied twice as often.', size: null });
+  assert.equal(bpNowIn(call, null), null, 'a call that cannot be read is left out, not said blank');
+  assert.equal(bpNowIn({ kind: 'step', title: '  ', why: null, size: null }, null), null);
+  assert.match(src('src/app/api/copilot/mcp/read.ts'), /const nowOf = \(home: HomeData, d: Derived\): NowIn \| null => nowIn\(d\.path\.now, home\.decision\);/);
+
+  console.log('copilot-core: bet plan checks passed');
+}
+
+betPlanSuite().catch((e) => { console.error(e); process.exit(1); });

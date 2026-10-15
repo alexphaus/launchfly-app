@@ -591,6 +591,31 @@ for), a worker's own word on whether it finished (invariant 10, now with a check
 behind it), and a worker shown or offered before one is registered (invariant
 7). See COPILOT.md → **The work layer**.
 
+**Then — a bet starts with its plan.** Its owner asked what one thing would finish
+Engine, after asking whether a bet is not already a project approved with its plan.
+In shape it was; what decides each is not. A project is done when its work passes
+the app's checks, and a bet passes when the world's count reaches its line — and
+the most useful thing the app can say is that every step was done and nobody
+bought, which is gone the moment finishing a plan can pass a bet. What was missing
+was the plan itself. A bet was a belief and a line; the work for it was a box that
+handed one project at a time to the agent; and the owner's record that week was a
+conversation bet at 0 of 10 on day nine beside four finished projects, none for it.
+So one Start now starts the bet and its plan: the crew's steps — the Scout finding
+people who said the problem, the Writer drafting the play's asset or writing its
+questions, the Researcher looking things up — and yours, answering people from your
+own account, putting the page online, saying how each conversation ended. Every
+step's state is read from rows; the crew's part starts with the tap and is taken up
+every night until the bet's last day; a failure is said on the step with "Try
+again"; and the plan is said, on the card and to Claude, to be the work and not the
+verdict. It passes the survival test on the join: a harness can run three agents
+when a bet starts; it cannot say that the Writer's questions passed a check it did
+not write, that four of the six people the Scout found were set aside unanswered,
+and that the bet still stands at 0 of 3 — which is what tells a belief that failed
+from one that was never tested. Declined: a model choosing the steps (which work a
+play needs is a rule, and a model picking what to do is the morning brief), a step
+the crew may tick itself, and any step that sends, posts or spends — answering
+people stays yours (invariant 4). See COPILOT.md → **A bet starts with its plan**.
+
 ---
 
 ## Where it actually stands
@@ -629,6 +654,13 @@ direction better than "copilot" does.
 
 ## Open, and honest
 
+- **Whether a plan turns into the count.** The plan makes the crew's work and
+  yours visible beside the count, which is the point and the risk: a card of
+  green ticks can feel like progress at 0 of 10. The counts to watch, per bet:
+  people the Scout found against people talked to, and crew steps done against
+  the count's own movement. If the plan fills and the count does not move, the
+  plan made the bet look busy — the same failure the people search was warned
+  about — and the debrief that reads both should say which side was short.
 - **Whether the hands deliver.** No Claude agent session and no connected
   account has run against the live API yet; the whole work layer has only met
   stand-ins. The count to watch is on the crew sheet: each worker's jobs done

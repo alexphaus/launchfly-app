@@ -30,6 +30,8 @@ import type { Actions, BetFromExperiment } from '../shared';
 import { newMoveId } from './bookLocal';
 import { ToldLine } from './TellSheets';
 import { voiceWho } from '@/lib/copilot/voices';
+import { planCapsOf, planFor } from '@/lib/copilot/betplan';
+import { PlanPreview } from './BetPlan';
 
 /** A custom bet's first count, by the part it is about: the number that part lives or dies by. */
 const PART_METRIC: Record<LinkKey, LabMetric> = { who: 'committed', reach: 'replied', close: 'meetings', pay: 'paid_at_price', deliver: 'handed' };
@@ -345,6 +347,14 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
         <b>{passLine({ metric, target, tries, priceLabel, unit: shownUnit }, shiftDay(today, days - 1))}</b>
         <span className="cp2-lab-preview-s">{countedFrom(metric, today, priceLabel, shownUnit, !!home.signals?.made, !!home.page?.live)}</span>
       </div>
+
+      {/* What Start starts besides the bet: the plan the server writes with it, from the same rule and the same home (betplan.ts). */}
+      {!running && (
+        <PlanPreview steps={planFor(
+          { part, belief: belief.trim(), play: play?.key ?? null, idea: play ? null : playFrom() ?? null, metric, unit: shownUnit, tries },
+          planCapsOf(home), offer,
+        )} />
+      )}
 
       {/* Said before the tap, with the way to fix it, rather than refused after it. */}
       {needsPrice && (

@@ -7,7 +7,7 @@ import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, 
 import { addDays, copilotDb, describeDbError, todayIso } from './db';
 import { horizonFor } from './due';
 import { FOCUS_EVENT, focusFromEvents, type FocusInput } from './focus';
-import { LAB_BET, LAB_COUNT, LAB_EVENTS, LAB_IDEAS, LAB_IDEAS_ASKED, LAB_IDEAS_FAILED, LAB_SHELF, LAB_SHELF_GONE, LAB_TALK, dayIn, experimentVerdicts, ideaRunsOf, labHome, type IdeaRunRow, type LabEventRow } from './lab';
+import { LAB_BET, LAB_COUNT, LAB_EVENTS, LAB_IDEAS, LAB_IDEAS_ASKED, LAB_IDEAS_FAILED, LAB_PLAN_RUN, LAB_SHELF, LAB_SHELF_GONE, LAB_TALK, PLAN_WHY_MAX, dayIn, experimentVerdicts, ideaRunsOf, labHome, planRunsOf, type IdeaRunRow, type LabEventRow, type PlanKind, type PlanRun, type PlanRunState } from './lab';
 import type { LinkKey } from './business';
 import { ASSET_EVENTS, ASSET_VERSION, OFFER_ASSET, assetsHome, offerBody, offerFields, sameOffer, type AssetEventRow, type Maker } from './assets';
 import { RECENT_DAYS, type AnsweredMove, type RecentLedger, type RecentOutcome } from './review';
@@ -1060,6 +1060,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     events: labEvents.rows,
     shelfEvents: labEvents.shelfRows,
     ideaRunEvents: labEvents.runRows,
+    planRunEvents: labEvents.planRunRows,
     unreadable: labEvents.unreadable,
     timezone: profile.timezone,
     today,
@@ -2322,6 +2323,8 @@ export const LAB_EVENT_LIMIT = 800;
 export const SHELF_EVENT_LIMIT = 300;
 /** Asks for ideas and their failures read per load: enough for the newest of each part, and a few over. */
 export const IDEA_RUN_EVENT_LIMIT = 20;
+/** A plan's runs read per load: a fortnight of a few steps a night, and the starts between. */
+export const PLAN_RUN_EVENT_LIMIT = 60;
 
 /**
  * The Lab's events — bets, call-offs, conversations, checkpoints — newest
@@ -2329,23 +2332,53 @@ export const IDEA_RUN_EVENT_LIMIT = 20;
  * failed read is `unreadable`, said on the Lab rather than shown as a Lab with
  * nothing in it (invariant 13).
  */
-export async function loadLabEvents(profileId: string): Promise<{ rows: LabEventRow[]; shelfRows: LabEventRow[]; runRows: LabEventRow[]; unreadable: string | null }> {
+export async function loadLabEvents(profileId: string): Promise<{ rows: LabEventRow[]; shelfRows: LabEventRow[]; runRows: LabEventRow[]; planRunRows: LabEventRow[]; unreadable: string | null }> {
   try {
     const read = (kinds: readonly string[], limit: number) => copilotDb().from('copilot_events')
       .select('id, event_type, payload, created_at')
       .eq('profile_id', profileId).in('event_type', [...kinds])
       .order('created_at', { ascending: false }).limit(limit);
-    const [all, shelf, runs] = await Promise.all([
+    const [all, shelf, runs, plan] = await Promise.all([
       read(LAB_EVENTS, LAB_EVENT_LIMIT),
       read([LAB_SHELF, LAB_SHELF_GONE, LAB_BET], SHELF_EVENT_LIMIT),
       read([LAB_IDEAS_ASKED, LAB_IDEAS_FAILED], IDEA_RUN_EVENT_LIMIT),
+      read([LAB_PLAN_RUN], PLAN_RUN_EVENT_LIMIT),
     ]);
-    const failed = all.error ?? shelf.error ?? runs.error;
-    if (failed) return { rows: [], shelfRows: [], runRows: [], unreadable: failed.message };
-    return { rows: (all.data ?? []) as LabEventRow[], shelfRows: (shelf.data ?? []) as LabEventRow[], runRows: (runs.data ?? []) as LabEventRow[], unreadable: null };
+    const failed = all.error ?? shelf.error ?? runs.error ?? plan.error;
+    if (failed) return { rows: [], shelfRows: [], runRows: [], planRunRows: [], unreadable: failed.message };
+    return {
+      rows: (all.data ?? []) as LabEventRow[], shelfRows: (shelf.data ?? []) as LabEventRow[],
+      runRows: (runs.data ?? []) as LabEventRow[], planRunRows: (plan.data ?? []) as LabEventRow[], unreadable: null,
+    };
   } catch (e) {
-    return { rows: [], shelfRows: [], runRows: [], unreadable: e instanceof Error ? e.message : String(e) };
+    return { rows: [], shelfRows: [], runRows: [], planRunRows: [], unreadable: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * A crew step of the running bet's plan started, finished or failed (planrun.ts):
+ * the rows the bet card reads the crew's work from. Throws with a reason.
+ */
+export async function insertPlanRun(profileId: string, payload: { bet: string; step: PlanKind; state: PlanRunState; why?: string | null; ref?: string | null }): Promise<void> {
+  const { error } = await copilotDb().from('copilot_events').insert({
+    profile_id: profileId, event_type: LAB_PLAN_RUN,
+    payload: { bet: payload.bet, step: payload.step, state: payload.state, why: payload.why?.slice(0, PLAN_WHY_MAX) ?? null, ref: payload.ref ?? null },
+  });
+  if (error) throw new Error(describeDbError(error, 'Could not save that.'));
+}
+
+/**
+ * The plans' runs alone — what the Engine polls while the crew starts a bet's
+ * steps in the background. Throws: a poller that cannot read says so rather than
+ * reading "done".
+ */
+export async function loadPlanRuns(profileId: string): Promise<PlanRun[]> {
+  const { data, error } = await copilotDb().from('copilot_events')
+    .select('id, event_type, payload, created_at')
+    .eq('profile_id', profileId).eq('event_type', LAB_PLAN_RUN)
+    .order('created_at', { ascending: false }).limit(PLAN_RUN_EVENT_LIMIT);
+  if (error) throw new Error(describeDbError(error, 'Could not read what your crew is doing.'));
+  return planRunsOf((data ?? []) as LabEventRow[]);
 }
 
 /* ─── Your page, online (livepage.ts) ──────────────────────────────────────── */

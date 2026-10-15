@@ -56,10 +56,12 @@ import {
   type Step, type StepGo,
 } from '@/lib/copilot/engine';
 import { pageCounts, pageLine } from '@/lib/copilot/livepage';
+import { SCOUT_SEARCHING, planCapsOf, planFor, planInputOf, planView, stepBusy } from '@/lib/copilot/betplan';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
 import { AssetGlyph, IconCheck, IconChevron, IconCross, IconExternal, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph, WorkerGlyph } from './icons2';
 import { MoveNote, MoveRow, agentIsFull, orChat, useBrief, useMove, type Brief } from './MoveKit';
+import { BetPlan, PlanIt } from './BetPlan';
 
 export default function ProofTab({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
   const changes = useSeen(home, d);
@@ -216,10 +218,13 @@ function useStep(home: HomeData, d: Derived, opened: Opened): { step: Step | nul
   const b = view?.bet ?? null;
   const read = home.lab?.voices;
   const voices = view && b && betVoiced(b) ? betVoices(read, b, home.lab?.talks ?? []) : null;
-  // Said the same way the route refuses it, so a button that could only be refused is not the step.
+  // Said the same way the route refuses it, so a button that could only be refused is not the step —
+  // and not while the plan's Scout is searching, so a tap does not start a second search beside it.
   const searchRefusal = voices
     ? read?.unreadable
       ? 'The people found for this bet could not be read just now.'
+      : stepBusy(lab.planRuns, 'find', d.now)
+      ? SCOUT_SEARCHING
       : voiceRefusal({ running: true, voiced: true, searches: voices.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining })
     : null;
   const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
@@ -607,7 +612,13 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   const today = home.recent.today;
   const found = d.proof.found.value;
   const play = playOf(b);
+  // The plan, read off the rows (betplan.ts): the work under the count, never the count.
+  const plan = d.proof.lab.plan;
+  const pv = plan ? planView(plan, planInputOf(home, view, d.now)) : null;
   const work = betWork(view, { links: d.proof.lab.links, commissions: home.commissions, assets: d.proof.assets, talks: d.proof.lab.talks, tallies: d.proof.lab.tallies });
+  // What a step of the plan already shows is not listed again under the work for the bet.
+  const inPlan = new Set((pv?.steps ?? []).flatMap((s) => [s.project, s.asset]).filter((x): x is string => !!x));
+  const workLeft = { ...work, projects: work.projects.filter((t) => !inPlan.has(t.commission.id)), assets: work.assets.filter((a) => !inPlan.has(a.id)) };
   const next = betNext(b.metric, found, b.unit);
   const over = overPlan(view);
   // The funnel up to the line, counted since the bet began: something to read on day one, when the bar is empty.
@@ -660,6 +671,9 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
       )}
       <p className="cp2-lab-pass"><b>Pass line:</b> {passLine(b, view.last)}.</p>
       {over && <p className="cp2-lab-over">{over}</p>}
+      {pv
+        ? <BetPlan home={home} view={view} pv={pv} actions={actions} brief={brief} />
+        : !d.proof.lab.unreadable && <PlanIt view={view} steps={planFor(b, planCapsOf(home), home.profile.offer ?? {})} actions={actions} />}
 
       <button className="cp2-lab-more" onClick={() => setMore((v) => !v)} aria-expanded={more}>
         {/* The play's own name, which fits a line; its book is said inside. */}
@@ -676,8 +690,9 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
             </div>
           )}
           {home.workerConnected && <HandOver view={view} actions={actions} full={full} />}
-          <BetWorkList view={view} work={work} home={home} actions={actions} />
-          <Prep home={home} view={view} work={work} actions={actions} brief={brief} full={full} canDraft={!!home.ai && !d.noOffer} />
+          <BetWorkList view={view} work={workLeft} home={home} actions={actions} />
+          {/* A plan's draft or project is this bet's "get it ready", already on the plan. */}
+          {!plan && <Prep home={home} view={view} work={work} actions={actions} brief={brief} full={full} canDraft={!!home.ai && !d.noOffer} />}
         </div>
       )}
 
@@ -794,7 +809,10 @@ function People({ home, view, actions, find, opened }: { home: HomeData; view: B
   const today = home.recent.today;
   const read = home.lab?.voices;
   const mine = betVoices(read, b, home.lab?.talks ?? []);
-  const refusal = voiceRefusal({ running: true, voiced: betVoiced(b), searches: mine.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining });
+  // "Find more" stands down while the plan's Scout searches: two at once would spend two of the bet's three.
+  const refusal = stepBusy(home.lab?.planRuns ?? [], 'find', new Date(home.generatedAt))
+    ? SCOUT_SEARCHING
+    : voiceRefusal({ running: true, voiced: betVoiced(b), searches: mine.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);

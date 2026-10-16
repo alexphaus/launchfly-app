@@ -14,6 +14,9 @@ import { canTake } from '@/lib/copilot/workers';
 import { WORK_ASSIGNED } from '@/lib/copilot/worklog';
 import { recordWork } from '@/lib/copilot/workstore';
 import { LAB_LINK } from '@/lib/copilot/lab';
+import { DRAFT_ASK_MAX, assetAsked, assetToRevise } from '@/lib/copilot/assets';
+import { resolveLlmConfig } from '@/lib/copilot/agent/llm';
+import { ProofModelError, ProofRefusal, draftAsset } from '@/lib/copilot/proofai';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
@@ -61,6 +64,23 @@ export async function POST(req: Request) {
       if (!w) return fail('No worker by that name is connected.');
       if (!canTake(w, jobKindOf(objective).kind, authority)) return fail(`${w.name} does not take this kind of job.`);
     }
+    // Asked for an asset this app keeps — a landing page, the delivery workflow,
+    // a script, the offer — it is drafted as that asset (assets.ts assetAsked):
+    // the next version of the one in use, tied to the bet when it came from the
+    // bet's card. A project could only answer with a report: copy in a thread,
+    // or HTML the research check sent back for having no links, while the page
+    // online stayed v1. A worker picked by name keeps the job, and so does an
+    // ask on a server with no model to write it.
+    const kind = !workerKey && authority === 'read' && resolveLlmConfig() ? assetAsked(objective) : null;
+    if (kind) {
+      const home = await loadHome(auth.pid);
+      if (!home) return fail('Not found', 404);
+      // Unread, a new version could not say what it follows: a second page beside the one online.
+      if (home.assets?.unreadable) return fail(`Your assets could not be read just now, so a new version cannot be written over them: ${home.assets.unreadable}`);
+      const revise = assetToRevise(kind, home.assets?.assets ?? [], home.page?.live?.asset ?? null);
+      const made = await draftAsset(auth.pid, { kind, asset: revise ?? undefined, bet: bet?.id, ask: objective.slice(0, DRAFT_ASK_MAX) });
+      return json({ ok: true, asset: made.asset, assetKind: kind, revised: !!revise, home: await loadHome(auth.pid) });
+    }
     const commission = await createCommission(auth.pid, {
       objective,
       why: typeof b.why === 'string' ? b.why.trim().slice(0, WHY_MAX) : null,
@@ -87,6 +107,10 @@ export async function POST(req: Request) {
     }
     return json({ ok: true, commission, tied, untied, unassigned, home: await loadHome(auth.pid) });
   } catch (e) {
+    // A draft the model could not write is the model's failure, said as one: the
+    // person can try again, or hand it over as a project instead.
+    if (e instanceof ProofModelError) return fail(e.message, 502);
+    if (e instanceof ProofRefusal) return fail(e.message);
     return fail(e instanceof Error ? e.message : 'Could not write that commission');
   }
 }

@@ -4,7 +4,7 @@
 
 import { after } from 'next/server';
 import { runJobs } from '@/lib/copilot/jobs';
-import { approveCommission, closeCommission, insertAnswered, loadCommissions, loadHome, markCommissionSeen, unblockCommission } from '@/lib/copilot/store';
+import { EVENTS_PER_COMMISSION, approveCommission, closeCommission, insertAnswered, loadCommissionEvents, loadCommissions, loadHome, markCommissionSeen, unblockCommission } from '@/lib/copilot/store';
 import { WORTH, WORTH_NOTE_MAX, isWorthKind } from '@/lib/copilot/worth';
 import { jobKindOf } from '@/lib/copilot/contract';
 import { registry } from '@/lib/copilot/hands';
@@ -42,6 +42,25 @@ function worthFrom(b: Record<string, unknown>) {
     amount,
     note: typeof b.note === 'string' ? b.note.trim().slice(0, WORTH_NOTE_MAX) || null : null,
   };
+}
+
+/**
+ * One project's log, for its sheet. The home carries the log of live projects
+ * only (loadHome), so a closed one's sheet reads it here when it opens — without
+ * this, what a finished project produced was on no screen at all: the Writer
+ * posts its draft and closes in one call, and the person saw "Written: Landing
+ * page copy" over an empty sheet. Scoped to the person's own rows by the query.
+ * A failed read is an error, never an empty log (invariant 13).
+ */
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const auth = await profileIdOr401();
+  if ('res' in auth) return auth.res;
+  const { id } = await ctx.params;
+  try {
+    return json({ ok: true, events: await loadCommissionEvents(auth.pid, [id], EVENTS_PER_COMMISSION, { strict: true }) });
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : 'Could not read what it did', 500);
+  }
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {

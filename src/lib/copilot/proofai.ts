@@ -230,6 +230,8 @@ export async function draftAsset(pid: string, input: DraftAsk): Promise<{ asset:
     part: part ? { label: part.label, state: LINK_STATE_LABEL[part.state], why: part.why } : null,
     previous: target ? { title: target.current.title, body: target.current.body } : null,
     ask,
+    // A script sends people somewhere: to the page, while it is online (assets.ts AssetDraftContext.page).
+    page: kind === 'script' && home.page?.live ? home.page.url ?? null : null,
     // Nameless: an asset is read by strangers, and a name in it would read as
     // a testimonial nobody gave.
     heard: heardFrom(home.lab?.talks ?? []).map((h) => heardLine({ ...h, who: null })),

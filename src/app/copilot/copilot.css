@@ -201,6 +201,8 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
    padding is what has to go. Found by reading the computed box, not the CSS. */
 .cp-draft.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; padding-bottom: 0; }
 .cp-draft-label { font-family: var(--display); font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+/* Under a worker's text: Show all and Copy side by side (SheetContent Artifact). */
+.cp-root .cp-draft-do { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; }
 
 /* Forms */
 .cp-field { margin-bottom: 14px; }

@@ -95,6 +95,8 @@ export function useMove(actions: Actions, brief: Brief) {
       const r = await actions.createCommission({ objective: (m.ask ?? m.label).slice(0, OBJECTIVE_MAX), why: why?.slice(0, 300), authority: 'read', ...(bet ? { bet } : {}) });
       setBusy(null);
       if (!r.ok) return setNote({ key: m.key, text: r.error ?? 'Could not hand that over', bad: true, claude: false });
+      // An ask for an asset — the delivery workflow, a page — comes back as that asset, drafted: opened on it.
+      if (r.asset) return actions.openSheet({ kind: 'asset', id: r.asset });
       if (r.id) {
         if (!r.tied) await onCreated?.(r.id);
         actions.openSheet({ kind: 'commission', id: r.id });

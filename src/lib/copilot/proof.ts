@@ -242,6 +242,23 @@ export function ideasStale(set: Pick<IdeaSet, 'at'> | null | undefined, bets: Be
   return bets.some((b) => b.state !== 'running' && !!b.ended && b.ended > written);
 }
 
+/* ─── What a play has you say ─────────────────────────────────────────────── */
+
+/**
+ * What a play has the person say to people, when it has them say something: a
+ * message to send, or a post to put up. Read from the play's own words. The
+ * Engine's move drafts it, and the bet's plan has the Writer draft it at Start —
+ * because "message ten people you know" left the hardest part, the words, to a
+ * person with a blank screen, and day one of that bet read "Log your sign-ups".
+ */
+export function playSays(how: string): 'message' | 'post' | null {
+  if (POSTS.test(how)) return 'post';
+  if (MESSAGES.test(how)) return 'message';
+  return null;
+}
+const POSTS = /\b(?:post|posts|posting|answer (?:one|a|the) question|answers? (?:one|a|the) question|reply to (?:posts|threads|questions)|comment on)\b/i;
+const MESSAGES = /\b(?:message|messages|messaging|write to|e-?mail|dms?|text them|whats ?app|ask (?:\w+ ){0,4}(?:people|friends|clients|contacts|customers|them|each|everyone)|reach out|forward|introduc\w*|invite|send)\b/i;
+
 /* ─── The next bet ────────────────────────────────────────────────────────── */
 
 /**

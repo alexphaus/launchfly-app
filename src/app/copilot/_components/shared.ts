@@ -329,7 +329,12 @@ export interface Actions {
    * `bet`: the running bet's id — the project is its own, takes the slot the bet
    * keeps, and is tied to it by the server (`tied`; `untied` says why not).
    */
-  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number; bet?: string }): Promise<{ ok: boolean; error?: string; id?: string; tied?: boolean; untied?: string | null }>;
+  /**
+   * Hand something over. An ask for an asset this app keeps (assets.ts
+   * assetAsked) comes back as that asset drafted — `asset`, not `id` — and the
+   * caller opens it rather than a project.
+   */
+  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number; bet?: string }): Promise<{ ok: boolean; error?: string; id?: string; asset?: string; tied?: boolean; untied?: string | null }>;
   /** Grant authority, carry on after answering, call it off, finish, or mark read. */
   /**
    * `answer` is the user's reply to a needs_you, and only 'unblock' carries one.

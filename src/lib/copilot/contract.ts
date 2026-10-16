@@ -57,7 +57,34 @@ const WRITE_VERB = /^(?:please\s+)?(?:re-?)?(write|draft|rewrite|redraft|edit|po
  * from memory is inventing listings (invariant 3: sourced beats inferred, and
  * nothing sourced came from a draft).
  */
-const NEEDS_THE_WORLD = /\b(find|search|look ?up|research|compar(?:e|es|ing|ison)|check|verify|how much|(?:get|collect|gather|request)\s+(?:\w+\s+){0,2}(?:quotes?|prices?|rates?|costs?)|list(?:ing)?s? (?:of )?(?:the )?(?:best|top|cheapest|available)|where|which (?:are|is) the|who (?:are|is|sells|offers)|near(?:by| me)?|availability|available|open(?:ing)? hours|reviews|rated|suppliers?|vendors?|competitors?|listings?|hotels?|guesthouses?|hostels?|flights?|venues?|jobs? (?:in|at|for)|grants?|phone numbers?|addresses|sources?|https?:\/\/|www\.)\b/i;
+const NEEDS_THE_WORLD = /\b(find|search|look ?up|research|compar(?:e|es|ing|ison)|check|verify|how much|(?:get|collect|gather|request)\s+(?:\w+\s+){0,2}(?:quotes?|prices?|rates?|costs?)|list(?:ing)?s? (?:of )?(?:the )?(?:best|top|cheapest|available)|where|which (?:are|is) the|who (?:are|is|sells|offers)|near(?:by| me)?|availability|available|open(?:ing)? hours|reviews|rated|suppliers?|vendors?|competitors?|listings?|hotels?|guesthouses?|hostels?|flights?|venues?|jobs? (?:in|at|for)|grants?|phone numbers?|addresses|sources?|visas?|immigration|permits?|regulations?|laws?|legal requirements|trips?|itinerar(?:y|ies)|https?:\/\/|www\.)\b/i;
+
+/**
+ * Making a document of the person's own: a making verb with a document for its
+ * object, or a plan of how they work. "Create a landing page", "Build an
+ * onboarding checklist", "Plan how I take a new client from yes to delivered"
+ * opened with no writing verb, so they were sorted as research — and research
+ * is held to a source link on every finding, which a page or a plan of yours
+ * has none of. Both of its owner's jobs were sent back by the link check every
+ * time and stopped at "Not accepted": the cheap mistake, it turned out, was not
+ * cheap. Still narrow: the verb alone is not enough ("Create a list of 20
+ * dentists in Makati" is research), and the world's markers win after it.
+ */
+const MAKE_VERB = /^(?:please\s+)?(?:create|make|build|design|develop|put together|set up|map out|lay out|sketch|structure|plan|prepare)\b/i;
+const DOC_OBJECT = /\b(?:landing ?page|web ?page|web ?site|site|page|copy|plan|playbook|process|workflow|checklist|outline|script|template|deck|slides?|proposal|brief|guide|faq|sop|onboarding|emails?|messages?|posts?|caption|bio|description|pitch|offer|strategy|framework|steps|step by step|timeline|calendar|schedule|agenda|questions|questionnaire|survey|form|policy|terms|contract|summary|structure|sequence|funnel|journey|curriculum|course|lessons?|newsletter|article|blog post|headlines?|taglines?|one-?pager|document|doc|letter|price list|menu)\b/i;
+/** A list of things in the world is research whatever makes it; a list of the person's own words is not. */
+const LIST_OF = /\b(?:list|lists|spreadsheet|table|directory|database|sheet) of\b/i;
+const LIST_OF_WORDS = /\b(?:list|lists) of (?:\d+\s+|ten |five |three )?(?:questions|steps|ideas|tips|objections|headlines|taglines|subject lines|openers|hooks|prompts|talking points|topics|names for)\b/i;
+/** "Plan how I…", "Plan my week": a plan of the person's own work, not a trip. */
+const PLAN_OWN = /^(?:please\s+)?(?:plan|map out|lay out) (?:how (?:i|we|to)\b|(?:my|our) (?:week|day|month|launch|content|onboarding|process|workflow|sales|outreach|offer|pricing|delivery))/i;
+
+function makesADocument(text: string): boolean {
+  if (PLAN_OWN.test(text)) return true;
+  if (!MAKE_VERB.test(text)) return false;
+  const head = text.slice(0, 90);
+  if (LIST_OF.test(head)) return LIST_OF_WORDS.test(head);
+  return DOC_OBJECT.test(head);
+}
 
 /**
  * Writing or research, from the objective's own words.
@@ -69,7 +96,7 @@ const NEEDS_THE_WORLD = /\b(find|search|look ?up|research|compar(?:e|es|ing|ison
  */
 export function jobKindOf(objective: string): { kind: JobKind; why: string } {
   const text = objective.trim();
-  if (!WRITE_VERB.test(text)) return { kind: 'research', why: 'It does not open with a writing verb.' };
+  if (!WRITE_VERB.test(text) && !makesADocument(text)) return { kind: 'research', why: 'It does not open with a writing verb, or with making a document of yours.' };
   const world = text.match(NEEDS_THE_WORLD);
   if (world) return { kind: 'research', why: `It needs the world ("${world[0]}").` };
   return { kind: 'write', why: 'It asks for words, and nothing it asks for is outside the app.' };

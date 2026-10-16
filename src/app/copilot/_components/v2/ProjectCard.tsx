@@ -9,6 +9,9 @@ import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, blockedOn, commissionChip, lapse
 import { jobKindOf, verdictLine } from '@/lib/copilot/contract';
 import { dayWords } from '@/lib/copilot/lab';
 import { takerOf } from '@/lib/copilot/workers';
+import { assetAskLine, assetAsked, assetToRevise } from '@/lib/copilot/assets';
+import { offerIsEmpty } from '@/lib/copilot/offer';
+import { secondPerson } from '@/lib/copilot/you';
 import type { CommissionThread, HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
@@ -41,7 +44,8 @@ export function Composer({ home, d, actions, brief, full }: { home: HomeData; d:
     setBusy(null);
     if (!r.ok) return setNote({ text: r.error ?? 'Could not hand that over', bad: true, claude: false });
     setText(''); setPicked(null);
-    if (r.id) actions.openSheet({ kind: 'commission', id: r.id });
+    if (r.asset) actions.openSheet({ kind: 'asset', id: r.asset });
+    else if (r.id) actions.openSheet({ kind: 'commission', id: r.id });
   };
   const copy = async () => {
     setBusy('copy'); setNote(null);
@@ -90,6 +94,9 @@ export function Composer({ home, d, actions, brief, full }: { home: HomeData; d:
 
 /** The composer's line: what kind of job this reads as, and who would take it. */
 function whoTakes(home: HomeData, text: string): string {
+  // An asset asked for by name is drafted as one, not handed over (assets.ts assetAsked): said before the tap.
+  const asset = home.ai && !offerIsEmpty(home.profile.offer) ? assetAsked(text) : null;
+  if (asset) return assetAskLine(asset, !!assetToRevise(asset, home.assets?.assets ?? [], home.page?.live?.asset ?? null));
   const job = jobKindOf(text).kind;
   const taker = takerOf(home.workers ?? [], job, 'read');
   if (!taker) return job === 'write' ? 'Reads as writing — nothing here writes it yet: the app needs a model.' : 'Reads as research — nothing here takes research yet.';
@@ -104,7 +111,9 @@ function whoTakes(home: HomeData, text: string): string {
  * project wants, an answer, cost the most taps. Now the question has a box on
  * the card, and a breakage its retry; everything else is one tap into the sheet.
  */
-export function Project({ thread, actions, today }: { thread: CommissionThread; actions: Actions; today?: string }) {
+export function Project({ thread, actions, today, name }: { thread: CommissionThread; actions: Actions; today?: string; name?: string | null }) {
+  // A worker's words, to the person (you.ts): "so Alex can move" read on Alex's phone.
+  const you = (t: string) => secondPerson(t, name);
   const c = thread.commission;
   const r = thread.report;
   // The day it was for has passed (commission.ts lapsedOn): said instead of the
@@ -173,7 +182,7 @@ export function Project({ thread, actions, today }: { thread: CommissionThread; 
         <span className="cp2-bz-job-ob">{c.objective}</span>
         {/* What it got done last — one line, enough to tell whether it is worth keeping. */}
         {c.status === 'active' && sentBack && <span className="cp2-bz-job-did bad">Sent back: {verdictLine(sentBack)}</span>}
-        {!fault && !ask && last && !(c.status === 'active' && sentBack) && <span className="cp2-bz-job-did">{last.summary}</span>}
+        {!fault && !ask && last && !(c.status === 'active' && sentBack) && <span className="cp2-bz-job-did">{you(last.summary)}</span>}
         {c.status === 'active' && !last && <span className="cp2-bz-job-did quiet">Nothing back yet.</span>}
       </button>
       {call && (
@@ -188,7 +197,7 @@ export function Project({ thread, actions, today }: { thread: CommissionThread; 
       )}
       {ask && !call && (
         <div className="cp2-bz-ask">
-          <p className="cp2-bz-ask-q">{ask.summary}</p>
+          <p className="cp2-bz-ask-q">{you(ask.summary)}</p>
           <div className="cp2-bz-ask-row">
             <input
               className="cp-input sm" value={answer} maxLength={300} placeholder="Your answer" aria-label={`Answer: ${ask.summary}`}
@@ -208,7 +217,7 @@ export function Project({ thread, actions, today }: { thread: CommissionThread; 
       )}
       {fault && (
         <div className="cp2-bz-fault">
-          <p>{fault.summary}</p>
+          <p>{you(fault.summary)}</p>
           <button className="cp-btn sm" disabled={busy} onClick={() => void retry()}>{busy ? 'Trying again…' : 'Try again'}</button>
         </div>
       )}

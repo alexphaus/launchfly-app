@@ -30,6 +30,7 @@ import {
 } from './lab';
 import { citedSources, evidenceLines, type Evidence, type IdeaResearch } from './idearesearch';
 import { FOUND_BY_LABEL } from './offer';
+import { secondPerson } from './you';
 import type { FoundBy, Offer } from './types';
 
 /** Ideas kept per ask. Three is a choice; ten is homework. */
@@ -185,7 +186,7 @@ const PLACEHOLDER = /\[[^\]]{0,40}\]|\{\{|\}\}|<[a-z][^>]*>/i;
  * owner's" reads the same; "the owner knows" has no safe rewrite ("you knows"),
  * so a line still saying it is not kept — dropped, not repaired, as the rest.
  */
-const toYou = (s: string | null): string | null => (s ? s.replace(/\bthe owner['’]s\b/gi, (m) => (m[0] === 'T' ? 'Your' : 'your')) : s);
+const toYou = (s: string | null): string | null => (s ? secondPerson(s) : s);
 const ABOUT_THEM = /\bthe (?:business )?owner\b/i;
 const REASON_MAX = 240;
 

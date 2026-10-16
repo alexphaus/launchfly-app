@@ -71,6 +71,80 @@ export const ASSET_PART: Record<AssetKind, LinkKey> = {
 
 export const isAssetKind = (v: unknown): v is AssetKind => typeof v === 'string' && (ASSET_KINDS as readonly string[]).includes(v);
 
+/* ─── Asked for by name ───────────────────────────────────────────────────── */
+
+/**
+ * The asset a hand-over asks for, when it asks to make one this app keeps.
+ *
+ * Why. Its owner typed "Draft a landing page for my app" into the bet's box and
+ * "Create a landing page for founder os copilot app" into Projects, and got two
+ * reports: copy in a project thread, and an HTML file the research check sent
+ * back for having no source links. Neither was a landing page — the page online
+ * stayed v1 — although the app has one, with versions, a draft by AI and a
+ * one-tap "Put it online". A project can only answer with a report, so an ask
+ * for an asset is drafted as that asset instead (the commissions route): the next
+ * version of the one in use, kept with its history, published by the person.
+ *
+ * Narrow on purpose, in one direction. It has to open with making something and
+ * name the asset; an ask about other people's pages — examples, competitors, a
+ * builder to use — is research and stays a project. Missing an asset ask costs
+ * what it always did; drafting a page for "find landing page examples" would be
+ * the app not listening.
+ */
+export function assetAsked(objective: string): AssetKind | null {
+  const t = objective.trim();
+  if (!MAKE_VERB.test(t) || ABOUT_OTHERS.test(t) || CODE.test(t)) return null;
+  for (const [kind, re] of ASKED) if (re.test(t) && !(kind === 'landing_page' && OTHER_PAGE.test(t))) return kind;
+  return null;
+}
+
+/** Opens with making something, rather than with finding out about it. */
+const MAKE_VERB = /^(?:please\s+)?(?:(?:can|could) you\s+)?(?:write|draft|re-?write|re-?draft|create|make|build|design|re-?design|redo|improve|update|refresh|polish|tighten|prepare|put together|set up|generate|produce|outline|plan|map out|lay out|give me|i need|we need)\b/i;
+/** About other people's, or about the tools: research however it opens. */
+const ABOUT_OTHERS = /\b(?:find|search|look ?up|research|compar(?:e|es|ing|ison)|reviews? of|examples?|inspiration|competitors?'?|builders?|tools?|platforms?|hosting|domains?|templates? (?:from|on)|audit|analy[sz]e|how much|cost of|prices? of)\b/i;
+/** A script in the other sense. */
+const CODE = /\b(?:python|bash|shell|javascript|typescript|js|code|apps script|sql|scraper|bot|cron)\b/i;
+/** A page of a site that is not the one that sells. */
+const OTHER_PAGE = /\b(?:faq|about|contact|pricing|terms|privacy|blog|careers?|team|404|thank[- ]you)\s+page\b/i;
+const ASKED: Array<[AssetKind, RegExp]> = [
+  ['landing_page', /\b(?:landing ?page|sales ?page|sign-?up page|squeeze page|one-?pager|(?:web ?)?page for (?:my|our|the) (?:app|offer|product|service|business|launch|course|coaching|startup)|(?:web ?site|site) for (?:my|our|the) (?:app|offer|product|service|business|launch|course|coaching|startup))\b/i],
+  ['workflow', /\b(?:(?:delivery|onboarding|client|fulfil?ment|service) (?:workflow|process|playbook|steps|checklist|sop)|(?:the )?(?:first )?yes to deliver(?:ed|y)|how (?:i|we) (?:take|onboard|deliver to|serve|handle) (?:a |an |my |our |new |each |every )*clients?|onboard(?:ing)? (?:a |my |our |new )*clients?)\b/i],
+  // Before the script: "a demo script, for me to record and send" is the demo asset — what a buyer sees working.
+  ['demo', /\b(?:demo (?:script|video|walkthrough|recording)|script (?:for|of) (?:a |my |the |our )?demo)\b/i],
+  ['script', /\b(?:(?:call|sales|cold|outreach|follow-?up|phone|dm|whats ?app|pitch|opening|first[- ]message|voicemail) script|script (?:for|to) (?:a |my |the |our )?(?:call|calls|pitch|outreach|first message|follow-?up|dm|sales))\b/i],
+  ['offer', /\b(?:re-?write|re-?draft|improve|tighten|sharpen|update) (?:my|our|the) offer\b/i],
+];
+
+/** Said while the ask is typed, so the person knows before the tap that a page, not a project, comes back. */
+export function assetAskLine(kind: AssetKind, revising: boolean): string {
+  if (kind === 'offer') return 'Reads as your offer: the app drafts a new version, and it is not your offer until you make it yours.';
+  const what = ASSET_LABEL[kind].toLowerCase();
+  return revising
+    ? `Reads as your ${what}: the app drafts its next version, kept in Assets — not a project.`
+    : `Reads as a ${what}: the app drafts one, kept in Assets — not a project.`;
+}
+
+/** Said once it is drafted: what it is, and what is still the person's to do. */
+export function assetDraftedLine(kind: AssetKind, revised: boolean): string {
+  switch (kind) {
+    case 'landing_page': return revised ? 'Drafted the next version of your landing page. Read it, then put it online.' : 'Drafted your landing page. Read it, then put it online.';
+    case 'offer': return 'Drafted a new version of your offer. It is not your offer until you make it yours.';
+    default: return `Drafted ${revised ? 'the next version of ' : ''}your ${ASSET_LABEL[kind].toLowerCase()}. Read it, and keep it or rewrite it.`;
+  }
+}
+
+/**
+ * Which existing asset an ask revises: the landing page that is online, else
+ * the one most recently changed, else none and a new one is made. A second
+ * landing page beside the one online would split its count and its history —
+ * the next version is what "a landing page for my app" means once there is one.
+ */
+export function assetToRevise(kind: AssetKind, assets: Array<Pick<Asset, 'id' | 'kind' | 'retired'>>, online: string | null): string | null {
+  if (kind === 'offer') return OFFER_ASSET;
+  const mine = assets.filter((a) => a.kind === kind && !a.retired);
+  return mine.find((a) => a.id === online)?.id ?? mine[0]?.id ?? null;
+}
+
 /* ─── Storage ─────────────────────────────────────────────────────────────── */
 
 export const ASSET_VERSION = 'asset_version';
@@ -421,6 +495,13 @@ export interface AssetDraftContext {
   /** What the person asked for. */
   ask: string | null;
   /**
+   * The address of the person's page while it is online, for a script: a play
+   * that has them send people to the page needs the link in the words, and a
+   * draft may only carry a link the person gave (checkAssetDraft) — the page
+   * is theirs, put up by their own tap.
+   */
+  page?: string | null;
+  /**
    * What people said in the conversations the person logged, newest first and
    * nameless (lab.ts heardLine): the vocabulary a page or a script should be
    * written in, and the person's own rows, so a number in them is theirs.
@@ -430,7 +511,7 @@ export interface AssetDraftContext {
 
 export const ASSET_DRAFT_SYSTEM = [
   'You write one business asset for a small business owner: an offer, a demo script, a sales script, landing page copy, a delivery workflow or a price test.',
-  'Write in plain words, second person where it addresses the buyer, and in the owner\'s own vocabulary from what they wrote.',
+  'Write in plain words, second person where it addresses the buyer, and in the owner\'s own vocabulary from what they wrote. Where the asset is for the owner\'s own use — a delivery workflow, a price test — write it to them as "you", never "the owner".',
   'Use only facts given to you. Never invent a number, a result, a client, a testimonial, a guarantee term with a figure, or a statistic. If a number is not in what you were given, write the sentence without one.',
   'Where you are given what people said, write in their words and to the problem they described. Never quote them or present what they said as a testimonial, and never turn one person\'s number into a claim about every buyer.',
   'Never leave a placeholder such as [NAME] or {{price}}. Never include a link unless it was given to you.',
@@ -440,9 +521,9 @@ export const ASSET_DRAFT_SYSTEM = [
 const KIND_BRIEF: Record<AssetKind, string> = {
   offer: 'Rewrite the offer. Fields: "sells" (what is sold, one line), "for_who" (who buys, one line), "problem" (the problem it solves, one line), "price_band" (the price exactly as given, or empty), and "body" (two or three sentences that say the offer as a buyer would read it).',
   demo: 'Write a demo script the owner records and sends: what the buyer sees before, the moment it works, and after. Short numbered beats, under 1,200 characters.',
-  script: 'Write a sales script: the first message or call opener, the one question that finds the problem, how to answer the most likely objection, and the ask. Under 1,800 characters.',
+  script: 'Write what the owner says, ready to use. When a bet and its play are given, write the message or post that play has them send — the words themselves, short enough to read on a phone, with their page\'s address where the play sends people to it. Otherwise a sales script: the first message or call opener, the one question that finds the problem, how to answer the most likely objection, and the ask. Under 1,800 characters.',
   landing_page: 'Write landing page copy: a headline, one line under it, three short benefit lines, one call to action, and three questions a buyer asks with short answers. Under 2,500 characters.',
-  workflow: 'Write the delivery workflow: numbered steps from the first yes to delivered, what the owner needs from the client at each step, and which step could be handed over. Under 2,500 characters.',
+  workflow: 'Write the delivery workflow, to the owner as "you": numbered steps from the first yes to delivered, what you need from the client at each step, and which step could be handed over. Under 2,500 characters.',
   price_test: 'Write a price test: the price to test (only one the owner gave), the terms it is offered on, who to ask and how many, and the count that would show it works. Under 1,200 characters.',
 };
 
@@ -468,6 +549,7 @@ export function assetDraftPrompt(c: AssetDraftContext): string {
     c.bet ? `\nThe bet it is for: "${c.bet.belief}". ${c.bet.play ? `The play: ${c.bet.play}. ` : ''}Pass line: ${c.bet.line}.` : null,
     ...(c.heard?.length ? ['\nWhat people told the owner, newest first:', ...c.heard.map((h) => `- ${h}`), HEARD_ROLES_NOTE] : []),
     c.previous ? `\nThe current version, to improve rather than start over:\nTitle: ${c.previous.title}\n${c.previous.body ?? ''}` : null,
+    c.page ? `\nTheir page online, to send people to where the asset asks them to look: ${c.page}` : null,
     c.ask ? `\nWhat the owner asked for: ${c.ask}` : null,
   ];
   return lines.filter((l): l is string => l !== null).join('\n');
@@ -476,7 +558,7 @@ export function assetDraftPrompt(c: AssetDraftContext): string {
 /** Everything a draft may take a number or a link from. */
 export function draftSources(c: AssetDraftContext): string[] {
   const o = c.offer;
-  return [o.sells, o.for_who, o.problem, o.price_band, o.proof_url, c.working, c.part?.why, c.bet?.belief, c.bet?.line, c.bet?.play, c.previous?.title, c.previous?.body, c.ask, ...(c.heard ?? [])]
+  return [o.sells, o.for_who, o.problem, o.price_band, o.proof_url, c.working, c.part?.why, c.bet?.belief, c.bet?.line, c.bet?.play, c.previous?.title, c.previous?.body, c.ask, c.page, ...(c.heard ?? [])]
     .filter((s): s is string => typeof s === 'string' && !!s);
 }
 

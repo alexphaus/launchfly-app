@@ -10586,7 +10586,7 @@ async function projectsDaySuite() {
   assert.match(card, /const lapsed = today \? lapsedOn\(c, today\) : null;/);
   assert.match(card, /It was for \{dayWords\(lapsed\)\}, which has passed/);
   assert.match(card, /actions\.commissionAction\(c\.id, 'stop'\)/, 'Stop on the card: inferred, never acted on for them');
-  assert.match(src('src/app/copilot/_components/v2/ProofSheets.tsx'), /<Project key=\{t\.commission\.id\} thread=\{t\} actions=\{actions\} today=\{home\.recent\.today\} \/>/);
+  assert.match(src('src/app/copilot/_components/v2/ProofSheets.tsx'), /<Project key=\{t\.commission\.id\} thread=\{t\} actions=\{actions\} today=\{home\.recent\.today\} name=\{home\.profile\.name\} \/>/);
 
   /* 5. The bet's own project is the bet's: checked on the record, tied by the server, approved into its slot. */
   const create = src('src/app/api/copilot/commissions/route.ts');
@@ -11626,7 +11626,7 @@ async function engineSuite() {
   assert.match(tab, /const step = engineStep\(\{/);
   assert.match(tab, /const part = picked \?\? openPart\(step, d\.proof\.chain\.weak\);/, 'the engine opens where the move is');
   assert.match(tab, /\{step && !step\.part && \(/, 'a move about the whole business is no one part’s');
-  assert.match(tab, /\{here && <div className="cp2-er-move"><NextStep step=\{here\}/, 'the move sits on the part it moves');
+  assert.match(tab, /\{here && <div className="cp2-er-move"><NextStep home=\{home\} step=\{here\}/, 'the move sits on the part it moves');
   assert.match(tab, /actions\.openSheet\(\{ kind: 'crew' \}\)/, 'the crew is a tap on the engine');
   assert.ok(!/<Voices /.test(tab), 'the people are not inside the bet card');
   assert.ok(!/work\.talks && work\.talks\.n > 0/.test(tab), 'the conversations row is gone: the score counts them and Behind it lists them');
@@ -12336,7 +12336,11 @@ async function betPlanSuite() {
   assert.deepEqual(kinds(bpFor(bet({ part: 'pay', play: 'guarantee', metric: 'paid_at_price', tries: { metric: 'sent', planned: 10 } }), all)), ['draft:crew:Writer', 'adopt:you:You'], 'a drafted offer is not the offer until you make it yours');
   assert.deepEqual(kinds(bpFor(bet({ part: 'reach', play: 'bullseye', metric: 'talks', tries: null }), all)), ['find:crew:Scout', 'job:crew:Researcher', 'reply:you:You']);
   assert.deepEqual(kinds(bpFor(bet({ part: 'reach', play: 'bullseye', metric: 'talks', tries: null }), { ...all, research: false, search: false })), ['find:you:You', 'job:you:You'], 'a research job with no researcher is yours');
-  assert.deepEqual(bpFor(bet({ part: 'pay', play: 'paid-48h', metric: 'paid', tries: null }), all), [], 'a play with nothing to prepare has no plan: the count is the work');
+  assert.deepEqual(bpFor(bet({ part: 'reach', play: 'one-event', metric: 'meetings', tries: null }), all), [], 'a play with nothing to prepare and nothing to say has no plan: the count is the work');
+  // A play that has you say something gets its words drafted by the Writer, for the bet (proof.ts playSays).
+  assert.deepEqual(bpFor(bet({ part: 'pay', play: 'paid-48h', metric: 'paid', tries: null }), all), [{ kind: 'draft', by: 'crew', who: 'Writer', do: 'Draft the message you send', asset: 'script' }]);
+  assert.deepEqual(kinds(bpFor(bet({ part: 'reach', play: 'warm-first', metric: 'talks', tries: null }), { ...all, draft: false })), ['find:crew:Scout', 'draft:you:You', 'reply:you:You'], 'no model: the message is yours to write, beside the people the Scout finds');
+  assert.deepEqual(bpFor(bet({ part: 'reach', play: 'one-niche', metric: 'replied', tries: null }), all), [], 'a play counted in sends has Swipe’s drafts, not a second message');
   // An idea's prep is an asset; the visits it counts go through the page.
   assert.deepEqual(kinds(bpFor(bet({ part: 'reach', metric: 'logged', unit: 'visits', tries: null, idea: { label: 'Post it where they are', how: 'x', from: 'AI', prep: { label: 'The page', asset: 'landing_page' } } }), all)), ['draft:crew:Writer', 'page:you:You']);
   // A draft carries no ask: what a draft is asked for is read as the owner's words (invariant 12).
@@ -12539,11 +12543,12 @@ async function researchedIdeasSuite() {
     { label: 'Warm intros', how: 'Ask the people the owner knows to forward the page.', metric: 'talks', target: 3, days: 7 },
     { label: 'Ask ten people', how: 'Ask ten people what they tried.', metric: 'talks', target: 3, days: 7, works: 'It converts 35% of the time.', fails: 'Then the owner should change the offer.' },
   ] }, { part: 'reach', foundBy: 'inbound', sources: ['Founder OS'], evidence: ev });
-  assert.deepEqual(ideas.map((i) => i.label), ['Post the answer in one community', 'Ask ten people'], '"the owner knows" has no safe rewrite: the idea goes');
+  assert.deepEqual(ideas.map((i) => i.label), ['Post the answer in one community', 'Warm intros', 'Ask ten people'], 'said to you, an idea is kept rather than dropped (you.ts)');
+  assert.equal(ideas[1].how, 'Ask the people you know to forward the page.', '"the owner knows" is "you know"');
   assert.equal(ideas[0].how, 'Answer one question your buyers ask, with your page at the end.', '"the owner’s" is "your"');
   assert.equal(ideas[0].works, 'Others got 40 users from one thread because an answer earns trust a pitch cannot.', 'a page’s number is the page’s, cited as such');
   assert.deepEqual(ideas[0].sources, [{ title: 'T https://a.com/x', url: 'https://a.com/x' }]);
-  assert.deepEqual([ideas[1].works, ideas[1].fails, ideas[1].sources], [null, null, []], 'a rate from nowhere and a line about "the owner" are not kept');
+  assert.deepEqual([ideas[2].works, ideas[2].fails, ideas[2].sources], [null, 'Then you should change the offer.', []], 'a rate from nowhere is not kept; a line about "the owner" is said to you');
   assert.equal(rsFirstWhy({ first_why: 'It is the cheapest test of how they hear.' }, { sources: [] }), 'It is the cheapest test of how they hear.');
   assert.equal(rsFirstWhy({ first_why: 'It works for 80% of founders.' }, { sources: [], evidence: ev }), null);
 
@@ -12622,3 +12627,133 @@ async function researchedIdeasSuite() {
 }
 
 researchedIdeasSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── From its owner's screens: assets asked for, the play as the move, work followed, said to you ─── */
+
+import { OFFER_ASSET as SC_OFFER, assetAskLine as scAskLine, assetAsked as scAsked, assetDraftPrompt as scDraftPrompt, assetDraftedLine as scDraftedLine, assetToRevise as scRevise, draftSources as scDraftSources } from '../../src/lib/copilot/assets';
+import { jobKindOf as scKind } from '../../src/lib/copilot/contract';
+import { handedSince as scHanded, type Commission as ScCommission } from '../../src/lib/copilot/commission';
+import { engineStep as scStep, type StepInput as ScInput } from '../../src/lib/copilot/engine';
+import { PLAYS as SC_PLAYS, playFromWords as scFrom, type BetView as ScBetView } from '../../src/lib/copilot/lab';
+import { playSays as scSays } from '../../src/lib/copilot/proof';
+import { secondPerson as scYou, youVerb as scYouVerb } from '../../src/lib/copilot/you';
+import { briefText as scBrief } from '../../src/lib/copilot/brieftext';
+import { readFileSync as readScreensFile } from 'node:fs';
+
+async function screensSuite() {
+  const src = (f: string) => readScreensFile(f, 'utf8');
+
+  /* 1. Asked for by name: an asset this app keeps — and only when it is plainly that. */
+  assert.equal(scAsked('Draft a landing page for my app'), 'landing_page', 'the bet card’s ask, from the screenshot');
+  assert.equal(scAsked('Create a landing page for founder os copilot app'), 'landing_page', 'the Projects ask, from the screenshot');
+  assert.equal(scAsked('Plan how I take a new client from the first yes to delivered, step by step'), 'workflow', 'the delivery plan is the workflow asset');
+  assert.equal(scAsked('Write how I take a new client from the first yes to delivered, step by step'), 'workflow', 'and so is the chain’s own Client onboarding ask');
+  assert.equal(scAsked('Build a website for my business'), 'landing_page');
+  assert.equal(scAsked('Write a cold call script for dentists'), 'script');
+  assert.equal(scAsked('Write a short demo script of what I sell, for one of my buyers: what they see before and after, for me to record and send'), 'demo', 'the chain’s Demo script is the demo asset, not a sales script');
+  assert.equal(scAsked('Rewrite my offer for dentists'), 'offer');
+  for (const x of ['Find landing page examples for SaaS', 'Compare landing page builders', 'Write a Python script to scrape listings', 'Write a FAQ page for my site', 'Make a one-page summary of my week', 'Research how competitors onboard clients', 'Landing page ideas'])
+    assert.equal(scAsked(x), null, `${x}: not an asset ask`);
+  const pages = [
+    { id: 'old', kind: 'landing_page' as const, retired: false },
+    { id: 'live', kind: 'landing_page' as const, retired: false },
+    { id: 'gone', kind: 'landing_page' as const, retired: true },
+  ];
+  assert.equal(scRevise('landing_page', pages, 'live'), 'live', 'the page online is the one a new version follows');
+  assert.equal(scRevise('landing_page', pages, null), 'old', 'else the one changed most recently');
+  assert.equal(scRevise('landing_page', [pages[2]], null), null, 'a page put away is not revised: a new one is made');
+  assert.equal(scRevise('offer', [], null), SC_OFFER);
+  assert.equal(scAskLine('landing_page', true), 'Reads as your landing page: the app drafts its next version, kept in Assets — not a project.');
+  assert.equal(scDraftedLine('landing_page', true), 'Drafted the next version of your landing page. Read it, then put it online.');
+  assert.equal(scDraftedLine('workflow', false), 'Drafted your workflow. Read it, and keep it or rewrite it.');
+  const route = src('src/app/api/copilot/commissions/route.ts');
+  assert.ok(route.indexOf('assetAsked(objective)') < route.indexOf('await createCommission('), 'decided before any project is written');
+  assert.match(route, /const kind = !workerKey && authority === 'read' && resolveLlmConfig\(\) \? assetAsked\(objective\) : null;/, 'a worker picked by name keeps the job; no model, no draft');
+  assert.match(route, /if \(home\.assets\?\.unreadable\) return fail\(/, 'never a second page beside one nobody could read');
+  for (const f of ['src/app/copilot/_components/v2/ProofTab.tsx', 'src/app/copilot/_components/v2/MoveKit.tsx', 'src/app/copilot/_components/v2/ProjectCard.tsx', 'src/app/copilot/_components/SheetContent.tsx'])
+    assert.match(src(f), /openSheet\(\{ kind: 'asset', id: r\.asset \}\)/, `${f}: a drafted asset is opened`);
+
+  /* 2. Making a document of your own is writing; a list of the world is still research. */
+  for (const x of ['Create a landing page for founder os copilot app', 'Plan how I take a new client from the first yes to delivered, step by step', 'Design an onboarding checklist', 'Create a content calendar for October', 'Map out my sales process', 'Create a list of questions to ask clinics'])
+    assert.equal(scKind(x).kind, 'write', `${x}: writing, so no source links are asked of it`);
+  for (const x of ['Build a list of 20 dentists in Makati', 'Create a list of the best coworking spaces in Manila', 'Plan a trip to Bangkok', 'Plan the steps to get a visa for Thailand', 'Make a spreadsheet of competitors', 'Set up a Stripe account'])
+    assert.equal(scKind(x).kind, 'research', `${x}: research`);
+
+  /* 3. What a play has you say. */
+  const says = (key: string) => scSays(SC_PLAYS.find((p) => p.key === key)!.how);
+  assert.deepEqual(['warm-first', 'paid-48h', 'ask-referrals', 'one-event', 'smoke-test'].map(says), ['message', 'message', 'message', null, null]);
+  assert.equal(scSays('Post a practical answer to one question tech indies ask, in one community where they gather.'), 'post');
+  assert.equal(scSays('Message 10 people you know personally and ask each to forward your landing page.'), 'message');
+
+  /* 4. A bet that counts itself: the play is the move, not the logging. */
+  const view = { bet: { id: 'b9', part: 'reach', belief: 'They find me online and get in touch', play: null, idea: { label: 'Send the landing page to people who already know you', how: 'Message 10 people you know personally and ask each to forward your landing page to one founder they know. Log nothing: the link counts.', from: 'AI, from your record' }, metric: 'logged', unit: 'sign-ups', target: 10, tries: null, days: 14, start: '2026-10-16', price: null, priceLabel: null, experiment: null, openedAt: '2026-10-16T00:00:00Z' }, state: 'running', result: 0, tries: null, day: 1, last: '2026-10-29', ended: null } as unknown as ScBetView;
+  const base: ScInput = {
+    today: '2026-10-16', offerSet: true, unreadable: false, checkpoint: { due: false, ended: 0 }, current: view, talks: [], found: 'inbound', voices: null,
+    opened: new Set(), searchRefusal: null, shelf: [], weak: null, goal: null,
+  };
+  const play = { label: view.bet.idea!.label, how: view.bet.idea!.how, counted: 'link' as const, script: null, canDraft: true, pageOnline: true };
+  const move = scStep({ ...base, play })!;
+  assert.deepEqual([move.kind, move.title, move.primary, move.secondary], ['play', 'Send the landing page to people who already know you', { label: 'Draft the message', go: { to: 'draft' } }, { label: 'Copy your page link', go: { to: 'copylink' } }]);
+  assert.equal(move.why, 'Message 10 people you know personally and ask each to forward your landing page to one founder they know. 0 of 10 sign-ups · 14 days left.');
+  assert.equal(move.hint, 'Your count link counts sign-ups by itself: log only the ones it cannot see.');
+  assert.deepEqual(scStep({ ...base, play: { ...play, script: 'a1' } })!.primary, { label: 'Open your message', go: { to: 'asset', id: 'a1' } }, 'the message made for it, opened rather than drafted twice');
+  const noModel = scStep({ ...base, play: { ...play, canDraft: false } })!;
+  assert.deepEqual([noModel.primary.go, noModel.secondary?.label], [{ to: 'copylink' }, 'Log sign-ups'], 'no model: the page link, and logging beside it');
+  assert.equal(scStep({ ...base, play: { ...play, counted: null } })!.kind, 'count', 'a count you keep yourself is still logged as the move');
+  assert.equal(scStep({ ...base, play: null })!.kind, 'count', 'no play: as before');
+
+  /* 5. Handed over and not heard from: said, followed, and never offered "Run it now". */
+  const c = (over: Partial<ScCommission> = {}) => ({ status: 'active', approved_at: '2026-10-16T07:10:00Z', budget_minutes: 60, ...over }) as ScCommission;
+  const quiet = { did: [], yours: [], stopped: [] };
+  const at = (iso: string) => Date.parse(iso);
+  assert.equal(scHanded(c(), quiet, null, at('2026-10-16T07:11:00Z')), '2026-10-16T07:10:00Z', 'approved a minute ago: in flight');
+  assert.equal(scHanded(c(), quiet, '2026-10-16T07:12:00Z', at('2026-10-16T07:13:00Z')), '2026-10-16T07:12:00Z', 'the newest hand-over is when it went');
+  const ev = (iso: string) => ({ id: 'e', kind: 'worked', at: iso }) as never;
+  assert.equal(scHanded(c(), { ...quiet, did: [ev('2026-10-16T07:20:00Z')] }, null, at('2026-10-16T07:21:00Z')), null, 'heard from since: the sheet shows what it did');
+  assert.equal(scHanded(c(), quiet, null, at('2026-10-16T09:00:00Z')), null, 'past its own budget: not followed, and Run it now is back');
+  assert.equal(scHanded(c({ status: 'done' }), quiet, null, at('2026-10-16T07:11:00Z')), null);
+  const sheet = src('src/app/copilot/_components/SheetContent.tsx');
+  assert.ok(!sheet.includes('It runs with the next nightly pass.'), 'approving starts it now where a worker is connected');
+  assert.match(sheet, /\{c\.status === 'active' && !inFlight && \(/, 'Run it now only for a job that is idle');
+  assert.match(sheet, /\(work\?\.job === 'research' \|\| !!work\?\.repeat\)/, 'Do it again only where another run could find something new');
+  assert.match(src('src/app/copilot/_components/useCopilot.ts'), /const handedKey = !home\.workerConnected \? '' : home\.commissions/, 'followed only where something can report');
+  assert.match(src('src/lib/copilot/threadwork.ts'), /handedAt: ok\?\.at \?\? null,/);
+
+  /* 6. A finished project's work is on its sheet: read when it opens, and said when it cannot be. */
+  const idRoute = src('src/app/api/copilot/commissions/[id]/route.ts');
+  assert.match(idRoute, /export async function GET\(/);
+  assert.match(idRoute, /loadCommissionEvents\(auth\.pid, \[id\], EVENTS_PER_COMMISSION, \{ strict: true \}\)/, 'a failed read is an error, never an empty log (invariant 13)');
+  assert.match(sheet, /get<\{ events\?: CommissionEvent\[\] \}>\(`\/commissions\/\$\{encodeURIComponent\(id\)\}`\)/);
+  assert.match(sheet, /Could not read what it did just now:/);
+  assert.match(sheet, /<button className="cp-connect blue" onClick=\{\(\) => void copy\(\)\}>Copy<\/button>/, 'what a worker wrote can be copied');
+
+  /* 7. Said to you. */
+  assert.equal(scYou('Message 10 people the owner knows personally.'), 'Message 10 people you know personally.');
+  assert.equal(scYou('Ask them to introduce the owner to one client.'), 'Ask them to introduce you to one client.');
+  assert.equal(scYou("The owner's buyers find them online."), 'Your buyers find them online.');
+  assert.equal(scYou('Drafted the missing approval gate so Alex can move from a verbal yes.', 'Alex Phaus'), 'Drafted the missing approval gate so you can move from a verbal yes.');
+  assert.equal(scYou("A landing page for Alex's Founder OS Copilot App.", 'Alex'), 'A landing page for your Founder OS Copilot App.');
+  assert.equal(scYou('ALEX CLIENT DELIVERY PLAYBOOK', 'Alex'), 'ALEX CLIENT DELIVERY PLAYBOOK', 'a name in a title stays');
+  assert.equal(scYou('Mark the step done when it ships.', 'Mark'), 'Mark the step done when it ships.', 'a name that is also a verb stays');
+  assert.deepEqual(['knows', 'reaches', 'tries', 'is', 'has', 'can', 'wanted'].map(scYouVerb), ['know', 'reach', 'try', 'are', 'have', 'can', 'wanted']);
+  assert.deepEqual(['The Mom Test', 'AI, from your record', 'AI, after $100M Leads', 'Your plan', 'Shared from another app'].map(scFrom),
+    ['From The Mom Test', 'By AI, from your record', 'By AI, after $100M Leads', 'From your plan', 'Shared from another app'], 'never "FROM AI, FROM YOUR RECORD"');
+  const brief = scBrief({ today: '2026-10-16', job: 'write', objective: 'Write my onboarding steps', why: null, goal: null, who: { name: 'Alex Phaus', offer: {} }, plan: [], log: [], checked: [], may: 'read', may_autonomously: true, budget_minutes: 60 } as never);
+  assert.match(brief, /YOUR REPORTS ARE READ BY ALEX PHAUS, ON THEIR PHONE: write every summary to them as "you"/);
+
+  /* 8. A message drafted for a bet can carry the page it sends people to — and only that link. */
+  const draft = { kind: 'script' as const, offer: { sells: 'Founder OS' }, foundBy: 'inbound' as const, working: null, bet: null, part: null, previous: null, ask: null, page: 'https://app.example/p/abc' };
+  assert.match(scDraftPrompt(draft), /Their page online, to send people to where the asset asks them to look: https:\/\/app\.example\/p\/abc/);
+  assert.ok(scDraftSources(draft).includes('https://app.example/p/abc'), 'the page is theirs: a link to it is not one they did not give');
+  assert.match(src('src/lib/copilot/proofai.ts'), /page: kind === 'script' && home\.page\?\.live \? home\.page\.url \?\? null : null,/, 'only while the page is online');
+
+  /* 9. Projects: the running bet's own first, whatever their state. */
+  const all = src('src/app/copilot/_components/v2/ProofSheets.tsx');
+  const sheets = all.slice(all.indexOf('export function ProjectsSheet'), all.indexOf('/* ─── A count the person keeps'));
+  assert.ok(sheets.indexOf('>For your bet<') > 0 && sheets.indexOf('>For your bet<') < sheets.indexOf('>On the go<') && sheets.indexOf('>On the go<') < sheets.indexOf('>Finished<'), 'for the bet, then on the go, then finished');
+  assert.match(sheets, /const live = \[\.\.\.jobs\.needsYou, \.\.\.jobs\.running\]\.filter\(\(t\) => !ofBet\(t\)\);/, 'listed once: the bet’s projects are not repeated below');
+
+  console.log('copilot-core: screens checks passed');
+}
+
+screensSuite().catch((e) => { console.error(e); process.exit(1); });

@@ -19,7 +19,8 @@ import { FOUND_BY_HINT, FOUND_BY_LABEL, offerIsEmpty } from '@/lib/copilot/offer
 import { ASK_DEFAULT, ASK_KINDS, ASK_KIND_LABEL, ASK_LABEL_MAX, askWhere, pageCounts, pageLine, type AskKind } from '@/lib/copilot/livepage';
 import { foundOf, pivotWords } from '@/lib/copilot/proof';
 import type { ToldMeta, ToldSale } from '@/lib/copilot/tell';
-import { FOUND_BY, type FoundBy, type HomeData } from '@/lib/copilot/types';
+import { FOUND_BY, type CommissionThread, type FoundBy, type HomeData } from '@/lib/copilot/types';
+import { secondPerson } from '@/lib/copilot/you';
 import { get } from '../api';
 import type { Actions } from '../shared';
 import { MoveCard } from '../views/NowView';
@@ -822,23 +823,55 @@ export function ProjectsSheet({ home, actions }: { home: HomeData; actions: Acti
   const brief = useBrief(actions);
   const full = agentIsFull(home);
   const jobs = splitThreads(home.commissions ?? []);
-  const live = [...jobs.needsYou, ...jobs.running];
-  const finished = [...jobs.finished].sort((a, b) => (b.commission.closed_at ?? '').localeCompare(a.commission.closed_at ?? ''));
-  // What the app offers to take on. The one on the call is on the Path already.
-  const offers = home.moves.filter((m) => m.artifact?.kind === 'plan');
   const bets = home.lab?.bets ?? [];
   const links = home.lab?.links ?? {};
   const betFor = (id: string) => bets.find((v) => (links[v.bet.id] ?? []).includes(id)) ?? null;
+  // The running bet's own projects, whatever their state, first and together.
+  // A hand-over from the bet's card finished by the Writer in a minute went to
+  // the foot of Finished, and its owner looked under On the go and decided the
+  // bet's box made some other kind of project that Projects did not show.
+  const running = bets.find((v) => v.state === 'running') ?? null;
+  const mine = new Set(running ? links[running.bet.id] ?? [] : []);
+  const ofBet = (t: CommissionThread) => mine.has(t.commission.id);
+  const byClosed = (a: CommissionThread, b: CommissionThread) => (b.commission.closed_at ?? '').localeCompare(a.commission.closed_at ?? '');
+  const betLive = [...jobs.needsYou, ...jobs.running].filter(ofBet);
+  const betDone = [...jobs.finished].filter(ofBet).sort(byClosed);
+  const live = [...jobs.needsYou, ...jobs.running].filter((t) => !ofBet(t));
+  const finished = [...jobs.finished].filter((t) => !ofBet(t)).sort(byClosed);
+  // What the app offers to take on. The one on the call is on the Path already.
+  const offers = home.moves.filter((m) => m.artifact?.kind === 'plan');
+  const card = (t: CommissionThread) => <Project key={t.commission.id} thread={t} actions={actions} today={home.recent.today} name={home.profile.name} />;
+  const row = (t: CommissionThread, showBet: boolean) => {
+    const c = t.commission;
+    const bet = showBet ? betFor(c.id) : null;
+    return (
+      <button key={c.id} className="cp2-row" onClick={() => actions.openSheet({ kind: 'commission', id: c.id })}>
+        <span className="cp2-row-main">
+          <span className="t cp2-clamp2">{c.objective}</span>
+          <span className="s cp2-clamp2">{[c.status === 'done' ? 'Finished' : 'Stopped', c.closed_at ? dayWords(c.closed_at) : null, c.outcome ? secondPerson(c.outcome, home.profile.name) : null, bet ? `for “${bet.bet.belief}”` : null].filter(Boolean).join(' · ')}</span>
+        </span>
+        <IconChevron />
+      </button>
+    );
+  };
   return (
     <>
       <h3>Projects</h3>
-      <p className="desc">Hand over anything you would otherwise do yourself. It researches, compares and drafts while you do something else, reports every step, and never contacts anyone as you without your OK, or spends anything.</p>
+      <p className="desc">Hand over anything you would otherwise do yourself. It researches, compares and drafts while you do something else, reports every step, and never contacts anyone as you without your OK, or spends anything. Ask for a landing page, a script or how you deliver, and it is drafted as that, in Assets.</p>
       <div className="cp-sheet-embed cp2-pf-sheetlist">
         <Composer home={home} d={d} actions={actions} brief={brief} full={full} />
+        {running && (betLive.length > 0 || betDone.length > 0) && (
+          <>
+            <div className="cp-section"><span className="lead">For your bet</span><span className="count">{betLive.length + betDone.length}</span></div>
+            <p className="cp-help cp2-clamp2">&ldquo;{running.bet.belief}&rdquo;</p>
+            {betLive.length > 0 && <div className="cp2-pf-projects">{betLive.map(card)}</div>}
+            {betDone.length > 0 && <div className="cp-list cp2-rows">{betDone.map((t) => row(t, false))}</div>}
+          </>
+        )}
         {live.length > 0 && (
           <>
             <div className="cp-section"><span className="lead">On the go</span>{d.proof.waiting > 0 && <span className="count">{d.proof.waiting} waiting on you</span>}</div>
-            <div className="cp2-pf-projects">{live.map((t) => <Project key={t.commission.id} thread={t} actions={actions} today={home.recent.today} />)}</div>
+            <div className="cp2-pf-projects">{live.map(card)}</div>
           </>
         )}
         {offers.map((m) => (
@@ -850,26 +883,12 @@ export function ProjectsSheet({ home, actions }: { home: HomeData; actions: Acti
         {finished.length > 0 && (
           <>
             <div className="cp-section"><span className="lead">Finished</span><span className="count">{finished.length}</span></div>
-            <div className="cp-list cp2-rows">
-              {finished.slice(0, 30).map((t) => {
-                const c = t.commission;
-                const bet = betFor(c.id);
-                return (
-                  <button key={c.id} className="cp2-row" onClick={() => actions.openSheet({ kind: 'commission', id: c.id })}>
-                    <span className="cp2-row-main">
-                      <span className="t cp2-clamp2">{c.objective}</span>
-                      <span className="s cp2-clamp2">{[c.status === 'done' ? 'Finished' : 'Stopped', c.closed_at ? dayWords(c.closed_at) : null, c.outcome, bet ? `for “${bet.bet.belief}”` : null].filter(Boolean).join(' · ')}</span>
-                    </span>
-                    <IconChevron />
-                  </button>
-                );
-              })}
-            </div>
+            <div className="cp-list cp2-rows">{finished.slice(0, 30).map((t) => row(t, true))}</div>
           </>
         )}
       </div>
       {/* A read that failed is not "nothing was built" (invariant 13). */}
-      {home.built?.unreadable && finished.length > 0 && <div className="cp-note">Could not read what the projects produced, so their counts may be short: {home.built.unreadable}</div>}
+      {home.built?.unreadable && finished.length + betDone.length > 0 && <div className="cp-note">Could not read what the projects produced, so their counts may be short: {home.built.unreadable}</div>}
     </>
   );
 }

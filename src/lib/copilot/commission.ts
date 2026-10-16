@@ -680,6 +680,28 @@ export function reportOf(c: Commission, events: CommissionEvent[], max = 6, chec
 }
 
 /**
+ * When work went to a worker and has not been heard from since: the newest of
+ * the hand-over that reached a worker and the approval (which hands it over in
+ * the same tap), while it is newer than anything the job posted and inside the
+ * job's own time budget. Null otherwise.
+ *
+ * Why. The sheet offered "Run it now — otherwise it waits for tonight" over a
+ * job approved a second earlier and already with its worker, because nothing on
+ * the screen moved until it reported; the button doubled as a refresh, and read
+ * as the job not having started. Now a job in flight says who has it and since
+ * when, the screen follows it until it reports (useCopilot), and the button is
+ * for a job that is idle: never handed over, sent back, or not heard from.
+ */
+export function handedSince(c: Pick<Commission, 'status' | 'approved_at' | 'budget_minutes'>, report: Pick<CommissionReport, 'did' | 'yours' | 'stopped'>, handedAt: string | null | undefined, now: number): string | null {
+  if (c.status !== 'active') return null;
+  const since = [handedAt ?? null, c.approved_at].filter((x): x is string => !!x).sort().pop() ?? null;
+  if (!since) return null;
+  const heard = [...report.did, ...report.yours, ...report.stopped].map((e) => e.at).sort().pop() ?? '';
+  if (heard >= since) return null;
+  return now - Date.parse(since) <= Math.max(10, c.budget_minutes) * 60_000 ? since : null;
+}
+
+/**
  * The three zones a handed-over job can be in, from the reader's side.
  *
  * Now was organised by FEATURE — jobs here, Moves there, the queue somewhere

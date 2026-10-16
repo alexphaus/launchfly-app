@@ -1532,29 +1532,45 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 
 /* No bet running: the parts, the ideas written for this business, the books, your own. */
 .cp-root[data-theme="soft"] .cp2-pf-ideas { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
-.cp-root[data-theme="soft"] .cp2-pf-ideas-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.cp-root[data-theme="soft"] .cp2-pf-ideas-top .cp2-link:disabled { color: var(--dim); }
 .cp-root[data-theme="soft"] .cp2-pf-wait { font-size: 12.5px; font-weight: 600; color: var(--blue); }
-.cp-root[data-theme="soft"] .cp2-pf-ideas-s { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+/* Where the ideas came from, under the bet, with the tap that writes new ones: one line where a paragraph was. */
+.cp-root[data-theme="soft"] .cp2-pf-ideas-s { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-pf-ideas-s .cp2-link { flex: none; font-size: 12px; }
+.cp-root[data-theme="soft"] .cp2-pf-ideas-s .cp2-link:disabled { color: var(--dim); }
 .cp-root[data-theme="soft"] .cp2-pf-books { display: block; margin-top: 18px; }
 .cp-root[data-theme="soft"] .cp2-pf-plays { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .cp-root[data-theme="soft"] .cp2-pf-play { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 14px 16px; border-radius: 20px; background: var(--surface); box-shadow: 0 4px 14px rgba(31, 41, 68, 0.09); }
 .cp-root[data-theme="soft"] .cp2-pf-play .cp-btn { margin-top: 4px; }
 .cp-root[data-theme="soft"] .cp2-pf-src { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-pf-src .cp2-owner { font-style: normal; }
-.cp-root[data-theme="soft"] .cp2-pf-why { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-pf-more { display: block; margin-top: 10px; padding: 6px 0; font-size: 12.5px; font-weight: 600; color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-pf-pick .cp2-lab-own { margin-top: 10px; }
 /* The one bet offered when none runs (ProofTab NextBetCard): one decision, the rest folded under it. */
 .cp-root[data-theme="soft"] .cp2-nextbet { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 14px; }
 .cp-root[data-theme="soft"] .cp2-nextbet .cp2-lab-q { margin: 2px 0 0; }
-.cp-root[data-theme="soft"] .cp2-nextbet .cp2-lab-preview { margin: 6px 0 0; }
 .cp-root[data-theme="soft"] .cp2-nextbet-r { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-nextbet-r b { font-weight: 600; }
 .cp-root[data-theme="soft"] .cp2-nextbet-src { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; margin: 0; font-size: 12px; color: var(--muted); }
 .cp-root[data-theme="soft"] .cp2-nextbet-src a { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; color: var(--blue); font-weight: 600; text-decoration: none; }
 .cp-root[data-theme="soft"] .cp2-nextbet-src svg { width: 12px; height: 12px; }
 .cp-root[data-theme="soft"] .cp2-nextbet-do { display: flex; align-items: center; gap: 16px; margin-top: 6px; }
+/* The test it is (NextBetCard): the claim, and the line it has to reach. Named apart from .cp2-lab-preview, which the bet sheet keeps. */
+.cp-root[data-theme="soft"] .cp2-nb-test { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 0; padding: 12px 14px; border-radius: 16px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-nb-test-k { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-nb-test b { font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-nb-test-line { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-nb-starts { margin: 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+/* Why this bet: the model's reasons and the plan, a tap away rather than between the play and Start. */
+.cp-root[data-theme="soft"] .cp2-nb-fold { display: inline-flex; align-items: center; gap: 2px; align-self: flex-start; min-height: 32px; padding: 0; font-size: 12.5px; font-weight: 600; color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-nb-fold .cp2-chev { width: 14px; height: 14px; transition: transform .15s ease; }
+.cp-root[data-theme="soft"] .cp2-nb-fold[aria-expanded="true"] .cp2-chev { transform: rotate(90deg); }
+.cp-root[data-theme="soft"] .cp2-nb-why { display: flex; flex-direction: column; gap: 8px; padding: 0 0 4px; }
+.cp-root[data-theme="soft"] .cp2-nb-why .cp2-bplan.preview { margin: 4px 0 0; }
+.cp-root[data-theme="soft"] .cp2-nb-note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+/* Another bet in the list: what it tests in a line, Make it my bet with its reasons beside it. */
+.cp-root[data-theme="soft"] .cp2-nb-tests { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-nb-cardact { display: flex; align-items: center; gap: 16px; margin-top: 4px; }
+.cp-root[data-theme="soft"] .cp2-pf-play .cp2-nb-cardact .cp-btn { margin-top: 0; }
 .cp-root[data-theme="soft"] .cp2-pf-pick .cp2-pf-more { margin-top: 12px; }
 
 /* Assets and the history: rows, a glyph for what each is, who made it on the right. */

@@ -91,6 +91,20 @@ export function findAsk(problem: string | null, belief: string): string {
 }
 
 /**
+ * What Start sets going, said under the button: the crew it starts, that
+ * nothing goes out in your name, and the one thing it spends where the Scout is
+ * on it. The whole plan is a tap further down; this is what a person needs
+ * before the tap. Null when every step is yours: then Start starts the count.
+ */
+export function startsLine(steps: PlanStep[]): string | null {
+  const crew = [...new Set(steps.filter((s) => s.by === 'crew').map((s) => `the ${s.who}`))];
+  if (!crew.length) return null;
+  const list = crew.length > 1 ? `${crew.slice(0, -1).join(', ')} and ${crew[crew.length - 1]}` : crew[0];
+  const scout = steps.some((s) => s.by === 'crew' && s.who === 'Scout');
+  return `Starts ${list} now. Nothing is sent or posted for you${scout ? '; each post the Scout keeps uses one of your matches' : ''}.`;
+}
+
+/**
  * The steps a bet starts with. The crew's first: who finds the people a bet about
  * people needs, then what gets it ready — the play's asset, drafted, or its
  * project, handed over — each one yours where nothing here can do it. Then what

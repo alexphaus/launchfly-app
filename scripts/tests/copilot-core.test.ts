@@ -8918,10 +8918,11 @@ async function proofSuite() {
 
   /* 10. Ideas are written again when the record moves: a bet ended since, or two weeks went by. */
   assert.equal(pfIdeasStale(null, [], today), true, 'none yet');
-  assert.equal(pfIdeasStale({ at: '2026-10-02T00:00:00Z' }, [live], today), false);
-  assert.equal(pfIdeasStale({ at: '2026-09-21T00:00:00Z' }, [ended], today), true, 'a bet ended after they were written');
-  assert.equal(pfIdeasStale({ at: '2026-09-23T00:00:00Z' }, [ended], today), false);
-  assert.equal(pfIdeasStale({ at: '2026-09-19T00:00:00Z' }, [], '2026-10-03'), true, 'two weeks on, the same three ideas are the same tab');
+  const reviewed = { ran: true, why: null };
+  assert.equal(pfIdeasStale({ at: '2026-10-02T00:00:00Z', review: reviewed }, [live], today), false);
+  assert.equal(pfIdeasStale({ at: '2026-09-21T00:00:00Z', review: reviewed }, [ended], today), true, 'a bet ended after they were written');
+  assert.equal(pfIdeasStale({ at: '2026-09-23T00:00:00Z', review: reviewed }, [ended], today), false);
+  assert.equal(pfIdeasStale({ at: '2026-09-19T00:00:00Z', review: reviewed }, [], '2026-10-03'), true, 'two weeks on, the same three ideas are the same tab');
 
   /* 11. Who made what, by the version in use. */
   assert.deepEqual(pfMakers(pfAssets(rows, offer)), { ai: 0, you: 1, line: '1 by you' }, 'a draft waiting is not the offer in use');
@@ -9911,7 +9912,7 @@ async function shareSeedSuite() {
   const one = (text: string) => seedOf({ text })!;
   const seedSrc = src('src/lib/copilot/seed.ts');
   assert.ok(!/export function beliefOfSeed/.test(seedSrc), 'there is no way to make a belief out of a share');
-  assert.match(src('src/app/copilot/_components/v2/LabSheets.tsx'), /useState\(\(\) => \(shelved \? shelved\.belief : seed \? '' : suggestBelief\(/, 'a shared sheet opens with an empty belief, not the share and not a draft from the offer');
+  assert.match(src('src/app/copilot/_components/v2/LabSheets.tsx'), /useState\(\(\) => \(shelved \? shelved\.belief : seed \? ''\s+: play \? playBelief\(/, 'a shared sheet opens with an empty belief, not the share and not a draft from the offer');
   // Kept while signed out, picked up after sign-in only while it is still the share somebody just made.
   const now = Date.parse('2026-10-06T10:00:00Z');
   assert.ok(seedIsFresh({ at: now - 60_000 }, now) && seedIsFresh({ at: now - SEED_FRESH_MS }, now));
@@ -10960,6 +10961,8 @@ modelRetrySuite().catch((e) => { console.error(e); process.exit(1); });
 // needs minutes: most asks ended "did not answer". Now the tap records the ask
 // and after() writes; Proof reads the newest of set, ask and failure per part.
 import { IDEAS_STALE_MS, LAB_IDEAS as LAB_IDEAS_K, LAB_IDEAS_ASKED, LAB_IDEAS_FAILED, ideaRun, ideaRunsOf } from '../../src/lib/copilot/lab';
+import { IDEAS_BUDGET_MS as BG_BUDGET } from '../../src/lib/copilot/ideas';
+import { RESEARCH_TIMEOUT_MS as BG_SEARCH } from '../../src/lib/copilot/idearesearch';
 
 async function ideasInBackgroundSuite() {
   const ev = (event_type: string, part: string, at: string, extra: Record<string, unknown> = {}) => ({ id: at, event_type, payload: { part, ...extra }, created_at: at });
@@ -10996,8 +10999,8 @@ async function ideasInBackgroundSuite() {
   assert.match(route, /const \{ started \} = await startIdeas\(auth\.pid, part\);/);
   assert.match(route, /after\(async \(\) => \{\s*\/\/[^\n]*\n\s*const r = await writeIdeas\(auth\.pid, part\);/);
   const proofai = readFileSync('src/lib/copilot/proofai.ts', 'utf8');
-  assert.match(proofai, /const IDEAS_TIMEOUT_MS = 150_000;/, 'bounded by the model, not the proxy');
-  assert.ok(150_000 < IDEAS_STALE_MS, 'an ask still inside its budget never reads as stopped');
+  assert.match(readFileSync('src/lib/copilot/ideas.ts', 'utf8'), /export const IDEAS_WRITE_MS = 150_000;/, 'bounded by the model, not the proxy');
+  assert.ok(BG_SEARCH + BG_BUDGET + 20_000 < IDEAS_STALE_MS, 'an ask inside its budget — the search, the write and the review, and the reads around them — never reads as stopped');
   // A failure is recorded where the tab reads it (invariant 13), never only logged.
   assert.match(proofai, /await insertIdeaRun\(pid, LAB_IDEAS_FAILED, \{ part, error: error\.slice\(0, 300\) \}\)/);
 
@@ -12616,12 +12619,12 @@ async function researchedIdeasSuite() {
 
   /* 12. Wired: the search runs before the model, its outcome is kept on the set, and the card starts the request the rule built. */
   const ai = src('src/lib/copilot/proofai.ts');
-  assert.ok(ai.indexOf('ctx.research = await researchIdeas(part, home);') < ai.indexOf('system: IDEAS_SYSTEM,'), 'searched first, then written');
+  assert.ok(ai.indexOf('ctx.research = await researchIdeas(part, home);') < ai.indexOf('await writeIdeaSet(ctx, askThrough(cfg));'), 'searched first, then written');
   assert.match(ai, /research: \{ pages: evidence\.length, why: ctx\.research\?\.why \?\? null/);
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
   assert.match(tab, /actions\.lab\(\{ action: 'open', nonce, bet: req \}\)/);
   assert.match(tab, /const req = nextBetRequest\(top, part, belief\);/);
-  assert.match(tab, /<PlanPreview steps=\{steps\} \/>/, 'what Start starts is on the screen before the tap');
+  assert.match(tab, /\{starts && !needsPrice && <p className="cp2-nb-starts">\{starts\}<\/p>\}/, 'what Start sets going is said before the tap');
 
   console.log('copilot-core: researched ideas checks passed');
 }
@@ -12757,3 +12760,244 @@ async function screensSuite() {
 }
 
 screensSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Ideas read again: the place, the claim each tests, one per cause, the card that starts one ─── */
+//
+// Its owner's next set offered a United States loan program's counselors to a
+// founder in Manila, two ideas that were one idea, and a card that said "you
+// would be testing: they find me online" over an idea about asking advisers —
+// two screens of reasons before Start. Six are written now and read again, each
+// says what it tests, one per cause is kept, and the card is the play, the test
+// and Start.
+import {
+  IDEAS_BUDGET_MS as RV_BUDGET, IDEAS_PER_ASK as RV_PER_ASK, IDEAS_REVIEW_SYSTEM as RV_REVIEW_SYSTEM, IDEAS_SYSTEM as RV_SYSTEM, IDEA_CANDIDATES as RV_CANDIDATES,
+  applyReview as rvApply, ideasPrompt as rvPrompt, normalizeIdeas as rvNorm, oneEach as rvOneEach, reviewPrompt as rvReviewPrompt, writeIdeaSet as rvWrite,
+  type AskModel as RvAsk, type Candidate as RvCandidate, type IdeasContext as RvCtx,
+} from '../../src/lib/copilot/ideas';
+import { researchQueries as rvQueries, type Evidence as RvEvidence } from '../../src/lib/copilot/idearesearch';
+import {
+  BELIEF_MAX as RV_BELIEF_MAX, LAB_IDEAS as RV_LAB_IDEAS, PLAYS as RV_PLAYS, ideaBeliefOf as rvBeliefOf, ideaFromStored as rvFromStored,
+  labFromEvents as rvLab, normalizeBet as rvNormBet, playBelief as rvPlayBelief, suggestBelief as rvSuggest, type Idea as RvIdea,
+} from '../../src/lib/copilot/lab';
+import { ideasStale as rvStale, nextBetBelief as rvNextBelief, nextBetRequest as rvRequest } from '../../src/lib/copilot/proof';
+import { startsLine as rvStarts } from '../../src/lib/copilot/betplan';
+import { resolveIdeasConfig as rvIdeasConfig } from '../../src/lib/copilot/agent/llm';
+import { readFileSync as readReviewFile } from 'node:fs';
+
+async function ideasReadAgainSuite() {
+  const src = (f: string) => readReviewFile(f, 'utf8');
+
+  /* 1. The ideas' own model: a stronger one for the one place the app judges the world, the brief's when unset. */
+  const keep = Object.fromEntries(['COPILOT_AI_API_KEY', 'COPILOT_AI_BASE_URL', 'COPILOT_AI_MODEL', 'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'COPILOT_IDEAS_MODEL', 'COPILOT_IDEAS_API_KEY', 'COPILOT_IDEAS_BASE_URL'].map((k) => [k, process.env[k]]));
+  try {
+    for (const k of Object.keys(keep)) delete process.env[k];
+    assert.equal(rvIdeasConfig(), null, 'no model anywhere: none');
+    process.env.COPILOT_AI_API_KEY = 'k'; process.env.COPILOT_AI_BASE_URL = 'https://router.example/v1'; process.env.COPILOT_AI_MODEL = 'small';
+    assert.deepEqual(rvIdeasConfig(), { apiKey: 'k', baseURL: 'https://router.example/v1', model: 'small' }, 'unset: the brief’s');
+    process.env.COPILOT_IDEAS_MODEL = 'strong';
+    assert.deepEqual(rvIdeasConfig(), { apiKey: 'k', baseURL: 'https://router.example/v1', model: 'strong' }, 'a stronger model on the same endpoint');
+    process.env.COPILOT_IDEAS_API_KEY = 'k2'; process.env.COPILOT_IDEAS_BASE_URL = 'https://other.example/v1';
+    assert.deepEqual(rvIdeasConfig(), { apiKey: 'k2', baseURL: 'https://other.example/v1', model: 'strong' }, 'or another endpoint');
+  } finally {
+    for (const [k, v] of Object.entries(keep)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+
+  /* 2. Where they are: the buyers' search is asked there, and the writer is told it — and what not to suggest because of it. */
+  const offer = { sells: 'Founder OS Copilot App', for_who: 'People who want a business but do not know how to start, tech indies', problem: 'Not knowing what moves the needle', price_band: '$29/month' };
+  const [howOthers, whereBuyers] = rvQueries('reach', offer, 'Manila');
+  assert.ok(!/Manila/.test(howOthers), 'how a business like this one got its first customers travels: unplaced');
+  assert.ok(whereBuyers.startsWith('where people who want a business but do not know how to start in Manila go to ask for advice'), whereBuyers);
+  assert.deepEqual(rvQueries('reach', offer), rvQueries('reach', offer, null), 'no place said, the searches as before');
+  assert.ok(!rvQueries('deliver', offer, 'Manila').some((q) => /Manila/.test(q)), 'how to deliver is not a place');
+  const ctx: RvCtx = {
+    part: 'reach', offer, foundBy: 'inbound', working: null, links: [], bets: [], talks: { n: 0, problem: 0, committed: 0 }, assets: [],
+    place: { based: 'Manila', area: null },
+  };
+  const prompt = rvPrompt(ctx);
+  assert.ok(prompt.includes('- Based in: Manila') && !prompt.includes('Sells to people in'), 'based, and no second place when none was said');
+  assert.ok(rvPrompt({ ...ctx, place: { based: 'Manila', area: 'Singapore' } }).includes('- Sells to people in: Singapore'));
+  assert.ok(rvPrompt({ ...ctx, place: { based: null, area: null } }).includes('- Where: not said'));
+  assert.ok(!/Based in|Where:/.test(rvPrompt({ ...ctx, place: undefined })), 'a context without the place says nothing about one');
+  assert.ok(prompt.startsWith(`Suggest ${RV_CANDIDATES} experiments`) && RV_CANDIDATES === 6 && RV_PER_ASK === 3, 'six written for three kept');
+  assert.ok(prompt.includes('- "partners": people who already serve your buyers and can introduce or recommend you'), 'the mechanisms, each said');
+  assert.ok(prompt.includes('"belief": "the claim it tests, in the owner\'s own voice: I, me, my; no numbers"') && prompt.includes('"mechanism"'));
+  assert.ok(prompt.includes('and never fewer than the pass line'), 'a plan is never smaller than its line');
+  assert.ok(RV_SYSTEM.includes('a government or local program from another country is no use to them'));
+  assert.ok(RV_SYSTEM.includes('each works through a different mechanism'));
+  assert.ok(RV_SYSTEM.includes('the belief alone is in their own voice'));
+
+  /* 3. The claim an idea tests is the person's voice and nobody else's, with no number in it. */
+  assert.equal(rvBeliefOf('Advisers who work with founders will introduce me to them'), 'Advisers who work with founders will introduce me to them');
+  assert.equal(rvBeliefOf('  Founders   in Manila groups will try my app  '), 'Founders in Manila groups will try my app');
+  for (const bad of ['3 advisers will introduce me', 'Advisers will introduce you to founders', 'Your clients will refer me', 'The owner’s clients refer', 'The business owner gets sign-ups', 'Founders like [NAME] will try it', 'x'.repeat(RV_BELIEF_MAX + 1), '', 42])
+    assert.equal(rvBeliefOf(bad), null, String(bad).slice(0, 40));
+
+  /* 4. Six candidates held to a bet's rules, each with its cause; a plan below its line loses the plan, not the idea. */
+  const ev: RvEvidence[] = [1, 2, 3].map((n) => ({ n, title: `Page ${n}`, url: `https://p${n}.example/x`, said: null }));
+  const idea = (label: string, mechanism: string, belief: string | null, sources: number[] = [], extra: Record<string, unknown> = {}) =>
+    ({ label, how: `${label}, this week.`, belief, mechanism, metric: 'talks', target: 3, days: 7, sources, ...extra });
+  const written = { ideas: [
+    idea('Ask an SBA counselor for introductions', 'partners', 'Business counselors know founders who need my app', [1]),
+    idea('Ask advisers for introductions', 'partners', 'Advisers who work with founders will introduce me to them', [2]),
+    idea('Talk to people who sell to founders', 'partners', 'People who sell to founders will introduce me to them'),
+    idea('Answer one question in a founders group', 'community', 'Founders in Manila groups will talk to me when I answer their questions', [3]),
+    idea('Message ten people you know', 'warm', 'People who know me will point me to founders'),
+    idea('Post a demo video', 'Content', 'You will get conversations from a demo'),
+    idea('Seventh', 'events', 'Founders at meetups will talk to me'),
+  ], first_why: 'It is the cheapest test of the advisers.' };
+  const cands = rvNorm(written, { part: 'reach', foundBy: 'inbound', sources: [], evidence: ev }, RV_CANDIDATES);
+  assert.equal(cands.length, 6, 'six at most');
+  assert.deepEqual(cands.map((c) => c.mechanism), ['partners', 'partners', 'partners', 'community', 'warm', 'content'], 'its cause, read as a key; one off the list would be "other"');
+  assert.equal(cands[5].belief, null, 'a claim said to "you" is not the person’s, and is not kept');
+  assert.equal(rvNorm({ ideas: [idea('Odd', 'telepathy', 'I can')] }, { part: 'reach', foundBy: 'inbound', sources: [] })[0].mechanism, 'other');
+  assert.equal(rvNorm(written, { part: 'reach', foundBy: 'inbound', sources: [] }).length, 3, 'three, as before, where a set is asked for');
+  const plan = (planned: number) => rvNorm({ ideas: [{ label: 'Meet', how: 'Meet.', metric: 'meetings', target: 3, tries: { metric: 'talks', planned }, days: 7 }] }, { part: 'close', foundBy: 'referrals', sources: [] })[0];
+  assert.deepEqual([plan(2).tries, plan(3).tries], [null, { metric: 'talks', planned: 3 }], 'three meetings from two talks is not a plan');
+
+  /* 5. The review's answer: set aside, the pages both agree on, the writer's order kept, and nothing at all when it is not an answer. */
+  const pool = cands.filter((c) => c.belief);
+  assert.equal(pool.length, 5);
+  const answer = {
+    reviews: [
+      { n: 1, keep: false, why: 'SBA counselors serve businesses in the United States, and you are in Manila.' },
+      { n: 2, keep: true, why: 'Advisers already see founders every week.', supported: [2] },
+      { n: 3, keep: false, why: 'The same people, the same way, as the advisers.' },
+      { n: 4, keep: true, supported: [3, 9] },
+      { n: 5, keep: true, supported: [1] },
+      { n: 5, keep: false },
+      { n: 12, keep: false },
+    ],
+    // Read by nothing: the review sets aside; which bet is first stays a rule over the writer's order.
+    order: [5, 4, 2],
+    first_why: 'Message people you know first.',
+  };
+  const reviewed = rvApply(answer, pool, { sources: [], evidence: ev })!;
+  assert.deepEqual(reviewed.ideas.map((i) => i.label), ['Ask advisers for introductions', 'Answer one question in a founders group', 'Message ten people you know'],
+    'the writer’s order, less the two set aside; a second word on one idea and a number past the list are ignored');
+  assert.deepEqual(reviewed.dropped.map((x) => x.label), ['Ask an SBA counselor for introductions', 'Talk to people who sell to founders']);
+  assert.equal(reviewed.dropped[0].why, 'SBA counselors serve businesses in the United States, and you are in Manila.');
+  assert.deepEqual(reviewed.ideas.map((i) => (i.sources ?? []).map((s) => s.url)), [['https://p2.example/x'], ['https://p3.example/x'], []],
+    'a page stays where the writer cited it and the review says it supports it; one the review names alone is not added');
+  assert.ok(!('pick' in reviewed), 'no reason for a first: the review does not pick one');
+  assert.equal(rvApply({ reviews: [{ n: 1, keep: false, why: 'It fails for 80% of founders.' }] }, pool, { sources: [], evidence: ev })?.dropped[0].why, null, 'a reason with a number from nowhere is not kept');
+  assert.equal(rvApply({ reviews: [{ n: 2, keep: false }] }, pool, { sources: [], evidence: ev })?.ideas[0].sources?.[0]?.url, 'https://p1.example/x', 'one the review did not mention is kept as written');
+  assert.equal(rvApply({ ideas: [] }, pool, { sources: [], evidence: ev }), null, 'no reviews: not an answer');
+  assert.equal(rvApply({ reviews: [{ n: 0 }, { n: 'x' }] }, pool, { sources: [], evidence: ev }), null, 'none about these ideas: not an answer');
+
+  /* 6. One per cause: the first of each in the order given; "other" says nothing about sameness. */
+  const tag = (label: string, mechanism: RvCandidate['mechanism']) => ({ ...cands[0], key: label, label, mechanism });
+  const one = rvOneEach([tag('a', 'partners'), tag('b', 'partners'), tag('c', 'other'), tag('d', 'other'), tag('e', 'warm')]);
+  assert.deepEqual([one.kept.map((x) => x.label), one.same.map((x) => x.label)], [['a', 'c', 'd', 'e'], ['b']]);
+
+  /* 7. The whole write, with a stand-in for the model: six written, read again, three kept, what it did kept on the set. */
+  const calls: Array<{ system: string; temperature: number; timeoutMs: number; prompt: string }> = [];
+  const stand = (review: (prompt: string) => string, elapse = 0, clock = { t: 0 }): RvAsk => async (call) => {
+    calls.push({ system: call.system, temperature: call.temperature, timeoutMs: call.timeoutMs, prompt: call.prompt });
+    if (call.system === RV_SYSTEM) { clock.t += elapse; return JSON.stringify(written); }
+    return review(call.prompt);
+  };
+  const research = { evidence: ev, queries: ['q'], why: null };
+  const set = await rvWrite({ ...ctx, research }, stand(() => JSON.stringify(answer)));
+  assert.deepEqual(set.ideas.map((i) => i.label), ['Ask advisers for introductions', 'Answer one question in a founders group', 'Message ten people you know']);
+  assert.ok(set.ideas.every((i) => i.belief), 'every idea kept says what it tests');
+  assert.deepEqual([set.pick, set.written, set.review.ran], [null, 6, true], 'the writer’s reason was for the idea set aside, so it is not shown beside another');
+  assert.deepEqual(calls.map((c) => [c.system === RV_SYSTEM ? 'write' : c.system === RV_REVIEW_SYSTEM ? 'review' : '?', c.temperature, c.timeoutMs]), [['write', 0.8, 150_000], ['review', 0.2, 90_000]]);
+  const sent = calls[1].prompt;
+  assert.ok(sent.includes('- Based in: Manila') && sent.includes('[1] Ask an SBA counselor for introductions (mechanism: partners)'), 'the review reads the same record, and each idea by number');
+  assert.ok(sent.includes('    Tests: "Advisers who work with founders will introduce me to them"') && sent.includes('    Cites: [2]') && sent.includes('    Pass line: 3 conversations'), sent.split('\n').filter((l) => l.startsWith('    ')).slice(0, 5).join(' | '));
+  assert.ok(!sent.includes('Post a demo video'), 'one that does not say what it tests is not offered, while others do');
+  const firstKept = await rvWrite({ ...ctx, research }, stand(() => JSON.stringify({ reviews: [{ n: 3, keep: false }] })));
+  assert.deepEqual([firstKept.ideas.map((i) => i.label), firstKept.pick], [['Ask an SBA counselor for introductions', 'Answer one question in a founders group', 'Message ten people you know'], 'It is the cheapest test of the advisers.'],
+    'what the review keeps, it keeps in the writer’s order, one per cause, with the writer’s reason while its first is first');
+
+  // The review failed: the writer's order, one per cause, and said — never a set that reads as checked.
+  calls.length = 0;
+  const unread = await rvWrite({ ...ctx, research }, stand(() => { throw new Error('strong did not answer within 90s — try again, or set a faster model'); }));
+  assert.deepEqual(unread.ideas.map((i) => i.label), ['Ask an SBA counselor for introductions', 'Answer one question in a founders group', 'Message ten people you know'], 'unread, the writer’s first of each cause stands');
+  assert.deepEqual(unread.review, { ran: false, why: 'the review failed: strong did not answer within 90s — try again, or set a faster model', same: ['Ask advisers for introductions', 'Talk to people who sell to founders'] });
+  assert.equal(unread.pick, 'It is the cheapest test of the advisers.', 'the writer’s reason for its first, while its first is still first');
+  const garbled = await rvWrite({ ...ctx, research }, stand(() => 'I think they are all fine.'));
+  assert.deepEqual([garbled.review.ran, garbled.review.ran ? null : garbled.review.why], [false, 'the review failed: it did not answer in the shape asked for']);
+
+  // Set every one aside: nothing to keep, said with its reason.
+  await assert.rejects(
+    rvWrite({ ...ctx, research }, stand(() => JSON.stringify({ reviews: [1, 2, 3, 4, 5].map((n) => ({ n, keep: false, why: n === 1 ? 'SBA counselors serve businesses in the United States, and you are in Manila.' : null })) }))),
+    /^Error: No new ideas: a second read set all 5 aside — SBA counselors serve businesses in the United States, and you are in Manila\. Try again\.$/,
+  );
+  // No time left after a slow write: skipped, and said with how long the write took.
+  calls.length = 0;
+  const clock = { t: 0 };
+  const late = await rvWrite({ ...ctx, research }, stand(() => '{}', RV_BUDGET - 10_000, clock), { now: () => clock.t });
+  assert.deepEqual([late.review.ran, late.review.ran ? null : late.review.why, calls.length], [false, 'no time was left for it after the ideas took 240s', 1]);
+  // One held: nothing to choose between, and nothing asked.
+  calls.length = 0;
+  const single = await rvWrite(ctx, async (call) => { calls.push({ ...call }); return JSON.stringify({ ideas: [written.ideas[1]] }); });
+  assert.deepEqual([single.ideas.length, single.review.ran, calls.length], [1, false, 1]);
+  // The writer failed or wrote nothing that holds: no set, and why.
+  await assert.rejects(rvWrite(ctx, async () => { throw new Error('small did not answer within 150s — try again, or set a faster model'); }), /^Error: No new ideas: small did not answer within 150s — try again, or set a faster model\.$/);
+  await assert.rejects(rvWrite(ctx, async () => 'no json here'), /did not answer in the shape asked for/);
+  await assert.rejects(rvWrite(ctx, async () => JSON.stringify({ ideas: [{ label: 'x', how: 'y', metric: 'sent', target: 3, days: 7 }] })), /none of the model's held/);
+  assert.ok(RV_REVIEW_SYSTEM.includes('a national program from another country is no use to them') && RV_REVIEW_SYSTEM.includes('Never set an idea aside for being simple'));
+  assert.ok(RV_REVIEW_SYSTEM.includes('do not reorder the ideas') && !/"order"|first_why/.test(rvReviewPrompt(ctx, pool)), 'it is asked to set aside, never to pick');
+
+  /* 8. As stored: the claim read back as held; the review's outcome on the set; a set from before it is written again. */
+  assert.equal(rvFromStored({ label: 'x', how: 'y', metric: 'talks', target: 3, days: 7, belief: 'Advisers will introduce me' }, 'reach')?.belief, 'Advisers will introduce me');
+  assert.equal(rvFromStored({ label: 'x', how: 'y', metric: 'talks', target: 3, days: 7, belief: '3 advisers will introduce me' }, 'reach')?.belief, null);
+  const row = (id: number, at: string, payload: Record<string, unknown>) => ({ id, event_type: RV_LAB_IDEAS, created_at: at, payload });
+  const stored = { label: 'x', how: 'y', metric: 'talks', target: 3, days: 7 };
+  const sets = rvLab([
+    row(1, '2026-10-10T00:00:00Z', { part: 'who', ideas: [stored] }),
+    row(2, '2026-10-11T00:00:00Z', { part: 'reach', ideas: [stored], review: { ran: true, why: null, dropped: [], written: 6 } }),
+    row(3, '2026-10-12T00:00:00Z', { part: 'pay', ideas: [stored], review: { ran: false, why: 'the review failed: timeout' } }),
+    row(4, '2026-10-12T00:00:00Z', { part: 'close', ideas: [stored], review: { ran: false } }),
+  ]).ideas;
+  assert.deepEqual([sets.who?.review, sets.reach?.review, sets.pay?.review, sets.close?.review], [null, { ran: true, why: null }, { ran: false, why: 'the review failed: timeout' }, { ran: false, why: 'no reason was recorded' }]);
+  assert.equal(rvStale(sets.who, [], '2026-10-12'), true, 'from before the review: its ideas say nothing of what they test, so it is written again');
+  assert.equal(rvStale(sets.reach, [], '2026-10-12'), false);
+  assert.equal(rvStale(sets.pay, [], '2026-10-12'), false, 'not read again is said, not asked again on every visit');
+
+  /* 9. What the one bet tests: the idea's claim, the play's own sentence from the offer, the part's only for an idea from before. */
+  const base: RvIdea = { key: 'k', part: 'reach', label: 'Ask advisers', how: 'Ask.', metric: 'talks', unit: null, target: 3, tries: null, days: 7, book: null, why: null, prep: null };
+  assert.equal(rvNextBelief({ kind: 'idea', idea: { ...base, belief: 'Advisers will introduce me to founders' }, pick: null }, 'reach', offer, '$29', 'inbound'), 'Advisers will introduce me to founders');
+  assert.equal(rvNextBelief({ kind: 'idea', idea: base, pick: null }, 'reach', offer, '$29', 'inbound'), rvSuggest('reach', offer, '$29', 'inbound'), 'an idea from before ideas said what they test');
+  const warm = RV_PLAYS.find((p) => p.key === 'warm-first')!;
+  assert.equal(rvNextBelief({ kind: 'play', play: warm }, 'reach', offer, '$29', 'inbound'), 'People who already know me will point me to people who want a business but do not know how to start');
+  assert.notEqual(rvNextBelief({ kind: 'play', play: warm }, 'reach', offer, '$29', 'inbound'), rvSuggest('reach', offer, '$29', 'inbound'), 'not "they find me online" over a play about people you know');
+  for (const p of RV_PLAYS) {
+    for (const o of [offer, {}]) {
+      const b = rvPlayBelief(p, o, o === offer ? '$29/month' : null);
+      assert.ok(b.length <= RV_BELIEF_MAX && !/[{}]/.test(b) && /^[A-Z]/.test(b), `${p.key}: ${b}`);
+      assert.ok(!/\byou\b|\byour\b/i.test(b), `${p.key}: said as the person would say it`);
+      const r = rvNormBet(rvRequest({ kind: 'play', play: p }, p.part, b) as unknown as Record<string, unknown>, { today: '2026-10-16', price: 29, priceLabel: '$29/month' });
+      assert.ok(r.ok && r.value.belief === b, `${p.key} starts with it: ${r.ok ? '' : r.error}`);
+    }
+  }
+  assert.equal(rvPlayBelief(RV_PLAYS.find((p) => p.key === 'paid-48h')!, {}, null), 'They will pay for what I sell now, before I build anything more', 'an empty offer still reads');
+  assert.equal(rvPlayBelief(RV_PLAYS.find((p) => p.key === 'guarantee')!, { for_who: 'dental clinics' }, null), 'A guarantee and the price said up front get dental clinics to pay my price');
+
+  /* 10. What Start sets going, in a line: the crew it starts, nothing sent, and what the Scout spends. */
+  assert.equal(rvStarts([{ kind: 'find', by: 'crew', who: 'Scout', do: 'x' }, { kind: 'draft', by: 'crew', who: 'Writer', do: 'y' }, { kind: 'reply', by: 'you', who: 'You', do: 'z' }]),
+    'Starts the Scout and the Writer now. Nothing is sent or posted for you; each post the Scout keeps uses one of your matches.');
+  assert.equal(rvStarts([{ kind: 'draft', by: 'crew', who: 'Writer', do: 'y' }]), 'Starts the Writer now. Nothing is sent or posted for you.');
+  assert.equal(rvStarts([{ kind: 'job', by: 'you', who: 'You', do: 'z' }]), null, 'all yours: Start starts the count');
+
+  /* 11. The card: the play, the test and Start first; the reasons and the plan folded under it; a set not read again said. */
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  const card = tab.slice(tab.indexOf('function NextBetCard('), tab.indexOf('function IdeaSource('));
+  assert.match(card, /const belief = nextBetBelief\(top, part, offer, priceLabel, found\);/);
+  const at = (s: string) => { const i = card.indexOf(s); assert.ok(i >= 0, s); return i; };
+  assert.ok(at('className="cp2-nb-test"') < at("'Start this bet'") && at("'Start this bet'") < at('<span>Why this bet</span>') && at('<span>Why this bet</span>') < at('<IdeaReasons idea={idea} why={!(top.kind === \'idea\' && top.pick)} />'),
+    'what it tests and Start come before the reasons, which are folded');
+  assert.ok(at('{why && (') < at('<PlanPreview steps={steps} foot={false} />'), 'the plan is in the fold, its footer said once under Start');
+  assert.ok(!card.includes('cp2-lab-preview'), 'its own class, not the bet sheet’s');
+  assert.match(tab, /\{unreviewed \? ` Not read again: \$\{unreviewed\}\.` : null\}/, 'a set nobody read again says so');
+  assert.match(tab, /`Show other bets \(\$\{moreIdeas \+ plays\.length\}\)`/);
+  const ai = src('src/lib/copilot/proofai.ts');
+  assert.match(ai, /const cfg = resolveIdeasConfig\(\);/);
+  assert.match(ai, /place: \{ based: home\.profile\.location \?\? null, area: home\.profile\.target_area \?\? null \}/);
+  assert.match(ai, /review: \{ \.\.\.set\.review, written: set\.written \}/, 'what the second read did is kept on the set');
+
+  console.log('copilot-core: ideas read again checks passed');
+}
+
+ideasReadAgainSuite().catch((e) => { console.error(e); process.exit(1); });

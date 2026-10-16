@@ -22,7 +22,7 @@
 import { ASSET_KINDS, type Asset, type AssetKind } from './assets';
 import { talkTotals } from './ideas';
 import {
-  CHECKPOINT_DAYS, countRefusal, daysBetween, dayWords, playsFor, resultLine,
+  CHECKPOINT_DAYS, countRefusal, daysBetween, dayWords, playBelief, playsFor, resultLine, suggestBelief,
   type BetIdea, type BetView, type Idea, type IdeaSet, type LabMetric, type Play, type Talk, type Tally,
 } from './lab';
 import { LINK_KEYS, LINK_LABEL, PIVOT_REACH, restartsOf, type ChainBet, type ChainInput, type LinkKey } from './business';
@@ -31,7 +31,7 @@ import type { Agent } from './machine';
 import { foundByOf, isFoundBy } from './offer';
 import { pageCounts } from './livepage';
 import { SECTIONS, type WorkingSection } from './working';
-import type { CommissionThread, FoundBy, HomeData } from './types';
+import type { CommissionThread, FoundBy, HomeData, Offer } from './types';
 
 /** What the person wrote in the working file, by section: their words, never a reading the app counted. */
 export function saidOf(home: Pick<HomeData, 'working'>): Partial<Record<WorkingSection, string[]>> {
@@ -233,10 +233,12 @@ export function betWork(v: BetView, i: { links: Record<string, string[]>; commis
  * Whether the ideas on hand for a part were written before the record moved:
  * a bet has ended since, or two weeks went by. Ideas from before a bet failed
  * would suggest the bet that failed; the point of a model writing them is that
- * they are not the same every time the tab is opened.
+ * they are not the same every time the tab is opened. A set from before the
+ * second read (no `review`) is written again once: its ideas carry no claim of
+ * their own, so its first would start under the part's one sentence.
  */
-export function ideasStale(set: Pick<IdeaSet, 'at'> | null | undefined, bets: BetView[], today: string): boolean {
-  if (!set) return true;
+export function ideasStale(set: Pick<IdeaSet, 'at' | 'review'> | null | undefined, bets: BetView[], today: string): boolean {
+  if (!set || !set.review) return true;
   const written = set.at.slice(0, 10);
   if (daysBetween(written, today) >= CHECKPOINT_DAYS) return true;
   return bets.some((b) => b.state !== 'running' && !!b.ended && b.ended > written);
@@ -292,11 +294,28 @@ export function ideaFrom(idea: Idea): BetIdea {
 }
 
 /**
+ * What the one bet tests, as the card shows it and Start keeps it: the idea's
+ * own claim, or the play's sentence filled from the offer (lab.ts playBelief).
+ * It was the part's one sentence (suggestBelief) for every play, and its owner
+ * saw "You would be testing: people find me online and get in touch" over an
+ * idea about asking advisers for introductions — a bet whose fail would have
+ * been filed, and read back by the next ideas, under a claim it never tested.
+ *
+ * An idea's claim is a model's sentence, so it is held to ideaBeliefOf (no
+ * number, nobody addressed), shown in quotes before the tap, and "Change it
+ * first" opens it to rewrite: the person makes it theirs by starting the bet,
+ * as they did the template. An idea from before ideas carried one falls back
+ * to the template.
+ */
+export function nextBetBelief(n: NextBet, part: LinkKey, offer: Offer, priceLabel: string | null, found: FoundBy | null): string {
+  if (n.kind === 'play') return playBelief(n.play, offer, priceLabel);
+  return n.idea.belief ?? suggestBelief(part, offer, priceLabel, found);
+}
+
+/**
  * The bet the one tap starts: the same request the bet sheet sends for the same
  * play or idea with its line untouched, so starting from the card and from the
- * sheet are one bet. The belief is the sheet's first draft (suggestBelief), shown
- * on the card before the tap — never a model's sentence put in the person's mouth
- * (invariant 12).
+ * sheet are one bet, with the claim the card showed (nextBetBelief).
  */
 export function nextBetRequest(n: NextBet, part: LinkKey, belief: string) {
   const p = n.kind === 'idea' ? n.idea : n.play;

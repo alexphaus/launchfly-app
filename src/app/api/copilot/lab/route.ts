@@ -34,8 +34,9 @@ import { LAB_VOICE_GONE, isVoiceId } from '@/lib/copilot/voices';
 import type { HomeData } from '@/lib/copilot/types';
 
 export const runtime = 'nodejs';
-// Ideas are written in after(), for up to two and a half minutes (proofai.ts):
-// the tap has its answer at once, and the writing outlives it.
+// Ideas are written and read again in after(), the search and both calls
+// inside about four and a half minutes (ideas.ts IDEAS_BUDGET_MS): the tap has
+// its answer at once, and the writing outlives it.
 export const maxDuration = 300;
 
 /**

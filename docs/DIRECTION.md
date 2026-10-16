@@ -638,6 +638,28 @@ order the model already wrote its ideas in. Not yet: "this play passed for 4 of
 input nobody else has. See COPILOT.md → **One bet, not a list** and **Researched
 ideas**.
 
+**Then — read again.** Its owner's next screens showed the one bet as a United
+States loan program's counselors offered to a founder in Manila, two of the three
+ideas as one idea, "you would be testing" over a claim the play did not test, and
+two screens of reasons before Start; asked what the highest leverage was, the
+answer was the ideas themselves, then a card that gets out of the way. So the
+writer is told where the business is, writes six with the cause each works
+through and the claim each tests, and a second call reads them as a skeptical
+operator before three are kept — one per cause, so a fail of one teaches
+something the others cannot. The card is the play, the claim it tests with its
+line, and Start; the reasons and the plan are a tap down. The claim is a model's
+sentence the person adopts by starting the bet, held to rules that keep a view of
+the business out of it — no number, nobody addressed — shown before the tap and
+rewritable, because a bet filed under a claim it never tested corrupts the record
+the next ideas read (invariant 12, at the level of the bet). The decline above
+stands: the second call only sets aside, and which bet comes first is still a rule
+over the writer's order. It passes the survival test on the join: a chat can
+critique a list of ideas; it cannot check them against the bets this business
+already failed and the place it is in, file the one started under the claim it
+tests, and grade it from rows. Not yet: the review reading the pages themselves
+rather than a sentence from each, and ideas ranked by what passed for businesses
+like this one. See COPILOT.md → **Read again**.
+
 ---
 
 ## Where it actually stands

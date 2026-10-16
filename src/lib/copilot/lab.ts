@@ -498,6 +498,13 @@ export interface Idea {
    * from the model's own knowledge, and it ranks below a sourced one (invariant 3).
    */
   sources?: IdeaSource[];
+  /**
+   * The claim it tests, in the person's voice ("Advisers who work with founders
+   * will introduce me to them"), held to ideaBeliefOf. What the card says you
+   * would be testing and what Start keeps as the bet's belief (proof.ts
+   * nextBetBelief). Null for ideas written before it was asked for.
+   */
+  belief?: string | null;
 }
 
 export interface IdeaSource { title: string; url: string }
@@ -514,6 +521,13 @@ export interface IdeaSet {
   pick?: string | null;
   /** The web search the set was written from: pages found, or why none were. Null for sets from before searches. */
   research?: { pages: number; why: string | null } | null;
+  /**
+   * The second read the candidates were given before three were kept (ideas.ts
+   * writeIdeaSet): `why` says why it did not run, so a set nobody checked never
+   * reads as one that was (invariant 13). Null for sets from before reviews —
+   * which carry no beliefs either, so the tab writes them again (proof.ts ideasStale).
+   */
+  review?: { ran: boolean; why: string | null } | null;
 }
 
 /** The newest ask for ideas on a part that has not ended in a set: still being written, or failed and why. */
@@ -846,7 +860,23 @@ export function ideaFromStored(v: unknown, part: LinkKey): Idea | null {
     prep: prepOf(o.prep),
     works: text(o.works, IDEA_REASON_MAX), fails: text(o.fails, IDEA_REASON_MAX),
     sources: ideaSourcesOf(o.sources),
+    belief: ideaBeliefOf(o.belief),
   };
+}
+
+/**
+ * The claim an idea tests, held to what keeps a model's sentence from becoming
+ * a view of the business in the person's mouth (invariant 12) once they start
+ * the bet that keeps it: one sentence in their own voice, under the belief's
+ * length, with no number — the pass line holds the numbers, and a figure here
+ * would be one they never gave (invariant 2) — and nobody addressed or talked
+ * about: "you" or "the owner" in a belief is the app speaking, not the person.
+ */
+export function ideaBeliefOf(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const b = v.trim().replace(/\s+/g, ' ');
+  if (!b || b.length > BELIEF_MAX || /\d/.test(b) || /[[\]{}<>]/.test(b)) return null;
+  return /\b(?:you|your|yours|yourself|the (?:business )?owner)\b/i.test(b) ? null : b;
 }
 
 /** The pages an idea rests on, as stored: web addresses only, a few at most. */
@@ -1072,10 +1102,12 @@ export function labFromEvents(rows: LabEventRow[]): LabLedger {
       const ideas = (Array.isArray(p.ideas) ? p.ideas : []).map((x) => ideaFromStored(x, part)).filter((x): x is Idea => !!x).slice(0, 3);
       // Newest wins: the rows arrive oldest first.
       const research = obj(p.research);
+      const review = obj(p.review);
       if (ideas.length) out.ideas[part] = {
         part, ideas, model: text(p.model, 80), at: r.created_at,
         pick: text(p.pick, IDEA_REASON_MAX),
         research: typeof research.pages === 'number' ? { pages: Math.max(0, Math.round(research.pages)), why: text(research.why, 300) } : null,
+        review: typeof review.ran === 'boolean' ? { ran: review.ran, why: review.ran ? null : text(review.why, 300) ?? 'no reason was recorded' } : null,
       };
     } else if (r.event_type === LAB_INTRO) {
       const talk = talkRef(p.talk);
@@ -1694,12 +1726,7 @@ const lowerFirst = (s: string) => (s.length > 1 && s[1] === s[1].toLowerCase() ?
  * numbers, which come from their own price or not at all.
  */
 export function suggestBelief(part: LinkKey, offer: Offer, priceLabel: string | null, foundBy: FoundBy | null = null): string {
-  // The first of a list: a bet on "resorts, pest control, plumbing" cannot
-  // fail for any one of them, and The Mom Test and Crossing the Chasm both
-  // start from one kind of buyer. A name with an ampersand in it is one name.
-  const who = offer.for_who?.split(/[,;/]|\s+(?:and|or)\s+/)[0].trim() || 'They';
-  const one = offer.sells?.split(/[,;]/)[0].trim();
-  const sells = one ? lowerFirst(one) : 'what I sell';
+  const { who, sells } = beliefWords(offer);
   const reach: Record<FoundBy, string> = {
     outreach: `${who} answer when I write to them about it`,
     inbound: `${who} find me online and get in touch`,
@@ -1714,7 +1741,37 @@ export function suggestBelief(part: LinkKey, offer: Offer, priceLabel: string | 
     pay: `${who} pay ${priceLabel ?? 'my price'} for ${sells}`,
     deliver: `I can deliver ${sells} without doing every step myself`,
   }[part];
-  return line.length <= BELIEF_MAX ? line : `${line.slice(0, BELIEF_MAX - 1).replace(/[\s,;:—-]+\S*$/, '')}…`;
+  return fitBelief(line);
+}
+
+/**
+ * The offer's words a belief is written from. The first of a list: a bet on
+ * "resorts, pest control, plumbing" cannot fail for any one of them, and The
+ * Mom Test and Crossing the Chasm both start from one kind of buyer. A name with
+ * an ampersand in it is one name.
+ */
+function beliefWords(offer: Offer): { who: string; sells: string } {
+  const who = offer.for_who?.split(/[,;/]|\s+(?:and|or)\s+/)[0].trim() || 'They';
+  const one = offer.sells?.split(/[,;]/)[0].trim();
+  return { who, sells: one ? lowerFirst(one) : 'what I sell' };
+}
+
+const fitBelief = (line: string) => (line.length <= BELIEF_MAX ? line : `${line.slice(0, BELIEF_MAX - 1).replace(/[\s,;:—-]+\S*$/, '')}…`);
+
+/**
+ * What a play from the books tests, for this business: its own sentence with
+ * the offer's words put in. The part's one sentence (suggestBelief) stood over
+ * every play on the part, so "Ask for one name" read as testing "they find me
+ * online and get in touch" — and its verdict would have been filed under that.
+ */
+export function playBelief(p: Pick<Play, 'belief'>, offer: Offer, priceLabel: string | null): string {
+  const { who, sells } = beliefWords(offer);
+  const named = who !== 'They';
+  return fitBelief(p.belief
+    .replace(/\{Who\}/g, who.charAt(0).toUpperCase() + who.slice(1))
+    .replace(/\{who\}/g, named ? lowerFirst(who) : 'people')
+    .replace(/\{sells\}/g, sells)
+    .replace(/\{price\}/g, priceLabel ?? 'my price'));
 }
 
 /* ─── The plays ───────────────────────────────────────────────────────────── */
@@ -1725,6 +1782,12 @@ export interface Play {
   book: string;
   part: LinkKey;
   label: string;
+  /**
+   * What it tests, as the person would say it, filled from their offer by
+   * playBelief: {Who} or {who} the first kind of buyer it names, {sells} the
+   * first thing it sells, {price} its price.
+   */
+  belief: string;
   /** What you do, in a sentence or two. */
   how: string;
   metric: LabMetric;
@@ -1755,6 +1818,7 @@ export interface Play {
 export const PLAYS: Play[] = [
   {
     key: 'mom-test', book: 'The Mom Test', part: 'who', label: 'Ten problem conversations', fits: 'any',
+    belief: '{Who} have this problem badly enough to commit to a next step',
     how: 'Ask about the last time the problem cost them, not about your idea. A compliment is not a result: another call, an intro or money is.',
     metric: 'committed', target: 3, tries: { metric: 'talks', planned: 10 }, days: 14,
     prep: { label: 'Interview questions', by: 'ai', ask: 'Write five questions for a problem conversation with the businesses I sell to: about their past, not about my idea' },
@@ -1764,102 +1828,120 @@ export const PLAYS: Play[] = [
     // the money, one conversation each; judged, like the book's, by what they
     // committed to, and an introduction to the next person counts.
     key: 'money-five', book: 'The Mom Test', part: 'who', label: 'Five people close to the money', fits: 'any',
+    belief: 'People close to the money will tell me what it costs them and who else to ask',
     how: 'Talk to one person who could buy, one who sells to them, one who runs the work, one who already earns in it and one who knows them. Ask what it costs them, what they pay for now, and who else to ask. An intro or another call counts.',
     metric: 'committed', target: 2, tries: { metric: 'talks', planned: 5 }, days: 7,
     prep: { label: 'The questions', by: 'ai', ask: 'Write questions for five people close to the money in my market: about what it costs them and what they pay for now, never about my idea' },
   },
   {
     key: 'one-niche', book: 'Crossing the Chasm', part: 'who', label: 'One niche for two weeks', fits: ['outreach'],
+    belief: 'One kind of business answers more when I write only to them',
     how: 'Write only to the kind of business that answered most, and to nobody else, until the two weeks are up.',
     metric: 'replied', target: 2, tries: { metric: 'sent', planned: 20 }, days: 14,
   },
   {
     key: 'smoke-test', book: 'The Lean Startup', part: 'who', label: 'A page before the product', fits: 'any',
+    belief: '{Who} will sign up for {sells} from one page that asks for one thing',
     how: 'Put up one page that says the offer and asks for one thing: a sign-up or a call booked. Share it where they are. Count who asks.',
     metric: 'logged', unit: 'sign-ups', target: 5, days: 14,
     prep: { label: 'The page', by: 'claude', ask: 'Write one landing page for my offer that asks for a single thing.', asset: 'landing_page' },
   },
   {
     key: 'bullseye', book: 'Traction', part: 'reach', label: 'A channel you have not tried', fits: 'any',
+    belief: '{Who} gather somewhere I have not tried, and will talk to me there',
     how: 'Go where they already gather — a group, a forum, an association — and log every lead it brings as a conversation.',
     metric: 'talks', target: 3, days: 7,
     prep: { label: 'Where they gather', by: 'ai', ask: 'Find five groups, forums or associations where the businesses I sell to talk to each other, with a link to each' },
   },
   {
     key: 'warm-first', book: '$100M Leads', part: 'reach', label: 'Warm before cold', fits: 'any',
+    belief: 'People who already know me will point me to {who}',
     how: 'Message twenty people who already know you. Ask who they know with the problem, not whether they want to buy. Log every lead as a conversation.',
     metric: 'talks', target: 3, days: 7,
   },
   {
     key: 'one-line', book: 'The Lean Startup', part: 'reach', label: 'Change one thing', fits: ['outreach'],
+    belief: 'A better first line gets more replies to the same message',
     how: 'Change only the first line of your message for the next ten. Keep the ask the same, so the result means something.',
     metric: 'replied', target: 2, tries: { metric: 'sent', planned: 10 }, days: 10,
     prep: { label: 'Three first lines', by: 'ai', ask: 'Write three new first lines for my opening message, each about something specific to the business it goes to' },
   },
   {
     key: 'clear-line', book: 'Building a StoryBrand', part: 'reach', label: 'One clear line', fits: ['inbound', 'marketplace', 'local'],
+    belief: 'Saying what they get in the first line brings more enquiries',
     how: 'Rewrite the first line people see — your page, listing or sign — as what they get and what it saves them. Change nothing else, and count the enquiries.',
     metric: 'logged', unit: 'enquiries', target: 3, days: 14,
     prep: { label: 'The new first line', by: 'claude', ask: 'Rewrite the first thing a buyer reads about my offer as what they get and what it saves them.', asset: 'landing_page' },
   },
   {
     key: 'ask-referrals', book: 'The Referral Engine', part: 'reach', label: 'Ask for one name', fits: 'any',
+    belief: 'My happy clients will introduce me to others like them',
     how: 'Ask your last three happy clients for one person they know with the same problem, by name. An intro counts; "I will think of someone" does not.',
     metric: 'committed', target: 2, tries: { metric: 'talks', planned: 3 }, days: 7,
   },
   {
     key: 'free-audit', book: '$100M Leads', part: 'reach', label: 'Give something to get a name', fits: ['inbound', 'marketplace', 'local', 'referrals'],
+    belief: '{Who} will leave their contact for something small and useful, for free',
     how: 'Offer something small and useful for free — a check, a template, a first fix — to anyone who leaves their contact. Count the contacts.',
     metric: 'logged', unit: 'leads', target: 5, days: 14,
     prep: { label: 'The free offer', by: 'claude', ask: 'Write a small free offer that shows what I do, for people to swap their contact for.', asset: 'script' },
   },
   {
     key: 'one-event', book: 'Traction', part: 'reach', label: 'One room full of buyers', fits: ['local', 'referrals', 'inbound'],
+    belief: 'In person, {who} will talk to me about the problem',
     how: 'Go to one event, market or meetup where the people you sell to are, and have five real conversations about their problem.',
     metric: 'talks', target: 5, days: 7,
   },
   {
     key: 'ask-why-not', book: 'The Mom Test', part: 'close', label: 'Ask the ones who said no', fits: 'any',
+    belief: 'People who did not buy will tell me what stopped them',
     how: 'Write to everyone you met who did not buy, with one question: what stopped you? Log each answer as a conversation.',
     metric: 'talks', target: 3, days: 7,
     prep: { label: 'The question', by: 'ai', ask: 'Write one short message asking someone I met, who did not buy, what stopped them, with no pitch in it' },
   },
   {
     key: 'ask-for-no', book: 'Never Split the Difference', part: 'close', label: 'Ask for a no', fits: ['outreach'],
+    belief: 'A question that is easy to say no to gets more meetings',
     how: 'On the next five replies, ask a question they can comfortably say no to, such as whether Thursday would be a bad time to talk, instead of "worth a call?".',
     metric: 'meetings', target: 2, tries: { metric: 'replied', planned: 5 }, days: 14,
   },
   {
     key: 'sales-script', book: 'The Mom Test', part: 'close', label: 'The same five questions', fits: 'any',
+    belief: 'One script for every conversation turns more of them into meetings',
     how: 'Use one written script for every conversation this week, so a yes or a no says something about the script and not your mood.',
     metric: 'meetings', target: 2, tries: { metric: 'talks', planned: 5 }, days: 7,
     prep: { label: 'The script', by: 'claude', ask: 'Write the five questions and the ask I use in every sales conversation this week.', asset: 'script' },
   },
   {
     key: 'guarantee', book: '$100M Offers', part: 'pay', label: 'A guarantee, and the price up front', fits: 'any',
+    belief: 'A guarantee and the price said up front get {who} to pay {price}',
     how: 'Add a guarantee you can keep and say the price in the first message. Ask the next ten.',
     metric: 'paid_at_price', target: 1, tries: { metric: 'sent', planned: 10 }, days: 14,
     prep: { label: 'The offer, rewritten', by: 'claude', ask: 'Rewrite my offer with a guarantee I can keep and the price said up front, from what has closed and what has not.', asset: 'offer' },
   },
   {
     key: 'paid-48h', book: 'Million Dollar Weekend', part: 'pay', label: 'Paid within 48 hours', fits: 'any',
+    belief: '{Who} will pay for {sells} now, before I build anything more',
     how: 'Before you build anything more, ask people who fit to pay now. Any real payment counts; a promise to pay later does not.',
     metric: 'paid', target: 3, days: 2,
   },
   {
     key: 'one-package', book: 'Built to Sell', part: 'pay', label: 'One package, one price', fits: 'any',
+    belief: '{Who} will buy one fixed package of {sells} at {price}',
     how: 'Sell one package at one fixed price, with no custom work, for two weeks.',
     metric: 'paid_at_price', target: 2, days: 14,
     prep: { label: 'The package', by: 'ai', ask: 'Write a one-page description of one fixed package of what I sell: what is in it, what is not, the price and how long it takes', asset: 'price_test' },
   },
   {
     key: 'concierge', book: 'The Lean Startup', part: 'deliver', label: 'Do it by hand first', fits: 'any',
+    belief: 'I can deliver {sells} by hand and learn which steps matter',
     how: 'Deliver it yourself, by hand, to the next three clients before automating anything, and write each step down as you go.',
     metric: 'logged', unit: 'clients served', target: 3, days: 21,
     prep: { label: 'The steps', by: 'claude', ask: 'Turn how I deliver into numbered steps I can follow by hand and improve after each client.', asset: 'workflow' },
   },
   {
     key: 'hand-a-step', book: 'The E-Myth Revisited', part: 'deliver', label: 'Hand one step over', fits: 'any',
+    belief: 'I can hand one step of delivering {sells} to my agent',
     how: 'Write down how you deliver, step by step, and hand the step you like least to your agent.',
     metric: 'handed', target: 1, days: 14,
     prep: { label: 'The steps, as a checklist', by: 'claude', ask: 'Turn how I deliver into a numbered checklist someone else could follow, and mark the step that is easiest to hand over.', asset: 'workflow' },

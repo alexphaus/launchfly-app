@@ -6,13 +6,16 @@ import { FOUND_BY_HINT, FOUND_BY_LABEL, OFFER_TASK_TITLE, addOpeningToOffer, isF
 import { CAPACITY_META, FOUND_BY, type Action, type Capacity, type Execution, type FoundBy, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, money, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
+import { get } from './api';
 import { STAGE_LABEL, type PipelineStage } from '@/lib/copilot/pipeline';
 import { WATCH_INTENTS, startersFor, type WatchIntent } from '@/lib/copilot/watch/catalogue';
 import { pruneSuggestions, yieldLine } from '@/lib/copilot/watch/yield';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import { BODY_MAX, SECTION, SECTIONS, type WorkingSection } from '@/lib/copilot/working';
-import { AUTHORITIES, AUTHORITY, MAX_ACTIVE_COMMISSIONS, blockedOn, gateFor, refusal, type Authority } from '@/lib/copilot/commission';
+import { AUTHORITIES, AUTHORITY, MAX_ACTIVE_COMMISSIONS, blockedOn, gateFor, handedSince, refusal, reportOf, type Authority, type CommissionEvent } from '@/lib/copilot/commission';
 import { YOURS_TAG, jobKindOf } from '@/lib/copilot/contract';
+import { assetAskLine, assetAsked, assetToRevise } from '@/lib/copilot/assets';
+import { secondPerson } from '@/lib/copilot/you';
 import { takerOf } from '@/lib/copilot/workers';
 import { REPEAT_EVERY, REPEAT_LABEL, type RepeatEvery } from '@/lib/copilot/repeats';
 import { WORTH, WORTH_KINDS, WORTH_NOTE_MAX, type WorthKind } from '@/lib/copilot/worth';
@@ -668,6 +671,8 @@ function HandoverForm({
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not write that');
     setOpen(!embedded); setObjective(''); setWhy('');
+    // An asset asked for by name came back drafted (assets.ts assetAsked): opened on it, rather than closed on nothing.
+    if (r.asset) return actions.openSheet({ kind: 'asset', id: r.asset });
     onDone?.();
   };
 
@@ -749,6 +754,8 @@ function HandoverForm({
 
 /** What kind of job the objective reads as, and who here would take it at this ring. */
 function takerLine(home: HomeData, objective: string, authority: Authority): string {
+  const asset = authority === 'read' && home.ai && !offerIsEmpty(home.profile.offer) ? assetAsked(objective) : null;
+  if (asset) return assetAskLine(asset, !!assetToRevise(asset, home.assets?.assets ?? [], home.page?.live?.asset ?? null));
   const job = jobKindOf(objective).kind;
   const taker = takerOf(home.workers ?? [], job, authority);
   if (!taker) return `Reads as ${job === 'write' ? 'writing' : 'research'} — nothing here takes that at "${AUTHORITY[authority].label}".`;
@@ -1357,14 +1364,25 @@ function MoneySheet({ home, actions }: { home: HomeData; actions: Actions }) {
  */
 function Artifact({ value }: { value: string }) {
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   // Roughly three lines at this width. Cheap and stable; measuring the box to
   // decide whether a toggle is needed costs a layout pass per artifact.
   const long = value.length > 190;
-  if (!long) return <div className="cp-draft">{value}</div>;
+  // What a worker wrote is for using somewhere else — a message to send, copy
+  // for a page — and selecting three screens of text on a phone is the step
+  // that gets skipped. Inside the tap: Safari refuses a write outside one.
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(value); setCopied('Copied.'); }
+    catch { setCopied('Your browser did not let it be copied. Select the text and copy it from there.'); }
+  };
   return (
     <>
-      <div className={`cp-draft${open ? '' : ' clamp'}`}>{value}</div>
-      <button className="cp-connect" onClick={() => setOpen((v) => !v)}>{open ? 'Show less' : 'Show all'}</button>
+      <div className={`cp-draft${long && !open ? ' clamp' : ''}`}>{value}</div>
+      <div className="cp-draft-do">
+        {long && <button className="cp-connect" onClick={() => setOpen((v) => !v)}>{open ? 'Show less' : 'Show all'}</button>}
+        <button className="cp-connect blue" onClick={() => void copy()}>Copy</button>
+      </div>
+      {copied && <p className="cp-help">{copied}</p>}
     </>
   );
 }
@@ -1407,6 +1425,20 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
     // distinct read, and re-running on every keystroke is not one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+  // A closed project's log is not in the home (loadHome reads live ones only),
+  // so its sheet reads it on opening. Without this the Writer's draft — posted
+  // and closed in one call — was on no screen at all: "Written: Landing page
+  // copy" over an empty sheet, which reads as the app having made nothing.
+  const closed = thread?.commission.status === 'done' || thread?.commission.status === 'stopped';
+  const [log, setLog] = useState<{ id: string; events: CommissionEvent[] } | { id: string; error: string } | null>(null);
+  useEffect(() => {
+    if (!closed) return;
+    let gone = false;
+    get<{ events?: CommissionEvent[] }>(`/commissions/${encodeURIComponent(id)}`)
+      .then((r) => { if (!gone) setLog({ id, events: r.events ?? [] }); })
+      .catch((e: unknown) => { if (!gone) setLog({ id, error: e instanceof Error ? e.message : 'no connection' }); });
+    return () => { gone = true; };
+  }, [id, closed]);
 
   if (!thread) return <><h3>Commission</h3><p className="desc">This one is gone.</p></>;
   const c = thread.commission;
@@ -1438,10 +1470,21 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   const check = thread.report.check;
   const askEach = !!home.accounts?.canConnect && (home.accounts?.list.length ?? 0) > 0;
   const gate = gateFor(c.authority, { askEach });
+  // The log as it was read: the home's for a live project, the sheet's own read
+  // for a closed one (above). What it is waiting on still comes from the home.
+  // A worker's report, said to the person (you.ts): "so Alex can move…" was read on Alex's own phone.
+  const you = (t: string) => secondPerson(t, home.profile.name);
+  // Approving hands it over in the same tap wherever a worker can take it.
+  const startsNow = home.workerConnected && !work?.noWorker;
+  // Handed over and not heard from yet (commission.ts handedSince): said, not offered a button.
+  const inFlight = startsNow && !work?.unreached ? handedSince(c, thread.report, work?.handedAt, Date.now()) : null;
+  const read = log && log.id === id && 'events' in log ? reportOf(c, log.events, 12, thread.report.check) : null;
+  const report = read ?? thread.report;
+  const logError = closed && log && log.id === id && 'error' in log ? log.error : null;
   // Rendered beside the field that answers it, and therefore left out of the log
   // below — the same sentence in two places is what this screen keeps deleting.
-  const olderAsks = (ask ? thread.report.yours.slice(1) : thread.report.yours).filter((e) => e.id !== callEvent?.id);
-  const olderFaults = fault ? thread.report.stopped.slice(1) : thread.report.stopped;
+  const olderAsks = (ask ? report.yours.slice(1) : report.yours).filter((e) => e.id !== callEvent?.id);
+  const olderFaults = fault ? report.stopped.slice(1) : report.stopped;
 
   // Unblock, then hand it straight back. A stopped job is not in dueCommissions,
   // so "run it now" alone would report nothing to do — the retry has to clear
@@ -1564,9 +1607,13 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
       {c.status === 'draft' && (
         <>
           <button className="cp-btn primary block" disabled={busy} onClick={() => void act('approve')}>
-            {busy ? 'Granting…' : 'Approve it'}
+            {busy ? 'Granting…' : startsNow ? 'Approve and start' : 'Approve it'}
           </button>
-          <p className="cp-help">Nothing happens until you do. It runs with the next nightly pass.</p>
+          {/* Said as it is: approving hands it over in the same tap wherever a
+              worker is connected (commissions/[id] approve). "It runs with the
+              next nightly pass" was true once, and then read as a day's wait
+              in front of a job that started a second later. */}
+          <p className="cp-help">{startsNow ? 'Nothing happens until you do. Then it starts straight away, and what it does turns up here.' : 'Nothing happens until you do.'}</p>
         </>
       )}
       {error && <div className="cp-note">{error}</div>}
@@ -1609,7 +1656,7 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
       {waiting === 'you' && (!call || question) && (
         <>
           <div className="cp-section"><span className="lead">Your answer</span></div>
-          {question && <p className="desc">{question.summary}</p>}
+          {question && <p className="desc">{you(question.summary)}</p>}
           <textarea
             id={`cp-answer-${id}`} className="cp-input sm" rows={3} maxLength={300}
             value={answer} onChange={(e) => { setAnswer(e.target.value); setError(null); }}
@@ -1650,7 +1697,7 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
       {fault && (
         <>
           <div className="cp-section"><span className="lead">It could not finish</span></div>
-          <p className="desc">{fault.summary}</p>
+          <p className="desc">{you(fault.summary)}</p>
           <button className="cp-btn primary block" disabled={busy} onClick={() => void retry()}>
             {busy ? 'Trying again…' : 'Try it again'}
           </button>
@@ -1711,7 +1758,11 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
 
       {/* Again, on its own: a standing yes to a research job already said yes to
           once (repeats.ts). Never for one that contacts people or spends. */}
-      {c.authority === 'read' && c.status !== 'draft' && c.status !== 'stopped' && (
+      {/* Only where another run could find something new: research. A page,
+          a plan or a message written once is not news tomorrow, and the chips
+          sat under a finished landing page as if it might be. Kept where a
+          repeat is already set, so it can be turned off. */}
+      {c.authority === 'read' && c.status !== 'draft' && c.status !== 'stopped' && (work?.job === 'research' || !!work?.repeat) && (
         <>
           <div className="cp-section"><span className="lead">Do it again</span></div>
           <div className="cp-chips">
@@ -1727,15 +1778,16 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
       {/* Everything that happened, newest first. Not a summary of it — the app
           telling you what it did in its own words is the one thing here that
           could be wrong without anybody noticing. */}
-      {(olderAsks.length > 0 || olderFaults.length > 0 || thread.report.said.length > 0 || thread.report.did.length > 0) && (
+      {(olderAsks.length > 0 || olderFaults.length > 0 || report.said.length > 0 || report.did.length > 0) && (
         <>
           <div className="cp-section"><span className="lead">What happened</span></div>
           {/* Earlier asks, then what you told it, then what it did. `said` is the
               one kind of line here the worker did not write, so it says whose it
               is rather than sitting anonymously among the worker's own report. */}
-          {[...olderAsks, ...olderFaults, ...thread.report.said, ...thread.report.did].map((e) => (
+          {[...olderAsks, ...olderFaults, ...report.said, ...report.did].map((e) => (
             <div key={e.id} className="cp-src">
-              <div className="ct">{e.summary}</div>
+              {/* The worker's words, to the person (you.ts); their own answers as they typed them. */}
+              <div className="ct">{e.kind === 'answered' ? e.summary : you(e.summary)}</div>
               <div className="cs">{e.kind === 'answered' ? 'You · ' : ''}{relTime(e.at)}{e.step ? ` · step ${e.step}` : ''}</div>
               {e.artifact && (
                 e.artifact.href
@@ -1746,8 +1798,22 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
           ))}
         </>
       )}
+      {/* A closed project's log is read when its sheet opens: said while it is
+          read, and said when it could not be — never an empty sheet that reads
+          as a project that made nothing (invariant 13). */}
+      {closed && !read && (logError
+        ? <div className="cp-note">Could not read what it did just now: {logError}. Open it again in a minute.</div>
+        : <p className="cp-help">Reading what it did…</p>)}
 
-      {c.status === 'active' && (
+      {/* In flight: who has it and since when, followed until it reports
+          (useCopilot). The button below is for a job that is idle — never
+          handed over, sent back, or not heard from inside its time. */}
+      {c.status === 'active' && inFlight && (
+        <p className="cp-help">
+          With {work?.with?.name ?? work?.wouldGo ?? 'your worker'} since {relTime(inFlight)}. What it does turns up here as it reports — nothing to do until then.
+        </p>
+      )}
+      {c.status === 'active' && !inFlight && (
         <>
           <button className="cp-btn primary block" disabled={busy} onClick={async () => {
             setBusy(true); setError(null);

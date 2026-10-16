@@ -39,7 +39,7 @@ import {
   type Bet, type BetPlan, type BetView, type PlanKind, type PlanRun, type PlanStep, type Talk, type Tally,
 } from './lab';
 import { offerIsEmpty } from './offer';
-import { foundOf } from './proof';
+import { foundOf, playSays } from './proof';
 import { unitSignal } from './signal';
 import { betVoiced, betVoices, voiceRefusal, type BetVoices } from './voices';
 import { takerOf, type WorkerCard } from './workers';
@@ -128,6 +128,19 @@ export function planFor(bet: Pick<Bet, 'part' | 'play' | 'idea' | 'metric' | 'un
     steps.push((job === 'write' ? caps.write : caps.research)
       ? { kind: 'job', by: 'crew', who: job === 'write' ? 'Writer' : 'Researcher', do: ask, ask }
       : { kind: 'job', by: 'you', who: 'You', do: ask, ask });
+  } else {
+    // A play that has you say something to people, with nothing else to get
+    // ready: the Writer drafts the words, made for the bet (proof.ts playSays).
+    // "Message ten people you know" left the hardest part — the message — to a
+    // blank screen, and the crew had nothing to do for the bet at all.
+    // Not a play counted in sends: those messages are Swipe's drafts, one per business.
+    const says = bet.metric === 'sent' || bet.metric === 'replied' ? null : playSays(cat?.how ?? bet.idea?.how ?? '');
+    const what = says === 'post' ? 'the post you put up' : 'the message you send';
+    if (says) {
+      steps.push(caps.draft
+        ? { kind: 'draft', by: 'crew', who: 'Writer', do: `Draft ${what}`, asset: 'script' }
+        : { kind: 'draft', by: 'you', who: 'You', do: `Write ${what}`, asset: 'script' });
+    }
   }
 
   // Answering is reach: from your own account, never the app's (invariant 4).

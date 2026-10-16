@@ -40,6 +40,7 @@ export function threadWorkOf(c: Commission, i: ThreadWorkInput): ThreadWork {
   return {
     job,
     with: ok ? { key: ok.worker, name: spec?.name ?? ok.worker, kind: spec?.kind ?? 'agent' } : null,
+    handedAt: ok?.at ?? null,
     unreached: any && !any.ok && (!ok || any.at > ok.at) ? (any.error ?? 'It did not answer') : null,
     wouldGo: pick?.worker?.name ?? null,
     noWorker: pick && !pick.worker ? pick.why : null,

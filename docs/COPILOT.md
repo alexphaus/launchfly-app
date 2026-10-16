@@ -879,8 +879,12 @@ off the same home fields on the sheet and in the route):
   job to the count it names). The play's prep: an asset the **Writer** drafts for
   the bet (`draftAsset`, with no ask — what a draft is asked for is read as the
   owner's words, and a catalogue's sentence is not theirs), or a project for the
-  Writer or the Researcher, by how the job will be sorted (`jobKindOf`). A step
-  nothing here can take is drawn as yours, said as yours (invariant 7).
+  Writer or the Researcher, by how the job will be sorted (`jobKindOf`). A play
+  with nothing to prepare that has you say something — "message ten people you
+  know", "post the answer in one community" (`playSays`) — gets the **Writer**
+  drafting the message or the post for the bet, so day one opens on the words, not
+  a blank screen; a play counted in sends does not, its messages being Swipe's. A
+  step nothing here can take is drawn as yours, said as yours (invariant 7).
 - **Yours.** Answer the people found from your own account (invariant 4), put the
   page online, make a rewritten offer yours. And how the count gets in — not a
   stored step, because it follows how the count is kept today: one tap per
@@ -1272,6 +1276,19 @@ offered (`voiceRefusal`: no search key, three searches done, the allowance spent
 fall through to logging the conversation that happened, invariant 7). Every number
 in it is one the rows hold: the bet's count and line, the days left to its last
 day, the goal's target and date.
+
+**The play is the move when the count is the app's** (`engine.ts` `StepPlay`,
+`proof.ts` `playSays`). Day one of a bet on sign-ups that the count link records by
+itself read "Log your sign-ups", with the play — "message ten people you know and
+ask each to forward your page" — folded inside the bet's card. When the bet's count
+comes in by itself (the count link or the page counts its unit), the move is the
+play: its name, its first sentence and the count, with one button — **Open your
+message** when one was made for the bet, else **Draft the message** (or the post)
+when the play has you say something and a model can write it (a script for the bet,
+written from its play, carrying the page's address while the page is online), else
+**Copy your page link** for a play that shares the page — and logging beside it as
+a link, for what the link cannot see. A count the person keeps is still logged as
+the move, and a bet with no play is as before.
 
 Two lines under the button are the point of the card. **What passing the bet does
 for the money** (`payoffOf`): a conversation bet earns nothing, and the card says
@@ -3508,7 +3525,8 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/watch/run` | read the sources now (25s budget) — the nightly budget cannot fit the watcher |
 | GET/POST | `/api/copilot/working` | the working file: write a line, confirm or decline a reading |
 | DELETE | `/api/copilot/working?id=` | remove a line |
-| GET/POST | `/api/copilot/commissions` | read the thread · write a mandate (always as a draft) |
+| GET/POST | `/api/copilot/commissions` | read the thread · write a mandate (always as a draft) — or, for an ask that names an asset this app keeps (`assetAsked`), draft that asset instead and answer `{ asset, assetKind, revised }` |
+| GET | `/api/copilot/commissions/[id]` | one project's log, for its sheet: a closed project's is not in the home. A failed read is a 500, never an empty log |
 | POST | `/api/copilot/commissions/[id]` | `approve` · `unblock` · `stop` · `done` · `seen` · `confirm` · `repeat` · `assign`. `approve`, and `unblock` with an `answer`, hand the work to the worker in `after()` and answer `started`; `unblock` keeps a job blocked while a call through the person's account still waits for its OK. `stop` and `done` carry the close-out verdict `{ worth, amount?, note? }`, answer with `recorded` plus a `note` when it did not reach the ledger, and tell a Claude agent still on the job to stop. `confirm { allow, call?, note? }` passes the person's OK or no on one call through their account to its session. `repeat { every: day \| week \| month \| off }` sets the standing grant on the job the runs come from (research only). `assign { worker \| null }` picks the hands |
 | POST | `/api/copilot/commissions/[id]/result` | **the worker's return leg**: Bearer `COPILOT_INBOUND_SECRET`, or a worker's own `inbound_secret_env`, which reports only on jobs handed to it. Through `acceptWork`; answers with the app's `checked` verdict |
 | POST | `/api/copilot/workers/claude/webhook` | Anthropic's session webhook (HMAC, `ANTHROPIC_WEBHOOK_SIGNING_KEY`): answers 204 and reads the session back in `after()` |
@@ -3652,7 +3670,62 @@ with the reason, so the card offers another go. The rule cuts the other way too:
 the chain's own move for delivery read "Plan how I take a new client…", opened on
 no writing verb, went as research, and the link check sent it back every time — a
 plan of yours has no links to give. It reads "Write how…" now, and the suite holds
-every move the chain hands the agent to the job it means.
+every move the chain hands the agent to the job it means. And it cuts for the
+person's own words: "Create a landing page", "Design an onboarding checklist",
+"Plan how I take a new client…" opened on no writing verb either, and two of its
+owner's projects were refused by the link check until they read "Not accepted". A
+making verb (create, build, design, plan, map out…) with a document of their own
+for its object, or "plan how I / my …", is writing now (`makesADocument`); a list of
+things in the world ("a list of 20 dentists in Makati") is still research, and the
+world's markers — a visa, a trip, a price — still win.
+
+**Asked for by name: an asset, not a project** (`assets.ts` `assetAsked`,
+`assetToRevise`; `POST /api/copilot/commissions`). Its owner typed "Draft a landing
+page for my app" into the bet's box and "Create a landing page…" into Projects, and
+got landing-page copy in a project thread and an HTML file the link check sent
+back — while the page online stayed v1, and the app keeps landing pages, with
+versions, a draft by AI and a one-tap "Put it online". A hand-over that asks to make
+an asset this app keeps — a landing page, the delivery workflow, a call or message
+script, the offer — is drafted as that asset (`draftAsset`), the next version of the
+one in use (the page online first), tied to the running bet when it came from its
+card, and opened; the box says so while it is typed ("Reads as your landing page:
+the app drafts its next version, kept in Assets — not a project"). Narrow by
+design: it has to open with making something and name the asset, and an ask about
+other people's pages — examples, competitors, builders — stays research. A worker
+picked by name keeps the job, and with no model on the server nothing changes. The
+chain's own "Client onboarding" move goes the same way, so How you deliver reads
+the workflow it drafts.
+
+**A project's work is on its sheet, and followed until it lands**
+(`GET /api/copilot/commissions/[id]`, `commission.ts` `handedSince`). The home
+loads the log of live projects only, so a finished one's sheet showed its outcome
+line and nothing else — the Writer posts its draft and closes in one call, and its
+landing-page copy was on no screen at all. A closed project's sheet reads its log
+when it opens (a failed read is said, never an empty log), and what a worker wrote
+has a Copy button. Approving says what happens — "Approve and start: then it starts
+straight away" where a worker is connected — instead of "it runs with the next
+nightly pass" over a job that started a second later. A job handed over and not
+heard from yet says who has it and since when, the screen follows it until it
+reports (`useCopilot`, 8s, half an hour at most, only where a worker is connected),
+and "Run it now" is offered only to a job that is idle: never handed over, sent
+back, or past its own time. "Do it again" is offered where another run could find
+something new — research — and not under a finished page or plan.
+
+**Projects, for your bet first** (`ProjectsSheet`). A hand-over from the bet's card
+that the Writer finished in a minute went to the foot of Finished, and its owner
+looked under On the go and concluded the bet's box made another kind of project.
+Projects now opens with the running bet's own, live or finished, under its belief,
+then the rest.
+
+**Said to you** (`you.ts` `secondPerson`, `brieftext.ts`). An idea read "message 10
+people the owner knows" and a worker's report "drafted the approval gate so Alex
+can move from a verbal yes" — on Alex's own phone. Workers are told every summary is
+read by the person and written to "you"; ideas are rewritten rather than dropped;
+and what was already written is said to the person on the way to the screen —
+"the owner" wherever it stands, their first name only where it is plainly them
+(the possessive, the subject of "can" or "needs", the object of "for"), so a title
+and "Mark the step done" survive. The record keeps the words as sent. A play's
+source reads "By AI, from your record", never "FROM AI, FROM YOUR RECORD".
 
 **The plan is held to the ring** (`guardPlan`, `guardEvents`). "Proceed toward a
 booking confirmation" was stored as the worker's step on a guesthouse search

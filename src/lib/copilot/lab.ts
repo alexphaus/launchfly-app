@@ -1663,6 +1663,19 @@ export function playOf(bet: Pick<Bet, 'play' | 'idea'>): { label: string; how: s
 }
 
 /**
+ * Where a play came from, as a line under it: "From The Mom Test", "By AI, from
+ * your record", "By AI, after $100M Leads", "From your plan". The bet card put
+ * "From" in front of every source, and with the label's capitals an idea read
+ * "FROM AI, FROM YOUR RECORD".
+ */
+export function playFromWords(from: string): string {
+  if (/^AI\b/.test(from)) return `By ${from}`;
+  if (/^your plan$/i.test(from)) return 'From your plan';
+  if (/^(?:your|shared|from|by)\b/i.test(from)) return from[0].toUpperCase() + from.slice(1);
+  return `From ${from}`;
+}
+
+/**
  * A play's name for a prompt, or null for one that came in as a shared reply: a
  * chat's words are never shown to a model as the person's, and a number in them
  * would pass the check that refuses numbers the person never gave (invariants 2

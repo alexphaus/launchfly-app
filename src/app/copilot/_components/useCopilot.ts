@@ -21,6 +21,8 @@ import { nightlyInFlight, nightlyToast, nightlyView, type NightlyRun } from '@/l
 import { roadmapInFlight, type MarkState, type RoadmapRun } from '@/lib/copilot/roadmap';
 import { ideaRun, newestRuns, openStarts, planBusy, type IdeaRunRow, type PlanRun } from '@/lib/copilot/lab';
 import type { LinkKey } from '@/lib/copilot/business';
+import { assetDraftedLine, type AssetKind } from '@/lib/copilot/assets';
+import { handedSince } from '@/lib/copilot/commission';
 import type { ExperimentState } from '@/lib/copilot/experiment';
 import { importLine, type MoneyImport } from '@/lib/copilot/money/ledger';
 import { takeSharedSeed } from './sharedSeed';
@@ -149,6 +151,10 @@ const ROADMAP_POLL_MS = 3_000;
 const IDEAS_POLL_MS = 4_000;
 /** A PDF or a screenshot is one model call a few pages long. */
 const IMPORT_POLL_MS = 3_000;
+/** Handed-over work: the Writer answers in a minute, an agent in many. One read per job per tick, so not too often. */
+const HANDED_POLL_MS = 8_000;
+/** The watch's own limit. A job not heard from by then is the nightly pass's to take up, and its sheet offers "Run it now". */
+const HANDED_FOLLOW_MS = 30 * 60_000;
 
 export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: CopilotConfig<T>) {
   const shell = useShell();
@@ -415,6 +421,46 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     const timer = setInterval(() => { void tick(); }, IDEAS_POLL_MS);
     return () => { over = true; clearInterval(timer); };
   }, [crewAt, refresh, say]);
+
+  // Work handed to a worker and not heard from yet (commission.ts handedSince):
+  // followed until it reports, then the screen reloads onto what came back. A
+  // worker takes seconds to minutes, and nothing on screen moved when it
+  // reported — so its sheet offered "Run it now" over a job already running,
+  // and the Writer's draft landed on a screen nobody reloaded. Keyed on the jobs
+  // and when each went, so a second hand-over joins the watch.
+  // Only where something can report: with no worker connected an approved job waits, and its sheet says so.
+  const handedKey = !home.workerConnected ? '' : home.commissions
+    .map((t) => ({ id: t.commission.id, since: handedSince(t.commission, t.report, t.work?.handedAt, Date.now()) }))
+    .filter((x) => !!x.since)
+    .map((x) => `${x.id}@${x.since}`).sort().join(',');
+  useEffect(() => {
+    if (!handedKey) return;
+    let over = false;
+    let misses = 0;
+    const watched = handedKey.split(',').map((x) => { const at = x.indexOf('@'); return { id: x.slice(0, at), since: x.slice(at + 1) }; });
+    const began = Date.now();
+    const tick = async () => {
+      // Each job's own budget bounds handedSince; this bounds the watch itself.
+      if (Date.now() - began > HANDED_FOLLOW_MS) { over = true; clearInterval(timer); return; }
+      let heard = false;
+      for (const w of watched) {
+        try {
+          const r = await get<{ events?: Array<{ at: string }> }>(`/commissions/${encodeURIComponent(w.id)}`);
+          misses = 0;
+          if ((r.events ?? []).some((e) => e.at > w.since)) heard = true;
+        } catch (e) {
+          misses += 1;
+          if (misses === NIGHTLY_MISSES) say(`Cannot check on your crew: ${e instanceof Error ? e.message : 'no connection'}. Still trying.`);
+        }
+      }
+      if (over || !heard) return;
+      over = true;
+      clearInterval(timer);
+      try { await refresh(); } catch { say('Your crew reported, but this screen could not reload. Reopen the app to see it.'); }
+    };
+    const timer = setInterval(() => { void tick(); }, HANDED_POLL_MS);
+    return () => { over = true; clearInterval(timer); };
+  }, [handedKey, refresh, say]);
 
   // A PDF or a screenshot is read in after(), so the upload returns while it is
   // still being read. Follow it — keyed on the ids being read, so a second
@@ -740,8 +786,14 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
     },
     async createCommission(input) {
       try {
-        const r = await post<{ home: HomeData; commission?: { id: string } | null; tied?: boolean; untied?: string | null }>('/commissions', input);
+        const r = await post<{ home: HomeData; commission?: { id: string } | null; tied?: boolean; untied?: string | null; asset?: string; assetKind?: AssetKind; revised?: boolean }>('/commissions', input);
         setHome(r.home);
+        // An asset asked for by name was drafted as one (assets.ts assetAsked):
+        // said as what it is and what is still the person's to do with it.
+        if (r.asset && r.assetKind) {
+          say(assetDraftedLine(r.assetKind, !!r.revised));
+          return { ok: true, asset: r.asset, tied: true, untied: null };
+        }
         // Says what happens next, because what happens next is nothing until
         // they approve it — and a commission that silently sits in draft looks
         // exactly like one the app ignored.

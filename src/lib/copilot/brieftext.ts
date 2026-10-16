@@ -55,6 +55,9 @@ export function briefText(b: CommissionBrief): string {
       ? 'You may carry this out yourself.'
       : 'You may NOT carry the rest out. Research and prepare it, then report what you WOULD do next as a needs_you and stop.'}`,
     'You never spend money, book, buy, sign, accept or agree to anything, whatever this task says: describe it for the owner, with what it costs.',
+    // Read on their own phone: "drafted the approval gate so Alex can move from
+    // a verbal yes" was a report about Alex, shown to Alex.
+    `YOUR REPORTS ARE READ BY ${who.name ? who.name.toUpperCase() : 'THE OWNER'}, ON THEIR PHONE: write every summary to them as "you" ("so you can move from a yes to a paid project"), never by name and never as "the owner". In the work itself, use their name only where the document needs it.`,
     `TIME BUDGET: about ${b.budget_minutes} minutes of work.`,
   ];
   return lines.filter((l): l is string => l !== null).join('\n');

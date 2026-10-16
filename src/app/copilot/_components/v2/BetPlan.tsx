@@ -167,9 +167,11 @@ export function PlanPreview({ steps, lead, children }: { steps: PlanStep[]; lead
 }
 
 /**
- * A bet started before plans: what planning it would start, and the tap that
- * does. Only where the crew has a step — a plan of yours alone is the play,
- * already under the bet.
+ * A bet with no plan written — started before plans, or before the crew had a
+ * step for its play: what planning it would start, and the tap that does. Only
+ * where the crew has a step — a plan of yours alone is the play, already under
+ * the bet. Its lead said "started before bets had plans" to a bet started the
+ * day before, whose play only now has a step for the crew.
  */
 export function PlanIt({ view, steps, actions }: { view: BetView; steps: PlanStep[]; actions: Actions }) {
   const [busy, setBusy] = useState(false);
@@ -187,7 +189,7 @@ export function PlanIt({ view, steps, actions }: { view: BetView; steps: PlanSte
     if (!r.ok) setError(r.error ?? 'Could not plan it');
   };
   return (
-    <PlanPreview steps={steps} lead="This bet started before bets had plans. Plan it, and the crew starts its part now.">
+    <PlanPreview steps={steps} lead="Your crew can take part of this bet. Plan it, and it starts now.">
       <button className="cp-btn sm primary cp2-bplan-go" disabled={busy} onClick={() => void plan()}>{busy ? 'Planning…' : 'Plan it and start the crew'}</button>
       {error && <p className="cp-help cp2-err">{error}</p>}
     </PlanPreview>

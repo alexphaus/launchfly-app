@@ -2273,6 +2273,13 @@ export async function loadCommissionEvents(
   profileId: string,
   commissionIds: string[],
   perCommission = EVENTS_PER_COMMISSION,
+  /**
+   * Strict: a failed read throws rather than reading as no events. The home
+   * keeps the lenient read (one project's log must not blank the screen); a
+   * sheet that reads one log has nothing else to show, and an empty one would
+   * say the project did nothing (invariant 13).
+   */
+  opts: { strict?: boolean } = {},
 ): Promise<CommissionEvent[]> {
   if (!commissionIds.length) return [];
   const db = copilotDb();
@@ -2280,7 +2287,10 @@ export async function loadCommissionEvents(
     db.from('copilot_commission_events').select(COMMISSION_EVENT_COLS)
       .eq('profile_id', profileId).eq('commission_id', id)
       .order('at', { ascending: false }).limit(perCommission)
-      .then((r) => (r.error ? [] : ((r.data ?? []) as unknown as CommissionEvent[])))));
+      .then((r) => {
+        if (r.error && opts.strict) throw new Error(describeDbError(r.error, 'Could not read what it did.'));
+        return r.error ? [] : ((r.data ?? []) as unknown as CommissionEvent[]);
+      })));
   return pages.flat();
 }
 

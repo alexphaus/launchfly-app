@@ -403,6 +403,8 @@ export interface ThreadWork {
   job: JobKind;
   /** Who has it now: the newest hand-over that reached them. */
   with: { key: string; name: string; kind: HiredKind } | null;
+  /** When that hand-over was: what the sheet follows until the worker reports (commission.ts handedSince). Optional: an older payload has none. */
+  handedAt?: string | null;
   /** Why the newest hand-over did not get there, when it is newer than the last that did. */
   unreached: string | null;
   /** Who it would go to now, for a job nobody has yet: so the person sees who before they say yes. */

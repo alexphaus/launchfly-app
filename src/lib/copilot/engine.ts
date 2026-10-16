@@ -33,7 +33,7 @@ import { dateLabel, daysPhrase, goalDue } from './due';
 import { creditedGoalId } from './goalcard';
 import type { HistoryEntry } from './history';
 import { resultLine, type Bet, type BetView, type Talk } from './lab';
-import { betNext, type BetNextGo } from './proof';
+import { betNext, playSays, type BetNextGo } from './proof';
 import type { FoundBy, Goal } from './types';
 import { betVoiced, stuckLine, type BetVoices } from './voices';
 
@@ -52,7 +52,13 @@ export type StepGo =
   | { to: 'shelf'; id: string }
   /** Where the bet's own next count happens (proof.ts betNext). */
   | { to: 'next'; go: BetNextGo }
-  | { to: 'tab'; tab: 'path' | 'swipe' };
+  | { to: 'tab'; tab: 'path' | 'swipe' }
+  /** What the play has you say, drafted for the bet by the app's model (assets.ts script). */
+  | { to: 'draft' }
+  /** An asset already made for the bet, opened. */
+  | { to: 'asset'; id: string }
+  /** The address of the person's page, on the clipboard: what a play that shares the page sends. */
+  | { to: 'copylink' };
 
 export interface StepButton { label: string; go: StepGo }
 
@@ -65,7 +71,7 @@ export interface Payoff {
   link: StepButton | null;
 }
 
-export type StepKind = 'offer' | 'found' | 'checkpoint' | 'shelf' | 'pick' | 'reply' | 'waiting' | 'find' | 'count';
+export type StepKind = 'offer' | 'found' | 'checkpoint' | 'shelf' | 'pick' | 'reply' | 'waiting' | 'find' | 'count' | 'play';
 
 export interface Step {
   kind: StepKind;
@@ -84,6 +90,8 @@ export interface Step {
   /** One line under the button: what a tap does, where that is not obvious. */
   hint: string | null;
   primary: StepButton;
+  /** A second way on, as a link beside the button: logging what a count link cannot see, the page's address. */
+  secondary?: StepButton | null;
   /** The line handed to Claude with the whole record, when a bet is running: a chat to think it through in. */
   claude: string | null;
   payoff: Payoff | null;
@@ -194,6 +202,24 @@ export interface StepInput {
   shelf: Array<{ id: string; part: LinkKey; belief: string }>;
   weak: { key: LinkKey; label: string; why: string } | null;
   goal: PayoffGoal | null;
+  /**
+   * The play the running bet runs, where it has one, and what the screen can do
+   * for it: whether its count comes in by itself, the message already made for
+   * it, whether a draft can be written, whether the page is online to share.
+   */
+  play?: StepPlay | null;
+}
+
+export interface StepPlay {
+  label: string;
+  how: string;
+  /** What counts the bet by itself: the count link, the page, or nothing — then the person logs it. */
+  counted: 'link' | 'page' | null;
+  /** A script made for this bet (assets.ts), opened rather than drafted twice. */
+  script: string | null;
+  /** A model and an offer to draft from (invariant 1). */
+  canDraft: boolean;
+  pageOnline: boolean;
 }
 
 /** "Day 3 of 14 and no conversation logged yet: 10 to have in the 12 days left", or the bet's count and the days. */
@@ -296,11 +322,37 @@ export function engineStep(i: StepInput): Step | null {
   }
 
   const next = betNext(b.metric, i.found, b.unit);
+  const log: StepButton = { label: next.label, go: { to: 'next', go: next.go } };
+  const p = i.play;
+  // The count comes in by itself, so logging it is not the move: doing the play
+  // is. Day one of a bet whose count link counted its sign-ups read "Log your
+  // sign-ups", with "message ten people you know" folded away in the bet's card.
+  if (p && p.counted && next.go === 'count') {
+    const says = playSays(p.how);
+    const sharesPage = p.pageOnline && PAGE_WORDS.test(`${p.label} ${p.how}`);
+    const copy: StepButton = { label: 'Copy your page link', go: { to: 'copylink' } };
+    const primary: StepButton = p.script ? { label: `Open your ${says ?? 'message'}`, go: { to: 'asset', id: p.script } }
+      : says && p.canDraft ? { label: `Draft the ${says}`, go: { to: 'draft' } }
+      : sharesPage ? copy
+      : log;
+    const secondary = primary.go.to === 'copylink' ? log : primary === log ? null : sharesPage ? copy : log;
+    const left = Math.max(1, b.days - view.day + 1);
+    const unit = b.unit ?? 'count';
+    return {
+      ...common, kind: 'play', title: clamp(p.label, 90),
+      why: `${clamp(firstSentence(p.how), 170)} ${resultLine(view)} · ${plural(left, 'day')} left.`,
+      hint: `Your ${p.counted === 'link' ? 'count link' : 'page'} counts ${unit} by itself: log only the ones it cannot see.`,
+      primary, secondary,
+    };
+  }
   return {
     ...common, kind: 'count', title: nextTitle(next.go, b.unit), hint: null,
-    primary: { label: next.label, go: { to: 'next', go: next.go } },
+    primary: log,
   };
 }
+
+/** A play about the person's page: sharing it, sending people to it. */
+const PAGE_WORDS = /\b(?:landing ?page|your page|the page|page link|link to (?:it|your|the)|forward)\b/i;
 
 /** The first sentence of a longer reason: the part a step needs, where the sheet has the rest. */
 function firstSentence(s: string): string {

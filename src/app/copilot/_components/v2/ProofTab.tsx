@@ -32,7 +32,8 @@
 // drafts of an asset — and the rows judge. lib/copilot/proof.ts, lab.ts,
 // engine.ts, crew.ts, assets.ts and history.ts have the rules.
 import { useEffect, useRef, useState } from 'react';
-import { ASSET_LABEL, OFFER_ASSET, type Asset, type AssetGap, type AssetKind } from '@/lib/copilot/assets';
+import { ASSET_LABEL, OFFER_ASSET, assetAskLine, assetAsked, assetToRevise, type Asset, type AssetGap, type AssetKind } from '@/lib/copilot/assets';
+import { offerIsEmpty } from '@/lib/copilot/offer';
 import {
   LINK_LABEL, LINK_STATE_LABEL, changeLine, chainChanges, evidenceState, parseSeenChain, snapshotChain,
   type ChainChange, type LinkKey, type LinkMove, type SeenChain,
@@ -41,7 +42,7 @@ import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } f
 import { WORKER_STATE_LABEL, crewHeadline, crewOn, type Worker } from '@/lib/copilot/crew';
 import { historyDay, type HistoryEntry } from '@/lib/copilot/history';
 import {
-  BET_STATE_LABEL, METRIC, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS, suggestBelief,
+  BET_STATE_LABEL, METRIC, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS, playFromWords, suggestBelief, unitPage,
   betPrice, countedFrom, dayWords, decisionWords, gradeWords, ideaRun, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
@@ -54,8 +55,10 @@ import { COMMITMENT_LABEL, COMMITMENTS, dayIn, type Commitment } from '@/lib/cop
 import { VOICE_OPENER, VOICE_SEARCHES, betVoiced, betVoices, postedWords, voiceRefusal, voiceTalk, type Voice } from '@/lib/copilot/voices';
 import {
   BUILT_SHOWN, OPENED_KEY, clearOpened, engineFigure, engineStep, markOpened, openPart, parseOpened, payoffGoal,
-  type Step, type StepGo,
+  type Step, type StepGo, type StepPlay,
 } from '@/lib/copilot/engine';
+import { unitSignal } from '@/lib/copilot/signal';
+import { secondPerson } from '@/lib/copilot/you';
 import { pageCounts, pageLine } from '@/lib/copilot/livepage';
 import { SCOUT_SEARCHING, planCapsOf, planFor, planInputOf, planView, stepBusy } from '@/lib/copilot/betplan';
 import type { Actions } from '../shared';
@@ -82,7 +85,7 @@ export default function ProofTab({ home, d, actions }: { home: HomeData; d: Deri
       {/* A move about the whole business — the offer, the checkpoint — is no one part's, so it comes before them. */}
       {step && !step.part && (
         <div className="cp-card cp2-ns">
-          <NextStep step={step} view={lab.current} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />
+          <NextStep home={home} step={step} view={lab.current} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />
         </div>
       )}
       {home.pivotLeft && <AfterPivot home={home} left={home.pivotLeft} actions={actions} />}
@@ -230,20 +233,48 @@ function useStep(home: HomeData, d: Derived, opened: Opened): { step: Step | nul
       : voiceRefusal({ running: true, voiced: true, searches: voices.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining })
     : null;
   const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
+  // The play the bet runs, and what the screen can do for it (engine.ts StepPlay).
+  const played = b ? playOf(b) : null;
+  const play: StepPlay | null = b && played ? {
+    label: secondPerson(played.label), how: secondPerson(played.how),
+    counted: home.signals?.made && unitSignal(b.unit) ? 'link' : home.page?.live && unitPage(b.unit) ? 'page' : null,
+    script: (home.assets?.assets ?? []).find((a) => a.kind === 'script' && !a.retired && a.versions.some((v) => v.bet === b.id))?.id ?? null,
+    canDraft: !!home.ai && !d.noOffer,
+    pageOnline: !!home.page?.live,
+  } : null;
   const step = engineStep({
     today: home.recent.today, offerSet: !d.noOffer, unreadable: !!lab.unreadable,
     checkpoint: { due: lab.checkpoint.due, ended: lab.checkpoint.ended.length },
     current: view, talks: lab.talks, found: found.value, voices, opened: opened.ids, searchRefusal,
     shelf: lab.shelf, weak: weak ? { key: weak.key, label: weak.label, why: weak.why } : null,
     goal: payoffGoal(home.goals, home.recent.today),
+    play,
   });
   return { step, peopleShown: !!voices && (voices.searches > 0 || !!read?.unreadable) };
 }
 
-function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
-  step: Step; view: BetView | null; actions: Actions; brief: Brief; find: Find; opened: Opened; peopleShown: boolean;
+function NextStep({ home, step, view, actions, brief, find, opened, peopleShown }: {
+  home: HomeData; step: Step; view: BetView | null; actions: Actions; brief: Brief; find: Find; opened: Opened; peopleShown: boolean;
 }) {
   const move = useMove(actions, brief);
+  const [drafting, setDrafting] = useState(false);
+  const [told, setTold] = useState<{ text: string; bad: boolean } | null>(null);
+  // What the play has you say, drafted for this bet and opened (assets.ts script).
+  const draft = async () => {
+    if (!view || drafting) return;
+    setDrafting(true); setTold(null);
+    const r = await actions.assets({ action: 'draft', kind: 'script', bet: view.bet.id });
+    setDrafting(false);
+    if (!r.ok) return setTold({ text: r.error ?? 'Could not draft it', bad: true });
+    if (r.id) actions.openSheet({ kind: 'asset', id: r.id });
+  };
+  // Inside the tap: Safari refuses a clipboard write outside one.
+  const copyLink = async () => {
+    const url = home.page?.url ?? (home.page?.path && typeof window !== 'undefined' ? `${window.location.origin}${home.page.path}` : null);
+    if (!url) return setTold({ text: 'Your page has no address on this server yet.', bad: true });
+    try { await navigator.clipboard.writeText(url); setTold({ text: `Copied: ${url.replace(/^https?:\/\//, '')}`, bad: false }); }
+    catch { setTold({ text: `Your browser did not let it be copied. Your page is at ${url}`, bad: false }); }
+  };
   const go = (g: StepGo) => {
     switch (g.to) {
       case 'offer': return actions.openSheet({ kind: 'offer' });
@@ -256,6 +287,9 @@ function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
       case 'shelf': return actions.openSheet({ kind: 'bet', shelf: g.id });
       case 'next': return view ? goTo(g.go, actions, view.bet.id) : undefined;
       case 'tab': return actions.setTab(g.tab);
+      case 'draft': return void draft();
+      case 'asset': return actions.openSheet({ kind: 'asset', id: g.id });
+      case 'copylink': return void copyLink();
       case 'post': return undefined;
     }
   };
@@ -276,7 +310,12 @@ function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
             {p.label} <IconExternal />
           </a>
         ) : (
-          <button className="cp-btn primary" disabled={searching} onClick={() => go(p.go)}>{searching ? 'Looking… about twenty seconds' : p.label}</button>
+          <button className="cp-btn primary" disabled={searching || (drafting && p.go.to === 'draft')} onClick={() => go(p.go)}>
+            {searching ? 'Looking… about twenty seconds' : drafting && p.go.to === 'draft' ? 'Drafting…' : p.label}
+          </button>
+        )}
+        {step.secondary && (
+          <button className="cp2-link" disabled={drafting && step.secondary.go.to === 'draft'} onClick={() => go(step.secondary!.go)}>{step.secondary.label}</button>
         )}
         {ask && (
           <button className="cp2-link muted" disabled={move.busy === ask.key} onClick={() => void move.run(ask)}>
@@ -285,6 +324,7 @@ function NextStep({ step, view, actions, brief, find, opened, peopleShown }: {
         )}
       </div>
       {step.hint && <p className="cp-help">{step.hint}</p>}
+      {told && <p className={`cp-help${told.bad ? ' cp2-err' : ''}`}>{told.text}</p>}
       {said && find.error && <p className="cp-help cp2-err">{find.error}</p>}
       {said && find.why && <p className="cp-help">{find.why[0].toUpperCase() + find.why.slice(1)}.</p>}
       {ask && move.note?.key === ask.key && <MoveNote note={move.note} />}
@@ -402,7 +442,7 @@ function Station({ home, d, actions, part, step, pick, brief, find, opened, peop
         <span className={`cp2-bz-state ${l.state}`}><i />{LINK_STATE_LABEL[l.state]}</span>
       </div>
       {/* The move first when it is on this part: the tab is opened to act, and its button belongs above the fold. */}
-      {here && <div className="cp2-er-move"><NextStep step={here} view={lab.current} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} /></div>}
+      {here && <div className="cp2-er-move"><NextStep home={home} step={here} view={lab.current} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} /></div>}
       <div className="cp2-er-detail">
         <p className="cp2-er-why">
           {weak && <b>The weakest part. </b>}
@@ -682,7 +722,7 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
 
       <button className="cp2-lab-more" onClick={() => setMore((v) => !v)} aria-expanded={more}>
         {/* The play's own name, which fits a line; its book is said inside. */}
-        <span className="cp2-clamp1">{play ? play.label : 'How it is counted'}</span>
+        <span className="cp2-clamp1">{play ? secondPerson(play.label, home.profile.name) : 'How it is counted'}</span>
         <span className={`cp2-plan-chev${more ? ' open' : ''}`}><IconChevron /></span>
       </button>
       {more && (
@@ -690,11 +730,12 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
           <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit, !!home.signals?.made, !!home.page?.live)}</p>
           {play && (
             <div className="cp2-lab-playing">
-              <span className="cp2-lab-book">From {play.from}</span>
-              <p>{play.how}</p>
+              <span className="cp2-lab-book">{playFromWords(play.from)}</span>
+              {/* Said to you (you.ts): a play an AI wrote before it was told to read "the owner knows". */}
+              <p>{secondPerson(play.how, home.profile.name)}</p>
             </div>
           )}
-          {home.workerConnected && <HandOver view={view} actions={actions} full={full} />}
+          {home.workerConnected && <HandOver home={home} view={view} actions={actions} full={full} />}
           <BetWorkList view={view} work={workLeft} home={home} actions={actions} />
           {/* A plan's draft or project is this bet's "get it ready", already on the plan. */}
           {!plan && <Prep home={home} view={view} work={work} actions={actions} brief={brief} full={full} canDraft={!!home.ai && !d.noOffer} />}
@@ -992,10 +1033,13 @@ function Prep({ home, view, work, actions, brief, full, canDraft }: { home: Home
 }
 
 /** Part of the bet, handed to the agent as a project tied to it. Only where a worker can pick it up; the full box is under Projects. */
-function HandOver({ view, actions, full }: { view: BetView; actions: Actions; full: boolean }) {
+function HandOver({ home, view, actions, full }: { home: HomeData; view: BetView; actions: Actions; full: boolean }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A page, a script or the workflow asked for by name is drafted as that asset
+  // (assets.ts assetAsked), which takes no project slot: not held back when the crew is full.
+  const asset = home.ai && !offerIsEmpty(home.profile.offer) ? assetAsked(text) : null;
   const go = async () => {
     const objective = text.trim();
     if (!objective) return;
@@ -1003,6 +1047,8 @@ function HandOver({ view, actions, full }: { view: BetView; actions: Actions; fu
     // As the bet's own: it takes the slot the bet keeps, and the server ties it to the bet.
     const r = await actions.createCommission({ objective, why: `For the bet "${view.bet.belief}".`.slice(0, 300), authority: 'read', bet: view.bet.id });
     setBusy(false);
+    // A page, a script or the workflow, asked for by name, comes back drafted as that asset, made for this bet.
+    if (r.ok && r.asset) { setText(''); return actions.openSheet({ kind: 'asset', id: r.asset }); }
     if (!r.ok || !r.id) return setError(r.error ?? 'Could not hand that over');
     setText('');
     // Said, not swallowed: a project the bet does not know about is still a project, under Projects.
@@ -1017,10 +1063,11 @@ function HandOver({ view, actions, full }: { view: BetView; actions: Actions; fu
           onChange={(e) => { setText(e.target.value); setError(null); }}
           onKeyDown={(e) => { if (e.key === 'Enter') void go(); }}
         />
-        <button className="cp-btn sm primary" disabled={!text.trim() || busy || full} onClick={() => void go()}>{busy ? 'Writing…' : 'Hand over'}</button>
+        <button className="cp-btn sm primary" disabled={!text.trim() || busy || (full && !asset)} onClick={() => void go()}>{busy ? (asset ? 'Drafting…' : 'Writing…') : asset ? 'Draft it' : 'Hand over'}</button>
       </div>
+      {asset && <p className="cp-help">{assetAskLine(asset, !!assetToRevise(asset, home.assets?.assets ?? [], home.page?.live?.asset ?? null))}</p>}
       {/* Full here means the bet's own slot is taken too: another project for it is already on the go. */}
-      {full && <p className="cp-help">A project for this bet is already on the go, and so are {MAX_ACTIVE_COMMISSIONS} others. Finish or stop one to hand over another.</p>}
+      {full && !asset && <p className="cp-help">A project for this bet is already on the go, and so are {MAX_ACTIVE_COMMISSIONS} others. Finish or stop one to hand over another.</p>}
       {error && <p className="cp-help cp2-err">{error}</p>}
     </div>
   );
@@ -1074,7 +1121,7 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
             <span className="cp2-shelf-part">{LINK_LABEL[e.part]}</span>
             <b className="cp2-clamp2">{e.belief}</b>
             <span className="cp2-shelf-line">{playLine(e, priceLabel)}</span>
-            {play && <span className="cp2-shelf-from">{play.from} · {play.label}</span>}
+            {play && <span className="cp2-shelf-from">{playFromWords(play.from)} · {secondPerson(play.label, home.profile.name)}</span>}
             <div className="cp2-shelf-do">
               {!running && <button className="cp-btn sm primary" disabled={busy === e.id} onClick={() => actions.openSheet({ kind: 'bet', shelf: e.id })}>Start it</button>}
               <button className="cp2-link muted" disabled={busy === e.id} onClick={() => void off(e.id)}>{busy === e.id ? 'Taking off…' : 'Take off'}</button>
@@ -1182,8 +1229,8 @@ function NextBetCard({ home, d, actions, part, top, priceLabel }: { home: HomeDa
       <span className="cp2-pf-src">
         {idea ? <><i className="cp2-owner ai">By AI</i>{idea.book ? <span>after {idea.book}</span> : null}</> : <span>{top.kind === 'play' ? top.play.book : ''}</span>}
       </span>
-      <h2 className="cp2-lab-q">{p.label}</h2>
-      <p className="cp2-lab-play-how">{p.how}</p>
+      <h2 className="cp2-lab-q">{secondPerson(p.label)}</h2>
+      <p className="cp2-lab-play-how">{secondPerson(p.how)}</p>
       {idea && <IdeaReasons idea={idea} />}
       {top.kind === 'idea' && top.pick && <p className="cp2-pf-why"><b>Why this one first:</b> {top.pick}</p>}
       <div className="cp2-lab-preview">
@@ -1213,8 +1260,8 @@ function IdeaReasons({ idea }: { idea: Idea }) {
   const sources = idea.sources ?? [];
   return (
     <>
-      {idea.works && <p className="cp2-nextbet-r"><b>How it would work:</b> {idea.works}</p>}
-      {idea.fails && <p className="cp2-nextbet-r"><b>If it does not pass:</b> {idea.fails}</p>}
+      {idea.works && <p className="cp2-nextbet-r"><b>How it would work:</b> {secondPerson(idea.works)}</p>}
+      {idea.fails && <p className="cp2-nextbet-r"><b>If it does not pass:</b> {secondPerson(idea.fails)}</p>}
       {sources.length > 0 && (
         <p className="cp2-nextbet-src">
           <span>Rests on</span>
@@ -1308,9 +1355,10 @@ function IdeaCard({ idea, priceLabel, actions }: { idea: Idea; priceLabel: strin
   return (
     <div className="cp2-pf-play ai">
       <span className="cp2-pf-src"><i className="cp2-owner ai">By AI</i>{idea.book ? <span>after {idea.book}</span> : null}</span>
-      <b className="cp2-lab-play-t">{idea.label}</b>
-      <p className="cp2-lab-play-how">{idea.how}</p>
-      {idea.why && <p className="cp2-pf-why">{idea.why}</p>}
+      {/* Said to you (you.ts): ideas written before the writer was told read "the owner knows". */}
+      <b className="cp2-lab-play-t">{secondPerson(idea.label)}</b>
+      <p className="cp2-lab-play-how">{secondPerson(idea.how)}</p>
+      {idea.why && <p className="cp2-pf-why">{secondPerson(idea.why)}</p>}
       <IdeaReasons idea={idea} />
       <p className="cp2-lab-play-pass">Pass line: {playLine(idea, priceLabel)}</p>
       <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', idea: idea.key, part: idea.part })}>Make it my bet</button>

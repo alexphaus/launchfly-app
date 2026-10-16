@@ -16,7 +16,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { generateText } from 'ai';
-import { maxOutputTokens, modelErrorText, providerFor, resolveLlmConfig } from './agent/llm';
+import { maxOutputTokens, modelErrorText, providerFor, resolveIdeasConfig, resolveLlmConfig, type LlmConfig } from './agent/llm';
 import { getProfile } from './base';
 import { extractJson } from './agent/schema';
 import {
@@ -24,8 +24,8 @@ import {
   assetDraftPrompt, checkAssetDraft, type AssetDraftContext, type AssetKind,
 } from './assets';
 import { LINK_STATE_LABEL, businessChain, type LinkKey } from './business';
-import { IDEAS_SYSTEM, firstWhyOf, ideaSources, ideasPrompt, normalizeIdeas, talkTotals, type IdeasContext } from './ideas';
-import { RESEARCH_PER_QUERY, RESEARCH_TIMEOUT_MS, evidenceFrom, rankIdeas, researchQueries, type IdeaResearch } from './idearesearch';
+import { talkTotals, writeIdeaSet, type AskModel, type IdeasContext } from './ideas';
+import { RESEARCH_PER_QUERY, RESEARCH_TIMEOUT_MS, evidenceFrom, researchQueries, type IdeaResearch } from './idearesearch';
 import { exaConfigured, exaPages } from './watch/exa';
 import { LAB_IDEAS, LAB_IDEAS_ASKED, LAB_IDEAS_FAILED, heardFrom, heardLine, ideaRun, passLine, playForModel, resultLine, talkCounts } from './lab';
 import { rateLimit } from './limits';
@@ -48,12 +48,6 @@ export class ProofModelError extends Error {}
  * is a model that should be faster, and the person is told which.
  */
 const DRAFT_TIMEOUT_MS = 25_000;
-/**
- * Ideas are written in after(), so they are bounded by what a reasoning model
- * needs rather than by the proxy: two and a half minutes, under IDEAS_STALE_MS
- * (lab.ts), after which an ask still writing reads as stopped.
- */
-const IDEAS_TIMEOUT_MS = 150_000;
 /** Sets of ideas a person can ask for in a day. Each is one call; past it, the books. */
 export const IDEAS_PER_DAY = 30;
 /** Asset drafts per person per day. */
@@ -92,7 +86,7 @@ async function contextOf(pid: string): Promise<{ home: HomeData; chain: ReturnTy
  * second tap joins the first (`started: false`).
  */
 export async function startIdeas(pid: string, part: LinkKey): Promise<{ started: boolean }> {
-  if (!resolveLlmConfig()) throw new ProofRefusal('There is no model on this server, so ideas come from the books for now.');
+  if (!resolveIdeasConfig()) throw new ProofRefusal('There is no model on this server, so ideas come from the books for now.');
   const profile = await getProfile(pid);
   if (!profile) throw new ProofRefusal('Not found');
   if (offerIsEmpty(profile.offer)) throw new ProofRefusal('Say what you sell first — every idea and every draft is written from it.');
@@ -105,8 +99,9 @@ export async function startIdeas(pid: string, part: LinkKey): Promise<{ started:
 }
 
 /**
- * Write the set an ask started: three ideas for one part, from its record, kept
- * as the set the tab shows until the next is asked for. Never throws — a
+ * Write the set an ask started: six ideas for one part from its record, read
+ * again, three kept as the set the tab shows until the next is asked for — on
+ * the ideas' own model (agent/llm.ts resolveIdeasConfig). Never throws — a
  * failure is recorded beside the ask, where Proof reads it (invariant 13), and
  * returned for the log.
  */
@@ -130,7 +125,7 @@ export async function writeIdeas(pid: string, part: LinkKey): Promise<{ ok: true
  * "no web search" must never read as "the web had nothing".
  */
 async function researchIdeas(part: LinkKey, home: HomeData): Promise<IdeaResearch> {
-  const queries = researchQueries(part, home.profile.offer ?? {});
+  const queries = researchQueries(part, home.profile.offer ?? {}, buyersPlace(home));
   if (!exaConfigured()) return { evidence: [], queries: [], why: 'this server has no search key' };
   if (!queries.length) return { evidence: [], queries, why: 'your offer does not say what you sell' };
   const runs = await Promise.allSettled(queries.map((q) => exaPages(q, { numResults: RESEARCH_PER_QUERY, budgetMs: RESEARCH_TIMEOUT_MS })));
@@ -144,8 +139,34 @@ async function researchIdeas(part: LinkKey, home: HomeData): Promise<IdeaResearc
   return { evidence, queries, why };
 }
 
+/** Where the buyers are, for the search: the area the business sells to, else where it is. */
+const buyersPlace = (home: HomeData) => home.profile.target_area?.trim() || home.profile.location?.trim() || null;
+
+/**
+ * One call through the app's provider, as writeIdeaSet asks for it: the
+ * model's words back, or an Error that says why in words.
+ */
+function askThrough(cfg: LlmConfig): AskModel {
+  return async (call) => {
+    try {
+      const { text } = await generateText({
+        model: providerFor(cfg)(cfg.model),
+        system: call.system,
+        prompt: call.prompt,
+        temperature: call.temperature,
+        maxRetries: 0,
+        maxOutputTokens: maxOutputTokens() ?? call.maxOutputTokens,
+        abortSignal: AbortSignal.timeout(call.timeoutMs),
+      });
+      return text;
+    } catch (e) {
+      throw new Error(failure(e, call.timeoutMs, cfg.model));
+    }
+  };
+}
+
 async function composeIdeas(pid: string, part: LinkKey): Promise<number> {
-  const cfg = resolveLlmConfig();
+  const cfg = resolveIdeasConfig();
   if (!cfg) throw new ProofRefusal('There is no model on this server, so ideas come from the books for now.');
   const { home, chain, working } = await contextOf(pid);
   const found = foundOf(home);
@@ -160,36 +181,20 @@ async function composeIdeas(pid: string, part: LinkKey): Promise<number> {
     // Their own words, as kept: the model is told what is already written down, not what to write.
     shelf: (home.lab?.shelf ?? []).map((e) => ({ belief: e.belief, play: playForModel(e) })),
     assets: assetKindsOf(home.assets?.assets ?? []),
+    // Where they are, so a program or a platform is one they can use (ideas.ts IdeasContext.place).
+    place: { based: home.profile.location ?? null, area: home.profile.target_area ?? null },
   };
   ctx.research = await researchIdeas(part, home);
-  let text: string;
-  try {
-    ({ text } = await generateText({
-      model: providerFor(cfg)(cfg.model),
-      system: IDEAS_SYSTEM,
-      prompt: ideasPrompt(ctx),
-      // Higher than a draft's: the point is ideas the catalogue would not have.
-      temperature: 0.8,
-      maxRetries: 0,
-      // Each idea now carries how it would work, what a fail says and its sources: room for three of those.
-      maxOutputTokens: maxOutputTokens() ?? 2400,
-      abortSignal: AbortSignal.timeout(IDEAS_TIMEOUT_MS),
-    }));
-  } catch (e) {
-    throw new ProofModelError(`No new ideas: ${failure(e, IDEAS_TIMEOUT_MS, cfg.model)}.`);
-  }
-  let parsed: unknown;
-  try { parsed = extractJson(text); } catch { throw new ProofModelError('No new ideas: the model did not answer in the shape asked for. Try again.'); }
+  // Six written, read again, three kept (ideas.ts writeIdeaSet): throws with the reason when there is nothing to keep.
+  const set = await writeIdeaSet(ctx, askThrough(cfg));
   const evidence = ctx.research?.evidence ?? [];
-  const held = normalizeIdeas(parsed, { part, foundBy: found.value, sources: ideaSources(ctx), evidence });
-  if (!held.length) throw new ProofModelError('No new ideas: none of the model\'s held to what a bet needs — a count this business can keep and a line in range. Try again.');
-  // The model's order, except that an idea resting on a page goes before one resting on its memory (invariant 3).
-  const { ideas, pick } = rankIdeas(held, firstWhyOf(parsed, { sources: ideaSources(ctx), evidence }));
   await insertLabEvent(pid, LAB_IDEAS, {
-    part, ideas, model: cfg.model, pick,
+    part, ideas: set.ideas, model: cfg.model, pick: set.pick,
     research: { pages: evidence.length, why: ctx.research?.why ?? null, queries: ctx.research?.queries ?? [] },
+    // What the second read did, kept whole for whoever asks why an idea is missing; the tab reads whether it ran.
+    review: { ...set.review, written: set.written },
   });
-  return ideas.length;
+  return set.ideas.length;
 }
 
 export interface DraftAsk {

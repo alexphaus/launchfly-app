@@ -27,7 +27,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 94 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 95 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -203,6 +203,16 @@ Its crew is whatever is configured — the Scout needs `EXA_API_KEY`, drafts and
 Writer a model, research a worker (`COPILOT_JOBS_URL` or the Claude agent) — and a
 step none of them can take is drawn as the person's. The nightly pass takes every
 running bet's plan up again in its jobs step (`bet_plan`, before `commission`).
+
+**Ideas** (Engine, `ideas.ts writeIdeaSet`) need no migration: six are written,
+read again by a second call that only sets aside, and three kept; what the review
+set aside is on the `lab_ideas` row, and a set it did not read says so under the
+card. `COPILOT_IDEAS_MODEL` (optional `COPILOT_IDEAS_API_KEY` /
+`COPILOT_IDEAS_BASE_URL`) gives them a stronger model than the brief's — pick one
+with `npx tsx scripts/copilot-ideas-eval.ts <model…> [--judge <model>]`, which runs
+the real write on three fixture businesses. A Responses stand-in must answer the
+review too (its system prompt starts "You review experiments"), or every set reads
+"Not read again".
 
 **Testing the plan:** the whole loop — Start, the Scout's search, the Writer's
 project dispatched and checked, the card polling to "Done, and checked", "Try

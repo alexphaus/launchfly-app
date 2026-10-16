@@ -42,11 +42,11 @@ import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } f
 import { WORKER_STATE_LABEL, crewHeadline, crewOn, type Worker } from '@/lib/copilot/crew';
 import { historyDay, type HistoryEntry } from '@/lib/copilot/history';
 import {
-  BET_STATE_LABEL, METRIC, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS, playFromWords, suggestBelief, unitPage,
+  BET_STATE_LABEL, METRIC, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS, playFromWords, unitPage,
   betPrice, countedFrom, dayWords, decisionWords, gradeWords, ideaRun, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
-import { assetMakers, betNext, betWork, ideasStale, nextBet, nextBetRequest, pivotWords, type BetNextGo, type BetWork, type NextBet } from '@/lib/copilot/proof';
+import { assetMakers, betNext, betWork, ideasStale, nextBet, nextBetBelief, nextBetRequest, pivotWords, type BetNextGo, type BetWork, type NextBet } from '@/lib/copilot/proof';
 import { hostOf, researchLine } from '@/lib/copilot/idearesearch';
 import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
 import { moneyLabel } from '@/lib/copilot/review';
@@ -60,7 +60,7 @@ import {
 import { unitSignal } from '@/lib/copilot/signal';
 import { secondPerson } from '@/lib/copilot/you';
 import { pageCounts, pageLine } from '@/lib/copilot/livepage';
-import { SCOUT_SEARCHING, planCapsOf, planFor, planInputOf, planView, stepBusy } from '@/lib/copilot/betplan';
+import { SCOUT_SEARCHING, planCapsOf, planFor, planInputOf, planView, startsLine, stepBusy } from '@/lib/copilot/betplan';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
 import { AssetGlyph, IconCheck, IconChevron, IconCross, IconExternal, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph, WorkerGlyph } from './icons2';
@@ -1139,8 +1139,7 @@ function Shelf({ home, d, actions }: { home: HomeData; d: Derived; actions: Acti
 
 /**
  * When no bet runs: one bet, ready to start — the best idea written for this
- * part, else the first play from the books (proof.ts nextBet) — with its line
- * set, what it tests, how it would work and what starts with it. One tap starts
+ * part, else the first play from the books (proof.ts nextBet). One tap starts
  * it as it stands; "Change it first" opens the sheet. Every other idea, the
  * books' plays and a bet of your own wait behind "Show other bets": the list
  * this replaced was a reading assignment where a decision was wanted.
@@ -1157,7 +1156,6 @@ function PickABet({ home, d, actions, part }: { home: HomeData; d: Derived; acti
   const topKey = top ? (top.kind === 'idea' ? top.idea.key : top.play.key) : null;
   const plays = playsFor(part, found.value).filter((p) => p.key !== topKey);
   const moreIdeas = (set?.ideas ?? []).filter((x) => x.key !== topKey).length;
-  const count = [moreIdeas ? `${moreIdeas} more ${moreIdeas === 1 ? 'idea' : 'ideas'}` : null, plays.length ? `${plays.length} from books` : null, 'your own'].filter(Boolean).join(' · ');
   return (
     <div className="cp-card cp2-pf-pick" id="cp2-nextbet">
       <div className="cp-eyebrow">No bet running · {LINK_LABEL[part]}</div>
@@ -1173,7 +1171,7 @@ function PickABet({ home, d, actions, part }: { home: HomeData; d: Derived; acti
       {/* Mounted while folded: it asks for ideas on opening, and says when they are being written or failed. */}
       <Ideas home={home} d={d} actions={actions} part={part} priceLabel={priceLabel} skip={topKey} open={others} />
       <button className="cp2-pf-more" onClick={() => setOthers((x) => !x)} aria-expanded={others}>
-        {others ? 'Fewer bets' : `Show other bets · ${count}`}
+        {others ? 'Fewer bets' : `Show other bets (${moreIdeas + plays.length})`}
       </button>
       {others && plays.length > 0 && <span className="cp2-pf-k cp2-pf-books">From books</span>}
       {others && plays.length > 0 && (
@@ -1192,19 +1190,24 @@ function PickABet({ home, d, actions, part }: { home: HomeData; d: Derived; acti
 }
 
 /**
- * The one bet, as it would start: what you would be testing, the line, how it
- * would work and what a fail would say, the pages it rests on, and what starts
- * with it (the same plan the bet sheet shows, from the same rule). Start sends
- * the request the sheet would send for it untouched (proof.ts nextBetRequest).
+ * The one bet, as it would start: what you do, what you would be testing with
+ * its line, and Start — nothing between the play and the tap but the test it
+ * is. Its owner's card was two screens before Start: how it would work, what a
+ * fail would say, why it is first, the pages, the plan and two notes, all open.
+ * They are behind "Why this bet" now; what Start sets going is the one line
+ * under it (betplan.ts startsLine), because that is the part a person needs
+ * before the tap. Start sends the request the sheet would send for it untouched
+ * (proof.ts nextBetRequest), with the claim the card showed (nextBetBelief).
  */
 function NextBetCard({ home, d, actions, part, top, priceLabel }: { home: HomeData; d: Derived; actions: Actions; part: LinkKey; top: NextBet; priceLabel: string | null }) {
   const offer = home.profile.offer ?? {};
   const found = d.proof.found.value;
-  const belief = suggestBelief(part, offer, priceLabel, found);
+  const belief = nextBetBelief(top, part, offer, priceLabel, found);
   const req = nextBetRequest(top, part, belief);
   const p = top.kind === 'idea' ? top.idea : top.play;
   const idea = top.kind === 'idea' ? top.idea : null;
   const steps = planFor({ part, belief, play: req.play, idea: req.idea, metric: req.metric, unit: req.unit, tries: req.tries }, planCapsOf(home), offer);
+  const starts = startsLine(steps);
   // A sale at your price with no price is refused at Start: said here, with the way to fix it, instead.
   const needsPrice = !!METRIC[req.metric].priced && priceLabel == null;
   // One word per card, sent with every try: the server answers a retry as it answered the tap (lab.ts openRace).
@@ -1212,6 +1215,7 @@ function NextBetCard({ home, d, actions, part, top, priceLabel }: { home: HomeDa
   const going = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [why, setWhy] = useState(false);
   const start = async () => {
     if (going.current) return;
     going.current = true;
@@ -1226,19 +1230,14 @@ function NextBetCard({ home, d, actions, part, top, priceLabel }: { home: HomeDa
     : actions.openSheet({ kind: 'bet', play: top.play.key }));
   return (
     <div className="cp2-nextbet">
-      <span className="cp2-pf-src">
-        {idea ? <><i className="cp2-owner ai">By AI</i>{idea.book ? <span>after {idea.book}</span> : null}</> : <span>{top.kind === 'play' ? top.play.book : ''}</span>}
-      </span>
+      <IdeaSource idea={idea} book={top.kind === 'play' ? top.play.book : null} />
       <h2 className="cp2-lab-q">{secondPerson(p.label)}</h2>
       <p className="cp2-lab-play-how">{secondPerson(p.how)}</p>
-      {idea && <IdeaReasons idea={idea} />}
-      {top.kind === 'idea' && top.pick && <p className="cp2-pf-why"><b>Why this one first:</b> {top.pick}</p>}
-      <div className="cp2-lab-preview">
-        <span className="cp2-lab-preview-k">You would be testing</span>
+      <div className="cp2-nb-test">
+        <span className="cp2-nb-test-k">You would be testing</span>
         <b>&ldquo;{belief}&rdquo;</b>
-        <span className="cp2-lab-preview-s">Pass line: {playLine(p, priceLabel)}. Only what happens after you start counts.</span>
+        <span className="cp2-nb-test-line">Pass line: {playLine(p, priceLabel)}</span>
       </div>
-      <PlanPreview steps={steps} />
       {needsPrice ? (
         <div className="cp-note cp2-lab-warn">
           A sale at your price needs a price, and your offer does not name one.{' '}
@@ -1251,15 +1250,42 @@ function NextBetCard({ home, d, actions, part, top, priceLabel }: { home: HomeDa
         </div>
       )}
       {error && <p className="cp-help cp2-err">{error}</p>}
+      {starts && !needsPrice && <p className="cp2-nb-starts">{starts}</p>}
+      <button className="cp2-nb-fold" onClick={() => setWhy((x) => !x)} aria-expanded={why}>
+        <span>Why this bet</span>
+        <IconChevron />
+      </button>
+      {why && (
+        <div className="cp2-nb-why">
+          {/* The writer's reason for its first while it is still first (ideas.ts writeIdeaSet), else the idea's own reason. */}
+          {top.kind === 'idea' && top.pick && <p className="cp2-nextbet-r"><b>Why first:</b> {secondPerson(top.pick)}</p>}
+          {idea && <IdeaReasons idea={idea} why={!(top.kind === 'idea' && top.pick)} />}
+          <PlanPreview steps={steps} foot={false} />
+          <p className="cp2-nb-note">Only what happens after you start counts, and only the count decides it. You can change the line before you start, never after.</p>
+        </div>
+      )}
     </div>
   );
 }
 
-/** How an idea would work, what a fail would say, and the pages it rests on — the model's reasoning, under its label. */
-function IdeaReasons({ idea }: { idea: Idea }) {
+/** Where a bet comes from, above its name: a model, with the book it follows or the pages it rests on, or the book. */
+function IdeaSource({ idea, book }: { idea: Idea | null; book: string | null }) {
+  const pages = idea?.sources?.length ?? 0;
+  if (!idea) return book ? <span className="cp2-pf-src"><span>{book}</span></span> : null;
+  return (
+    <span className="cp2-pf-src">
+      <i className="cp2-owner ai">By AI</i>
+      {idea.book ? <span>after {idea.book}</span> : pages ? <span>rests on {pages} {pages === 1 ? 'page' : 'pages'}</span> : null}
+    </span>
+  );
+}
+
+/** Why this, how it would work, what a fail would say, and the pages it rests on — the model's reasoning, folded under the bet. */
+function IdeaReasons({ idea, why = false }: { idea: Idea; why?: boolean }) {
   const sources = idea.sources ?? [];
   return (
     <>
+      {why && idea.why && <p className="cp2-nextbet-r"><b>Why this:</b> {secondPerson(idea.why)}</p>}
       {idea.works && <p className="cp2-nextbet-r"><b>How it would work:</b> {secondPerson(idea.works)}</p>}
       {idea.fails && <p className="cp2-nextbet-r"><b>If it does not pass:</b> {secondPerson(idea.fails)}</p>}
       {sources.length > 0 && (
@@ -1290,13 +1316,15 @@ function PlayCard({ play: p, priceLabel, actions }: { play: Play; priceLabel: st
 const IDEAS_RETRY_MS = 60 * 60_000;
 
 /**
- * Three ideas a model wrote for this part of this business, from its record
- * and a web search for what others did (idearesearch.ts). Asked for once a visit
- * when there are none, or when the record has moved since the last were written
- * (ideasStale) — so the tab is not the same every time it is opened — and again
- * on a tap. Without a model on the server there is no button: a button with
- * nothing behind it is a promise the app cannot keep. The first is the next bet
- * above (`skip`); the rest are shown when the others are (`open`).
+ * Ideas a model wrote for this part of this business, from its record and a
+ * web search for what others did (idearesearch.ts), read again before three
+ * were kept (ideas.ts writeIdeaSet). Asked for once a visit when there are
+ * none, or when the record has moved since the last were written (ideasStale)
+ * — so the tab is not the same every time it is opened — and again on a tap.
+ * Without a model on the server there is no button: a button with nothing
+ * behind it is a promise the app cannot keep. The first is the next bet above
+ * (`skip`); the rest are shown when the others are (`open`). Folded, all that
+ * shows is one line under the bet: where the ideas came from, and New ideas.
  */
 function Ideas({ home, d, actions, part, priceLabel, skip, open }: {
   home: HomeData; d: Derived; actions: Actions; part: LinkKey; priceLabel: string | null; skip: string | null; open: boolean;
@@ -1332,36 +1360,46 @@ function Ideas({ home, d, actions, part, priceLabel, skip, open }: {
 
   if (!can && !set) return null;
   const rest = (set?.ideas ?? []).filter((x) => x.key !== skip);
+  // A set nobody read again is said to be, and why (invariant 13): it would otherwise read as checked.
+  const unreviewed = set?.review && !set.review.ran ? set.review.why : null;
   return (
     <div className="cp2-pf-ideas">
-      <div className="cp2-pf-ideas-top">
-        <span className="cp2-pf-k">Written for your business</span>
-        {can && <button className="cp2-link" disabled={writing} onClick={() => void ask(part)}>{writing ? 'Writing…' : failedWhy ? 'Try again' : set ? 'New ideas' : 'Write some'}</button>}
-      </div>
-      {/* Said only where a search will run: without a key the set is written from the record and the model's knowledge (invariant 7). */}
-      {writing && <p className="cp2-pf-wait">{home.hunting?.webReady ? 'Searching for what others did, then writing three from it and your record.' : 'Writing three from your record.'} A minute or two — this can stay open or close.</p>}
-      {!writing && failedWhy && <p className="cp-help cp2-err">{/^No new ideas/.test(failedWhy) ? failedWhy : `No new ideas: ${failedWhy}`}</p>}
+      {open && rest.length > 0 && <span className="cp2-pf-k">Written for your business</span>}
       {open && rest.map((idea) => <IdeaCard key={idea.key} idea={idea} priceLabel={priceLabel} actions={actions} />)}
-      {set && (
+      {/* Said only where a search will run: without a key the set is written from the record and the model's knowledge (invariant 7). */}
+      {writing && <p className="cp2-pf-wait">{home.hunting?.webReady ? 'Searching for what others did, then writing ideas from it and your record, and reading them again.' : 'Writing ideas from your record, and reading them again.'} A minute or two — this can stay open or close.</p>}
+      {!writing && failedWhy && <p className="cp-help cp2-err">{/^No new ideas/.test(failedWhy) ? failedWhy : `No new ideas: ${failedWhy}`}</p>}
+      {/* The first set being written has nothing to say here yet: the note above says it. */}
+      {(set || !writing) && (
         <p className="cp2-pf-ideas-s">
-          By AI {researchLine(set.research)}, {dayWords(set.at)}. A page is a reason to try something, not proof it works for you; the pass lines are its proposal, and you set yours before the bet starts.
+          <span>
+            {set ? `By AI ${researchLine(set.research)}, ${dayWords(set.at)}.` : null}
+            {unreviewed ? ` Not read again: ${unreviewed}.` : null}
+          </span>
+          {can && <button className="cp2-link" disabled={writing} onClick={() => void ask(part)}>{writing ? 'Writing…' : failedWhy ? 'Try again' : set ? 'New ideas' : 'Write some'}</button>}
         </p>
       )}
     </div>
   );
 }
 
+/** Another bet written for you, folded to what it is: the play, what it tests, its line, and the model's reasons a tap away. */
 function IdeaCard({ idea, priceLabel, actions }: { idea: Idea; priceLabel: string | null; actions: Actions }) {
+  const [why, setWhy] = useState(false);
+  const reasons = !!(idea.why || idea.works || idea.fails || idea.sources?.length);
   return (
     <div className="cp2-pf-play ai">
-      <span className="cp2-pf-src"><i className="cp2-owner ai">By AI</i>{idea.book ? <span>after {idea.book}</span> : null}</span>
+      <IdeaSource idea={idea} book={null} />
       {/* Said to you (you.ts): ideas written before the writer was told read "the owner knows". */}
       <b className="cp2-lab-play-t">{secondPerson(idea.label)}</b>
       <p className="cp2-lab-play-how">{secondPerson(idea.how)}</p>
-      {idea.why && <p className="cp2-pf-why">{secondPerson(idea.why)}</p>}
-      <IdeaReasons idea={idea} />
+      {idea.belief && <p className="cp2-nb-tests">Tests &ldquo;{idea.belief}&rdquo;</p>}
       <p className="cp2-lab-play-pass">Pass line: {playLine(idea, priceLabel)}</p>
-      <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', idea: idea.key, part: idea.part })}>Make it my bet</button>
+      {why && <div className="cp2-nb-why"><IdeaReasons idea={idea} why /></div>}
+      <div className="cp2-nb-cardact">
+        <button className="cp-btn sm primary" onClick={() => actions.openSheet({ kind: 'bet', idea: idea.key, part: idea.part })}>Make it my bet</button>
+        {reasons && <button className="cp2-link" onClick={() => setWhy((x) => !x)} aria-expanded={why}>{why ? 'Less' : 'Why this'}</button>}
+      </div>
     </div>
   );
 }

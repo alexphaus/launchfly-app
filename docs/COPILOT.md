@@ -953,8 +953,9 @@ equal columns broke "messag/es sent" at 390px, which no assertion could see.
 
 **With none running**, the card asks what you believe that you have not tested,
 on the weak part first, with the last bet's result. First come **ideas a model
-wrote for this business** (`ideas.ts`, `proofai.ts writeIdeas`): three, from the
-person's words, the chain with its rules and numbers, the bets already run and how
+wrote for this business** (`ideas.ts`, `proofai.ts writeIdeas`): six written and
+three kept after a second read (**Read again**, below), from the person's words,
+where they are, the chain with its rules and numbers, the bets already run and how
 each ended, the conversations logged (who they were with, and what people said
 in their words) and the assets there are — asked for once a
 visit when there are none, or when the record has moved since the last were
@@ -974,16 +975,34 @@ server there is no ideas button at all (invariant 7); the books are there.
 Three ideas, six plays and a box for your own, each a paragraph, was a reading
 assignment where a decision was wanted. So the card offers one: the first idea
 written for the part that this business can count, else the first play from the
-books for it — never one whose count would be refused at Start. It shows what you
-would be testing (the bet sheet's own first draft of the belief, `suggestBelief`,
-never a model's sentence), the pass line, how it would work and what a fail would
-say, the pages it rests on, and the plan that starts with it (`PlanPreview`, the
-same rule the sheet uses). **Start this bet** sends exactly the request the sheet
-sends for that play or idea untouched (`nextBetRequest`, with the sheet's nonce
-rule), so the card and the sheet are one bet; **Change it first** opens the sheet.
-The other ideas, the plays and your own wait behind **Show other bets**. The
-step's "Pick a bet" scrolls to the card. The choice is a rule over an order the
-model already gave, not a second model call.
+books for it — never one whose count would be refused at Start. It is the play,
+what you would be testing with its pass line, and **Start this bet** — all on the
+first screen at 390px. Its owner's version was two screens before Start: how it
+would work, what a fail would say, why it is first, the pages, the plan and two
+notes, all open. Those are behind **Why this bet** now; what Start sets going is
+the one line under the button (`betplan.ts startsLine`: "Starts the Scout and the
+Writer now. Nothing is sent or posted for you; each post the Scout keeps uses one
+of your matches"), because that is what a person needs before the tap. Under the
+card, one line says where the ideas came from, with **New ideas** beside it.
+
+What you would be testing is the play's own claim (`nextBetBelief`): an idea's
+`belief`, or a book play's sentence filled from the offer (`playBelief`: "People
+who already know me will point me to {who}"). It was the part's one sentence
+(`suggestBelief`) for every play, and its owner saw "you would be testing: they
+find me online and get in touch" over an idea about asking advisers — a bet whose
+fail would have been filed, and read back by the next ideas, under a claim it
+never tested. An idea's claim is a model's sentence, so it is held to
+`ideaBeliefOf` — the person's voice, no number, nobody addressed — shown in
+quotes before the tap, and the sheet opens on it to rewrite: the person makes it
+theirs by starting the bet, as they did the template (invariant 12). An idea from
+before ideas carried one falls back to the template, and its set is written again
+on the next visit (`ideasStale`: a set without a `review`). **Start this bet**
+sends exactly the request the sheet sends for that play or idea untouched
+(`nextBetRequest`, with the sheet's nonce rule), so the card and the sheet are one
+bet; **Change it first** opens the sheet on the same claim. The other ideas — each
+with what it tests and its reasons a tap away — the plays and your own wait behind
+**Show other bets (n)**. The step's "Pick a bet" scrolls to the card. The choice
+is a rule over an order the model already gave, not a second model call.
 
 **Researched ideas** (`idearesearch.ts`, `proofai.ts researchIdeas`). Ideas were
 written from the record alone, and "use only what you are told" kept every one
@@ -1008,6 +1027,47 @@ none — no key, a failed search — never a set that looks researched when it w
 (invariant 13). A page is a reason to try something, never evidence it worked
 here: only the count decides the bet.
 
+**Read again** (`ideas.ts writeIdeaSet`). Its owner's next set offered a United
+States loan program's counselors to a founder in Manila, beside two ideas that
+were one idea ("ask advisers for introductions", "talk to people who sell to
+founders") — and both read as fine to the model that wrote them. So the writer is
+now told where the business is (`place`: the profile's location, and its target
+area when that differs) and to suggest no program, platform or event that does not
+exist there; the buyers' search is asked there too (`researchQueries(…, where)`;
+how others got their first customers stays unplaced, because it travels). It
+writes **six**, each tagged with the cause it works through (`IDEA_MECHANISMS`:
+warm, clients, partners, community, content, direct, events, listing, offer, free,
+ask, proof, process, other) and the claim it tests. Those that hold to a bet's
+rules — preferring the ones whose claim holds — go to a **second call**
+(`IDEAS_REVIEW_SYSTEM`, temperature 0.2), a skeptical operator reading the same
+record, which sets aside what relies on something that does not exist where the
+person is, repeats what already failed or is already shelved, one person could not
+start this week, could not be judged by its count, or reaches the same people the
+same way as another; never one for being simple. It **only sets aside**: it is told
+not to reorder, and an order in its answer is not read — which bet comes first is
+still a rule over the writer's order (DIRECTION.md declined a second call choosing
+the move). A page stays on an idea only where the writer cited it **and** the
+review says it supports it. Then a rule keeps the first idea of each cause
+(`oneEach`; "other" is never a repeat), three are kept, and a page behind an idea
+still ranks it first (`rankIdeas`). The writer's reason for its first stays only
+while that idea is still first. A plan below its line ("three meetings from two
+replies") loses the plan. If the review fails, times out or answers in another
+shape, nothing is set aside and the set says so under the card — "Not read again:
+the review failed: …" (invariant 13); if it sets every one aside, there is no set,
+and the reason is said. Both calls run in `after()` inside `IDEAS_BUDGET_MS`
+(250s: the write's 150s, the review's 90s, the review skipped when under 20s is
+left) so an ask never outlives `IDEAS_STALE_MS`. What the review did — what it set
+aside and why, what repeated a cause, how many were written — is kept on the set's
+row. Ideas run on their own model when `COPILOT_IDEAS_MODEL` is set
+(`resolveIdeasConfig`; unset, the brief's): they are the one place the app judges
+the world, and they are written where nothing waits on them.
+`scripts/copilot-ideas-eval.ts` runs the real write on three fixture businesses
+(Manila, Austin, London), each given one page that is bait — an American program,
+a British platform — and scores what breaks: no set, an idea without its claim,
+two ideas through one cause, an idea from the wrong country, the review not
+running; `--judge <model>` adds a rubric score per idea. Run it before changing
+the model or the prompts, not after.
+
 **The shelf** (`lab.ts` `ShelfEntry`, `Shelf` in `ProofTab.tsx`). Ideas were
 replaced the next time they were asked for, and a bet the person was not ready to
 start had nowhere to wait. A test is **kept for later** from the bet sheet — every
@@ -1021,8 +1081,8 @@ become the bet it was kept as and is refused with what a bet is refused with. A
 field it does not know — a score, a market size — is dropped; there is none to
 give, and DIRECTION.md says why. The shelf holds ten and refuses the same test
 twice — the same part, belief, count and play (`shelfRefusal`); not the belief
-alone, because every play on a part opens the sheet with the same suggested
-belief, and two books' plays kept as they came would have read as one. It
+alone, because one belief can be tested by two plays, and two kept as they came
+would have read as one. It
 refuses a keep while the record cannot be read (invariant 13), and a count the
 business cannot keep (`countRefusal`, sends and replies only where the app
 sends) — held by the route, at the keep and again at the start, because the
@@ -2202,6 +2262,9 @@ COPILOT_ACCOUNTS_ALLOW_LOCAL=1           # tests only: an account's MCP server o
 COPILOT_PLAN_MODEL / COPILOT_PLAN_API_KEY / COPILOT_PLAN_BASE_URL
 COPILOT_PLAN_TIMEOUT_MS=200000      # one call, under the draw's own 270s ceiling; spent inside the nightly pass too
 COPILOT_PLAN_EXTRA_BODY / COPILOT_PLAN_MAX_OUTPUT_TOKENS   # e.g. a higher reasoning effort for the plan only
+# The ideas' own model (optional; unset = the brief's). Written and read again in
+# after(), so it can be slower and stronger. Pick it with scripts/copilot-ideas-eval.ts.
+COPILOT_IDEAS_MODEL / COPILOT_IDEAS_API_KEY / COPILOT_IDEAS_BASE_URL
 # The model that reads PDF statements and screenshots (optional; unset = the brief's).
 # Screenshots need one that takes images. CSV and OFX need no model at all.
 COPILOT_STATEMENT_MODEL

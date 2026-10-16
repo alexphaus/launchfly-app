@@ -60,14 +60,18 @@ const firstOf = (s: string | null | undefined) => s?.split(/[,;/]|\s+(?:and|or)\
  * Two searches for a part: how others like this business did it, and where its
  * buyers say the problem. Written from the offer's own first phrases, because a
  * search for "freelancers, tech indies, business owners in Manila" finds pages
- * about none of them. Empty when the offer does not say what it sells.
+ * about none of them. The second is about the buyers, so it is asked where they
+ * are (`where`): unplaced, it found American forums and programs, and the ideas
+ * cited them to a founder in Manila. The first stays unplaced — how a business
+ * like this one got its first customers travels. Empty when the offer does not
+ * say what it sells.
  */
-export function researchQueries(part: LinkKey, offer: Offer): string[] {
+export function researchQueries(part: LinkKey, offer: Offer, where: string | null = null): string[] {
   const sells = firstOf(offer.sells);
   if (!sells) return [];
   const what = lowerFirst(sells);
   const who = firstOf(offer.for_who);
-  const buyers = who ? lowerFirst(who) : 'small businesses';
+  const buyers = `${who ? lowerFirst(who) : 'small businesses'}${where?.trim() ? ` in ${where.trim()}` : ''}`;
   const problem = offer.problem?.trim().replace(/[.\s]+$/, '') || null;
   const byPart: Record<LinkKey, [string, string]> = {
     who: [
@@ -159,8 +163,8 @@ export function citedSources(raw: unknown, evidence: Evidence[]): IdeaSource[] {
  * reason for its first stays only while that idea is still first — beside
  * another, it would be a reason for the wrong one.
  */
-export function rankIdeas(ideas: Idea[], pick: string | null): { ideas: Idea[]; pick: string | null } {
-  const sourced = (i: Idea) => ((i.sources?.length ?? 0) > 0 ? 0 : 1);
+export function rankIdeas<T extends Idea>(ideas: T[], pick: string | null): { ideas: T[]; pick: string | null } {
+  const sourced = (i: T) => ((i.sources?.length ?? 0) > 0 ? 0 : 1);
   const ranked = ideas.map((idea, at) => ({ idea, at })).sort((a, b) => sourced(a.idea) - sourced(b.idea) || a.at - b.at).map((x) => x.idea);
   return { ideas: ranked, pick: ranked[0] && ranked[0] === ideas[0] ? pick : null };
 }

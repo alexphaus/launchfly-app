@@ -133,9 +133,11 @@ export function BetPlan({ home, view, pv, actions, brief }: { home: HomeData; vi
 /**
  * What starts with a bet, before it starts: the crew's steps, then yours, read
  * off the same planFor the server writes when Start is tapped. On the bet sheet,
- * and on a bet started before plans, with the tap that plans it.
+ * and on a bet started before plans, with the tap that plans it; on the Engine's
+ * card inside its fold, without the footer (`foot`), which the line under its
+ * Start button already says (betplan.ts startsLine).
  */
-export function PlanPreview({ steps, lead, children }: { steps: PlanStep[]; lead?: string; children?: ReactNode }) {
+export function PlanPreview({ steps, lead, foot = true, children }: { steps: PlanStep[]; lead?: string; foot?: boolean; children?: ReactNode }) {
   if (!steps.length) return null;
   const crew = steps.filter((s) => s.by === 'crew');
   const scout = crew.some((s) => s.kind === 'find' && s.who === 'Scout');
@@ -156,11 +158,13 @@ export function PlanPreview({ steps, lead, children }: { steps: PlanStep[]; lead
           </li>
         ))}
       </ol>
-      <p className="cp2-bplan-foot">
-        {crew.length
-          ? `The crew’s part starts now and goes on every night until the last day. Nothing is sent or posted for you${scout ? ', and each post the Scout keeps uses one of your matches' : ''}.`
-          : 'Nothing connected here can take a step of it, so every step is yours.'}
-      </p>
+      {foot && (
+        <p className="cp2-bplan-foot">
+          {crew.length
+            ? `The crew’s part starts now and goes on every night until the last day. Nothing is sent or posted for you${scout ? ', and each post the Scout keeps uses one of your matches' : ''}.`
+            : 'Nothing connected here can take a step of it, so every step is yours.'}
+        </p>
+      )}
       {children}
     </div>
   );

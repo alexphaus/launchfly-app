@@ -132,6 +132,27 @@ export function resolvePlanConfig(): LlmConfig | null {
 }
 
 /**
+ * The ideas' model, when it should not be the brief's.
+ *
+ * Ideas are the one place the app is asked for judgement about the world —
+ * which play works for a business like this one, where it is — and they are
+ * written in after(), so nothing waits on them under the proxy. A small model
+ * sized for the 30s brief proposed a United States loan program to a founder in
+ * Manila and two ideas that were one idea. COPILOT_IDEAS_MODEL names a stronger
+ * one for the ideas and their review alone; COPILOT_IDEAS_API_KEY /
+ * COPILOT_IDEAS_BASE_URL point it at another endpoint. Unset, the ideas use the
+ * brief's model, as before.
+ */
+export function resolveIdeasConfig(): LlmConfig | null {
+  const base = resolveLlmConfig();
+  const key = process.env.COPILOT_IDEAS_API_KEY?.trim();
+  const model = process.env.COPILOT_IDEAS_MODEL?.trim();
+  if (key) return { apiKey: key, baseURL: process.env.COPILOT_IDEAS_BASE_URL?.trim() || base?.baseURL, model: model || base?.model || 'gpt-4o-mini' };
+  if (!base) return null;
+  return model ? { ...base, model } : base;
+}
+
+/**
  * How long a draw may take: 200s unless COPILOT_PLAN_TIMEOUT_MS says otherwise.
  *
  * It was 110s, a number sized like a tap's when no draw ever runs behind the

@@ -13,7 +13,7 @@ import { shiftDay } from '@/lib/copilot/focus';
 import {
   BELIEF_MAX, COMMITMENTS, COMMITMENT_LABEL, DEFAULT_BET_DAYS, INTRO_DAYS, INTRO_LINK_DAYS, INTRO_STATE_LABEL, METRIC, PLANNED_MAX, PLAY_BY_KEY, PROBLEMS, PROBLEM_LABEL,
   SAID_MAX, TALK_BACK_DAYS, TALK_ROLES, TALK_ROLE_LABEL, TARGET_MAX, TRIES_FOR, UNIT_MAX, WHO_MAX,
-  asksProblem, betPrice, countRefusal, countedFrom, dayWords, daysBetween, introSources, introState, metricWords, metricsFor, passLine, playFor, roleOf, spanWords,
+  asksProblem, betPrice, countRefusal, countedFrom, dayWords, daysBetween, introSources, introState, metricWords, metricsFor, passLine, playBelief, playFor, roleOf, spanWords,
   suggestBelief, talkCounts, unitPage,
   type Commitment, type IntroClose, type IntroOutcome, type LabMetric, type Problem, type Talk, type TalkRole,
 } from '@/lib/copilot/lab';
@@ -163,11 +163,14 @@ export function BetSheet({ home, playKey, part: asked, ideaKey, experiment, seed
   const [sharedPart] = useState<LinkKey | null>(() => (seed && !asked && !shelved && !experiment ? derive(home).proof.chain.weak : null));
   const first: LinkKey = basis?.part ?? experiment?.part ?? asked ?? sharedPart ?? 'who';
   const [part, setPart] = useState<LinkKey>(first);
-  // A first draft from the offer, for the person to make theirs. Rewritten
-  // with the part until they type in it; never after. A share gets no draft at
-  // all: neither the chat's sentence nor one written from the offer is what the
-  // person believes, and the first would reach a model as their words.
-  const [belief, setBelief] = useState(() => (shelved ? shelved.belief : seed ? '' : suggestBelief(first, offer, priceLabel, found)));
+  // A first draft for the person to make theirs: what the play or the idea
+  // tests — the same claim the Engine's card showed (proof.ts nextBetBelief) —
+  // else one from the offer for the part, rewritten with the part until they
+  // type in it, never after. A share gets no draft at all: neither the chat's
+  // sentence nor one written from the offer is what the person believes, and
+  // the first would reach a model as their words.
+  const [belief, setBelief] = useState(() => (shelved ? shelved.belief : seed ? ''
+    : play ? playBelief(play, offer, priceLabel) : idea?.belief ?? suggestBelief(first, offer, priceLabel, found)));
   const [typed, setTyped] = useState(!!seed || !!shelved);
   const [metric, setMetric] = useState<LabMetric>(keptCountOff ? firstMetric(first) : basis?.metric ?? firstMetric(first));
   const [unit, setUnit] = useState(basis?.unit ?? (found ? UNIT_FOR[found] : 'sign-ups'));

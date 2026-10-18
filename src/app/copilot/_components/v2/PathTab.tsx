@@ -406,6 +406,7 @@ function NowCard({ now, actions, openMatches }: { now: NowMove; actions: Actions
     else if (now.kind === 'move' && now.id) actions.openSheet({ kind: 'move', id: now.id });
     else if (now.kind === 'intro' && now.id) actions.openSheet({ kind: 'intro', talk: now.id });
     else if (now.kind === 'proposal') actions.openSheet({ kind: 'proposals' });
+    else if (now.kind === 'test') actions.setTab('proof');
     else if (now.id) actions.openSheet({ kind: 'commission', id: now.id });
   };
   return (
@@ -452,6 +453,7 @@ const CHIP: Record<AskRow['kind'], (a: AskRow) => string> = {
   confirm: () => 'Where did the replies get to?',
   send: (a) => a.title,
   proposal: (a) => `Claude proposes: ${a.title}`,
+  test: (a) => `Your test: ${a.title}`,
 };
 
 /** Beside the move, the rest of what needs you — short, so the move stays one thing. */
@@ -461,6 +463,8 @@ function AlsoChip({ ask, actions, openMatches }: { ask: AskRow; actions: Actions
     else if (ask.kind === 'send') openMatches('to_send');
     else if (ask.kind === 'intro' && ask.id) actions.openSheet({ kind: 'intro', talk: ask.id });
     else if (ask.kind === 'proposal') actions.openSheet({ kind: 'proposals' });
+    // Engine opens on the test's part, where the move's own button is: one instruction, one place to act on it.
+    else if (ask.kind === 'test') actions.setTab('proof');
     else if (ask.id) actions.openSheet({ kind: 'commission', id: ask.id });
   };
   return (

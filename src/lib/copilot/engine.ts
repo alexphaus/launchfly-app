@@ -28,7 +28,7 @@
 //
 // Pure: no DB import. The screen (ProofTab.tsx) maps `StepGo` onto its actions.
 
-import type { LinkKey, Verdict } from './business';
+import { LINK_KEYS, LINK_LABEL, type LinkKey, type LinkState, type Verdict } from './business';
 import { dateLabel, daysPhrase, goalDue } from './due';
 import { creditedGoalId } from './goalcard';
 import type { HistoryEntry } from './history';
@@ -373,6 +373,75 @@ function clamp(s: string, max: number): string {
  */
 export function openPart(step: Pick<Step, 'part'> | null, weak: LinkKey | null): LinkKey {
   return step?.part ?? weak ?? 'who';
+}
+
+/**
+ * How a part's card is drawn under the engine: open, or closed to its verdict.
+ *
+ * One part is open — the one the engine opens on (openPart): the test's, where
+ * one runs, else the move's, else the weakest — and its test and its move lead
+ * it. Every other part is closed: its rule, what it waits on, and the way to
+ * the open one. Its owner's review of a version that drew each part's steps:
+ * they pulled attention from the one test that counts, and a delivery template
+ * with nothing paid put effort at the wrong end of the chain. And the card of
+ * every other part said "Your move is on how they hear" in a box, so four of
+ * five cards spent their best space pointing somewhere else.
+ */
+export interface PartView {
+  /** Drawn whole: the test and the move first, then who works it and what would move it. */
+  open: boolean;
+  /** Closed, and after the open part in the chain: nothing reaches it until that part moves. */
+  waitsOn: LinkKey | null;
+  /** Closed, and before the open part: the move is there, one tap away. */
+  moveOn: LinkKey | null;
+  /**
+   * What would move it is offered. On a closed part, not while a test runs —
+   * a second bet is refused (lab.ts), and until the test ends its count is the
+   * only one that means anything — and never on delivery before anyone pays.
+   */
+  moves: boolean;
+  /** Said in place of the rule on delivery while nothing is paid: there is nothing to deliver yet. */
+  notYet: string | null;
+}
+
+export const NOT_YET_DELIVER = 'Not yet: there is nothing to deliver until someone pays. Write it down when the first one does.';
+
+export function partView(i: {
+  part: LinkKey;
+  /** The part the engine opens on (openPart). */
+  open: LinkKey;
+  /** Whether the step is on the open part, so a closed part can point to it as the move's. */
+  moveThere: boolean;
+  testRunning: boolean;
+  states: Partial<Record<LinkKey, LinkState>>;
+}): PartView {
+  // Nothing paid — no price to pay against, or no sale at it — and no way of
+  // delivering written: delivery is the far end of a chain that has not turned yet.
+  const unpaid = i.states.pay === 'untested' || i.states.pay === 'missing';
+  const notYet = i.part === 'deliver' && i.states.deliver === 'missing' && unpaid ? NOT_YET_DELIVER : null;
+  if (i.part === i.open) return { open: true, waitsOn: null, moveOn: null, moves: true, notYet };
+  const at = LINK_KEYS.indexOf(i.part);
+  const there = LINK_KEYS.indexOf(i.open);
+  return {
+    open: false,
+    waitsOn: at > there ? i.open : null,
+    moveOn: at < there && i.moveThere ? i.open : null,
+    moves: !i.testRunning && !notYet,
+    notYet,
+  };
+}
+
+/**
+ * The running test's step as the Path lists it: the sentence the test's part
+ * leads with and its reason, word for word, so the two tabs never give two
+ * instructions — the Path said "Open Wise" while Engine said "Reply to one of
+ * the 7 people", and the test's step was on no list the Path kept at all. The
+ * count stands in for a reason only where the step has none. Null with no test
+ * running, or for a step that is not the test's (the offer, a checkpoint).
+ */
+export function testAsk(step: Pick<Step, 'part' | 'title' | 'why'> | null, view: Pick<BetView, 'bet' | 'result' | 'day'> | null): { title: string; detail: string } | null {
+  if (!step || !view || step.part !== view.bet.part) return null;
+  return { title: step.title, detail: step.why ?? `${LINK_LABEL[view.bet.part]} · ${resultLine(view)}, day ${view.day} of ${view.bet.days}` };
 }
 
 /** The engine's figure: the count that proves it, drawn rather than said. */

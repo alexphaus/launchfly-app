@@ -5,10 +5,11 @@
 //   The engine    what it sells, whether it is proven — the count, drawn big —
 //                 the five parts in a row with their states and the weakest
 //                 marked, and the crew working them. One card, read at a glance
-//   The part      the part opened (where your move is, else the weakest): its
-//                 state and the rule behind it, your move when it is here, who
-//                 works it and what would move it — and for the bet's part, the
-//                 people found and the bet itself
+//   The part      the part opened (where your move is, else the weakest): the
+//                 test first where one runs, then your move, who works it and
+//                 what would move it — and for the test's part, the people found
+//                 and "How this test runs", folded. Any other part tapped is
+//                 closed to its rule and what it waits on (engine.ts partView)
 //   Built so far  what the business has to show for itself: sales, bets passed,
 //                 projects finished, the first version of anything made
 //   More          conversations, assets and projects: a line each
@@ -42,7 +43,7 @@ import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } f
 import { WORKER_STATE_LABEL, crewHeadline, crewOn, type Worker } from '@/lib/copilot/crew';
 import { historyDay, type HistoryEntry } from '@/lib/copilot/history';
 import {
-  BET_STATE_LABEL, METRIC, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS, playFromWords, unitPage,
+  BET_STATE_LABEL, METRIC, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS, playFromWords,
   betPrice, countedFrom, dayWords, decisionWords, gradeWords, ideaRun, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
@@ -54,10 +55,9 @@ import type { FoundBy, HomeData } from '@/lib/copilot/types';
 import { COMMITMENT_LABEL, COMMITMENTS, dayIn, type Commitment } from '@/lib/copilot/lab';
 import { VOICE_OPENER, VOICE_SEARCHES, betVoiced, betVoices, postedWords, voiceRefusal, voiceTalk, type Voice } from '@/lib/copilot/voices';
 import {
-  BUILT_SHOWN, OPENED_KEY, clearOpened, engineFigure, engineStep, markOpened, openPart, parseOpened, payoffGoal,
-  type Step, type StepGo, type StepPlay,
+  BUILT_SHOWN, OPENED_KEY, clearOpened, engineFigure, markOpened, openPart, parseOpened, partView,
+  type PartView, type Step, type StepGo,
 } from '@/lib/copilot/engine';
-import { unitSignal } from '@/lib/copilot/signal';
 import { secondPerson } from '@/lib/copilot/you';
 import { pageCounts, pageLine } from '@/lib/copilot/livepage';
 import { SCOUT_SEARCHING, planCapsOf, planFor, planInputOf, planView, startsLine, stepBusy } from '@/lib/copilot/betplan';
@@ -68,17 +68,23 @@ import { MoveNote, MoveRow, agentIsFull, orChat, useBrief, useMove, type Brief }
 import { BetPlan, PlanIt, PlanPreview } from './BetPlan';
 import { newMoveId } from './bookLocal';
 
-export default function ProofTab({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean }) {
+export default function ProofTab({ home, d, actions, opened }: { home: HomeData; d: Derived; actions: Actions; briefing: boolean; opened: Opened }) {
   const changes = useSeen(home, d);
   const brief = useBrief(actions);
   const lab = d.proof.lab;
-  const opened = useOpened(home.profile.id);
   const find = useFind(actions, lab.current?.bet.id ?? null);
-  const { step, peopleShown } = useStep(home, d, opened);
+  // Read once in derive (engine.ts engineStep), so the Path lists this move in these words.
+  const { step, peopleShown } = d.proof;
   // A part tapped stays open until the next visit; until then the engine opens where the move is.
   const [picked, setPicked] = useState<LinkKey | null>(null);
   const part = picked ?? openPart(step, d.proof.chain.weak);
   const onBet = lab.current?.bet.part === part;
+  // Open or closed (engine.ts partView): the part the engine opens on carries the
+  // test and the move; any other part tapped says its rule and what it waits on.
+  const shape = partView({
+    part, open: openPart(step, d.proof.chain.weak), moveThere: !!step?.part, testRunning: !!lab.current,
+    states: Object.fromEntries(d.proof.chain.links.map((l) => [l.key, l.state])),
+  });
   return (
     <>
       <EngineHero home={home} d={d} actions={actions} part={part} pick={setPicked} changes={changes} />
@@ -100,7 +106,7 @@ export default function ProofTab({ home, d, actions }: { home: HomeData; d: Deri
       ) : (
         <>
           {lab.checkpoint.due && <Checkpoint d={d} actions={actions} />}
-          <Station home={home} d={d} actions={actions} part={part} step={step} pick={setPicked} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />
+          <Station home={home} d={d} actions={actions} part={part} shape={shape} step={step} pick={setPicked} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />
           {lab.current
             ? (
               <>
@@ -115,7 +121,8 @@ export default function ProofTab({ home, d, actions }: { home: HomeData; d: Deri
               // The person's own kept tests before the generic ones: what they wrote down to run next is what they came back for.
               <>
                 <Shelf home={home} d={d} actions={actions} />
-                <PickABet home={home} d={d} actions={actions} part={part} />
+                {/* Delivery before anyone pays offers no bets: there is nothing to deliver yet. */}
+                {!shape.notYet && <PickABet home={home} d={d} actions={actions} part={part} />}
               </>
             )}
         </>
@@ -167,7 +174,7 @@ function useSeen(home: HomeData, d: Derived): ChainChange[] {
  * question. Read in an effect, never during render, so the first paint is the
  * server's.
  */
-function useOpened(profileId: string) {
+export function useOpened(profileId: string) {
   const key = OPENED_KEY(profileId);
   const [map, setMap] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -187,7 +194,7 @@ function useOpened(profileId: string) {
     clear: (id: string) => save(clearOpened(map, id)),
   };
 }
-type Opened = ReturnType<typeof useOpened>;
+export type Opened = ReturnType<typeof useOpened>;
 
 /**
  * The search for the running bet's people, run from whichever card asks: the
@@ -214,43 +221,6 @@ type Find = ReturnType<typeof useFind>;
 /** Scrolls to a card on this tab: the checkpoint, or the people found. */
 function scrollToCard(id: string) {
   try { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* an older browser: the card is where it was */ }
-}
-
-/** The one move, read off the rows (engine.ts engineStep), and whether the people card is up to say what a search did. */
-function useStep(home: HomeData, d: Derived, opened: Opened): { step: Step | null; peopleShown: boolean } {
-  const { chain, found, lab } = d.proof;
-  const view = lab.current;
-  const b = view?.bet ?? null;
-  const read = home.lab?.voices;
-  const voices = view && b && betVoiced(b) ? betVoices(read, b, home.lab?.talks ?? []) : null;
-  // Said the same way the route refuses it, so a button that could only be refused is not the step —
-  // and not while the plan's Scout is searching, so a tap does not start a second search beside it.
-  const searchRefusal = voices
-    ? read?.unreadable
-      ? 'The people found for this bet could not be read just now.'
-      : stepBusy(lab.planRuns, 'find', d.now)
-      ? SCOUT_SEARCHING
-      : voiceRefusal({ running: true, voiced: true, searches: voices.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining })
-    : null;
-  const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
-  // The play the bet runs, and what the screen can do for it (engine.ts StepPlay).
-  const played = b ? playOf(b) : null;
-  const play: StepPlay | null = b && played ? {
-    label: secondPerson(played.label), how: secondPerson(played.how),
-    counted: home.signals?.made && unitSignal(b.unit) ? 'link' : home.page?.live && unitPage(b.unit) ? 'page' : null,
-    script: (home.assets?.assets ?? []).find((a) => a.kind === 'script' && !a.retired && a.versions.some((v) => v.bet === b.id))?.id ?? null,
-    canDraft: !!home.ai && !d.noOffer,
-    pageOnline: !!home.page?.live,
-  } : null;
-  const step = engineStep({
-    today: home.recent.today, offerSet: !d.noOffer, unreadable: !!lab.unreadable,
-    checkpoint: { due: lab.checkpoint.due, ended: lab.checkpoint.ended.length },
-    current: view, talks: lab.talks, found: found.value, voices, opened: opened.ids, searchRefusal,
-    shelf: lab.shelf, weak: weak ? { key: weak.key, label: weak.label, why: weak.why } : null,
-    goal: payoffGoal(home.goals, home.recent.today),
-    play,
-  });
-  return { step, peopleShown: !!voices && (voices.searches > 0 || !!read?.unreadable) };
 }
 
 function NextStep({ home, step, view, actions, brief, find, opened, peopleShown }: {
@@ -413,12 +383,15 @@ function EngineHero({ home, d, actions, part, pick, changes }: {
 }
 
 /**
- * The part opened: its state and the rule behind it, the move when the move is
- * here, who works it, and what would move it. The bet's own cards follow it
- * when the bet is on this part; a move on another part is one tap away.
+ * The part opened. On the part the engine opens on (engine.ts partView): the
+ * test first where one runs — the claim and the one count that grades anything
+ * here — then the move, then who works it and what would move it. Any other
+ * part is closed to its rule and what it waits on, with the way back to the
+ * open one: its card said "Your move is on how they hear" in a box, and four of
+ * five cards spent their best space pointing somewhere else.
  */
-function Station({ home, d, actions, part, step, pick, brief, find, opened, peopleShown }: {
-  home: HomeData; d: Derived; actions: Actions; part: LinkKey; step: Step | null; pick: (k: LinkKey) => void;
+function Station({ home, d, actions, part, shape, step, pick, brief, find, opened, peopleShown }: {
+  home: HomeData; d: Derived; actions: Actions; part: LinkKey; shape: PartView; step: Step | null; pick: (k: LinkKey) => void;
   brief: Brief; find: Find; opened: Opened; peopleShown: boolean;
 }) {
   const { chain, crew, lab } = d.proof;
@@ -427,35 +400,57 @@ function Station({ home, d, actions, part, step, pick, brief, find, opened, peop
   if (!l) return null;
   const i = chain.links.indexOf(l);
   const weak = chain.weak === part;
-  const here = step && step.part === part ? step : null;
-  const there = step && step.part && step.part !== part ? step : null;
   const betHere = lab.current?.bet.part === part ? lab.current : null;
+  // Under the test the move says only what the test does not: its eyebrow drops the
+  // day, and a reason made of the test's own count goes (engine.ts whyOf) — a play's
+  // reason is what to do, and a post waiting on an answer says what to log, so those
+  // stay. The count's way in rides beside its button, unless the move already is that
+  // way in. On a phone the two have one screen between them; the Path, which has no
+  // test above its card, keeps the reason (engine.ts testAsk).
+  const next = betHere ? betNext(betHere.bet.metric, d.proof.found.value, betHere.bet.unit) : null;
+  const logs = (x: Step) => x.primary.go.to === 'next' || x.secondary?.go.to === 'next';
+  const counted = (x: Step) => x.kind === 'reply' || x.kind === 'find' || x.kind === 'count';
+  const here = step && step.part === part
+    ? (betHere && next
+      ? { ...step, eyebrow: 'Your move', why: counted(step) ? null : step.why, secondary: step.secondary ?? (logs(step) ? null : { label: next.label, go: { to: 'next', go: next.go } as StepGo }) }
+      : step)
+    : null;
   const said = !!here?.why && l.why.startsWith(here.why.replace(/…$/, ''));
-  const on = crewOn(crew, part);
+  // Closed, a part names only the agents on it: "You · Needed" on every card told
+  // the person five times what the move says once. An agent that stopped is still
+  // said on the part it stopped (invariant 13).
+  const on = crewOn(crew, part).filter((w) => shape.open || w.kind !== 'you');
   const full = agentIsFull(home);
   // The move above already is "Bet on how they hear"; the same words again under it read as a second thing to do.
   const moves = here ? l.moves.filter((m) => m.label !== here.title) : l.moves;
+  const thread = shape.waitsOn ?? shape.moveOn;
   return (
     <section className={`cp-card cp2-er-station ${l.state}`} style={{ '--frac': i * 0.2 + 0.1 } as React.CSSProperties} aria-label={l.label}>
       <div className="cp2-er-shead">
         <h2>{l.label}</h2>
         <span className={`cp2-bz-state ${l.state}`}><i />{LINK_STATE_LABEL[l.state]}</span>
       </div>
-      {/* The move first when it is on this part: the tab is opened to act, and its button belongs above the fold. */}
+      {/* The test first where one runs: the claim, and the one count that grades anything here. */}
+      {betHere && <TestHead home={home} d={d} view={betHere} actions={actions} wayIn={!here} />}
+      {/* Then the move, on the part it moves: the tab is opened to act, and its button belongs above the fold. */}
       {here && <div className="cp2-er-move"><NextStep home={home} step={here} view={lab.current} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} /></div>}
-      <div className="cp2-er-detail">
-        <p className="cp2-er-why">
-          {weak && <b>The weakest part. </b>}
-          {/* A move that is "bet on this part" carries the part's own rule as its reason; said once is enough. */}
-          {said ? (weak ? 'Nothing past it can be tested until it works.' : null) : l.why}
-        </p>
-        {l.what && <p className="cp2-er-what cp2-clamp2">{l.what}</p>}
-        {/* Said once: the engine above already says where the count starts when it is the same pivot. */}
-        {l.since && l.since !== chain.verdict.since && <p className="cp2-er-since">{l.since}</p>}
-      </div>
-      {there && (
-        <button className="cp2-er-elsewhere" onClick={() => pick(there.part!)}>
-          <span><b>Your move is on {LINK_LABEL[there.part!].toLowerCase()}:</b> {there.title}</span>
+      {/* The rule where no test is: where one runs, its count is what the rule would say. */}
+      {!betHere && (
+        <div className="cp2-er-detail">
+          <p className="cp2-er-why">
+            {weak && <b>The weakest part. </b>}
+            {/* A move that is "bet on this part" carries the part's own rule as its reason; said once is enough. */}
+            {shape.notYet ?? (said ? (weak ? 'Nothing past it can be tested until it works.' : null) : l.why)}
+          </p>
+          {l.what && <p className="cp2-er-what cp2-clamp2">{l.what}</p>}
+          {/* Said once: the engine above already says where the count starts when it is the same pivot. */}
+          {l.since && l.since !== chain.verdict.since && <p className="cp2-er-since">{l.since}</p>}
+        </div>
+      )}
+      {/* Closed: what it waits on, or where the move is, one tap back to the open part. */}
+      {thread && (
+        <button className="cp2-er-thread" onClick={() => pick(thread)}>
+          <span>{shape.waitsOn ? 'Waits on' : 'Your move is on'} <b>{LINK_LABEL[thread].toLowerCase()}</b></span>
           <IconChevron />
         </button>
       )}
@@ -469,8 +464,8 @@ function Station({ home, d, actions, part, step, pick, brief, find, opened, peop
           {l.runner.problem && <p className="cp2-bz-problem">{l.runner.problem}</p>}
         </div>
       )}
-      {/* What would move it, while no bet is on it: the bet's own card holds the work for the part it is on. */}
-      {!betHere && moves.length > 0 && (
+      {/* What would move it, while no bet is on it — and on a closed part only while no test runs: a second bet is refused. */}
+      {!betHere && shape.moves && moves.length > 0 && (
         <div className="cp2-er-moves">
           <span className="cp2-er-k">What would move it</span>
           {moves.map((raw) => {
@@ -485,6 +480,37 @@ function Station({ home, d, actions, part, step, pick, brief, find, opened, peop
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * The test, first on its part: the claim, the one count that grades it with its
+ * bar beside it, and the line it passes at. The day is said quietly — days going
+ * by are not progress; the count is. Kept to what a phone can show above the move
+ * under it: the count's way in rides beside the move's button, and sits here only
+ * where there is no move to carry it.
+ */
+function TestHead({ home, d, view, actions, wayIn }: { home: HomeData; d: Derived; view: BetView; actions: Actions; wayIn: boolean }) {
+  const b = view.bet;
+  const next = betNext(b.metric, d.proof.found.value, b.unit);
+  const over = overPlan(view);
+  return (
+    <div className="cp2-er-test">
+      <span className="cp2-er-k">The test · day {view.day} of {b.days}{view.last === home.recent.today ? ' · last day' : ''}</span>
+      <p className="cp2-er-claim">&ldquo;{b.belief}&rdquo;</p>
+      <div className="cp2-er-count">
+        <b>{view.result}</b>
+        <span className="cp2-er-countof">of {b.target}</span>
+        <span className="cp2-er-countunit">{metricWords(b.metric, b.target, b.priceLabel, b.unit)}</span>
+        <span className="cp2-er-countbar" role="progressbar" aria-label="Toward the pass line" aria-valuemin={0} aria-valuemax={b.target} aria-valuenow={Math.min(view.result, b.target)}>
+          <i style={{ width: `${pctOf(view.result, b.target)}%` }} />
+        </span>
+      </div>
+      {/* One test at a time (lab.ts refuses a second), said where the count is, so nothing else on the screen reads as counting. */}
+      <p className="cp2-er-passes">Passes at {passLine(b, view.last)}. The only test running.</p>
+      {over && <p className="cp2-lab-over">{over}</p>}
+      {wayIn && <button className="cp2-link cp2-er-wayin" onClick={() => goTo(next.go, actions, b.id)}>{next.label}</button>}
+    </div>
   );
 }
 
@@ -652,9 +678,16 @@ function goTo(go: BetNextGo, actions: Actions, betId: string) {
 
 const pctOf = (n: number, of: number) => Math.min(100, Math.round((n / Math.max(1, of)) * 100));
 
+/**
+ * How the running test runs, folded under one line: what it took so far, the
+ * plan, the play and how it is counted, and calling it off. The claim and its
+ * count lead the part above (TestHead); this was the bet's whole card, two
+ * screens tall, and its owner's review asked for it out of the way while the
+ * test is live — the map, not the move. A step of the plan that stopped says so
+ * on the fold, so it is not hidden by it (invariant 13).
+ */
 function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: Derived; view: BetView; actions: Actions; brief: Brief; full: boolean }) {
   const b = view.bet;
-  const today = home.recent.today;
   const found = d.proof.found.value;
   const play = playOf(b);
   // The plan, read off the rows (betplan.ts): the work under the count, never the count.
@@ -665,7 +698,6 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   const inPlan = new Set((pv?.steps ?? []).flatMap((s) => [s.project, s.asset]).filter((x): x is string => !!x));
   const workLeft = { ...work, projects: work.projects.filter((t) => !inPlan.has(t.commission.id)), assets: work.assets.filter((a) => !inPlan.has(a.id)) };
   const next = betNext(b.metric, found, b.unit);
-  const over = overPlan(view);
   // The funnel up to the line, counted since the bet began: something to read on day one, when the bar is empty.
   const rungs = rungsOf(view, found);
   const planInRungs = rungs.length > 1 && rungs.some((r) => r.planned != null);
@@ -674,6 +706,11 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   // Reached by outreach, a sale still comes in from outside the app sometimes — a referral, a walk-in.
   const saleToo = next.go === 'replied' && (b.metric === 'paid' || b.metric === 'paid_at_price');
   const [stopping, setStopping] = useState(false);
+  const [open, setOpen] = useState(false);
+  const stuck = (pv?.steps ?? []).filter((x) => x.state === 'failed' || x.state === 'stopped').length;
+  const fold = stuck
+    ? `${stuck === 1 ? 'A step' : `${stuck} steps`} of the plan stopped: open it to try again`
+    : pv ? 'The plan, the play, how it is counted, and calling it off' : 'How it is counted, the play, and calling it off';
   // How it is counted, the play's method and the hand-over box: read once, and
   // between them the card ran two screens tall on a phone, with what to do next
   // at the very bottom. Folded under one line that names the play.
@@ -690,75 +727,71 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   };
 
   return (
-    <div className="cp-card cp2-lab-bet">
-      <div className="cp-call-top">
-        <div className="cp-eyebrow">This bet · day {view.day} of {b.days}{view.last === today ? ' · last day' : ''}</div>
-        <span className="cp2-lab-partname">{LINK_LABEL[b.part]}</span>
-      </div>
-      <h2 className="cp2-lab-belief">&ldquo;{b.belief}&rdquo;</h2>
-
-      <div className="cp2-lab-score">
-        <span className="cp2-lab-n"><b>{view.result}</b> of {b.target}</span>
-        <span className="cp2-lab-unit">{metricWords(b.metric, b.target, b.priceLabel, b.unit)}</span>
-      </div>
-      <div className="cp2-lab-bar" role="progressbar" aria-label="Toward the pass line" aria-valuemin={0} aria-valuemax={b.target} aria-valuenow={Math.min(view.result, b.target)}>
-        <i style={{ width: `${pctOf(view.result, b.target)}%` }} />
-      </div>
-      {/* The rungs before the line. The line's own rung is the score above, and
-          "0 of 3 commitments" over a "0/3 committed" chip said one count twice. */}
-      {rungs.length > 1 && <Reading view={view} rungs={rungs.filter((r) => !r.line)} found={found} />}
-      {/* The plan has its place on the ladder when the ladder holds it; shown twice it would read as two plans. */}
-      {b.tries && view.tries != null && !planInRungs && (
-        <div className="cp2-pf-tries">
-          <span>{view.tries} of {b.tries.planned} {metricWords(b.tries.metric, b.tries.planned)}</span>
-          <span className="cp2-pf-tries-bar" aria-hidden><i style={{ width: `${pctOf(view.tries, b.tries.planned)}%` }} /></span>
-        </div>
-      )}
-      <p className="cp2-lab-pass"><b>Pass line:</b> {passLine(b, view.last)}.</p>
-      {over && <p className="cp2-lab-over">{over}</p>}
-      {pv
-        ? <BetPlan home={home} view={view} pv={pv} actions={actions} brief={brief} />
-        : !d.proof.lab.unreadable && <PlanIt view={view} steps={planFor(b, planCapsOf(home), home.profile.offer ?? {})} actions={actions} />}
-
-      <button className="cp2-lab-more" onClick={() => setMore((v) => !v)} aria-expanded={more}>
-        {/* The play's own name, which fits a line; its book is said inside. */}
-        <span className="cp2-clamp1">{play ? secondPerson(play.label, home.profile.name) : 'How it is counted'}</span>
-        <span className={`cp2-plan-chev${more ? ' open' : ''}`}><IconChevron /></span>
+    <div className="cp-card cp2-lab-bet cp2-er-runs">
+      <button className="cp2-er-runs-head" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="cp2-er-runs-main">
+          <b>How this test runs</b>
+          <span className={stuck ? 'bad' : undefined}>{fold}</span>
+        </span>
+        <span className={`cp2-plan-chev${open ? ' open' : ''}`}><IconChevron /></span>
       </button>
-      {more && (
-        <div className="cp2-lab-morebody">
-          <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit, !!home.signals?.made, !!home.page?.live)}</p>
-          {play && (
-            <div className="cp2-lab-playing">
-              <span className="cp2-lab-book">{playFromWords(play.from)}</span>
-              {/* Said to you (you.ts): a play an AI wrote before it was told to read "the owner knows". */}
-              <p>{secondPerson(play.how, home.profile.name)}</p>
+      {open && (
+        <div className="cp2-er-runs-body">
+          {/* The rungs before the line. The line's own rung is the count above, and
+              "0 of 3 commitments" over a "0/3 committed" chip said one count twice. */}
+          {rungs.length > 1 && <Reading view={view} rungs={rungs.filter((r) => !r.line)} found={found} />}
+          {/* The plan has its place on the ladder when the ladder holds it; shown twice it would read as two plans. */}
+          {b.tries && view.tries != null && !planInRungs && (
+            <div className="cp2-pf-tries">
+              <span>{view.tries} of {b.tries.planned} {metricWords(b.tries.metric, b.tries.planned)}</span>
+              <span className="cp2-pf-tries-bar" aria-hidden><i style={{ width: `${pctOf(view.tries, b.tries.planned)}%` }} /></span>
             </div>
           )}
-          {home.workerConnected && <HandOver home={home} view={view} actions={actions} full={full} />}
-          <BetWorkList view={view} work={workLeft} home={home} actions={actions} />
-          {/* A plan's draft or project is this bet's "get it ready", already on the plan. */}
-          {!plan && <Prep home={home} view={view} work={work} actions={actions} brief={brief} full={full} canDraft={!!home.ai && !d.noOffer} />}
-        </div>
-      )}
+          {pv
+            ? <BetPlan home={home} view={view} pv={pv} actions={actions} brief={brief} />
+            : !d.proof.lab.unreadable && <PlanIt view={view} steps={planFor(b, planCapsOf(home), home.profile.offer ?? {})} actions={actions} />}
 
-      {stopping ? (
-        <div className="cp2-lab-stop">
-          <p>Call it off? It stays in your history as called off, with what it counted until today.</p>
-          <input className="cp-input sm" value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="What you learned — optional" aria-label="What you learned, optional" />
-          {error && <div className="cp-error">{error}</div>}
-          <div className="cp-btn-row">
-            <button className="cp-btn" disabled={busy} onClick={() => void stop()}>{busy ? 'Calling it off…' : 'Call it off'}</button>
-            <button className="cp-btn primary" disabled={busy} onClick={() => { setStopping(false); setError(null); }}>Keep it running</button>
-          </div>
-        </div>
-      ) : (
-        <div className="cp2-lab-actions">
-          {/* The step at the top of the tab is the one primary button on this screen; this one is the same count's way in, close to where the bet ends. */}
-          <button className="cp-btn" onClick={() => goTo(next.go, actions, b.id)}>{next.label}</button>
-          {logToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'talk' })}>Log a conversation</button>}
-          {saleToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'sale', outcome: 'won' })}>Log a sale</button>}
-          <button className="cp2-link muted" onClick={() => setStopping(true)}>Call it off</button>
+          <button className="cp2-lab-more" onClick={() => setMore((v) => !v)} aria-expanded={more}>
+            {/* The play's own name, which fits a line; its book is said inside. */}
+            <span className="cp2-clamp1">{play ? secondPerson(play.label, home.profile.name) : 'How it is counted'}</span>
+            <span className={`cp2-plan-chev${more ? ' open' : ''}`}><IconChevron /></span>
+          </button>
+          {more && (
+            <div className="cp2-lab-morebody">
+              <p className="cp2-lab-src">{countedFrom(b.metric, b.start, b.priceLabel, b.unit, !!home.signals?.made, !!home.page?.live)}</p>
+              {play && (
+                <div className="cp2-lab-playing">
+                  <span className="cp2-lab-book">{playFromWords(play.from)}</span>
+                  {/* Said to you (you.ts): a play an AI wrote before it was told to read "the owner knows". */}
+                  <p>{secondPerson(play.how, home.profile.name)}</p>
+                </div>
+              )}
+              {home.workerConnected && <HandOver home={home} view={view} actions={actions} full={full} />}
+              <BetWorkList view={view} work={workLeft} home={home} actions={actions} />
+              {/* A plan's draft or project is this bet's "get it ready", already on the plan. */}
+              {!plan && <Prep home={home} view={view} work={work} actions={actions} brief={brief} full={full} canDraft={!!home.ai && !d.noOffer} />}
+            </div>
+          )}
+
+          {stopping ? (
+            <div className="cp2-lab-stop">
+              <p>Call it off? It stays in your history as called off, with what it counted until today.</p>
+              <input className="cp-input sm" value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="What you learned — optional" aria-label="What you learned, optional" />
+              {error && <div className="cp-error">{error}</div>}
+              <div className="cp-btn-row">
+                <button className="cp-btn" disabled={busy} onClick={() => void stop()}>{busy ? 'Calling it off…' : 'Call it off'}</button>
+                <button className="cp-btn primary" disabled={busy} onClick={() => { setStopping(false); setError(null); }}>Keep it running</button>
+              </div>
+            </div>
+          ) : (
+            <div className="cp2-lab-actions">
+              {/* The step at the top of the tab is the one primary button on this screen; this one is the same count's way in, close to where the bet ends. */}
+              <button className="cp-btn" onClick={() => goTo(next.go, actions, b.id)}>{next.label}</button>
+              {logToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'talk' })}>Log a conversation</button>}
+              {saleToo && <button className="cp-btn" onClick={() => actions.openSheet({ kind: 'sale', outcome: 'won' })}>Log a sale</button>}
+              <button className="cp2-link muted" onClick={() => setStopping(true)}>Call it off</button>
+            </div>
+          )}
         </div>
       )}
     </div>

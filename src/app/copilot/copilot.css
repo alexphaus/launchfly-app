@@ -2643,9 +2643,36 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-er-move { margin-top: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .cp-root[data-theme="soft"] .cp2-er-move .cp2-ns-t { font-size: 20px; }
 .cp-root[data-theme="soft"] .cp2-er-detail > :first-child { margin-top: 12px; }
-.cp-root[data-theme="soft"] .cp2-er-elsewhere { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 14px; padding: 10px 12px; border-radius: 12px; background: var(--tint); color: var(--blue); font-size: 12.5px; line-height: 1.45; text-align: left; }
-.cp-root[data-theme="soft"] .cp2-er-elsewhere span { flex: 1; min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-er-elsewhere b { font-weight: 700; }
+/* A closed part's way back to the open one: what it waits on, or where the move is.
+   Grey, not the move's blue: it is a way back, not a second thing to do. */
+.cp-root[data-theme="soft"] .cp2-er-thread { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 14px; padding: 10px 12px; border-radius: 12px; background: var(--line); color: var(--ink); font-size: 12.5px; line-height: 1.45; text-align: left; }
+.cp-root[data-theme="soft"] .cp2-er-thread span { flex: 1; min-width: 0; }
+.cp-root[data-theme="soft"] .cp2-er-thread b { font-weight: 700; }
+.cp-root[data-theme="soft"] .cp2-er-thread .cp2-chev { width: 15px; height: 15px; color: var(--dim); }
+/* The test, first on its part (TestHead): the claim, the one count, the line it
+   passes at. The day is the eyebrow, quiet: days going by are not progress. */
+.cp-root[data-theme="soft"] .cp2-er-test { margin-top: 12px; }
+.cp-root[data-theme="soft"] .cp2-er-claim { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-er-count { display: flex; align-items: baseline; gap: 6px; margin-top: 10px; }
+.cp-root[data-theme="soft"] .cp2-er-count b { font-family: var(--cp-font-display, var(--display)); font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -1px; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-er-countof { font-family: var(--cp-font-display, var(--display)); font-size: 18px; font-weight: 600; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-er-countunit { font-size: 13px; font-weight: 600; color: var(--muted); }
+/* The bar beside the count, not under it: one row, so the move under the test stays on the screen. */
+.cp-root[data-theme="soft"] .cp2-er-countbar { flex: 1; min-width: 48px; max-width: 120px; height: 8px; margin-left: auto; align-self: center; border-radius: 999px; background: var(--track); overflow: hidden; }
+.cp-root[data-theme="soft"] .cp2-er-countbar i { display: block; height: 100%; border-radius: 999px; background: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-er-passes { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-er-wayin { display: inline-block; margin-top: 6px; padding: 4px 0; font-size: 12.5px; }
+/* The move under the test, in its own tint, so the act reads apart from the count. */
+.cp-root[data-theme="soft"] .cp2-er-test + .cp2-er-move { margin-top: 14px; padding: 14px; border-bottom: 0; border-radius: 18px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-er-test + .cp2-er-move .cp2-ns-pay { background: var(--surface); }
+/* How this test runs: the bet's card, folded under one line while the test is live. */
+.cp-root[data-theme="soft"] .cp2-er-runs-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; text-align: left; }
+.cp-root[data-theme="soft"] .cp2-er-runs-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-root[data-theme="soft"] .cp2-er-runs-main b { font-size: 14px; font-weight: 700; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-er-runs-main span { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-er-runs-main span.bad { font-weight: 600; color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-er-runs-head .cp2-chev { width: 16px; height: 16px; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-er-runs-body { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .cp-root[data-theme="soft"] .cp2-er-k { display: block; margin-bottom: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .cp-root[data-theme="soft"] :is(.cp2-er-oncrew, .cp2-er-moves) { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .cp-root[data-theme="soft"] .cp2-er-chips { display: flex; flex-wrap: wrap; gap: 6px; }

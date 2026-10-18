@@ -10271,7 +10271,7 @@ async function shelfSuite() {
   const iface = src('src/lib/copilot/lab.ts').match(/export interface ShelfEntry \{[\s\S]*?\n\}/)![0];
   assert.ok(!/score|market|viab|rank/i.test(iface), 'a kept idea is a test with a line: nothing in it estimates its worth');
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
-  assert.match(tab, /<Shelf home=\{home\} d=\{d\} actions=\{actions\} \/>\s*<PickABet/, 'with no bet running, the person’s own tests come before the generic ones');
+  assert.match(tab, /<Shelf home=\{home\} d=\{d\} actions=\{actions\} \/>\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?\{!shape\.notYet && <PickABet/, 'with no bet running, the person’s own tests come before the generic ones — and delivery offers none before anyone pays');
   assert.match(tab, /\{!running && <button className="cp-btn sm primary" disabled=\{busy === e\.id\} onClick=\{\(\) => actions\.openSheet\(\{ kind: 'bet', shelf: e\.id \}\)\}>Start it<\/button>\}/, 'Start is offered only when the slot is free, and not while that row is being taken off');
   // While a bet runs the picker is not shown and Start is not offered, so the shelf is the only way into the sheet — and that is when ideas arrive.
   assert.match(tab, /if \(!shelf\.length && !running\) return null;/, 'nothing to show, and nothing running: no card');
@@ -11626,7 +11626,9 @@ async function engineSuite() {
   /* 8. The screen: the engine leads, the part opened carries the move, the people are their own card, the tab is Engine. */
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
   assert.ok(tab.indexOf('<EngineHero ') < tab.indexOf('<AfterPivot') && tab.indexOf('<AfterPivot') < tab.indexOf('<Station ') && tab.indexOf('<Station ') < tab.indexOf('<People ') && tab.indexOf('<People ') < tab.indexOf('<ThisBet '), 'the engine, then what a pivot left, then the part opened, then the people, then the bet');
-  assert.match(tab, /const step = engineStep\(\{/);
+  // Read once in derive, so the Path lists the move in Engine's words (engine.ts testAsk).
+  assert.match(src('src/app/copilot/_components/v2/derive.ts'), /const step = engineStep\(\{/);
+  assert.match(tab, /const \{ step, peopleShown \} = d\.proof;/, 'the tab reads the move it did not compute');
   assert.match(tab, /const part = picked \?\? openPart\(step, d\.proof\.chain\.weak\);/, 'the engine opens where the move is');
   assert.match(tab, /\{step && !step\.part && \(/, 'a move about the whole business is no one part’s');
   assert.match(tab, /\{here && <div className="cp2-er-move"><NextStep home=\{home\} step=\{here\}/, 'the move sits on the part it moves');
@@ -13001,3 +13003,118 @@ async function ideasReadAgainSuite() {
 }
 
 ideasReadAgainSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Engine, the test first: one part open, the rest closed, the same move on the Path (engine.ts, today.ts, plan.ts) ─── */
+// Its owner's review of a process view of every part: the steps pulled attention
+// from the one test that counts, and a delivery template with nothing paid put
+// effort at the wrong end of the chain. So the part the engine opens on leads
+// with the test and then the move; every other part is closed to its rule and
+// what it waits on; and the Path lists the test's step in Engine's words.
+import { NOT_YET_DELIVER as tfNotYet, partView as tfPart, testAsk as tfAsk } from '../../src/lib/copilot/engine';
+import { ASK_LABEL as tfAskLabel, needsYou as tfNeeds } from '../../src/lib/copilot/today';
+import { pathNow as tfNow } from '../../src/lib/copilot/plan';
+import type { BetView as TfBetView } from '../../src/lib/copilot/lab';
+import type { LinkKey as TfKey, LinkState as TfState } from '../../src/lib/copilot/business';
+import { readFileSync as readTestFirstFile } from 'node:fs';
+
+async function testFirstSuite() {
+  const src = (f: string) => readTestFirstFile(f, 'utf8');
+  const states: Partial<Record<TfKey, TfState>> = { who: 'testing', reach: 'testing', close: 'untested', pay: 'untested', deliver: 'missing' };
+  const shape = (part: TfKey, over: Partial<Parameters<typeof tfPart>[0]> = {}) => tfPart({ part, open: 'reach', moveThere: true, testRunning: true, states, ...over });
+
+  /* 1. One part open: the test's. The rest closed to their rule, each pointing back to it. */
+  assert.deepEqual(shape('reach'), { open: true, waitsOn: null, moveOn: null, moves: true, notYet: null });
+  assert.deepEqual(shape('who'), { open: false, waitsOn: null, moveOn: 'reach', moves: false, notYet: null }, 'before the open part: the move is there');
+  assert.deepEqual(shape('close'), { open: false, waitsOn: 'reach', moveOn: null, moves: false, notYet: null }, 'after it: nothing reaches this part until that one moves');
+  assert.equal(shape('who', { moveThere: false }).moveOn, null, 'no move on the open part, nothing to point at');
+  assert.equal(shape('close', { testRunning: false }).moves, true, 'with no test running, a closed part still offers its bets: the engine is the picker');
+  assert.equal(shape('close').moves, false, 'while one runs, a second bet is refused (lab.ts), so none is offered');
+
+  /* 2. Delivery before anyone pays: not yet, and nothing offered for it. */
+  const deliver = shape('deliver', { testRunning: false });
+  assert.deepEqual([deliver.notYet, deliver.moves, deliver.waitsOn], [tfNotYet, false, 'reach']);
+  assert.equal(shape('deliver', { states: { ...states, pay: 'testing' } }).notYet, null, 'someone paid: delivery is written next');
+  assert.equal(shape('deliver', { states: { ...states, deliver: 'works' } }).notYet, null, 'already written down');
+  assert.equal(shape('deliver', { states: { ...states, pay: 'missing' } }).notYet, tfNotYet, 'no price said is nothing paid at one');
+  assert.ok(!/\d/.test(tfNotYet), 'no number in it');
+
+  /* 3. The test's step for the Path: Engine's own sentence and reason; the count where the step gives none. */
+  const view = { bet: { part: 'reach', metric: 'committed', target: 3, priceLabel: null, unit: null, days: 21 }, result: 0, day: 3 } as unknown as TfBetView;
+  const why = 'Day 3 of 21 and no conversation logged yet: 10 to have in the 19 days left.';
+  assert.deepEqual(tfAsk({ part: 'reach', title: 'Reply to one of the 7 people who said it', why }, view), { title: 'Reply to one of the 7 people who said it', detail: why });
+  assert.deepEqual(tfAsk({ part: 'reach', title: 'Log your next conversation', why: null }, view),
+    { title: 'Log your next conversation', detail: 'How they hear · 0 of 3 commitments, day 3 of 21' });
+  assert.equal(tfAsk({ part: null, title: 'Write what you sell', why: null }, view), null, 'the offer is not the test');
+  assert.equal(tfAsk({ part: 'pay', title: 'x', why: null }, view), null, 'a step on another part is not the test’s');
+  assert.equal(tfAsk(null, view), null);
+  assert.equal(tfAsk({ part: 'reach', title: 'x', why: null }, null), null, 'no test running');
+
+  /* 4. The Path lists it first, and never lets it take the move from a block, the call or the plan. */
+  const test = { title: 'Reply to one of the 7 people who said it', detail: why };
+  const none = { commissions: [], capture: null, queue: { count: 0, oldestDays: 0 }, queueIsCall: false, noOffer: false };
+  assert.deepEqual(tfNeeds({ ...none, test }).map((a) => [a.key, a.kind, a.title, a.detail]), [['test', 'test', test.title, test.detail]]);
+  assert.equal(tfAskLabel.test, 'Your test', 'what the connector and the Ask sheet call it');
+  assert.equal(tfNeeds({ ...none, test: null }).length, 0);
+  const listed = tfNeeds({ ...none, capture: { kind: 'opened', headline: 'Did it go?', because: 'x' }, queue: { count: 2, oldestDays: 1 }, test });
+  assert.deepEqual(listed.map((a) => a.kind), ['test', 'confirm', 'send'], 'the test leads; the drafts are last, as before');
+
+  const row = { key: 'test', kind: 'test' as const, ...test };
+  const fix = { key: 'f:c1', kind: 'fix' as const, title: 'Create a landing page', detail: 'Its work did not pass the app’s checks', id: 'c1' };
+  const base = { noOffer: false, callPending: false, queue: { count: 0, oldestDays: 0 }, moves: [] as never[], capacity: 'deep' as const, funnel: { sent: 9, replied: 2, won: 2 }, freshMatches: 0 };
+  const call = tfNow({ ...base, callPending: true, asks: [row, fix] });
+  assert.deepEqual([call.now.kind, call.also.map((a) => a.key)], ['call', ['test', 'f:c1']], 'a waiting call keeps the move; the test is first beside it');
+  const blocked = tfNow({ ...base, asks: [row, fix] });
+  assert.deepEqual([blocked.now.kind, blocked.also.map((a) => a.key)], ['fix', ['test']], 'what blocks a worker comes first; the test waits beside it');
+  const planned = tfNow({ ...base, asks: [row], hasPlan: true, planStep: { item: 'i1', title: 'Open Wise', milestone: 'Savings safe in Wise', size: '20 min' } });
+  assert.deepEqual([planned.now.kind, planned.also.map((a) => a.key)], ['step', ['test']], 'the plan was drawn across every goal: its step keeps the move');
+  const itsTurn = tfNow({ ...base, asks: [row], hasPlan: true, queue: { count: 4, oldestDays: 2 } });
+  assert.deepEqual([itsTurn.now.kind, itsTurn.now.title, itsTurn.now.why, itsTurn.now.cta, itsTurn.now.size, itsTurn.also.length], ['test', test.title, test.detail, 'Open your test', null, 0],
+    'then the test, before old drafts: Engine’s sentence, its count, one tap to its button');
+  const capture = { key: 'capture', kind: 'confirm' as const, title: 'Did it go?', detail: 'x' };
+  const full = tfNow({ ...base, callPending: true, asks: [row, fix, { ...fix, key: 'f:c2' }, capture] });
+  assert.deepEqual(full.also.map((a) => a.key), ['test', 'f:c1', 'f:c2', 'capture'], 'the test rides beside the cap: it pushes out no ask that was there before it');
+  assert.equal(tfNow({ ...base, callPending: true, asks: [fix, { ...fix, key: 'f:c2' }, capture, { ...capture, key: 'c2' }] }).also.length, 3, 'without one, the cap is as it was');
+  const mv = { id: 'm', job: 'goal_gap', kind: 'decide', headline: 'Quote Casa Blanca', why: ['w'], artifact: { kind: 'text', label: 'Read', value: 'v' }, cost_label: '10 min', status: 'open', created_at: '2026-10-17T05:00:00Z' } as never;
+  assert.equal(tfNow({ ...base, asks: [row], moves: [mv] }).now.kind, 'test', 'before any one job’s idea of a next thing');
+  assert.equal(tfNow({ ...base, asks: [row], queue: { count: 4, oldestDays: 2 } }).now.kind, 'send', 'with no plan, on an outbound path the drafts still come first');
+
+  /* 5. One source: derive reads the move once, the Path is handed that one, and the tab routes it to Engine. */
+  const derive = src('src/app/copilot/_components/v2/derive.ts');
+  assert.match(derive, /const engine = engineStepOf\(home, \{ now, noOffer, chain, lab, found: found\.value \}, opened\);/);
+  assert.match(derive, /test: testAsk\(engine\.step, lab\.current\),/, 'the Path is handed Engine’s step, not a second reading of it');
+  assert.ok(derive.indexOf('const engine = engineStepOf(') < derive.indexOf('const asks = needsYou('), 'read before the Path’s list is made');
+  assert.match(derive, /step: engine\.step,/);
+  const shell = src('src/app/copilot/_components/v2/CopilotApp2.tsx');
+  assert.match(shell, /const opened = useOpened\(home\.profile\.id\);\n\s*const d = useDerived\(home, opened\.ids\);/, 'the posts this device opened, kept once for both tabs');
+  assert.match(shell, /<ProofTab home=\{home\} d=\{d\} actions=\{actions\} briefing=\{briefing\} opened=\{opened\} \/>/);
+  const path = src('src/app/copilot/_components/v2/PathTab.tsx');
+  assert.match(path, /else if \(ask\.kind === 'test'\) actions\.setTab\('proof'\);/, 'the chip opens Engine, where the move’s button is');
+  assert.match(path, /else if \(now\.kind === 'test'\) actions\.setTab\('proof'\);/);
+
+  /* 6. The screen: the test, then the move; closed parts point back; the bet's card folded, saying when a step stopped. */
+  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
+  const station = tab.slice(tab.indexOf('function Station('), tab.indexOf('function TestHead('));
+  const testAt = station.indexOf('{betHere && <TestHead ');
+  assert.ok(testAt >= 0 && testAt < station.indexOf('{here && <div className="cp2-er-move">'), 'the test leads its part, the move under it');
+  assert.ok(!tab.includes('cp2-er-elsewhere'), 'no box on every part pointing somewhere else');
+  assert.match(station, /\{shape\.waitsOn \? 'Waits on' : 'Your move is on'\}/);
+  assert.match(station, /crewOn\(crew, part\)\.filter\(\(w\) => shape\.open \|\| w\.kind !== 'you'\)/, 'closed, a part names only the agents on it');
+  assert.match(station, /\{!betHere && shape\.moves && moves\.length > 0 && \(/);
+  const head = tab.slice(tab.indexOf('function TestHead('), tab.indexOf('/** A worker as a chip'));
+  assert.ok(head.indexOf('className="cp2-er-k">The test · day') < head.indexOf('className="cp2-er-count"'), 'the day is the eyebrow; the count is the figure');
+  assert.match(head, /Passes at \{passLine\(b, view\.last\)\}\. The only test running\./, 'one test at a time, said where the count is');
+  assert.match(station, /\{ \.\.\.step, eyebrow: 'Your move', why: counted\(step\) \? null : step\.why, secondary: step\.secondary \?\? \(logs\(step\) \? null : \{ label: next\.label, go: \{ to: 'next', go: next\.go \} as StepGo \}\) \}/,
+    'under the test, the move drops what the test already says, and carries the count’s way in');
+  assert.match(station, /const counted = \(x: Step\) => x\.kind === 'reply' \|\| x\.kind === 'find' \|\| x\.kind === 'count';/, 'only a reason made of the test’s own count: a play’s reason is what to do');
+  assert.match(station, /<TestHead home=\{home\} d=\{d\} view=\{betHere\} actions=\{actions\} wayIn=\{!here\} \/>/, 'and under the test only where no move carries it');
+  const runs = tab.slice(tab.indexOf('function ThisBet('), tab.indexOf('function Reading('));
+  assert.match(runs, /const \[open, setOpen\] = useState\(false\);/, 'folded while the test is live');
+  assert.match(runs, /x\.state === 'failed' \|\| x\.state === 'stopped'/, 'a step that stopped is said on the fold (invariant 13)');
+  assert.ok(!/cp2-lab-belief|cp2-lab-score/.test(runs), 'the claim and its count are said once, above');
+  const css = src('src/app/copilot/copilot.css');
+  for (const c of ['cp2-er-test', 'cp2-er-count', 'cp2-er-countbar', 'cp2-er-thread', 'cp2-er-runs-head', 'cp2-er-runs-body']) assert.ok(css.includes(`.cp-root[data-theme="soft"] .${c} `), `${c} is styled, in the calm theme`);
+
+  console.log('copilot-core: test-first checks passed');
+}
+
+testFirstSuite().catch((e) => { console.error(e); process.exit(1); });

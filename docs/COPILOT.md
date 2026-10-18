@@ -1316,6 +1316,41 @@ What it took away: the Agents row (the crew is on the engine), the History row
 verdict), and the bet picker's own row of parts (the engine is the picker: tap a
 part and its plays are below). Nothing was added below the screen.
 
+**The test, then the move** (`engine.ts` `partView` · `testAsk`, `TestHead` · `Station` ·
+`ThisBet` in `ProofTab.tsx`, `derive.ts` `engineStepOf`). Its owner sketched each part as a
+process — steps with owners, automation, a bet on a step — and the review of the mock was that
+it drifted into process-building: the steps pulled attention from the one test that counts, a
+delivery template with nothing paid put effort at the wrong end of the chain, and every card that
+was not the move's said "Your move is on how they hear" in a box. So:
+
+- **One part is open**: the one the engine opens on (`openPart`). It leads with **the test** —
+  the claim, the one count that grades anything here with its bar beside it, and the line it
+  passes at ("Passes at 3 commitments by 5 Nov, from 10 conversations. The only test running.")
+  — the day said only in the eyebrow, because days going by are not progress. Then **the move**,
+  which under a test drops the day, and drops its reason where the reason is the test's own count
+  (a play's reason is what to do, and stays), and carries the count's way in ("Log a
+  conversation") beside its button. On a 412×915 phone both fit above the tab bar; the reason's
+  two lines were the difference.
+- **Every other part is closed** (`partView`): its rule; what it waits on, when it comes after
+  the open part, or where the move is, when it comes before — one grey row, one tap back; only
+  the agents on it, so "You · Needed" is not said five times, and an agent that stopped is still
+  said where it stopped (invariant 13); no bets while a test runs, because a second is refused;
+  and on delivery, while nothing is paid, "Not yet: there is nothing to deliver until someone
+  pays" — no moves and no bets for it.
+- **The bet's card is "How this test runs"**, folded under one line: what it took so far, the
+  plan, the play, how it is counted, calling it off. The fold says when a step of the plan
+  stopped ("A step of the plan stopped: open it to try again"), so it never hides a failure.
+
+**The same move on the Path.** The Path said "Open Wise" while Engine said "Reply to one of the
+7 people", and the test's step was on no list the Path kept: `needsYou` read projects, captures,
+the send queue, introductions and proposals, never the bet. Engine's move is now read once, in
+`derive` — with the posts this device opened, which `CopilotApp2` keeps for both tabs
+(`useOpened`), and none on the server — and the Path is handed it (`testAsk` → a `test` ask,
+"Your test"): first in its list, in Engine's sentence and reason, opening Engine where the
+button is, and beside the three chips rather than one of them, so it pushes none out. It never takes the move from today's call, from what blocks a worker, or from the
+plan's step, which was drawn across every goal; it is the move after those, before old drafts
+and before any one job's Move (`pathNow`). The connector and the Ask sheet list it too.
+
 **The next step first** (`engine.ts`, `NextStep` in `ProofTab.tsx` — on the part it moves since the engine room).
 Proof opened on its verdict — the offer, five dots with five state words, the weak
 link in forty words, runway in bets — and the one thing to do was two and a half

@@ -660,6 +660,25 @@ tests, and grade it from rows. Not yet: the review reading the pages themselves
 rather than a sentence from each, and ideas ranked by what passed for businesses
 like this one. See COPILOT.md → **Read again**.
 
+**Then — the test, then the move.** Its owner sketched each part of the business as a
+process — steps with owners, automation, a bet on a step, "needs you or the rest is stuck" —
+and the review of the mock was blunt: stronger on structure and permission, riskier as process
+theatre. Steps pulled attention from the one test that counts, activity read as progress, and a
+delivery template before anyone paid put effort at the wrong end of the chain. What was kept was
+the judgment, not the builder: the part being worked is open and leads with its test, then its
+one move; every other part is closed to its rule and what it waits on; the bet's card is folded
+to "How this test runs"; and the Path lists the same move in the same words, because two tabs
+had been giving two instructions — "Open Wise" on one, "Reply to one of the 7 people" on the
+other, and the test's step on no list the Path kept. Its place there is after the call, after
+what blocks a worker and after the plan's step: the plan is drawn across every goal, the exit as
+much as the business, and the test is one part of one of them. Not yet: steps that belong to a
+part, edited or suggested by a model, and automation per step. The levels that review kept
+(drafts on a schedule, an OK for each send, never a send without asking) are the right shape
+for when they come, and they come only under a part that has earned attention. It passes the
+survival test on the join, as the rest do: a harness can show a checklist; it cannot say which
+one test the rows are grading, that a second would be refused while it runs, or that delivery
+waits until someone pays. See COPILOT.md → **The test, then the move**.
+
 ---
 
 ## Where it actually stands

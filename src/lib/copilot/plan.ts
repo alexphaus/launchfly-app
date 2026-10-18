@@ -114,7 +114,7 @@ export function pathHere(ladder: { steps: PathStep[]; current: number }, f: Funn
 
 /* ─── The move ────────────────────────────────────────────────────────────── */
 
-export type NowKind = 'offer' | 'call' | 'send' | 'question' | 'intro' | 'fix' | 'approve' | 'confirm' | 'proposal' | 'step' | 'move' | 'find' | 'rest';
+export type NowKind = 'offer' | 'call' | 'send' | 'question' | 'intro' | 'fix' | 'approve' | 'confirm' | 'proposal' | 'test' | 'step' | 'move' | 'find' | 'rest';
 
 export interface NowMove {
   kind: NowKind;
@@ -163,6 +163,8 @@ const ASK_NOW: Record<AskRow['kind'], { title: (a: AskRow) => string; cta: strin
   send: { title: (a) => a.title, cta: 'Open the drafts', size: '' },
   // Never the move (pathNow leaves proposals beside it): here so the record of kinds is whole.
   proposal: { title: (a) => `Claude proposes: ${a.title}`, cta: 'Keep or drop it', size: 'one tap' },
+  // The move only after the plan's step (pathNow): its words are Engine's, and its button is there.
+  test: { title: (a) => a.title, cta: 'Open your test', size: '' },
 };
 
 /**
@@ -175,7 +177,8 @@ const ASK_NOW: Record<AskRow['kind'], { title: (a: AskRow) => string; cta: strin
  * else can be drafted; the drafts, because on an outbound path nothing moves until
  * something goes out, and they are finished work earning nothing; then whatever
  * a person is blocking — a question, an introduction, a breakage, an approval,
- * a reply with no ending; then the planner's first Move that fits the time you
+ * a reply with no ending; then the plan's step; then the running test's step,
+ * in Engine's words; then the planner's first Move that fits the time you
  * set; then the businesses worth a message. Once the call is answered it is a
  * receipt, and the move is the next thing — the call's card said as much, and
  * the old Path left it at the centre of the screen anyway.
@@ -184,7 +187,13 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
   const cap = CAPACITY_META[input.capacity];
   const f = input.funnel;
   const asks = input.asks;
-  const also = (without?: string) => asks.filter((a) => a.key !== without).slice(0, MAX_ALSO);
+  // The running test's step rides beside the cap rather than in it: it is the
+  // business's one move, and filling a list of three it would push out an ask
+  // that was there before it — with no "more" to find it under.
+  const also = (without?: string) => {
+    const rest = asks.filter((a) => a.key !== without);
+    return [...rest.filter((a) => a.kind === 'test'), ...rest.filter((a) => a.kind !== 'test').slice(0, MAX_ALSO)];
+  };
 
   if (input.callPending) return { now: { kind: 'call', key: 'call', title: '', why: null, size: null, cta: null }, also: also() };
   if (input.noOffer && !input.hasPlan) {
@@ -230,7 +239,10 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
   // and decides; until it asks for them they are a chip beside the move.
   // A proposal blocks nothing — it is a chat's draft waiting for a yes — so it
   // waits beside the move and never takes the move's place over the plan.
-  const blocking = (input.hasPlan ? asks.filter((a) => a.kind !== 'send') : asks).filter((a) => a.kind !== 'proposal');
+  // Nor does the running test's step: it is the business's move, not a block on
+  // anybody, and the plan was drawn across every goal — the exit, the savings —
+  // so the test waits behind the plan's step rather than taking it.
+  const blocking = (input.hasPlan ? asks.filter((a) => a.kind !== 'send') : asks).filter((a) => a.kind !== 'proposal' && a.kind !== 'test');
   const ask = blocking[0];
   if (ask) {
     const k = ASK_NOW[ask.kind];
@@ -256,6 +268,13 @@ export function pathNow(input: NowInput): { now: NowMove; also: AskRow[] } {
   }
   // A plan with nothing of yours that fits today: finished drafts are the best
   // use of the time, but the plan never said sending is the path, so neither does this.
+  // Then the running test's step: the one count that means anything about the
+  // business, before old drafts and before any one job's idea of a next thing.
+  const test = asks.find((a) => a.kind === 'test');
+  if (test) {
+    const k = ASK_NOW.test;
+    return { now: { kind: 'test', key: test.key, title: k.title(test), why: test.detail, size: null, cta: k.cta }, also: also(test.key) };
+  }
   if (input.queue.count > 0) return sendNow('Written and waiting, and nothing else on your plan fits today.');
 
   const fitting = input.moves.find((m) => (costMinutesOf(m.cost_label) ?? DEFAULT_COST_MINUTES) <= cap.minutes);

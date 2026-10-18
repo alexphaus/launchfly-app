@@ -64,7 +64,7 @@ import { sheetKey, useCopilot } from '../useCopilot';
 import { useDerived } from './derive';
 import { IconEngine, IconMoney, IconPath, IconSwipe, IconYou } from './icons2';
 import PathTab from './PathTab';
-import ProofTab from './ProofTab';
+import ProofTab, { useOpened } from './ProofTab';
 import MoneyTab, { BookFab, BookSheet, MoneyTabGuard, useBook } from './MoneyTab';
 import YouTab from './YouTab';
 import SwipeTab from './SwipeTab';
@@ -153,7 +153,10 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     onHeard: (text) => void tell(text),
     onFailed: (why, type) => { say(why); if (type) logMove(); },
   });
-  const d = useDerived(home);
+  // Posts this device opened and has not answered: the one input to Engine's move
+  // that is not a row, kept here so the Path lists the same move Engine leads with.
+  const opened = useOpened(home.profile.id);
+  const d = useDerived(home, opened.ids);
   const status = d.status[tab];
   const nightly = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? nightlyView(home.nightly.run, new Date()) : null;
   // Where the Path and the week's review send someone about their matches: the
@@ -192,7 +195,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
           : (briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
         {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
         {tab === 'swipe' && <SwipeTab home={home} d={d} actions={actions} finding={finding} say={say} refresh={refresh} />}
-        {tab === 'proof' && <ProofTab home={home} d={d} actions={actions} briefing={briefing} />}
+        {tab === 'proof' && <ProofTab home={home} d={d} actions={actions} briefing={briefing} opened={opened} />}
         {tab === 'money' && <MoneyTabGuard><MoneyTab book={book} actions={actions} say={say} arrival={arrival} clearArrival={clearArrival} /></MoneyTabGuard>}
         {tab === 'you' && <YouTab home={home} d={d} actions={actions} openMatches={openMatches} />}
       </main>

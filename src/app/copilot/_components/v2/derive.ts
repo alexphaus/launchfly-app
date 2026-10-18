@@ -15,11 +15,11 @@ import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster } from '@/lib/copilot/machine';
 import { businessChain, verdictCount, waitingOnYou } from '@/lib/copilot/business';
 import { crewLine, crewOf } from '@/lib/copilot/crew';
-import { builtSoFar } from '@/lib/copilot/engine';
+import { builtSoFar, engineStep, payoffGoal, testAsk, type Step, type StepPlay } from '@/lib/copilot/engine';
 import { lapsedOn } from '@/lib/copilot/commission';
 import { assetGaps } from '@/lib/copilot/assets';
 import { historyOf } from '@/lib/copilot/history';
-import { betPrice, labView, openIntros } from '@/lib/copilot/lab';
+import { betPrice, labView, openIntros, playOf, unitPage } from '@/lib/copilot/lab';
 import { proposalLine } from '@/lib/copilot/proposals';
 import { chainInputOf, foundOf, saidOf } from '@/lib/copilot/proof';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
@@ -31,12 +31,19 @@ import { VERDICT_WORDS, goalOutlooks } from '@/lib/copilot/outlook';
 import { weekReview } from '@/lib/copilot/review';
 import { doneForYou, needsYou, worthDoing } from '@/lib/copilot/today';
 import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
-import type { HomeData } from '@/lib/copilot/types';
+import type { FoundBy, HomeData } from '@/lib/copilot/types';
+import { SCOUT_SEARCHING, stepBusy } from '@/lib/copilot/betplan';
+import { unitSignal } from '@/lib/copilot/signal';
+import { betVoiced, betVoices, voiceRefusal } from '@/lib/copilot/voices';
+import { secondPerson } from '@/lib/copilot/you';
 import { moneyForPlan } from '@/lib/copilot/money/ledger';
 import type { Tab2 } from '../shared';
 import { salesCurrency } from '@/lib/copilot/metrics';
 
-export function derive(home: HomeData) {
+/** No posts opened: the server's read, and the connector's, which have no device to ask. */
+const NO_OPENED: ReadonlySet<string> = new Set();
+
+export function derive(home: HomeData, opened: ReadonlySet<string> = NO_OPENED) {
   const now = new Date(home.generatedAt);
   const noOffer = offerIsEmpty(home.profile.offer);
   const queueCount = home.queue.length;
@@ -78,6 +85,54 @@ export function derive(home: HomeData) {
     outcomes: home.recent.outcomes,
     moves: ownMoves,
   });
+  const d = home.diagnosis;
+  /* The team: each agent placed on the part of the business it runs, and one line for Proof */
+  const team = agentRoster({
+    now,
+    today: home.recent.today,
+    supplyLastRun: home.supplyLastRun,
+    sourced: home.metrics.pipeline.sourced,
+    // Maps targeting or a web search it can plan: either is the Scout with something to do.
+    hasTargeting: searching,
+    // A web search that should run and cannot, said on the Scout — the searches
+    // have no screen of their own, so this is where a broken one shows.
+    searchProblem: searchProblemOf(home, noOffer),
+    matchesLeft: home.billing.matches.remaining,
+    sources: home.watchSources.map((s) => ({ lastCheckedAt: s.last_checked_at, error: s.last_error, status: s.status })),
+    finds: feed.filter((i) => i.from === 'feed').length,
+    offerEmpty: noOffer,
+    queueCount,
+    drafted: d.stages.find((s) => s.key === 'drafted')?.count ?? 0,
+    workerConnected: home.workerConnected,
+    commissions: home.commissions,
+    lastCronRun: home.lastCronRun,
+    lastRun: home.lastRun,
+    jobsRan: home.jobsRun?.ran ?? null,
+    broke: home.jobsRun?.broke ?? [],
+  });
+  // The chain is read from the same rows the funnel counts (proof.ts), with the
+  // bets, conversations and assets the person keeps for what the app cannot see.
+  const said = saidOf(home);
+  const found = foundOf(home);
+  const chainInput = chainInputOf(home, {
+    agents: team,
+    worthAMessage: good.filter((i) => i.from === 'business').length,
+    webReady,
+    currency,
+    topOpening: d.openings[0]?.term ?? null,
+  });
+  const chain = businessChain(chainInput);
+  const running = home.commissions.filter((t) => t.commission.status === 'active' || t.commission.status === 'blocked').length;
+
+  /* Proof — the verdict, the bet that moves it, the assets, the history. One
+     tab, because whether the business is proven and what is being bet to find
+     out are one question: the part a play is offered for is the part the
+     verdict calls weak, and a checkpoint reads its decision back against the
+     verdicts on the same screen. */
+  const lab = labView(home.lab, { runwayMonths: home.metrics.runway_months, links: chain.links, today: home.recent.today });
+  // Engine's one move, read once here so the Path can list it in Engine's words.
+  const engine = engineStepOf(home, { now, noOffer, chain, lab, found: found.value }, opened);
+
   // Introductions somebody offered and nobody has followed up: on the Path,
   // because they are lost by waiting, and on Proof beside the conversations.
   const intros = openIntros(home.lab?.talks ?? [], home.lab?.intros, home.recent.today);
@@ -90,12 +145,12 @@ export function derive(home: HomeData) {
     intros,
     today: home.recent.today,
     proposals: (home.proposals?.open ?? []).map((p) => ({ id: p.id, line: proposalLine(p, betPrice(home.profile.offer?.price_band, currency).priceLabel), why: p.why })),
+    test: testAsk(engine.step, lab.current),
   });
   // A brand new account: nothing to call, nothing found, nothing handed over.
   // One card that says what is happening beats five empty sections.
   const nothingYet = !home.decision && !home.insight && !queueCount && !home.moves.length && !home.pipeline.length && !home.commissions.length;
 
-  const d = home.diagnosis;
   // The ladder counts from the same funnel the path to money shows, so a
   // milestone and the machine cannot disagree about how many were sent.
   const count = (k: string) => d.stages.find((st) => st.key === k)?.count ?? 0;
@@ -255,50 +310,6 @@ export function derive(home: HomeData) {
     swap: plan.state === 'ready' ? null : pathSwap({ now, timezone: home.profile.timezone, focus: home.recent.focus, sentAt, outcomes: home.recent.outcomes, queueCount: noOffer ? 0 : queueCount }),
   };
 
-  /* The team: each agent placed on the part of the business it runs, and one line for Proof */
-  const team = agentRoster({
-    now,
-    today: home.recent.today,
-    supplyLastRun: home.supplyLastRun,
-    sourced: home.metrics.pipeline.sourced,
-    // Maps targeting or a web search it can plan: either is the Scout with something to do.
-    hasTargeting: searching,
-    // A web search that should run and cannot, said on the Scout — the searches
-    // have no screen of their own, so this is where a broken one shows.
-    searchProblem: searchProblemOf(home, noOffer),
-    matchesLeft: home.billing.matches.remaining,
-    sources: home.watchSources.map((s) => ({ lastCheckedAt: s.last_checked_at, error: s.last_error, status: s.status })),
-    finds: feed.filter((i) => i.from === 'feed').length,
-    offerEmpty: noOffer,
-    queueCount,
-    drafted: d.stages.find((s) => s.key === 'drafted')?.count ?? 0,
-    workerConnected: home.workerConnected,
-    commissions: home.commissions,
-    lastCronRun: home.lastCronRun,
-    lastRun: home.lastRun,
-    jobsRan: home.jobsRun?.ran ?? null,
-    broke: home.jobsRun?.broke ?? [],
-  });
-  // The chain is read from the same rows the funnel counts (proof.ts), with the
-  // bets, conversations and assets the person keeps for what the app cannot see.
-  const said = saidOf(home);
-  const found = foundOf(home);
-  const chainInput = chainInputOf(home, {
-    agents: team,
-    worthAMessage: good.filter((i) => i.from === 'business').length,
-    webReady,
-    currency,
-    topOpening: d.openings[0]?.term ?? null,
-  });
-  const chain = businessChain(chainInput);
-  const running = home.commissions.filter((t) => t.commission.status === 'active' || t.commission.status === 'blocked').length;
-
-  /* Proof — the verdict, the bet that moves it, the assets, the history. One
-     tab, because whether the business is proven and what is being bet to find
-     out are one question: the part a play is offered for is the part the
-     verdict calls weak, and a checkpoint reads its decision back against the
-     verdicts on the same screen. */
-  const lab = labView(home.lab, { runwayMonths: home.metrics.runway_months, links: chain.links, today: home.recent.today });
   const assets = home.assets?.assets ?? [];
   const states = Object.fromEntries(chain.links.map((l) => [l.key, l.state]));
   // Who works each part (crew.ts): the roster placed where the chain names it,
@@ -348,6 +359,10 @@ export function derive(home: HomeData) {
     /** Projects waiting on a day that has passed: said under Projects with Stop, counted as neither waiting nor a slot. */
     lapsed: home.commissions.filter((t) => !!lapsedOn(t.commission, home.recent.today)).length,
     intros,
+    /** The one move (engine.ts engineStep), the same one the Path lists. */
+    step: engine.step,
+    /** Whether the people card is up to say what a search did, so the move does not say it again. */
+    peopleShown: engine.peopleShown,
   };
 
   const review = weekReview({
@@ -408,8 +423,58 @@ function searchProblemOf(home: HomeData, noOffer: boolean): string | null {
   return failed ? `Web search failed last run: ${failed}` : null;
 }
 
+/**
+ * Engine's one move, read off the rows (engine.ts engineStep) — here, once, so
+ * the Path lists the move Engine leads with in Engine's words. The posts this
+ * device opened are the one input that is not a row: the screen passes them in,
+ * and a read without them (the connector's) says to reply rather than asking
+ * whether they answered.
+ */
+function engineStepOf(
+  home: HomeData,
+  i: { now: Date; noOffer: boolean; chain: ReturnType<typeof businessChain>; lab: ReturnType<typeof labView>; found: FoundBy | null },
+  opened: ReadonlySet<string>,
+): { step: Step | null; peopleShown: boolean } {
+  const { chain, lab } = i;
+  const view = lab.current;
+  const b = view?.bet ?? null;
+  const read = home.lab?.voices;
+  const voices = view && b && betVoiced(b) ? betVoices(read, b, home.lab?.talks ?? []) : null;
+  // Said the same way the route refuses it, so a button that could only be refused is not the step —
+  // and not while the plan's Scout is searching, so a tap does not start a second search beside it.
+  const searchRefusal = voices
+    ? read?.unreadable
+      ? 'The people found for this bet could not be read just now.'
+      : stepBusy(lab.planRuns, 'find', i.now)
+      ? SCOUT_SEARCHING
+      : voiceRefusal({ running: true, voiced: true, searches: voices.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining })
+    : null;
+  const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
+  // The play the bet runs, and what the screen can do for it (engine.ts StepPlay).
+  const played = b ? playOf(b) : null;
+  const play: StepPlay | null = b && played ? {
+    label: secondPerson(played.label), how: secondPerson(played.how),
+    counted: home.signals?.made && unitSignal(b.unit) ? 'link' : home.page?.live && unitPage(b.unit) ? 'page' : null,
+    script: (home.assets?.assets ?? []).find((a) => a.kind === 'script' && !a.retired && a.versions.some((v) => v.bet === b.id))?.id ?? null,
+    canDraft: !!home.ai && !i.noOffer,
+    pageOnline: !!home.page?.live,
+  } : null;
+  const step = engineStep({
+    today: home.recent.today, offerSet: !i.noOffer, unreadable: !!lab.unreadable,
+    checkpoint: { due: lab.checkpoint.due, ended: lab.checkpoint.ended.length },
+    current: view, talks: lab.talks, found: i.found, voices, opened, searchRefusal,
+    shelf: lab.shelf, weak: weak ? { key: weak.key, label: weak.label, why: weak.why } : null,
+    goal: payoffGoal(home.goals, home.recent.today),
+    play,
+  });
+  return { step, peopleShown: !!voices && (voices.searches > 0 || !!read?.unreadable) };
+}
+
 export type Derived = ReturnType<typeof derive>;
 
-export function useDerived(home: HomeData): Derived {
-  return useMemo(() => derive(home), [home]);
+export function useDerived(home: HomeData, opened?: ReadonlySet<string>): Derived {
+  // Keyed on the ids, not the set: the hook that keeps them builds a new set every render.
+  const key = opened ? [...opened].sort().join(',') : '';
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => derive(home, opened), [home, key]);
 }

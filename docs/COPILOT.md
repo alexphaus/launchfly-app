@@ -289,10 +289,13 @@ Old deep links still work: `TAB_ALIAS` maps `today`/`pipeline` → `now` and
 `signals` → `working`, so an installed shell and the weekly push keep landing
 somewhere sensible.
 
-## Four tabs (`/copilot2`)
+## Four tabs (`/copilot2`) — three now, and You in the header
 
-A second layout over the same app: **Path**, **Swipe**, **Engine** (the key and
-the files are still `proof`; see **Proof** below), **Money**, **You**. It began as Today, Matches, Work, You, written from its owner's verdict on the
+A second layout over the same app: **Decide** (key `swipe`, `SwipeTab.tsx`),
+**System** (key `proof`, `ProofTab.tsx`), **Money**, and **You** behind the
+avatar in the header's corner. Until October 2026 it was Path, Swipe, Engine,
+Money and You; see **Decide, System, Money** below for what moved where and why.
+The layout keeps its old name. It began as Today, Matches, Work, You, written from its owner's verdict on the
 two-tab version ("too many things, nothing that stands out, the purpose lost from
 the original mock-ups; Working? is a log"). Then every redraft of Work met the
 same verdict — "static sections that compete for attention and nothing changes",
@@ -320,20 +323,78 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 
 | Tab | The question | What is on it | Pure module |
 | --- | --- | --- | --- |
-| Path | where am I, and what moves it | the evidence (what came back in the last two weeks, steps reached where they happened, steps ticked off the plan, graded calls, hours with the one swap, today's call once answered, the week, what broke) · you are here, in words · the one move, sized to your capacity, and what else needs you beside it · the plan: **drawn** for the person's goals when the server has a model (why this order, what changed, then this week → this month → this quarter → after that, milestones with what makes them done and tagged steps, then every goal) — otherwise the funnel plan (this week's steps, the milestones walked back from your first goal at your price, rate and capacity, the checkpoint, the goal) · the composer | `roadmap.ts`, `plan.ts`, `pathway.ts`, `today.ts` |
-| Swipe | who is worth contacting, one at a time — yes or no | one card to the foot of the screen, the buttons and nav frosted over it: the photo, what and where, every reason, the post itself for a find, how they can be reached, and the message already written · right sends it, left is not for me · at the top, the way to everyone already written to (To send · Waiting · Replied, a sheet) · see **Swipe** below | `deck.ts`, `matches.ts` |
-| Engine (`proof`) | is the business proven, what is working on it, and what is mine to do | **the engine**, one dark card: what you sell, the count that proves it drawn big ("0/3 paid at your $29", proven at 3 at your price), the five parts in a row with their states — the track lit through every part that works and stopping at the first that does not, the weakest flagged — and the crew working them, a face each · **the part opened**, under it with a notch pointing at its part: the move when it is here (the one next step, read off the rows), the rule behind the state, who works it and what would move it · for the bet's part, the people a bet found and the bet itself; with none running, the person's own kept tests, then ideas and book plays for the part opened · **Built so far**: sales, bets passed, projects finished, the first version of anything made, newest three, with All history · conversations, assets and the page, projects, a line each · see **The engine room** below | `engine.ts`, `crew.ts`, `proof.ts`, `business.ts`, `lab.ts`, `assets.ts`, `history.ts`, `ideas.ts`, `voices.ts`, `livepage.ts`, `era.ts` |
+| Decide (`swipe`) | what waits on me — do it, or put it off | one deck, one card to the foot of the screen, the buttons and nav frosted over it. **Decisions first** (`decide.ts`): writing the offer when there is none; today's call, answered on its own buttons; what needs you (a project that stopped to ask, an introduction, a post you opened — did they answer?, work that failed a check, what Claude proposed, opened drafts to confirm, a plan to approve); the posts the running bet found; the bet's next step; the plan's step or a Move; a checkpoint due; what a pivot left behind; what has to be set up; picking today's call when none was. **Then the people worth a message**, as Swipe dealt them (`deck.ts`). Right does it, left puts it off; a post's left is not a fit, with Undo. Its own top line carries the name, the way to everyone already written to, the mic and You, the count, and anything that broke (`Notices`) · see **Decide, System, Money** and **Swipe** below | `decide.ts`, `deck.ts`, `today.ts`, `plan.ts`, `engine.ts`, `voices.ts` |
+| System (`proof`) | what runs, and what it has proven | **the engine**, one dark card: what you sell, the count that proves it drawn big ("0/3 paid at your $29", proven at 3 at your price), the five parts in a row with their states — the track lit through every part that works and stopping at the first that does not, the weakest flagged — and the crew working them, a face each · **the part opened** (the one the workflow on trial tests, else the weakest), with a notch pointing at its part: with the bet on it, **the workflow on trial** — the play as its name, the claim it tests, its count against the line and the date it is judged by, and each step with who runs it, how often and what the rows show it has produced, the one the count stopped at marked **Stuck here** (`betplan.ts stuckStep`), the people found one tap away on Decide; otherwise the rule behind the state, who works it and what would move it · a checkpoint when due · **What you've tried**: every bet that ended, with what it counted and how it ended (`engine.ts triedWhen`) · with none running, the person's own kept tests, then the next bet, ideas and book plays for the part opened · conversations, assets and the page, projects, the history, a line each | `engine.ts`, `crew.ts`, `proof.ts`, `business.ts`, `lab.ts`, `betplan.ts`, `assets.ts`, `history.ts`, `ideas.ts`, `livepage.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move, which steps aside while the list is read downward (it sat over the amounts) | `money/book.ts` |
-| You | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals, one list · Records, what it reads instead of asking (a pill only where one waits on you) · Settings (the business), the nightly run ("Run again" starts tonight's pass now, and the row reports each step) and Account, three groups · the header names the tab; only Path greets, and only Path has a line under it — on Proof, Money and You it repeated the first card | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
+| You (the avatar) | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals, one list · **Something changed?**, the typed note the plan and tomorrow's call are redrawn from (it was at the foot of the Path) · Records, what it reads instead of asking (a pill only where one waits on you) · Settings (the business), the nightly run ("Run again" starts tonight's pass now, and the row reports each step) and Account, three groups · the header names the screen; no tab has a line under it — on System, Money and You it repeated the first card | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
 `derive.ts` computes all of it once per `HomeData`, from `generatedAt` rather
 than the clock, so the header's status line and the tab under it cannot disagree
 (the old header said 61 over a card saying 51) and the server render and the
-hydrating client agree across an hour boundary. Only the Path has a status line
-now: on Engine ("Not proven · day 2 of 14 on who buys · 3 waiting on you") and You
-("1.7 months of runway") it said the first card again, over two lines.
+hydrating client agree across an hour boundary. No tab has a status line now: on
+Engine ("Not proven · day 2 of 14 on who buys · 3 waiting on you") and You ("1.7
+months of runway") it said the first card again, over two lines, and the Path's
+went with it. Decide's badge and its pile read one list (`d.decide`), so the
+count on the nav and the cards under it cannot disagree either.
 
-**The Path is a plan, not a log.** One line runs down the left of the screen,
+**Decide, System, Money** (October 2026; `decide.ts`, `SwipeTab.tsx`,
+`ProofTab.tsx`, `CopilotApp2.tsx`). The day's work had drifted over three
+screens: the call, the move and "Needs you" on the Path; the bet's move and the
+people it found on Engine; the businesses on Swipe. Its owner, asked what a tab
+could be that survives a personal agent doing the planning, chose one deck of
+decisions, a tab that shows the system behind the business — "the proven
+workflow" — and Money, with You moved to the header; and said of Engine that
+half of it was work the deck could do. Their own counts said the rest of Path's
+case: of the calls carried out none moved the number it named, and 27 were never
+done. So:
+
+- **Path is gone, and nothing it did is lost.** The call, the move and every ask
+  are Decide's cards. What broke — a nightly run that never ran, a failed check,
+  a failing source, a read that failed — is said over Decide's pile (`Notices`),
+  where a quiet deck would otherwise hide it (invariant 13). The typed note is on
+  You. The plan is still drawn when what the person said is due (`usePlanDraw` in
+  the shell, as opening Path did): the call is picked from it and Claude reads it
+  over the connector (`get_plan`). What went is the drawing of it — the evidence
+  log, the week's dots, the swap, the phases and milestones — the part a chat
+  with the record does as well (DIRECTION.md, the survival test). Every name the
+  Path had (`path`, `today`, `now`) opens Decide.
+- **A decision is a card, ahead of the leads, warm first** (`decideCards`): a
+  blank offer first and alone (invariant 1 — and the businesses are not dealt at
+  all); the call; a project blocked on you, an introduction, a post opened and not
+  answered; a fix, a proposal, a confirm, an approval; the posts found; the bet's
+  step (never "reply to one of them": each post is its own card); the plan's step
+  or a Move while no call waits; a checkpoint; what a pivot left; set-up; picking
+  today's call. Sends are not a card — the drafts are the businesses on the pile.
+  A decision that arrives mid-session is dealt next; a post opened in this sitting
+  comes back as "did they answer?" at the back, not the moment its tab closes.
+- **Right does it, and a swipe never grades a call.** The call is answered on its
+  own buttons — I did it, Not doing it, Wrong call — because the answer grades it
+  and a gesture that cheap would grade it wrong; its right swipe only hands work
+  over, where the call is work the app offers to do, and only once the hand-over
+  went. An ask's right swipe opens where it is answered and the card stays until
+  the rows say it was. A post's right swipe opens it and copies the opener — the
+  reply goes from the person's own account (invariant 4). A plan step marked done
+  and a post set aside wait out the same Undo window as "not for me", and a save
+  that fails is said and the card dealt again.
+- **The badge counts what waits on you**, not the posts: a post found is a lead,
+  as a business is.
+- **System is the system.** The part a bet is on shows the bet as the workflow
+  on trial: the play as its name, the claim it tests, the count against its line
+  and the date it is judged by — not the day it is on, which is not progress —
+  and its steps as a line down the card, each with who runs it (a face: the Scout,
+  the Writer, the Researcher, you), how often (the crew's search every night, a
+  draft once) and what the rows show, the step the count stopped at marked. The
+  step that is answering people links to Decide, where they are. Under it, **What
+  you've tried**: every bet that ended as a workflow tried, its count against its
+  line and how it ended, a call-off said with how soon (`triedWhen`) — the owner's
+  record was four of five called off within a day, which is a test that never ran,
+  and five rows reading "Called off" said nothing about that.
+- **You is a screen, not a tab**: the avatar in every header's corner opens it,
+  blue while it is open, and the nav takes you back.
+
+**The Path is a plan, not a log.** *(Path was dropped in October 2026 — see
+**Decide, System, Money** above. This and the paragraphs on the plan below are kept
+for why each was built; the plan is still drawn and the call still follows it.)* One line runs down the left of the screen,
 outside the cards: solid through the evidence above "you are here", dashed
 through the plan below it, because that half is a guess. It opens on "you are
 here" with a little of the evidence above. The stream it replaced put everything
@@ -1259,8 +1320,9 @@ the person's own rows, so a number in it is one they gave and passes
 keeps a file on anyone, sets a quota, or messages people for you (DIRECTION.md).
 
 **The engine room** (`engine.ts` `engineFigure` · `openPart` · `builtSoFar`,
-`crew.ts`, `EngineHero` · `Station` · `Built` in `ProofTab.tsx`, `CrewSheet` in
-`ProofSheets.tsx`). Its owner's verdict on the tab below — step first, the verdict
+`crew.ts`, `EngineHero` · `Station` in `ProofTab.tsx`, `CrewSheet` in
+`ProofSheets.tsx`; the tab is called System since October 2026, and Built so far is
+the first line of History under Records). Its owner's verdict on the tab below — step first, the verdict
 a tap under it — was that it was hard to understand, run by the person rather than
 by the AI, and nothing that could stand beside what else is on the market; the want
 was a startup built by a workforce with its owner steering, a crew that will one
@@ -1316,7 +1378,7 @@ What it took away: the Agents row (the crew is on the engine), the History row
 verdict), and the bet picker's own row of parts (the engine is the picker: tap a
 part and its plays are below). Nothing was added below the screen.
 
-**The next step first** (`engine.ts`, `NextStep` in `ProofTab.tsx` — on the part it moves since the engine room).
+**The next step first** (`engine.ts`; on Decide since October 2026, a card of its own — `engineStep` is read in `derive.ts` and dealt by `decide.ts` — except where the posts are already their own cards).
 Proof opened on its verdict — the offer, five dots with five state words, the weak
 link in forty words, runway in bets — and the one thing to do was two and a half
 screens down, at the foot of the bet's card. A review of the tab put it plainly:
@@ -1364,7 +1426,7 @@ says — the chat does the thinking this app does not, with the rows it never
 collected. With the connector (You → Claude) Claude reads the same numbers live,
 and can propose a conversation for the person to keep.
 
-**People who said it** (`voices.ts`, `voicefind.ts`, `People` in `ProofTab.tsx`).
+**People who said it** (`voices.ts`, `voicefind.ts`; each post a card on Decide since October 2026, opened on the right swipe with the opener copied, "did they answer?" once opened, not a fit on the left).
 Its owner's bet was ten conversations with people who want a business and do
 not know where to start, and on day three the card read "0 of 10" over a "Log a
 conversation" button: nothing in the app could find one such person. The pool,
@@ -1448,8 +1510,8 @@ stays while the version behind it changes, so a link already shared keeps
 working; taken offline, it says the page is not online, and goes back up in one
 tap with the button it had (`lastAskOf`).
 
-**What a pivot on who buys left behind** (`era.ts` `pivotLeft`, `AfterPivot` in
-`ProofTab.tsx`). Its owner pivoted who buys on 7 Oct, from booking automation for
+**What a pivot on who buys left behind** (`era.ts` `pivotLeft`; a card on Decide
+since October 2026, set aside on the right swipe, kept from its own button). Its owner pivoted who buys on 7 Oct, from booking automation for
 resorts to the app itself for people starting out; two days later Maps still
 searched for pest control and plumbing in Manila every night, 148 of those
 businesses waited in the pool, and 35 drafts had been rewritten to them from the
@@ -1486,7 +1548,7 @@ breakage retried on the card, what the app offers to take on, and what finished,
 with the bet each was for — and the agents as one line, the roster folded under
 it.
 
-**The Path keeps its job** — the plan, the call, the day's move — with three
+**The Path kept its job** until October 2026 — the plan, the call, the day's move — with three
 links to Proof: the bet running (or a checkpoint due) as one line under "you are
 here"; the plan's experiment can **become the bet** ("Or make it a bet, and let
 the rows judge it"), opening the bet sheet with the experiment's test, check days
@@ -2672,6 +2734,10 @@ session.** If swiping goes up and sending does not, it made the app feel better
 and changed nothing, and it should be reverted.
 
 ## Swipe — the deck again, where yes is the send (`deck.ts`, `deckstore.ts`, `v2/SwipeTab.tsx`)
+
+*Since October 2026 this deck is Decide: every decision is dealt as a card ahead of
+the businesses (`decide.ts`; see **Decide, System, Money** under the tabs). What
+follows is the deck's own part, the people worth a message, and it is unchanged.*
 
 The tab that replaced Matches, from its owner's account of why 57 of 76 drafts
 never went: "little info about each card, then open it and draft it to check and
@@ -3959,7 +4025,10 @@ affinity), metrics, phone normalisation and heuristic fit, message templates, ag
 normalisation, starter agent, session signing — and, for the plan's judgement, due dates
 counted down (`due.ts`), the will-it-work verdicts and the record's signals (`outlook.ts`),
 the experiment's parse, novelty, life and ledger (`experiment.ts`), and a call that
-follows a redrawn plan only while it is unanswered (`replacesCall`).
+follows a redrawn plan only while it is unanswered (`replacesCall`) — and, for
+Decide, the order its decisions are dealt in, which of them need the person, that
+no swipe answers a call, the step a workflow is stuck on (`stuckStep`) and how a
+bet that ended is said (`triedWhen`).
 
 Two of them read files rather than modules, and both exist because the same bug
 shipped twice. `OUTCOME_KINDS` is diffed against the `kind` CHECK in

@@ -32,7 +32,7 @@ import type { LinkKey, Verdict } from './business';
 import { dateLabel, daysPhrase, goalDue } from './due';
 import { creditedGoalId } from './goalcard';
 import type { HistoryEntry } from './history';
-import { resultLine, type Bet, type BetView, type Talk } from './lab';
+import { BET_STATE_LABEL, dayWords, daysBetween, resultLine, type Bet, type BetView, type Talk } from './lab';
 import { betNext, playSays, type BetNextGo } from './proof';
 import type { FoundBy, Goal } from './types';
 import { betVoiced, stuckLine, type BetVoices } from './voices';
@@ -52,7 +52,8 @@ export type StepGo =
   | { to: 'shelf'; id: string }
   /** Where the bet's own next count happens (proof.ts betNext). */
   | { to: 'next'; go: BetNextGo }
-  | { to: 'tab'; tab: 'path' | 'swipe' }
+  /** Decide (the tab's key is still `swipe`): where the day's call and every other decision are. */
+  | { to: 'tab'; tab: 'swipe' }
   /** What the play has you say, drafted for the bet by the app's model (assets.ts script). */
   | { to: 'draft' }
   /** An asset already made for the bet, opened. */
@@ -156,7 +157,7 @@ export function payoffOf(bet: Pick<Bet, 'metric' | 'price' | 'priceLabel'>, goal
   return {
     line: `Passing this bet does not pay you. ${named(goal.title)} still needs ${need}${by}.`,
     pays: false,
-    link: { label: 'What pays now', go: { to: 'tab', tab: 'path' } },
+    link: { label: 'What pays now', go: { to: 'tab', tab: 'swipe' } },
   };
 }
 
@@ -460,4 +461,25 @@ export function clearOpened(prev: Record<string, string>, id: string): Record<st
   if (!(id in prev)) return prev;
   const { [id]: _gone, ...rest } = prev;
   return rest;
+}
+
+/* ─── What was tried ──────────────────────────────────────────────────────── */
+
+/**
+ * How a bet that ended, ended: passed on its day, ran out short of its line, or
+ * called off — and for a call-off, how soon. The System tab lists every ended
+ * bet as a workflow tried, and five rows reading "Called off" said nothing about
+ * the owner's actual record: four of five called off within a day of starting,
+ * which is a test that never ran rather than one that failed. Said from the
+ * bet's own start and end days; nothing is judged here.
+ */
+export function triedWhen(v: Pick<BetView, 'state' | 'ended' | 'last' | 'note'> & { bet: Pick<Bet, 'start'> }): string {
+  const note = v.note?.trim() ? ` · “${clamp(v.note.trim(), 80)}”` : '';
+  if (v.state === 'passed') return `${BET_STATE_LABEL.passed}${v.ended ? ` on ${dayWords(v.ended)}` : ''}${note}`;
+  if (v.state === 'failed') return `Ran to ${dayWords(v.last)} short of its line${note}`;
+  if (v.state === 'running') return BET_STATE_LABEL.running;
+  if (!v.ended) return `${BET_STATE_LABEL.stopped}${note}`;
+  const ran = Math.max(0, daysBetween(v.bet.start, v.ended));
+  const when = ran === 0 ? 'the day it started' : ran === 1 ? 'the next day' : `after ${ran} days`;
+  return `Called off ${when}${note}`;
 }

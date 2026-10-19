@@ -185,7 +185,7 @@ export function betNext(metric: LabMetric, foundBy: FoundBy | null, unit: string
   const outbound = foundBy === 'outreach';
   switch (metric) {
     case 'sent':
-    case 'replied': return { label: 'Open Swipe', go: 'swipe' };
+    case 'replied': return { label: 'Open Decide', go: 'swipe' };
     case 'meetings': return outbound ? { label: 'Who replied', go: 'replied' } : { label: 'Log a meeting', go: 'meeting' };
     case 'paid':
     case 'paid_at_price': return outbound ? { label: 'Who replied', go: 'replied' } : { label: 'Log a sale', go: 'sale' };

@@ -54,7 +54,7 @@ const LAB_SAID: Record<LabInput['action'], string> = {
   // The card shows each step working, and what it came to when it lands.
   plan: 'Planned. The crew has started its part.',
   plan_run: 'Trying it again.',
-  found_by: 'Saved. Engine reads your business that way now.',
+  found_by: 'Saved. System reads your business that way now.',
   checkpoint: 'Decided. The next checkpoint reads it back.',
   // Said with the count it kept (lab() below); this is the line when it says nothing more.
   voices: 'Searched.',
@@ -67,7 +67,7 @@ const LAB_SAID: Record<LabInput['action'], string> = {
 function setAsideSaid(set: { businesses: number; drafts: number; segments: string[] }): string {
   const parts = [
     set.drafts ? `${set.drafts} ${set.drafts === 1 ? 'draft' : 'drafts'} cancelled` : null,
-    set.businesses ? `${set.businesses} ${set.businesses === 1 ? 'business' : 'businesses'} out of Swipe` : null,
+    set.businesses ? `${set.businesses} ${set.businesses === 1 ? 'business' : 'businesses'} out of Decide` : null,
     set.segments.length ? 'Maps stopped searching the old segments' : null,
   ].filter(Boolean);
   return parts.length ? `Set aside: ${parts.join(', ')}.` : 'Set aside.';
@@ -623,7 +623,7 @@ export function useCopilot<T extends Tab | Tab2>(initial: HomeData, cfg: Copilot
         setHome(r.home);
         // Said as what happened: started now, or written and waiting on an approval
         // that could not be given (three already running) — never "done".
-        say(r.started ? 'Handed over. It is starting now.' : 'Written. Approve it under Projects on Engine to start it.');
+        say(r.started ? 'Handed over. It is starting now.' : 'Written. Approve it under Projects on System to start it.');
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };

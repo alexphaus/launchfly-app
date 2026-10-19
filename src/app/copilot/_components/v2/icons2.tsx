@@ -16,6 +16,12 @@ export const IconToday = () => (<svg {...base}><circle cx="12" cy="12" r="4" /><
 /** A gear: the engine the business runs on (the tab that was Proof). */
 export const IconEngine = () => (<svg {...base}><circle cx="12" cy="12" r="3.2" /><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.9 1.9M16.6 16.6l1.9 1.9M18.5 5.5l-1.9 1.9M7.4 16.6l-1.9 1.9" /></svg>);
 export const IconProof = () => (<svg {...base}><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" /><path d="M8.8 12.2l2.2 2.2 4.4-4.6" /></svg>);
+/**
+ * System: the workflow the business runs — steps joined, each handing to the
+ * next. The tab that was Engine, which was Proof; the gear said "machine", and
+ * what the tab shows is a sequence of steps with who runs each.
+ */
+export const IconSystem = () => (<svg {...base}><rect x="3" y="3.5" width="7.5" height="6" rx="1.8" /><rect x="13.5" y="14.5" width="7.5" height="6" rx="1.8" /><path d="M10.5 6.5h4.2a2.8 2.8 0 0 1 2.8 2.8v5.2" /><circle cx="6.75" cy="17.5" r="2.4" /><path d="M6.75 9.5v5.6" /></svg>);
 /** Path: from where you were to where you are going — two points and the way between. */
 export const IconPath = () => (<svg {...base}><circle cx="6" cy="19" r="2" /><circle cx="18" cy="5" r="2" /><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16" /></svg>);
 /** Will it work: a gauge — where the pace sits against what the goal needs. */

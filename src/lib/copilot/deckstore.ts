@@ -222,7 +222,7 @@ export async function reachDeckCard(pid: string, kind: DeckKind, id: string, inp
     }
     const country = str(o.data, 'country_code')?.toUpperCase() ?? null;
     if (!businessReach(o.contact ?? {}, country).some((r) => r.via === input.via)) throw new DeckRefusal(`They cannot be reached by ${input.via} from what is on file.`);
-    drafted = await draftWithBody(profile, o, channel, { body, subject: input.subject ?? null, via: input.via, detail: 'Swiped right on the Swipe tab.' });
+    drafted = await draftWithBody(profile, o, channel, { body, subject: input.subject ?? null, via: input.via, detail: 'Swiped right on Decide.' });
     if (!drafted) throw new DeckRefusal('No contact for this business on that channel.');
     // The same record a tap on "Draft" makes from the list: the keep-rate is one tally.
     await logEvent(pid, 'triage_answered', { opportunity_id: o.id, action: 'draft', segment: segmentOfOpp(o), from: 'swipe' });

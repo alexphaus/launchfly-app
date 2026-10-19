@@ -660,6 +660,34 @@ tests, and grade it from rows. Not yet: the review reading the pages themselves
 rather than a sentence from each, and ideas ranked by what passed for businesses
 like this one. See COPILOT.md → **Read again**.
 
+**Then — three tabs: Decide, System, Money.** Its owner asked what to build so that
+the app survives agents that plan, research and draft better every month, with less
+asked of the person and the app complementary to Claude and Grok rather than beside
+them. The answer taken was the one this document had left open as its cheapest
+large experiment: an approval screen over what the agents produce, and the record
+they read. The day's work had drifted over three screens — the call, the move and
+"Needs you" on Path; the bet's move and the people it found on Engine; the
+businesses on Swipe — and the owner's own counts were the case against the one
+built to plan the day: of the calls carried out none moved the number it named, and
+27 were never done. So Path went, and its call and asks became cards in one deck,
+**Decide**, ahead of the businesses: right does it, left puts it off, warm first,
+the badge counting only what waits on the person. Engine became **System**: the
+part a bet is on shows the bet as the workflow on trial, each step with who runs it
+and what it has produced and the one the count stopped at marked, and under it every
+workflow tried with how it ended — the owner's record was four of five bets called
+off within a day, a test that never ran, and the list now says so. You moved to the
+header. It passes the survival test on the join, not the layout: a harness can list
+what is waiting on you; it cannot hold a call to its own buttons because the answer
+grades it, deal a post the bet found beside the count it moves, or say which step of
+a workflow the rows stopped at. Declined: a swipe that answers the call (a gesture
+that cheap would grade it wrong), a card per draft when the drafts are the pile, a
+badge counting strangers, and a screen for the plan — it is still drawn, the call is
+still picked from it, and Claude reads it over the connector, but a chat with the
+record draws it as well as a screen here would. Not yet: Claude and Grok adding to
+the pile on their own — the connector proposes a conversation or a test, and a
+message to queue would be the next tool — and a workflow that passed kept running as
+the part's standard. See COPILOT.md → **Decide, System, Money**.
+
 ---
 
 ## Where it actually stands
@@ -772,9 +800,16 @@ direction better than "copilot" does.
   of ten was the right instinct. Nobody but its owner has tried it.
 - **Unknown: whether the surface is worth keeping at all.** If the harness
   argument above is right, Today's brief, insight, lesson and nudges are dead
-  weight, and the send queue is the only screen worth defending. Nobody has
-  tested a copilot that is an MCP server plus one approval screen. This is the
-  cheapest large experiment available and it has not been run.
+  weight, and the send queue is the only screen worth defending. Decide is the
+  nearest this app has come to a copilot that is an MCP server plus one approval
+  screen: every decision and every send is one pile. Whether that is the product
+  is still untested on anyone but its owner.
+- **Whether one deck gets answered.** Decide is filled by what ran overnight and
+  what the chats proposed, and judged by what leaves it answered rather than put
+  off. The counts to watch: cards answered against cards put off per session,
+  and sends per session, as Swipe always was. If the pile grows and "later" is
+  the commonest answer, it is a better-drawn inbox, and the decisions belong back
+  beside the work they are about.
 - **Unknown: whether the moat is operational or imaginary.** "They cannot
   maintain a deduped pool under a budget" is an assertion about effort, not
   about capability. If a Hermes skill plus one Apify key gets someone 80% of

@@ -1,21 +1,23 @@
 'use client';
-// A bet's plan on the screen (lib/copilot/betplan.ts): on the bet's card, the
-// crew's steps and yours with what the rows show for each; for a bet started
-// before plans, what planning it would start; and on the bet sheet, what Start
-// starts besides the bet.
+// A bet's plan on the screen (lib/copilot/betplan.ts): on System, the workflow
+// on trial — the crew's steps and yours, each with who runs it, how often, and
+// what the rows show it has produced, and the step the count stopped at marked;
+// for a bet started before plans, what planning it would start; and on the bet
+// sheet, what Start starts besides the bet.
 //
 // It sits under the count and is said to be the work, never the verdict: the
 // count above it decides the bet, and every step done passes nothing
 // (invariant 10). A step is tapped through to the thing that is its work — the
-// project, the draft, the people found, the page — so the plan is a way in, not
-// a second copy of what those already show.
+// project, the draft, the page — and the people found are answered on Decide,
+// one card each, so the step that is theirs goes there.
 import { useRef, useState, type ReactNode } from 'react';
 import type { AssetKind } from '@/lib/copilot/assets';
-import { planLine, type PlanView, type StepState, type StepView } from '@/lib/copilot/betplan';
+import { planLine, stuckStep, type PlanView, type StepState, type StepView } from '@/lib/copilot/betplan';
 import type { BetView, PlanStep } from '@/lib/copilot/lab';
+import { betVoices } from '@/lib/copilot/voices';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
-import { IconCheck, IconChevron } from './icons2';
+import { AgentGlyph, IconCheck, IconChevron, IconSwipe, IconYou } from './icons2';
 import { MoveNote, type Brief } from './MoveKit';
 
 const MARK: Record<StepState, string> = { done: 'done', working: 'working', needs: 'needs', failed: 'failed', waiting: 'waiting', stopped: 'stopped', open: 'open' };
@@ -36,21 +38,40 @@ function pageTarget(home: HomeData, view: BetView): { id?: string; assetKind?: A
   return mine ? { id: mine.id } : { assetKind: 'landing_page', bet: view.bet.id };
 }
 
-function Row({ s, open, busy }: { s: StepView; open: (() => void) | null; busy: boolean }) {
+/** Who runs a step, as a face: the crew's own glyph, or you. */
+function Who({ who }: { who: string }) {
+  const agent = who === 'Scout' ? 'scout' : who === 'Writer' ? 'writer' : who === 'Researcher' ? 'researcher' : null;
+  return <span className={`cp2-bplan-face ${agent ? 'crew' : 'you'}`} aria-hidden>{agent ? <AgentGlyph agent={agent} /> : <IconYou />}</span>;
+}
+
+/**
+ * How often a step runs, said beside who runs it: the crew's steps are taken up
+ * again every night until the bet's last day (planrun.ts), a draft or a handed
+ * job runs once, and what is yours runs when you do it.
+ */
+function cadence(s: StepView): string | null {
+  if (s.step.by !== 'crew') return null;
+  return s.step.kind === 'find' ? 'each night' : 'once';
+}
+
+function Row({ s, open, busy, stuck, go }: { s: StepView; open: (() => void) | null; busy: boolean; stuck: boolean; go: string | null }) {
+  const every = cadence(s);
   const body = (
     <>
       <Mark state={s.state} by={s.step.by} />
       <span className="cp2-bplan-main">
-        <span className="cp2-bplan-who">{s.step.who}</span>
+        {stuck && <span className="cp2-bplan-flag">Stuck here</span>}
         <b className="cp2-clamp2">{s.step.do}</b>
+        <span className="cp2-bplan-who"><Who who={s.step.who} />{s.step.who}{every ? ` · ${every}` : ''}</span>
         <span className={`cp2-bplan-state ${MARK[s.state]}`}>{busy ? 'Gathering…' : s.line}</span>
+        {go && <span className="cp2-bplan-todecide"><IconSwipe />{go}</span>}
       </span>
       {open && <IconChevron />}
     </>
   );
   return open
-    ? <li><button className="cp2-bplan-row" onClick={open} disabled={busy}>{body}</button></li>
-    : <li><div className="cp2-bplan-row">{body}</div></li>;
+    ? <li className={stuck ? 'stuck' : undefined}><button className="cp2-bplan-row" onClick={open} disabled={busy}>{body}</button></li>
+    : <li className={stuck ? 'stuck' : undefined}><div className="cp2-bplan-row">{body}</div></li>;
 }
 
 /**
@@ -87,9 +108,8 @@ export function BetPlan({ home, view, pv, actions, brief }: { home: HomeData; vi
     if (s.project) return () => actions.openSheet({ kind: 'commission', id: s.project! });
     if (s.asset) return () => actions.openSheet({ kind: 'asset', id: s.asset! });
     switch (s.step.kind) {
-      case 'reply': return (home.lab?.voices?.searches ?? []).some((x) => x.bet === view.bet.id)
-        ? () => { try { document.getElementById('cp2-people')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* the card is where it was */ } }
-        : null;
+      // The people found are answered on Decide, a card each, from the person's own account.
+      case 'reply': return (home.lab?.voices?.searches ?? []).some((x) => x.bet === view.bet.id) ? () => actions.setTab('swipe') : null;
       case 'page': return () => actions.openSheet({ kind: 'asset', ...pageTarget(home, view) });
       case 'draft': return s.step.by === 'you' && s.step.asset ? () => actions.openSheet({ kind: 'asset', assetKind: s.step.asset!, bet: view.bet.id }) : null;
       // Nobody here takes it: the same ask, with the whole record, for a chat.
@@ -98,21 +118,26 @@ export function BetPlan({ home, view, pv, actions, brief }: { home: HomeData; vi
     }
   };
 
+  // The step the count stopped at: yours and not done, or the crew's and failed.
+  const stuck = stuckStep(pv);
+  /** The reply step, when people wait on it: where they are answered, and how many. */
+  const waiting = betVoices(home.lab?.voices, view.bet, home.lab?.talks ?? []).open.length;
+  const goOf = (s: StepView): string | null => (s.step.kind === 'reply' && s.state !== 'done' && waiting > 0 ? `${waiting} waiting in Decide` : null);
   return (
-    <div className="cp2-bplan" aria-label="The plan for this bet">
+    <div className="cp2-bplan workflow" aria-label="The workflow on trial">
       <div className="cp2-bplan-top">
-        <span className="cp2-pf-k">The plan</span>
+        <span className="cp2-pf-k">Its steps</span>
         <span className="cp2-bplan-sum">{planLine(pv)}</span>
       </div>
       <ol className="cp2-bplan-list">
-        {pv.steps.map((s) => <Row key={s.step.kind} s={s} open={opener(s)} busy={busy === s.step.kind} />)}
+        {pv.steps.map((s, i) => <Row key={s.step.kind} s={s} open={opener(s)} busy={busy === s.step.kind} stuck={i === stuck} go={goOf(s)} />)}
         {/* How the count gets in: yours, or counted by itself. No button: the one under the bet is it. */}
         <li>
           <div className="cp2-bplan-row">
             <Mark state={pv.count.auto ? 'done' : 'open'} by="you" />
             <span className="cp2-bplan-main">
-              <span className="cp2-bplan-who">{pv.count.auto ? 'The app' : 'You'}</span>
               <b className="cp2-clamp2">{pv.count.do}</b>
+              <span className="cp2-bplan-who"><Who who={pv.count.auto ? 'The app' : 'You'} />{pv.count.auto ? 'The app' : 'You'}</span>
               {pv.count.line && <span className="cp2-bplan-state">{pv.count.line}</span>}
             </span>
           </div>

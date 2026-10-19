@@ -30,15 +30,58 @@ import { useShell } from '../shell';
 import type { Derived } from './derive';
 import { IconAlert, IconCheck, IconChevron, PathGlyph } from './icons2';
 
-export default function YouTab({ home, d, actions, openMatches }: { home: HomeData; d: Derived; actions: Actions; openMatches: (s: MatchStage) => void }) {
+export default function YouTab({ home, d, actions, openMatches, briefing }: { home: HomeData; d: Derived; actions: Actions; openMatches: (s: MatchStage) => void; briefing: boolean }) {
   return (
     <>
       <Numbers home={home} d={d} actions={actions} />
       <Week home={home} d={d} actions={actions} openMatches={openMatches} />
       <Goals home={home} actions={actions} />
+      <Tell home={home} actions={actions} briefing={briefing} />
       <Records home={home} d={d} actions={actions} />
       <Settings home={home} d={d} actions={actions} />
     </>
+  );
+}
+
+/* ─── Something changed ───────────────────────────────────────────────────── */
+
+/**
+ * What changed, typed in the person's own words; the plan and tomorrow's call
+ * are redrawn from it. It lived at the foot of the Path, the one place a note
+ * could be typed rather than said into the mic — which, typed, opens the book —
+ * so with Path gone it comes here, under the goals the plan is drawn toward.
+ */
+function Tell({ home, actions, briefing }: { home: HomeData; actions: Actions; briefing: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [sending, setSending] = useState(false);
+  const submit = async () => {
+    if (!note.trim()) return;
+    setSending(true);
+    const saved = await actions.addNote(note.trim(), true);
+    if (saved) { setNote(''); setOpen(false); }
+    setSending(false);
+  };
+  if (!open) {
+    return (
+      <button className="cp-tell cp2-tell" onClick={() => setOpen(true)}>
+        <span className="t">Something changed?</span>
+        <span className="s">Tell it in your own words — {home.contextCount} things it knows · the plan and tomorrow’s call redraw from it</span>
+      </button>
+    );
+  }
+  return (
+    <div className="cp-composer cp2-tell">
+      <textarea
+        autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
+        placeholder="Maria replied. Burn is down to 200. I have an interview Thursday…"
+      />
+      <div className="bar">
+        <span className="hint">{home.roadmap?.enabled ? 'Redraws your plan and tomorrow’s call.' : 'Changes tomorrow’s call.'}</span>
+        <button className="cp-btn" disabled={sending} onClick={() => { setOpen(false); setNote(''); }}>Cancel</button>
+        <button className="cp-btn primary" disabled={sending || briefing || !note.trim()} onClick={() => void submit()}>Add &amp; re-plan</button>
+      </div>
+    </div>
   );
 }
 
@@ -176,7 +219,7 @@ const GLYPH: Record<ReviewKind, PathIcon> = {
 
 /** Where an opened line leads, said at its foot. */
 const OPEN_LABEL: Record<Exclude<ReviewTarget, null>, string> = {
-  queue: 'Open the queue', projects: 'Open your projects', matches: 'Open Swipe',
+  queue: 'Open the queue', projects: 'Open your projects', matches: 'Open Decide',
   focus: 'Log time', record: 'Ask your record about it', won: 'See every win', replied: 'Open your replies', waiting: 'See who you are waiting on',
 };
 

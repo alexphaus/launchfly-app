@@ -8898,7 +8898,7 @@ async function proofSuite() {
   assert.equal(pfIdeaFromStored({ label: 'x', how: 'y', metric: 'talks', target: 3, days: 7, prep: { label: 'p', asset: 'poster' } }, 'reach')?.prep, null);
 
   /* 9. The bet on screen: where its next count happens, by how buyers arrive, and what was done for it. */
-  assert.deepEqual(pfBetNext('replied', 'outreach', null), { label: 'Open Swipe', go: 'swipe' });
+  assert.deepEqual(pfBetNext('replied', 'outreach', null), { label: 'Open Decide', go: 'swipe' });
   assert.deepEqual(pfBetNext('paid_at_price', 'outreach', null), { label: 'Who replied', go: 'replied' });
   assert.deepEqual(pfBetNext('paid_at_price', 'local', null), { label: 'Log a sale', go: 'sale' }, 'a shop logs a sale; nobody replied to anything');
   assert.deepEqual(pfBetNext('meetings', null, null), { label: 'Log a meeting', go: 'meeting' });
@@ -11240,14 +11240,14 @@ async function voicesSuite() {
   assert.match(voices, /if \(found\.voices\.length\) await bumpUsage\(pid, periodKey\(profile\.timezone\), 'matches', found\.voices\.length\);/, 'a paid search spends the allowance by what it kept (invariant 6 protects only the free ones)');
   assert.match(voices, /home\.lab\?\.voices\?\.unreadable\) throw new VoiceRefused/, 'unread, it cannot tell who is new');
 
-  /* 12. The card: no section where nothing can search (invariant 7), the opener is fixed words, nothing is sent. */
-  const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
-  // Its own card above the bet, and nothing at all until a search has run or its record cannot be read.
-  assert.match(tab, /if \(mine\.searches === 0 && !read\?\.unreadable\) return null;/);
-  assert.match(tab, /<People home=\{home\} view=\{lab\.current\} actions=\{actions\} find=\{find\} opened=\{opened\} \/>/);
-  assert.ok(tab.indexOf('<People ') < tab.indexOf('<ThisBet '), 'the people come before the bet they count toward');
-  assert.match(tab, /href=\{v\.url\} target="_blank" rel="noopener noreferrer nofollow"/);
-  assert.match(tab, /actions\.openSheet\(\{ kind: 'talk', voice: v\.id \}\)/);
+  /* 12. The cards: each post its own card on Decide, the opener fixed words, nothing sent from the app. */
+  const deck = src('src/app/copilot/_components/v2/SwipeTab.tsx');
+  // Opened from the person's own browser, the reply theirs (invariant 4): a link opened and words copied, never a send.
+  assert.match(deck, /openLink\(v\.url\);\s*openedNow\.current\.add\(v\.id\);\s*opened\.mark\(v\.id\);/);
+  assert.match(deck, /navigator\.clipboard\.writeText\(VOICE_OPENER\)/);
+  assert.match(deck, /href=\{v\.url\} target="_blank" rel="noopener noreferrer nofollow"/);
+  assert.match(deck, /actions\.openSheet\(\{ kind: 'talk', voice: c\.voice!\.id \}\)/);
+  assert.ok(!/<People /.test(src('src/app/copilot/_components/v2/ProofTab.tsx')), 'the people are Decide’s cards, not a list on System');
   assert.ok(vxOpener.length < 140 && !/\$|\d/.test(vxOpener), 'a question about their past, with no number in it');
   assert.match(src('src/app/copilot/_components/v2/LabSheets.tsx'), /\.\.\.\(post && logged === 0 \? \{ voice: post\.id \} : \{\}\),/, 'only the first conversation in the sitting is theirs');
 
@@ -11483,7 +11483,11 @@ async function pivotLeftSuite() {
   assert.match(fn, /await insertPivotAnswer\(profileId, PIVOT_SET_ASIDE,/);
   const route = src('src/app/api/copilot/lab/route.ts');
   assert.match(route, /if \(!left \|\| left\.day !== str\(b\.day\)\) return fail\('Nothing from that pivot is waiting on you\.'\);/, 'only the pivot the screen showed');
-  assert.match(src('src/app/copilot/_components/v2/ProofTab.tsx'), /\{home\.pivotLeft && <AfterPivot home=\{home\} left=\{home\.pivotLeft\} actions=\{actions\} \/>\}/);
+  // A card on Decide now: set aside on the right swipe, kept from its own button — both the person's tap.
+  const deckLeft = src('src/app/copilot/_components/v2/SwipeTab.tsx');
+  assert.match(deckLeft, /actions\.lab\(\{ action: 'pivot_left', day: left\.day, keep: false \}\)/);
+  assert.match(deckLeft, /actions\.lab\(\{ action: 'pivot_left', day: left\.day, keep: true \}\)/);
+  assert.match(src('src/app/copilot/_components/v2/derive.ts'), /pivotLeft: !!home\.pivotLeft,/);
   assert.ok(!/setAsidePivot/.test(src('src/lib/copilot/nightly.ts')) && !/setAsidePivot/.test(src('src/app/api/copilot/cron/daily/route.ts')), 'nothing sets it aside for them');
 
   console.log('copilot-core: pivot left checks passed');
@@ -11507,7 +11511,7 @@ import type { BetView as EnBetView } from '../../src/lib/copilot/lab';
 import type { Goal as EnGoalRow } from '../../src/lib/copilot/types';
 
 async function engineSuite() {
-  const { readFileSync } = await import('node:fs');
+  const { readFileSync, existsSync } = await import('node:fs');
   const src = (p: string) => readFileSync(p, 'utf8');
   const today = '2026-10-10';
 
@@ -11566,7 +11570,7 @@ async function engineSuite() {
 
   /* 3. Every other bet: where its next count happens. */
   const sends = enStep(input({ current: bet({ part: 'reach', metric: 'replied', tries: { metric: 'sent', planned: 20 } }), voices: null, found: 'outreach' }))!;
-  assert.deepEqual([sends.title, sends.primary.label, sends.primary.go], ['Send the next messages', 'Open Swipe', { to: 'next', go: 'swipe' }]);
+  assert.deepEqual([sends.title, sends.primary.label, sends.primary.go], ['Send the next messages', 'Open Decide', { to: 'next', go: 'swipe' }]);
   assert.equal(enStep(input({ current: bet({ part: 'pay', metric: 'paid_at_price', tries: null }), voices: null, found: 'inbound' }))!.primary.go.to, 'next');
   assert.equal(enStep(input({ current: bet({ part: 'reach', metric: 'logged', unit: 'sign-ups', tries: null }), voices: null }))!.title, 'Log your sign-ups');
   const last = enStep(input({ current: bet({}, 14, { last: today }) }))!;
@@ -11584,7 +11588,7 @@ async function engineSuite() {
   assert.equal(enGoal([{ ...goalRows[2], target_value: null }] as unknown as EnGoalRow[], today), null, 'no target to be short of');
   const talkBet = bet();
   assert.deepEqual(enPayoff(talkBet.bet, g, today), {
-    line: 'Passing this bet does not pay you. Save Exit PH [NOV] still needs $1,500 by 8 Dec (59 days left).', pays: false, link: { label: 'What pays now', go: { to: 'tab', tab: 'path' } },
+    line: 'Passing this bet does not pay you. Save Exit PH [NOV] still needs $1,500 by 8 Dec (59 days left).', pays: false, link: { label: 'What pays now', go: { to: 'tab', tab: 'swipe' } },
   });
   const sale = enPayoff(bet({ metric: 'paid_at_price' }).bet, g, today)!;
   assert.deepEqual([sale.pays, sale.link], [true, null]);
@@ -11623,34 +11627,40 @@ async function engineSuite() {
   const p1 = { ...post(1), author: 'marta_codes', where: 'Indie Hackers' };
   assert.deepEqual(enVoiceTalk(p1, 'time'), { who: 'marta_codes (Indie Hackers)', role: 'buyer', problem: 'unasked', commitment: 'time', voice: p1.id });
 
-  /* 8. The screen: the engine leads, the part opened carries the move, the people are their own card, the tab is Engine. */
+  /* 8. The screens: System leads with the engine and opens on the workflow on trial; the move and the people are Decide's cards. */
   const tab = src('src/app/copilot/_components/v2/ProofTab.tsx');
-  assert.ok(tab.indexOf('<EngineHero ') < tab.indexOf('<AfterPivot') && tab.indexOf('<AfterPivot') < tab.indexOf('<Station ') && tab.indexOf('<Station ') < tab.indexOf('<People ') && tab.indexOf('<People ') < tab.indexOf('<ThisBet '), 'the engine, then what a pivot left, then the part opened, then the people, then the bet');
-  assert.match(tab, /const step = engineStep\(\{/);
-  assert.match(tab, /const part = picked \?\? openPart\(step, d\.proof\.chain\.weak\);/, 'the engine opens where the move is');
-  assert.match(tab, /\{step && !step\.part && \(/, 'a move about the whole business is no one part’s');
-  assert.match(tab, /\{here && <div className="cp2-er-move"><NextStep home=\{home\} step=\{here\}/, 'the move sits on the part it moves');
+  assert.ok(tab.indexOf('<EngineHero ') < tab.indexOf('<Station ') && tab.indexOf('<Station ') < tab.indexOf('<Tried '), 'the engine, then the part opened, then what was tried');
+  assert.match(tab, /const part = picked \?\? openPart\(lab\.current \? \{ part: lab\.current\.bet\.part \} : null, d\.proof\.chain\.weak\);/, 'it opens on the workflow on trial, else the weakest');
+  assert.ok(!/engineStep\(|<NextStep |<People |<AfterPivot /.test(tab), 'the move, the people and what a pivot left are Decide’s');
   assert.match(tab, /actions\.openSheet\(\{ kind: 'crew' \}\)/, 'the crew is a tap on the engine');
   assert.ok(!/<Voices /.test(tab), 'the people are not inside the bet card');
-  assert.ok(!/work\.talks && work\.talks\.n > 0/.test(tab), 'the conversations row is gone: the score counts them and Behind it lists them');
-  assert.match(tab, /<button className="cp-btn" onClick=\{\(\) => goTo\(next\.go, actions, b\.id\)\}>\{next\.label\}<\/button>/, 'one primary button on the screen: the step’s');
-  assert.match(tab, /actions\.lab\(\{ action: 'talk', talk: voiceTalk\(v, commitment\) \}\)/, 'one tap on how it ended');
-  assert.match(tab, /try \{ window\.localStorage\.setItem\(key, JSON\.stringify\(next\)\); \} catch/, 'storage that keeps nothing costs only the question');
-  assert.match(tab, /href=\{p\.go\.url\} target="_blank" rel="noopener noreferrer nofollow"/, 'a real link, not a script’s popup');
-  assert.match(tab, /dayIn\(at, home\.profile\.timezone\)/, 'opened "yesterday" is the person’s yesterday');
+  assert.ok(!/work\.talks && work\.talks\.n > 0/.test(tab), 'the conversations row is gone: the score counts them and Records lists them');
+  assert.match(tab, /<button className="cp-btn" onClick=\{\(\) => goTo\(next\.go, actions, b\.id\)\}>\{next\.label\}<\/button>/, 'the count’s own way in, under the workflow');
+  assert.match(tab, /The workflow on trial · until \{dayWords\(view\.last\)\}/, 'the date it is judged by, not the day it is on');
+  const deck = src('src/app/copilot/_components/v2/SwipeTab.tsx');
+  assert.match(deck, /actions\.lab\(\{ action: 'talk', talk: voiceTalk\(x, commitment\) \}\)/, 'one tap on how it ended');
+  assert.match(deck, /try \{ window\.localStorage\.setItem\(key, JSON\.stringify\(next\)\); \} catch/, 'storage that keeps nothing costs only the question');
+  assert.match(deck, /const key = OPENED_KEY\(profileId\);/, 'the posts Engine kept as opened are still asked about');
+  assert.match(deck, /dayIn\(c\.openedAt, home\.profile\.timezone\)/, 'opened "yesterday" is the person’s yesterday');
   const shell = src('src/app/copilot/_components/v2/CopilotApp2.tsx');
-  assert.match(shell, /const LABEL: Record<Tab2, string> = \{ path: 'Path', swipe: 'Swipe', proof: 'Engine', money: 'Money', you: 'You' \};/);
-  assert.match(shell, /proof: 'proof', engine: 'proof',/, 'both names open it');
-  assert.match(shell, /proof: IconEngine,/);
+  assert.match(shell, /const LABEL: Record<Tab2, string> = \{ swipe: 'Decide', proof: 'System', money: 'Money', you: 'You' \};/);
+  assert.match(shell, /const TABS: Tab2\[\] = \['swipe', 'proof', 'money'\];/, 'three tabs; You is the avatar');
+  assert.match(shell, /proof: 'proof', engine: 'proof', system: 'proof',/, 'every name it had opens it');
+  assert.match(shell, /path: 'swipe', today: 'swipe', now: 'swipe',/, 'a push or shortcut naming Path lands on what took its cards');
+  assert.match(shell, /proof: IconSystem,/);
+  assert.match(shell, /<MeButton home=\{home\} on=\{tab === 'you'\} onOpen=\{\(\) => setTab\('you'\)\} \/>/, 'You from the header, on every tab');
+  assert.match(shell, /const badge = t === 'swipe' \? d\.decideNeeds : 0;/, 'the badge counts what waits on you, not the leads');
+  assert.match(shell, /usePlanDraw\(home, d, actions\);/, 'the plan the call is picked from is still drawn when due');
   for (const [file, text] of [
-    ['src/app/copilot/_components/v2/PathPlan.tsx', 'A bet on Engine decides it'],
-    ['src/app/copilot/_components/useCopilot.ts', 'Saved. Engine reads your business that way now.'],
-    ['src/app/copilot/_components/v2/SwipeTab.tsx', 'in your crew on Engine'],
-    ['src/lib/copilot/asked.ts', 'Start one on Engine.'],
+    ['src/app/copilot/_components/useCopilot.ts', 'Saved. System reads your business that way now.'],
+    ['src/app/copilot/_components/v2/SwipeTab.tsx', 'in your crew on System'],
+    ['src/lib/copilot/asked.ts', 'Start one on System.'],
+    ['src/app/copilot/_components/v2/LabSheets.tsx', 'call it off on System'],
   ] as const) assert.ok(src(file).includes(text), `${file} names the tab as it is called`);
-  assert.ok(!/\bProof\b/.test(src('src/app/copilot/_components/v2/CopilotApp2.tsx').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/ProofTab|Proof'/g, '')), 'no label of the old name left in the shell’s code');
+  assert.ok(!/\bProof\b|\bEngine\b/.test(src('src/app/copilot/_components/v2/CopilotApp2.tsx').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/ProofTab|Proof'/g, '')), 'no label of an old name left in the shell’s code');
+  assert.ok(!existsSync('src/app/copilot/_components/v2/PathTab.tsx') && !existsSync('src/app/copilot/_components/v2/PathPlan.tsx'), 'Path is gone, not hidden');
   const css = src('src/app/copilot/copilot.css');
-  for (const c of ['cp2-ns', 'cp2-ns-t', 'cp2-er-hero', 'cp2-er-parts', 'cp2-er-station', 'cp2-vox-card', 'cp2-vox-end']) assert.ok(css.includes(`.cp2-${c.replace(/^cp2-/, '')}`), `${c} is styled`);
+  for (const c of ['cp2-er-hero', 'cp2-er-parts', 'cp2-er-station', 'cp2-dk-face', 'cp2-dk-ended', 'cp2-dk-head', 'cp2-me-btn', 'cp2-sy-tried', 'cp2-bplan-flag']) assert.ok(css.includes(`.cp2-${c.replace(/^cp2-/, '')}`), `${c} is styled`);
 
   console.log('copilot-core: engine checks passed');
 }
@@ -13001,3 +13011,119 @@ async function ideasReadAgainSuite() {
 }
 
 ideasReadAgainSuite().catch((e) => { console.error(e); process.exit(1); });
+
+/* ─── Decide: every decision a card, in one deck, ahead of the leads (decide.ts) ─── */
+//
+// Path held the call and what needs you, Engine the bet's move and the people it
+// found, Swipe the businesses. Now they are one pile. The checks are the ways the
+// pile could mislead: a call graded by a swipe, drafts drawn from a blank offer,
+// something that goes cold dealt behind something that waits on nothing, a
+// stranger's post counted as something that needs you, and a workflow called
+// stuck while the crew is still working it.
+
+import { decideCards as dcCards, decideCount as dcCount, type DecideInput as DcInput } from '../../src/lib/copilot/decide';
+import { stuckStep as dcStuck, type StepView as DcStepView } from '../../src/lib/copilot/betplan';
+import { triedWhen as dcTried } from '../../src/lib/copilot/engine';
+import type { AskRow as DcAsk } from '../../src/lib/copilot/today';
+import type { Step as DcStep } from '../../src/lib/copilot/engine';
+import type { Voice as DcVoice } from '../../src/lib/copilot/voices';
+import { readFileSync as readDecideFile } from 'node:fs';
+
+async function decideSuite() {
+  const src = (f: string) => readDecideFile(f, 'utf8');
+  const ask = (kind: DcAsk['kind'], n = 1): DcAsk => ({ key: `${kind[0]}:${n}`, kind, title: `${kind} ${n}`, detail: `${kind} detail`, id: `c${n}` });
+  const voice = (n: number): DcVoice => ({ id: `v_0000000${n}`, url: `https://www.indiehackers.com/post/${n}`, where: 'Indie Hackers', title: `Post ${n}`, said: `I am stuck ${n}`, author: `a${n}`, posted: '2026-10-15' });
+  const step = (over: Partial<DcStep> = {}): DcStep => ({
+    kind: 'find', part: 'reach', eyebrow: 'Your move · day 4 of 21', title: 'Find more people who said it', why: '0 of 3 commitments · 18 days left.', hint: null,
+    primary: { label: 'Find more', go: { to: 'find' } }, claude: null, payoff: null, ...over,
+  });
+  const base: DcInput = {
+    noOffer: false, callPending: false, callHandsOver: false, now: null, asks: [], step: null, voices: [], opened: {},
+    pivotLeft: false, checkpoint: { due: false, ended: 0 }, cannotSearch: false, noCall: false,
+  };
+  const kinds = (i: Partial<DcInput>) => dcCards({ ...base, ...i }).map((c) => c.kind);
+  const keys = (i: Partial<DcInput>) => dcCards({ ...base, ...i }).map((c) => c.key);
+
+  /* 1. Nothing drafts from a blank offer: writing it is the first card, and no setup or call is offered before it. */
+  assert.deepEqual(kinds({ noOffer: true, cannotSearch: true, noCall: true }), ['offer']);
+  assert.equal(dcCards({ ...base, noOffer: true }).every((c) => c.kind !== 'setup' && c.kind !== 'brief'), true);
+  assert.deepEqual(kinds({ noOffer: true, asks: [ask('proposal')] }), ['offer', 'ask'], 'a proposal from a chat still waits, after the offer');
+
+  /* 2. The call: first after the offer, and a swipe never says "I did it" — only work the app offers to do is handed over by one. */
+  const call = dcCards({ ...base, callPending: true })[0];
+  assert.deepEqual([call.kind, call.right, call.needs], ['call', null, true]);
+  assert.equal(dcCards({ ...base, callPending: true, callHandsOver: true })[0].right, 'Hand it over');
+  const deck = src('src/app/copilot/_components/v2/SwipeTab.tsx');
+  assert.ok(deck.indexOf('await actions.handOverMove(move.id);') < deck.indexOf("await actions.answerCall('did');"), 'acted on only once the work actually went');
+  assert.equal((deck.match(/answerCall\(/g) ?? []).length, 1, 'the deck answers a call in one place: after a hand-over');
+
+  /* 3. Warm first: blocked work, introductions, posts opened and not answered, then fixes, proposals, confirms, approvals. Sends are the leads themselves. */
+  const asks = [ask('approve'), ask('send'), ask('confirm'), ask('proposal'), ask('fix'), ask('intro'), ask('question')];
+  const v1 = voice(1);
+  const v2 = voice(2);
+  const order = dcCards({ ...base, asks, voices: [v1, v2], opened: { [v2.id]: '2026-10-17T03:00:00Z' } });
+  assert.deepEqual(order.map((c) => (c.ask ? c.ask.kind : c.kind)), ['question', 'intro', 'answered', 'fix', 'proposal', 'confirm', 'approve', 'voice']);
+  assert.ok(!order.some((c) => c.ask?.kind === 'send'), 'a card saying "drafts ready" over the drafts is the drafts twice');
+  assert.equal(order.find((c) => c.kind === 'answered')!.openedAt, '2026-10-17T03:00:00Z');
+
+  /* 4. A post found is a lead: dealt, set aside by a left swipe, and not on the badge. A post opened needs an answer. */
+  const fresh = order.find((c) => c.kind === 'voice')!;
+  assert.deepEqual([fresh.left, fresh.needs, fresh.right], ['not_fit', false, 'Open their post']);
+  const asked = order.find((c) => c.kind === 'answered')!;
+  assert.deepEqual([asked.left, asked.needs, asked.right], ['later', true, 'They answered']);
+  assert.equal(dcCount(order), 7, 'six asks and one post waiting on an answer; the fresh post is a lead');
+  assert.notEqual(keys({ voices: [v1] })[0], keys({ voices: [v1], opened: { [v1.id]: '2026-10-17T03:00:00Z' } })[0], 'opened, it is a new card, not one already answered');
+  assert.ok(keys({ asks, voices: [v1], callPending: true, pivotLeft: true }).every((k) => k.startsWith('d:')), 'never a key a lead uses');
+
+  /* 5. The bet's step: a card of its own, except where the posts or the offer already are. */
+  assert.deepEqual(kinds({ step: step() }), ['bet']);
+  assert.equal(dcCards({ ...base, step: step() })[0].right, 'Find more');
+  for (const k of ['reply', 'waiting', 'offer'] as const) assert.deepEqual(kinds({ step: step({ kind: k }) }), [], `${k}: already its own cards`);
+  assert.notEqual(keys({ step: step() })[0], keys({ step: step({ kind: 'count', title: 'Log your next conversation' }) })[0], 'a step that changed is a new card');
+
+  /* 6. The plan's step or a Move, only while no call waits: the call already weighed them. */
+  const planStep = { kind: 'step' as const, key: 'rm:s1', item: 's1', title: 'Open Wise, verify it receives PHP', why: 'Toward: Savings safe in Wise.', size: 'S · you have 150 min', cta: 'Mark it done' };
+  assert.deepEqual(kinds({ now: planStep }), ['move']);
+  assert.deepEqual([dcCards({ ...base, now: planStep })[0].right, dcCards({ ...base, now: planStep })[0].eyebrow], ['Done', 'Your plan']);
+  assert.deepEqual(kinds({ now: planStep, callPending: true }), ['call']);
+  for (const k of ['send', 'find', 'rest', 'offer', 'question'] as const) assert.deepEqual(kinds({ now: { ...planStep, kind: k } }), [], `${k}: a card of its own elsewhere, or none`);
+
+  /* 7. A checkpoint, what a pivot left, and what has to be set up: last, and nothing to set up before there is an offer. */
+  assert.deepEqual(kinds({ pivotLeft: true, cannotSearch: true, noCall: true, asks: [ask('fix')], checkpoint: { due: true, ended: 4 } }), ['ask', 'checkpoint', 'pivot', 'setup', 'brief']);
+  const due = dcCards({ ...base, checkpoint: { due: true, ended: 4 } })[0];
+  assert.deepEqual([due.title, due.right, due.needs], ['Pivot or persevere?', 'Answer it', true]);
+  assert.match(due.detail!, /^4 bets ended since you last decided\./);
+  assert.deepEqual(kinds({ checkpoint: { due: true, ended: 2 }, step: step({ kind: 'checkpoint', title: 'Pivot or persevere?', primary: { label: 'Answer it', go: { to: 'checkpoint' } } }) }), ['bet'], 'asked once: as the bet’s step when no bet runs');
+
+  /* 8. Stuck: the first step not done, when it waits on you or failed — never while the crew is still working it. */
+  const sv = (by: 'crew' | 'you', state: DcStepView['state'], kind: 'find' | 'draft' | 'reply' = 'find'): DcStepView => ({ step: { kind, by, who: by === 'crew' ? 'Scout' : 'You', do: 'x' }, state, line: 'y', runnable: false });
+  assert.equal(dcStuck({ steps: [sv('crew', 'done'), sv('crew', 'done', 'draft'), sv('you', 'open', 'reply')] }), 2, 'the owner’s record: found, drafted, nobody answered');
+  assert.equal(dcStuck({ steps: [sv('crew', 'working'), sv('you', 'open', 'reply')] }), null, 'the Scout is searching: nothing is stuck yet');
+  assert.equal(dcStuck({ steps: [sv('crew', 'waiting'), sv('you', 'open', 'reply')] }), null);
+  assert.equal(dcStuck({ steps: [sv('crew', 'failed'), sv('you', 'open', 'reply')] }), 0, 'a failed search is where it stopped');
+  assert.equal(dcStuck({ steps: [sv('crew', 'done'), sv('you', 'done', 'reply')] }), null, 'every step done: only the count is left');
+  assert.equal(dcStuck({ steps: [] }), null);
+
+  /* 9. How a bet ended, in its own days: a test called off the day it started never ran, and the list says so. */
+  const ended = (state: 'passed' | 'failed' | 'stopped', start: string, end: string | null, note: string | null = null) => ({ state, ended: end, last: '2026-10-29', note, bet: { start } });
+  assert.equal(dcTried(ended('stopped', '2026-10-16', '2026-10-16')), 'Called off the day it started');
+  assert.equal(dcTried(ended('stopped', '2026-10-05', '2026-10-06')), 'Called off the next day');
+  assert.equal(dcTried(ended('stopped', '2026-10-07', '2026-10-15')), 'Called off after 8 days');
+  assert.equal(dcTried(ended('stopped', '2026-10-07', '2026-10-15', 'Nobody I asked had the problem')), 'Called off after 8 days · “Nobody I asked had the problem”');
+  assert.equal(dcTried(ended('passed', '2026-10-01', '2026-10-09')), 'Passed on 9 Oct');
+  assert.equal(dcTried(ended('failed', '2026-10-01', '2026-10-29')), 'Ran to 29 Oct short of its line');
+  assert.equal(dcTried(ended('stopped', '2026-10-01', null)), 'Called off', 'no end day kept: nothing invented');
+
+  /* 10. Wired: the badge and the deck read one list, the plan is still drawn, and the typed note moved to You. */
+  const derive = src('src/app/copilot/_components/v2/derive.ts');
+  assert.match(derive, /const decide = decideCards\(\{ \.\.\.decideInput, opened: \{\} \}\);/);
+  assert.match(deck, /decideCards\(\{ \.\.\.d\.decideInput, opened: opened\.map \}\)/, 'the same input, with the posts this device opened');
+  assert.match(src('src/app/copilot/_components/v2/YouTab.tsx'), /await actions\.addNote\(note\.trim\(\), true\);/, 'a note can still be typed, not only said');
+  assert.match(deck, /<Notices home=\{home\} d=\{d\} actions=\{actions\} \/>/, 'what broke is said over the pile (invariant 13)');
+  // Nothing drafts from a blank offer: with none, the businesses are not dealt at all.
+  assert.match(deck, /const leads = useMemo\(\(\) => \(d\.noOffer \? \[\] : deckCards\(/);
+
+  console.log('copilot-core: decide checks passed');
+}
+
+decideSuite().catch((e) => { console.error(e); process.exit(1); });

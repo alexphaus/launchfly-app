@@ -1,31 +1,34 @@
 'use client';
-// Engine (key `proof`): the business as a machine of five parts, who works each
-// one, and the one move that is the person's.
+// System (key `proof`; it was Engine, which was Proof): the business as a
+// system — what runs, who runs each step, and what it has proven.
 //
 //   The engine    what it sells, whether it is proven — the count, drawn big —
 //                 the five parts in a row with their states and the weakest
 //                 marked, and the crew working them. One card, read at a glance
-//   The part      the part opened (where your move is, else the weakest): its
-//                 state and the rule behind it, your move when it is here, who
-//                 works it and what would move it — and for the bet's part, the
-//                 people found and the bet itself
-//   Built so far  what the business has to show for itself: sales, bets passed,
-//                 projects finished, the first version of anything made
-//   More          conversations, assets and projects: a line each
+//   The part      the part opened (the one the workflow on trial tests, else the
+//                 weakest). With the bet on it: the workflow on trial — the play
+//                 and the claim it tests, its count against its line, and each
+//                 step with who runs it and what the rows show it has produced,
+//                 the one it is stuck on marked. Without: its state and the rule
+//                 behind it, who works it, and what would move it
+//   Tried         every workflow that ended, with what it counted and how it
+//                 ended — a pass, a run out short, or a call-off and how soon
+//   Records       conversations, assets, projects and the history: a line each
 //
-// Why it is drawn this way. Its owner's verdict on the tab before it: hard to
-// understand, run by the person rather than by the AI, and nothing that could
-// stand beside what else is on the market — where the want was a startup built
-// by a workforce with its owner steering, and a crew that will one day include
-// newer models, people taken on for a part, and machines. So the chain that was
-// five dots under the step is the screen's spine; each part says who works it
-// (crew.ts); the one move sits on the part it moves; and what was built is the
-// record of the engine running. The parts are tapped through in place, not in a
-// sheet, because a sheet over the engine hides the engine.
+// Why it is drawn this way. Its owner asked to see the system behind the
+// business — "the proven workflow" — rather than steps and milestones, and said
+// half of what was here was work the deck could do. So what is done each day
+// left for Decide (SwipeTab.tsx, lib/copilot/decide.ts): the move, the people a
+// bet found, what a pivot left behind. What stays is what only a system view
+// has: which step of the workflow the count stopped at, who runs each one, and
+// the record of what has been tried — where a proven workflow will come from.
+// The parts are tapped through in place, not in a sheet, because a sheet over
+// the engine hides the engine.
 //
-// What it leaves to the other tabs: the plan and the day's move (Path), outreach
-// (Swipe), runway and the bank (Money), the offer, goals and settings (You). A
-// number shown here that is shown there is counted twice and will disagree.
+// What it leaves to the other tabs: every decision and the people worth a
+// message (Decide), runway and the bank (Money), the offer, goals and settings
+// (You). A number shown here that is shown there is counted twice and will
+// disagree.
 //
 // What it will not do: show a number nobody counted, mark a bet passed, or let a
 // model's draft stand as the person's. A model proposes — ideas for a bet,
@@ -42,7 +45,7 @@ import { MAX_ACTIVE_COMMISSIONS, OBJECTIVE_MAX, commissionChip, splitThreads } f
 import { WORKER_STATE_LABEL, crewHeadline, crewOn, type Worker } from '@/lib/copilot/crew';
 import { historyDay, type HistoryEntry } from '@/lib/copilot/history';
 import {
-  BET_STATE_LABEL, METRIC, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS, playFromWords, unitPage,
+  BET_STATE_LABEL, METRIC, NOTE_MAX, PLAY_BY_KEY, TALK_BACK_DAYS, playFromWords,
   betPrice, countedFrom, dayWords, decisionWords, gradeWords, ideaRun, metricWords, overPlan, passLine, playLine, playOf, playsFor, talkCounts,
   type BetView, type Idea, type LabDecision, type Play,
 } from '@/lib/copilot/lab';
@@ -51,16 +54,10 @@ import { hostOf, researchLine } from '@/lib/copilot/idearesearch';
 import { readingLine, rungsOf, type Rung } from '@/lib/copilot/reading';
 import { moneyLabel } from '@/lib/copilot/review';
 import type { FoundBy, HomeData } from '@/lib/copilot/types';
-import { COMMITMENT_LABEL, COMMITMENTS, dayIn, type Commitment } from '@/lib/copilot/lab';
-import { VOICE_OPENER, VOICE_SEARCHES, betVoiced, betVoices, postedWords, voiceRefusal, voiceTalk, type Voice } from '@/lib/copilot/voices';
-import {
-  BUILT_SHOWN, OPENED_KEY, clearOpened, engineFigure, engineStep, markOpened, openPart, parseOpened, payoffGoal,
-  type Step, type StepGo, type StepPlay,
-} from '@/lib/copilot/engine';
-import { unitSignal } from '@/lib/copilot/signal';
+import { engineFigure, openPart, triedWhen } from '@/lib/copilot/engine';
 import { secondPerson } from '@/lib/copilot/you';
 import { pageCounts, pageLine } from '@/lib/copilot/livepage';
-import { SCOUT_SEARCHING, planCapsOf, planFor, planInputOf, planView, startsLine, stepBusy } from '@/lib/copilot/betplan';
+import { planCapsOf, planFor, planInputOf, planView, startsLine } from '@/lib/copilot/betplan';
 import type { Actions } from '../shared';
 import type { Derived } from './derive';
 import { AssetGlyph, IconCheck, IconChevron, IconCross, IconExternal, IconFlask, IconSwap, IconTarget, MatchGlyph, PathGlyph, WorkerGlyph } from './icons2';
@@ -72,23 +69,14 @@ export default function ProofTab({ home, d, actions }: { home: HomeData; d: Deri
   const changes = useSeen(home, d);
   const brief = useBrief(actions);
   const lab = d.proof.lab;
-  const opened = useOpened(home.profile.id);
-  const find = useFind(actions, lab.current?.bet.id ?? null);
-  const { step, peopleShown } = useStep(home, d, opened);
-  // A part tapped stays open until the next visit; until then the engine opens where the move is.
+  // A part tapped stays open until the next visit; until then the system opens
+  // on the part the workflow on trial tests, else the weakest. The move itself
+  // is on Decide, so it no longer decides where this opens.
   const [picked, setPicked] = useState<LinkKey | null>(null);
-  const part = picked ?? openPart(step, d.proof.chain.weak);
-  const onBet = lab.current?.bet.part === part;
+  const part = picked ?? openPart(lab.current ? { part: lab.current.bet.part } : null, d.proof.chain.weak);
   return (
     <>
       <EngineHero home={home} d={d} actions={actions} part={part} pick={setPicked} changes={changes} />
-      {/* A move about the whole business — the offer, the checkpoint — is no one part's, so it comes before them. */}
-      {step && !step.part && (
-        <div className="cp-card cp2-ns">
-          <NextStep home={home} step={step} view={lab.current} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />
-        </div>
-      )}
-      {home.pivotLeft && <AfterPivot home={home} left={home.pivotLeft} actions={actions} />}
       {lab.unreadable ? (
         // Refused rather than shown empty: an unread record drawn as "no bet
         // running" would invite a second bet beside the one running (invariant 13).
@@ -100,14 +88,11 @@ export default function ProofTab({ home, d, actions }: { home: HomeData; d: Deri
       ) : (
         <>
           {lab.checkpoint.due && <Checkpoint d={d} actions={actions} />}
-          <Station home={home} d={d} actions={actions} part={part} step={step} pick={setPicked} brief={brief} find={find} opened={opened} peopleShown={peopleShown} />
+          <Station home={home} d={d} actions={actions} part={part} pick={setPicked} brief={brief} />
           {lab.current
             ? (
               <>
-                {/* The bet's part carries the bet: the people it found first — the move says to reply to one — then the bet they count toward. */}
-                {onBet && <People home={home} view={lab.current} actions={actions} find={find} opened={opened} />}
-                {/* The bet keeps a slot of its own: errands on the go do not grey out the work it exists to move (commission.ts roomForProject). */}
-                {onBet && <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={agentIsFull(home, lab.links[lab.current.bet.id] ?? [])} />}
+                <Tried home={home} d={d} actions={actions} />
                 <Shelf home={home} d={d} actions={actions} />
               </>
             )
@@ -116,11 +101,11 @@ export default function ProofTab({ home, d, actions }: { home: HomeData; d: Deri
               <>
                 <Shelf home={home} d={d} actions={actions} />
                 <PickABet home={home} d={d} actions={actions} part={part} />
+                <Tried home={home} d={d} actions={actions} />
               </>
             )}
         </>
       )}
-      <Built home={home} d={d} actions={actions} />
       <More home={home} d={d} actions={actions} />
     </>
   );
@@ -156,186 +141,6 @@ function useSeen(home: HomeData, d: Derived): ChainChange[] {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature, key, home.generatedAt]);
   return changes;
-}
-
-/* ─── The move ────────────────────────────────────────────────────────────── */
-
-/**
- * Which posts this device opened and has not answered, kept on the device. A
- * convenience about the screen — what to ask "did they answer?" about — and
- * nothing is decided from it: storage that keeps nothing costs only the
- * question. Read in an effect, never during render, so the first paint is the
- * server's.
- */
-function useOpened(profileId: string) {
-  const key = OPENED_KEY(profileId);
-  const [map, setMap] = useState<Record<string, string>>({});
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(key);
-      setMap(parseOpened(raw ? JSON.parse(raw) : null));
-    } catch { /* storage refused or unreadable: nothing remembered, so nothing is asked */ }
-  }, [key]);
-  const save = (next: Record<string, string>) => {
-    setMap(next);
-    try { window.localStorage.setItem(key, JSON.stringify(next)); } catch { /* as above */ }
-  };
-  return {
-    map,
-    ids: new Set(Object.keys(map)),
-    mark: (id: string) => save(markOpened(map, id, new Date().toISOString())),
-    clear: (id: string) => save(clearOpened(map, id)),
-  };
-}
-type Opened = ReturnType<typeof useOpened>;
-
-/**
- * The search for the running bet's people, run from whichever card asks: the
- * move, or "Find more" under the people already found. One state, so a search
- * started in one place is seen in the other and cannot be started twice.
- */
-function useFind(actions: Actions, betId: string | null) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [why, setWhy] = useState<string | null>(null);
-  const run = async () => {
-    if (!betId || busy) return;
-    setBusy(true); setError(null); setWhy(null);
-    const r = await actions.lab({ action: 'voices', bet: betId });
-    setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'The search did not run');
-    // One of the two searches failing, or the model's words not used, is said beside what was found.
-    if (r.why) setWhy(r.why);
-  };
-  return { busy, error, why, run };
-}
-type Find = ReturnType<typeof useFind>;
-
-/** Scrolls to a card on this tab: the checkpoint, or the people found. */
-function scrollToCard(id: string) {
-  try { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* an older browser: the card is where it was */ }
-}
-
-/** The one move, read off the rows (engine.ts engineStep), and whether the people card is up to say what a search did. */
-function useStep(home: HomeData, d: Derived, opened: Opened): { step: Step | null; peopleShown: boolean } {
-  const { chain, found, lab } = d.proof;
-  const view = lab.current;
-  const b = view?.bet ?? null;
-  const read = home.lab?.voices;
-  const voices = view && b && betVoiced(b) ? betVoices(read, b, home.lab?.talks ?? []) : null;
-  // Said the same way the route refuses it, so a button that could only be refused is not the step —
-  // and not while the plan's Scout is searching, so a tap does not start a second search beside it.
-  const searchRefusal = voices
-    ? read?.unreadable
-      ? 'The people found for this bet could not be read just now.'
-      : stepBusy(lab.planRuns, 'find', d.now)
-      ? SCOUT_SEARCHING
-      : voiceRefusal({ running: true, voiced: true, searches: voices.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining })
-    : null;
-  const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
-  // The play the bet runs, and what the screen can do for it (engine.ts StepPlay).
-  const played = b ? playOf(b) : null;
-  const play: StepPlay | null = b && played ? {
-    label: secondPerson(played.label), how: secondPerson(played.how),
-    counted: home.signals?.made && unitSignal(b.unit) ? 'link' : home.page?.live && unitPage(b.unit) ? 'page' : null,
-    script: (home.assets?.assets ?? []).find((a) => a.kind === 'script' && !a.retired && a.versions.some((v) => v.bet === b.id))?.id ?? null,
-    canDraft: !!home.ai && !d.noOffer,
-    pageOnline: !!home.page?.live,
-  } : null;
-  const step = engineStep({
-    today: home.recent.today, offerSet: !d.noOffer, unreadable: !!lab.unreadable,
-    checkpoint: { due: lab.checkpoint.due, ended: lab.checkpoint.ended.length },
-    current: view, talks: lab.talks, found: found.value, voices, opened: opened.ids, searchRefusal,
-    shelf: lab.shelf, weak: weak ? { key: weak.key, label: weak.label, why: weak.why } : null,
-    goal: payoffGoal(home.goals, home.recent.today),
-    play,
-  });
-  return { step, peopleShown: !!voices && (voices.searches > 0 || !!read?.unreadable) };
-}
-
-function NextStep({ home, step, view, actions, brief, find, opened, peopleShown }: {
-  home: HomeData; step: Step; view: BetView | null; actions: Actions; brief: Brief; find: Find; opened: Opened; peopleShown: boolean;
-}) {
-  const move = useMove(actions, brief);
-  const [drafting, setDrafting] = useState(false);
-  const [told, setTold] = useState<{ text: string; bad: boolean } | null>(null);
-  // What the play has you say, drafted for this bet and opened (assets.ts script).
-  const draft = async () => {
-    if (!view || drafting) return;
-    setDrafting(true); setTold(null);
-    const r = await actions.assets({ action: 'draft', kind: 'script', bet: view.bet.id });
-    setDrafting(false);
-    if (!r.ok) return setTold({ text: r.error ?? 'Could not draft it', bad: true });
-    if (r.id) actions.openSheet({ kind: 'asset', id: r.id });
-  };
-  // Inside the tap: Safari refuses a clipboard write outside one.
-  const copyLink = async () => {
-    const url = home.page?.url ?? (home.page?.path && typeof window !== 'undefined' ? `${window.location.origin}${home.page.path}` : null);
-    if (!url) return setTold({ text: 'Your page has no address on this server yet.', bad: true });
-    try { await navigator.clipboard.writeText(url); setTold({ text: `Copied: ${url.replace(/^https?:\/\//, '')}`, bad: false }); }
-    catch { setTold({ text: `Your browser did not let it be copied. Your page is at ${url}`, bad: false }); }
-  };
-  const go = (g: StepGo) => {
-    switch (g.to) {
-      case 'offer': return actions.openSheet({ kind: 'offer' });
-      case 'foundby': return actions.openSheet({ kind: 'foundby' });
-      case 'checkpoint': return scrollToCard('cp2-checkpoint');
-      case 'find': return void find.run();
-      case 'people': return scrollToCard('cp2-people');
-      // The one bet waits on this tab, ready to start: the move scrolls to it. The sheet is for when it is not drawn.
-      case 'bet': return document.getElementById('cp2-nextbet') ? scrollToCard('cp2-nextbet') : actions.openSheet({ kind: 'bet', part: g.part });
-      case 'shelf': return actions.openSheet({ kind: 'bet', shelf: g.id });
-      case 'next': return view ? goTo(g.go, actions, view.bet.id) : undefined;
-      case 'tab': return actions.setTab(g.tab);
-      case 'draft': return void draft();
-      case 'asset': return actions.openSheet({ kind: 'asset', id: g.id });
-      case 'copylink': return void copyLink();
-      case 'post': return undefined;
-    }
-  };
-  const p = step.primary;
-  const searching = find.busy && p.go.to === 'find';
-  const ask: LinkMove | null = step.claude ? { key: 'engine-ask', label: 'Think it through with Claude', by: 'claude', ask: step.claude } : null;
-  // A search that failed or was cut short is said where it was asked — here, unless the people card is up to say it.
-  const said = step.kind === 'find' && !peopleShown;
-  return (
-    <div className="cp2-ns-step">
-      <div className="cp-eyebrow">{step.eyebrow}</div>
-      <h2 className="cp2-ns-t">{step.title}</h2>
-      {step.why && <p className="cp2-ns-why">{step.why}</p>}
-      <div className="cp2-ns-do">
-        {p.go.to === 'post' ? (
-          // A real link, not a script's window.open: a popup blocker has no quarrel with a tap on an anchor.
-          <a className="cp-btn primary" href={p.go.url} target="_blank" rel="noopener noreferrer nofollow" onClick={() => opened.mark((p.go as { voice: string }).voice)}>
-            {p.label} <IconExternal />
-          </a>
-        ) : (
-          <button className="cp-btn primary" disabled={searching || (drafting && p.go.to === 'draft')} onClick={() => go(p.go)}>
-            {searching ? 'Looking… about twenty seconds' : drafting && p.go.to === 'draft' ? 'Drafting…' : p.label}
-          </button>
-        )}
-        {step.secondary && (
-          <button className="cp2-link" disabled={drafting && step.secondary.go.to === 'draft'} onClick={() => go(step.secondary!.go)}>{step.secondary.label}</button>
-        )}
-        {ask && (
-          <button className="cp2-link muted" disabled={move.busy === ask.key} onClick={() => void move.run(ask)}>
-            {move.busy === ask.key ? 'Gathering…' : 'Ask Claude'}
-          </button>
-        )}
-      </div>
-      {step.hint && <p className="cp-help">{step.hint}</p>}
-      {told && <p className={`cp-help${told.bad ? ' cp2-err' : ''}`}>{told.text}</p>}
-      {said && find.error && <p className="cp-help cp2-err">{find.error}</p>}
-      {said && find.why && <p className="cp-help">{find.why[0].toUpperCase() + find.why.slice(1)}.</p>}
-      {ask && move.note?.key === ask.key && <MoveNote note={move.note} />}
-      {step.payoff && (
-        <p className="cp2-ns-pay">
-          {step.payoff.line}
-          {step.payoff.link && <> <button className="cp2-link" onClick={() => go(step.payoff!.link!.go)}>{step.payoff.link.label}</button></>}
-        </p>
-      )}
-    </div>
-  );
 }
 
 /* ─── The engine ──────────────────────────────────────────────────────────── */
@@ -413,13 +218,14 @@ function EngineHero({ home, d, actions, part, pick, changes }: {
 }
 
 /**
- * The part opened: its state and the rule behind it, the move when the move is
- * here, who works it, and what would move it. The bet's own cards follow it
- * when the bet is on this part; a move on another part is one tap away.
+ * The part opened. With the bet on it, the part is the workflow on trial: the
+ * play, the claim it tests, its count against the line, and each step with who
+ * runs it and what it has produced (ThisBet). Without, its state and the rule
+ * behind it, who works it, and what would move it — and where the workflow on
+ * trial is, one tap away.
  */
-function Station({ home, d, actions, part, step, pick, brief, find, opened, peopleShown }: {
-  home: HomeData; d: Derived; actions: Actions; part: LinkKey; step: Step | null; pick: (k: LinkKey) => void;
-  brief: Brief; find: Find; opened: Opened; peopleShown: boolean;
+function Station({ home, d, actions, part, pick, brief }: {
+  home: HomeData; d: Derived; actions: Actions; part: LinkKey; pick: (k: LinkKey) => void; brief: Brief;
 }) {
   const { chain, crew, lab } = d.proof;
   const move = useMove(actions, brief);
@@ -427,62 +233,66 @@ function Station({ home, d, actions, part, step, pick, brief, find, opened, peop
   if (!l) return null;
   const i = chain.links.indexOf(l);
   const weak = chain.weak === part;
-  const here = step && step.part === part ? step : null;
-  const there = step && step.part && step.part !== part ? step : null;
   const betHere = lab.current?.bet.part === part ? lab.current : null;
-  const said = !!here?.why && l.why.startsWith(here.why.replace(/…$/, ''));
+  const there = lab.current && !betHere ? lab.current : null;
   const on = crewOn(crew, part);
   const full = agentIsFull(home);
-  // The move above already is "Bet on how they hear"; the same words again under it read as a second thing to do.
-  const moves = here ? l.moves.filter((m) => m.label !== here.title) : l.moves;
+  const played = there ? playOf(there.bet) : null;
   return (
     <section className={`cp-card cp2-er-station ${l.state}`} style={{ '--frac': i * 0.2 + 0.1 } as React.CSSProperties} aria-label={l.label}>
       <div className="cp2-er-shead">
         <h2>{l.label}</h2>
         <span className={`cp2-bz-state ${l.state}`}><i />{LINK_STATE_LABEL[l.state]}</span>
       </div>
-      {/* The move first when it is on this part: the tab is opened to act, and its button belongs above the fold. */}
-      {here && <div className="cp2-er-move"><NextStep home={home} step={here} view={lab.current} actions={actions} brief={brief} find={find} opened={opened} peopleShown={peopleShown} /></div>}
-      <div className="cp2-er-detail">
-        <p className="cp2-er-why">
-          {weak && <b>The weakest part. </b>}
-          {/* A move that is "bet on this part" carries the part's own rule as its reason; said once is enough. */}
-          {said ? (weak ? 'Nothing past it can be tested until it works.' : null) : l.why}
-        </p>
-        {l.what && <p className="cp2-er-what cp2-clamp2">{l.what}</p>}
-        {/* Said once: the engine above already says where the count starts when it is the same pivot. */}
-        {l.since && l.since !== chain.verdict.since && <p className="cp2-er-since">{l.since}</p>}
-      </div>
-      {there && (
-        <button className="cp2-er-elsewhere" onClick={() => pick(there.part!)}>
-          <span><b>Your move is on {LINK_LABEL[there.part!].toLowerCase()}:</b> {there.title}</span>
-          <IconChevron />
-        </button>
-      )}
-      {/* Who works it, each in their word. An agent that stopped is said on the part it stopped (invariant 13). */}
-      {on.length > 0 && (
-        <div className="cp2-er-oncrew">
-          <span className="cp2-er-k">Who works it</span>
-          <div className="cp2-er-chips">
-            {on.map((w) => <CrewChip key={w.key} w={w} />)}
-          </div>
+      {betHere && lab.current ? (
+        <>
+          {/* An agent that stopped is said on the part it stopped (invariant 13), above the work it stopped. */}
           {l.runner.problem && <p className="cp2-bz-problem">{l.runner.problem}</p>}
-        </div>
-      )}
-      {/* What would move it, while no bet is on it: the bet's own card holds the work for the part it is on. */}
-      {!betHere && moves.length > 0 && (
-        <div className="cp2-er-moves">
-          <span className="cp2-er-k">What would move it</span>
-          {moves.map((raw) => {
-            const m = orChat(raw, full);
-            return (
-              <div key={m.key}>
-                <MoveRow m={m} rerouted={m.by !== raw.by} busy={move.busy === m.key} onRun={() => void move.run(m, l.why)} />
-                {move.note?.key === m.key && <MoveNote note={move.note} />}
+          <ThisBet key={lab.current.bet.id} home={home} d={d} view={lab.current} actions={actions} brief={brief} full={agentIsFull(home, lab.links[lab.current.bet.id] ?? [])} />
+        </>
+      ) : (
+        <>
+          <div className="cp2-er-detail">
+            <p className="cp2-er-why">
+              {weak && <b>The weakest part. </b>}
+              {l.why}
+            </p>
+            {l.what && <p className="cp2-er-what cp2-clamp2">{l.what}</p>}
+            {/* Said once: the engine above already says where the count starts when it is the same pivot. */}
+            {l.since && l.since !== chain.verdict.since && <p className="cp2-er-since">{l.since}</p>}
+          </div>
+          {there && (
+            <button className="cp2-er-elsewhere" onClick={() => pick(there.bet.part)}>
+              <span><b>The workflow on trial is on {LINK_LABEL[there.bet.part].toLowerCase()}:</b> {played ? secondPerson(played.label, home.profile.name) : there.bet.belief}</span>
+              <IconChevron />
+            </button>
+          )}
+          {/* Who works it, each in their word. An agent that stopped is said on the part it stopped (invariant 13). */}
+          {on.length > 0 && (
+            <div className="cp2-er-oncrew">
+              <span className="cp2-er-k">Who works it</span>
+              <div className="cp2-er-chips">
+                {on.map((w) => <CrewChip key={w.key} w={w} />)}
               </div>
-            );
-          })}
-        </div>
+              {l.runner.problem && <p className="cp2-bz-problem">{l.runner.problem}</p>}
+            </div>
+          )}
+          {/* What would move it: the bet's own workflow holds the work for the part it is on. */}
+          {l.moves.length > 0 && (
+            <div className="cp2-er-moves">
+              <span className="cp2-er-k">What would move it</span>
+              {l.moves.map((raw) => {
+                const m = orChat(raw, full);
+                return (
+                  <div key={m.key}>
+                    <MoveRow m={m} rerouted={m.by !== raw.by} busy={move.busy === m.key} onRun={() => void move.run(m, l.why)} />
+                    {move.note?.key === m.key && <MoveNote note={move.note} />}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </section>
   );
@@ -496,53 +306,6 @@ function CrewChip({ w }: { w: Worker }) {
       <span>{w.name}</span>
       <em>{WORKER_STATE_LABEL[w.state]}</em>
     </span>
-  );
-}
-
-/* ─── What a pivot on who buys left behind ────────────────────────────────── */
-
-/** "a, b and c": a short list, said. */
-const listWords = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : xs[0] ?? '');
-const countOf = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
-/**
- * The businesses, drafts and searches left over from the buyers the person
- * pivoted away from (era.ts pivotLeft), said once and answered by a tap: saving
- * the new offer rewrote every waiting draft from it, to the same old businesses,
- * and only the pivot says the buyers changed. Nothing is set aside for them.
- */
-function AfterPivot({ home, left, actions }: { home: HomeData; left: NonNullable<HomeData['pivotLeft']>; actions: Actions }) {
-  const [busy, setBusy] = useState<'aside' | 'keep' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const answer = async (keep: boolean) => {
-    setBusy(keep ? 'keep' : 'aside'); setError(null);
-    const r = await actions.lab({ action: 'pivot_left', day: left.day, keep });
-    setBusy(null);
-    if (!r.ok) setError(r.error ?? 'Could not save that');
-  };
-  const forWho = home.profile.offer?.for_who?.trim();
-  const said = [
-    left.segments.length ? `Maps still searches for ${listWords(left.segments)} every night.` : null,
-    left.businesses
-      ? `${countOf(left.businesses, 'business', 'businesses')} found for those buyers ${left.businesses === 1 ? 'waits' : 'wait'} in Swipe${left.drafts ? `, ${countOf(left.drafts, 'draft', 'drafts')} written to them from your new offer` : ''}.`
-      : null,
-  ].filter(Boolean).join(' ');
-  return (
-    <div className="cp-card cp2-pv-left">
-      <div className="cp-eyebrow">Since you pivoted who buys · {dayWords(left.day)}</div>
-      <h2 className="cp2-lab-q">Still looking for the buyers you left</h2>
-      <p className="cp2-pv-said">{said}</p>
-      {forWho && <p className="cp2-pv-now">Your offer is for: <b>{forWho}</b></p>}
-      <div className="cp2-pv-do">
-        <button className="cp-btn primary" disabled={busy !== null} onClick={() => void answer(false)}>{busy === 'aside' ? 'Setting aside…' : 'Set them aside'}</button>
-        <button className="cp2-link muted" disabled={busy !== null} onClick={() => void answer(true)}>{busy === 'keep' ? 'Saving…' : 'Keep them'}</button>
-      </div>
-      <p className="cp-help">
-        {[left.drafts ? 'Those drafts are cancelled' : null, left.businesses ? 'those businesses leave Swipe' : null, left.segments.length ? 'Maps stops searching the old segments' : null]
-          .filter(Boolean).join(', ').replace(/^./, (c) => c.toUpperCase())}. What you sent, and what came back, stays in your history.
-      </p>
-      {error && <div className="cp-error">{error}</div>}
-    </div>
   );
 }
 
@@ -690,12 +453,11 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
   };
 
   return (
-    <div className="cp-card cp2-lab-bet">
-      <div className="cp-call-top">
-        <div className="cp-eyebrow">This bet · day {view.day} of {b.days}{view.last === today ? ' · last day' : ''}</div>
-        <span className="cp2-lab-partname">{LINK_LABEL[b.part]}</span>
-      </div>
-      <h2 className="cp2-lab-belief">&ldquo;{b.belief}&rdquo;</h2>
+    <div className="cp2-lab-bet cp2-sy-flow">
+      {/* The date it is judged by, not the day it is on: a day count is not progress. */}
+      <div className="cp2-sy-k">The workflow on trial · until {dayWords(view.last)}{view.last === today ? ' · last day' : ''}</div>
+      <h3 className="cp2-sy-play">{play ? secondPerson(play.label, home.profile.name) : 'Your own test'}</h3>
+      <p className="cp2-sy-claim">&ldquo;{b.belief}&rdquo;</p>
 
       <div className="cp2-lab-score">
         <span className="cp2-lab-n"><b>{view.result}</b> of {b.target}</span>
@@ -721,8 +483,8 @@ function ThisBet({ home, d, view, actions, brief, full }: { home: HomeData; d: D
         : !d.proof.lab.unreadable && <PlanIt view={view} steps={planFor(b, planCapsOf(home), home.profile.offer ?? {})} actions={actions} />}
 
       <button className="cp2-lab-more" onClick={() => setMore((v) => !v)} aria-expanded={more}>
-        {/* The play's own name, which fits a line; its book is said inside. */}
-        <span className="cp2-clamp1">{play ? secondPerson(play.label, home.profile.name) : 'How it is counted'}</span>
+        {/* The play's name is the workflow's title above; its book and how it is counted are said inside. */}
+        <span className="cp2-clamp1">How it is counted{play ? ', and where the play comes from' : ''}</span>
         <span className={`cp2-plan-chev${more ? ' open' : ''}`}><IconChevron /></span>
       </button>
       {more && (
@@ -831,137 +593,6 @@ function BetWorkList({ view, work, home, actions }: { view: BetView; work: BetWo
           <IconChevron />
         </button>
       )}
-    </div>
-  );
-}
-
-/** Posts shown before "more": three people is a morning's replies; the rest wait behind a tap. */
-const VOICES_SHOWN = 3;
-
-/**
- * People who said it (voices.ts): public posts where somebody says the bet's
- * problem in their own words, each with its link, for the person to answer from
- * their own account. Its own card, above the bet: the step at the top says to
- * reply to one, and the bet is what they count toward. Nothing is sent from
- * here (invariant 4).
- *
- * Each post goes through three states, each a tap. Not opened: Open, or Not a
- * fit. Opened — on this device — it asks "Did they answer?": one tap on how it
- * ended logs the conversation, named for the post, and the post leaves; no
- * answer is nothing to do. The full sheet is still there for the detail.
- */
-function People({ home, view, actions, find, opened }: { home: HomeData; view: BetView; actions: Actions; find: Find; opened: Opened }) {
-  const b = view.bet;
-  const today = home.recent.today;
-  const read = home.lab?.voices;
-  const mine = betVoices(read, b, home.lab?.talks ?? []);
-  // "Find more" stands down while the plan's Scout searches: two at once would spend two of the bet's three.
-  const refusal = stepBusy(home.lab?.planRuns ?? [], 'find', new Date(home.generatedAt))
-    ? SCOUT_SEARCHING
-    : voiceRefusal({ running: true, voiced: betVoiced(b), searches: mine.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining });
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
-  const [all, setAll] = useState(false);
-  // Which opened post is being asked how it ended: one at a time, so a stray tap cannot log the wrong one.
-  const [ending, setEnding] = useState<string | null>(null);
-  if (!betVoiced(b)) return null;
-  // Nothing found and nothing said: the step above leads, and a card of nothing would only repeat it.
-  if (mine.searches === 0 && !read?.unreadable) return null;
-
-  const gone = async (v: Voice) => {
-    setBusy(v.id); setError(null);
-    const r = await actions.lab({ action: 'voice_gone', voice: v.id });
-    setBusy(null);
-    if (!r.ok) return setError(r.error ?? 'Could not set it aside');
-    opened.clear(v.id);
-  };
-  // The conversation, kept with the one tap: who it was with is their post's name, and the ending is theirs.
-  const logIt = async (v: Voice, commitment: Commitment) => {
-    setBusy(v.id); setError(null);
-    const r = await actions.lab({ action: 'talk', talk: voiceTalk(v, commitment) });
-    setBusy(null);
-    if (!r.ok) return setError(r.error ?? 'Could not log that');
-    opened.clear(v.id);
-    setEnding(null);
-  };
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(VOICE_OPENER); setCopied('Copied. Change it to fit their post.'); }
-    catch { setCopied('Your browser did not let it be copied. Select the words and copy them from there.'); }
-  };
-  // The ones opened and not answered come first: they are the ones waiting on this person.
-  const rows = [...mine.open.filter((v) => opened.ids.has(v.id)), ...mine.open.filter((v) => !opened.ids.has(v.id))];
-  const shown = all ? rows : rows.slice(0, VOICES_SHOWN);
-
-  return (
-    <div className="cp-card cp2-vox-card" id="cp2-people">
-      <div className="cp2-vox-top">
-        <div className="cp-eyebrow">People who said it</div>
-        {mine.found > 0 && <span className="cp2-vox-count">{mine.talked ? `${mine.talked} of ${mine.found} talked to` : `${mine.found} found`}</span>}
-      </div>
-      {read?.unreadable && <p className="cp-help cp2-err">The people found for this bet could not be read just now: {read.unreadable}</p>}
-      {mine.open.length > 0 && (
-        <div className="cp2-vox-opener">
-          <span>Open with their past, not your idea</span>
-          <q>{VOICE_OPENER}</q>
-          <button className="cp2-link" onClick={() => void copy()}>Copy it</button>
-        </div>
-      )}
-      {copied && <p className="cp-help">{copied}</p>}
-      {shown.map((v) => {
-        const at = opened.map[v.id];
-        const waiting = !!at;
-        return (
-          <div key={v.id} className={`cp2-vox-row${waiting ? ' waiting' : ''}`}>
-            <b className="cp2-clamp2">{v.title}</b>
-            {v.said && v.said !== v.title && <p className="cp2-vox-said">&ldquo;{v.said}&rdquo;</p>}
-            <span className="cp2-vox-meta">{[v.where, postedWords(v.posted, today), v.author].filter(Boolean).join(' · ')}</span>
-            {waiting && ending !== v.id && (
-              <div className="cp2-vox-ask">
-                <span>Opened {postedWords(dayIn(at, home.profile.timezone), today) ?? 'earlier'}. Did they answer?</span>
-              </div>
-            )}
-            {ending === v.id && (
-              <div className="cp2-vox-end" role="group" aria-label="How it ended">
-                <span>How did it end?</span>
-                <div className="cp-chips">
-                  {COMMITMENTS.map((c) => (
-                    <button key={c} className="cp-fchip" disabled={busy !== null} onClick={() => void logIt(v, c)}>{COMMITMENT_LABEL[c]}</button>
-                  ))}
-                </div>
-                <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'talk', voice: v.id })}>Add detail instead</button>
-              </div>
-            )}
-            <div className="cp2-vox-do">
-              {waiting
-                ? <button className="cp-btn sm primary" disabled={busy !== null} onClick={() => setEnding(ending === v.id ? null : v.id)}>They answered</button>
-                : (
-                  <a className="cp-btn sm primary" href={v.url} target="_blank" rel="noopener noreferrer nofollow" aria-label={`Open the post on ${v.where}`} onClick={() => opened.mark(v.id)}>
-                    Open <IconExternal />
-                  </a>
-                )}
-              {waiting && <a className="cp-btn sm" href={v.url} target="_blank" rel="noopener noreferrer nofollow" aria-label={`Open the post on ${v.where} again`}>Open again <IconExternal /></a>}
-              <button className="cp2-link muted" disabled={busy !== null} onClick={() => void gone(v)}>{busy === v.id ? 'Saving…' : 'Not a fit'}</button>
-            </div>
-          </div>
-        );
-      })}
-      {rows.length > VOICES_SHOWN && (
-        <button className="cp2-pf-more" onClick={() => setAll((x) => !x)}>{all ? 'Fewer' : `${rows.length - VOICES_SHOWN} more`}</button>
-      )}
-      {mine.found > 0 && mine.open.length === 0 && <p className="cp-help">Everyone found is talked to or set aside.</p>}
-      {mine.last && mine.last.kept === 0 && <p className="cp-help">The last search, {dayWords(mine.last.at.slice(0, 10))}, found nobody new.</p>}
-      <div className="cp2-vox-go">
-        {refusal
-          ? <p className="cp-help">{refusal}</p>
-          : <button className={`cp-btn sm${mine.open.length === 0 ? ' primary' : ''}`} disabled={find.busy} onClick={() => void find.run()}>
-            {find.busy ? 'Looking… about twenty seconds' : `Find more · ${mine.searches} of ${VOICE_SEARCHES} searches`}
-          </button>}
-      </div>
-      {find.why && <p className="cp-help">{find.why[0].toUpperCase() + find.why.slice(1)}.</p>}
-      {find.error && <p className="cp-help cp2-err">{find.error}</p>}
-      {error && <p className="cp-help cp2-err">{error}</p>}
-      <p className="cp2-vox-src">Their words, from the post. Found by a web search for this bet; nothing is sent from the app.</p>
     </div>
   );
 }
@@ -1525,41 +1156,56 @@ export function HistoryRow({ e, today, actions }: { e: HistoryEntry; today: stri
     : <div className="cp2-row cp2-pf-hrow">{body}</div>;
 }
 
-/* ─── Built so far ────────────────────────────────────────────────────────── */
+/* ─── What was tried ──────────────────────────────────────────────────────── */
+
+/** Workflows shown before the history: a short record reads; a long one is a log. */
+const TRIED_SHOWN = 5;
 
 /**
- * What the business has to show for itself, newest first (engine.ts builtSoFar):
- * a sale, a bet that passed, a project the agent finished, the first version of
- * anything made. The engine running is what it built, said with who built it;
- * everything else that happened is one tap away in the history.
+ * Every workflow that ended, newest first: the play it ran (or the belief, for a
+ * test of the person's own), what the rows counted against its line, and how it
+ * ended (engine.ts triedWhen). A proven workflow comes from this list — one that
+ * passed is kept and run again — and so does the honest reading of it: a test
+ * called off the day it started never ran, and the list says so rather than
+ * reading as one more that failed.
  */
-function Built({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
-  const { built, history } = d.proof;
+function Tried({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
+  const ended = d.proof.lab.learned;
+  if (!ended.length) return null;
   return (
-    <>
-      <div className="cp-section cp2-er-h">
-        <span>Built so far</span>
-        {history.length > 0 && <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'history' })}>All history</button>}
+    <div className="cp-card cp2-sy-tried">
+      <div className="cp2-sy-tried-top">
+        <span className="cp-eyebrow">What you&rsquo;ve tried</span>
+        <span className="cp2-sy-n">{ended.length} {ended.length === 1 ? 'workflow' : 'workflows'}</span>
       </div>
-      {built.length ? (
-        <div className="cp-list cp2-rows cp2-er-built">
-          {built.slice(0, BUILT_SHOWN).map((e) => <HistoryRow key={e.key} e={e} today={home.recent.today} actions={actions} />)}
-        </div>
-      ) : (
-        <p className="cp2-er-none">The first sale, a bet that passes, a project finished and the first version of anything you make land here, each dated.</p>
+      {ended.slice(0, TRIED_SHOWN).map((v) => {
+        const play = playOf(v.bet);
+        return (
+          <div key={v.bet.id} className="cp2-sy-tr">
+            <span className={`cp2-sy-tm ${v.state}`} aria-hidden>{v.state === 'passed' ? <IconCheck /> : v.state === 'failed' ? <IconCross /> : '–'}</span>
+            <div className="cp2-sy-tb">
+              <b className="cp2-clamp2">{play ? secondPerson(play.label, home.profile.name) : v.bet.belief}</b>
+              <span className={`cp2-sy-got ${v.state}`}>{v.result} of {v.bet.target} {metricWords(v.bet.metric, v.bet.target, v.bet.priceLabel, v.bet.unit)} · {LINK_LABEL[v.bet.part]}</span>
+              <span className="cp2-sy-when">{triedWhen(v)}</span>
+            </div>
+          </div>
+        );
+      })}
+      {ended.length > TRIED_SHOWN && (
+        <button className="cp2-pf-more" onClick={() => actions.openSheet({ kind: 'history' })}>All {ended.length} in your history</button>
       )}
-    </>
+    </div>
   );
 }
 
 /* ─── More ────────────────────────────────────────────────────────────────── */
 
 /**
- * The records the engine keeps, a line each and a tap to the sheet that has it
- * whole: the conversations, the assets and the page, the projects. None of it is
- * read to decide the move, so none of it sits above the engine. The agents are
- * the crew, on the engine itself; the history is under Built so far. A row
- * dropped here would be a sheet nobody can open.
+ * The records the system keeps, a line each and a tap to the sheet that has it
+ * whole: the conversations, the assets and the page, the projects, the history.
+ * None of it is read to decide anything, so none of it sits above the engine.
+ * The agents are the crew, on the engine itself. A row dropped here would be a
+ * sheet nobody can open.
  */
 function More({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
   const talks = d.proof.lab.talks;
@@ -1592,7 +1238,7 @@ function More({ home, d, actions }: { home: HomeData; d: Derived; actions: Actio
                 ? `${c.n} in ${TALK_BACK_DAYS} days · ${c.committed} committed · ${c.have} have the problem`
                 : talks.length ? `None in the last ${TALK_BACK_DAYS} days` : 'Who you talked to, and what they committed'}
             </span>
-            {/* Said where the conversations are, as well as on the Path: an introduction is lost by waiting. */}
+            {/* Said where the conversations are, as well as on Decide: an introduction is lost by waiting. */}
             {intros.length > 0 && (
               <span className="s cp2-pf-needs">
                 {intros.length === 1 ? `The intro from ${intros[0].talk.who || 'someone'} waits on you` : `${intros.length} introductions wait on you`}
@@ -1612,6 +1258,14 @@ function More({ home, d, actions }: { home: HomeData; d: Derived; actions: Actio
           <span className="cp2-row-main">
             <span className="t">Projects</span>
             <span className={`s${d.proof.waiting ? ' cp2-pf-needs' : ''}`}>{projects || 'Research, comparisons and drafts, handed over'}</span>
+          </span>
+          <IconChevron />
+        </button>
+        {/* What it has built — a sale, a bet passed, a project finished, a first version — first, then the rest by month. */}
+        <button className="cp2-row" onClick={() => actions.openSheet({ kind: 'history' })}>
+          <span className="cp2-row-main">
+            <span className="t">History</span>
+            <span className="s cp2-clamp1">{d.proof.built.length ? `Built so far: ${d.proof.built[0].title}` : 'Every bet, offer, project and sale, by month'}</span>
           </span>
           <IconChevron />
         </button>

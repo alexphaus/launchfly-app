@@ -366,7 +366,7 @@ export function countStep(bet: Pick<Bet, 'id' | 'metric' | 'unit' | 'start'>, i:
       return { do: 'Say how each conversation ended: one tap', line: lastOf(i.talks.map((t) => t.on)), auto: false };
     case 'sent':
     case 'replied':
-      return { do: 'Send from Swipe: each send counts by itself', line: null, auto: true };
+      return { do: 'Send from Decide: each send counts by itself', line: null, auto: true };
     case 'handed':
       return { do: 'Hand a step over to your crew: it counts when it is done', line: null, auto: true };
     case 'meetings':
@@ -404,6 +404,21 @@ export function planView(plan: BetPlan, i: PlanInput): PlanView {
     yours: { done: yours.filter((s) => s.state === 'done').length, of: yours.length },
     busy: steps.some((s) => s.step.by === 'crew' && s.state === 'working' && !s.project),
   };
+}
+
+/**
+ * The step the workflow is stuck on, by its index: the first step not done,
+ * when it waits on the person or failed. Null while that first step is the
+ * crew's and under way or not yet started — then nothing is stuck, it is being
+ * worked — and when every step is done, where only the count is left. System
+ * marks it "Stuck here": the part of the workflow a count of zero is waiting on.
+ */
+export function stuckStep(v: Pick<PlanView, 'steps'>): number | null {
+  const i = v.steps.findIndex((s) => s.state !== 'done');
+  if (i < 0) return null;
+  const s = v.steps[i];
+  if (s.state === 'failed') return i;
+  return s.step.by === 'you' && (s.state === 'open' || s.state === 'needs') ? i : null;
 }
 
 /** "Crew 2 of 3 done · yours 0 of 1": the plan in a line, beside the count, which is the verdict. */

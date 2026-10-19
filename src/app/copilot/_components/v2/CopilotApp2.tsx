@@ -1,32 +1,36 @@
 'use client';
 // The tab shell at /copilot2 — called the four-tab shell from its first
-// release, five tabs now. One question per tab:
+// release, three tabs now, and You behind the avatar. One question per tab:
 //
-//   Path      where am I, and what moves it: what was done above, "you are
-//             here" with the one thing to do now, what comes next below
-//   Swipe     who is worth contacting — one at a time, the message written,
-//             right sends it
-//   Proof     is the business proven, and what is being bet to find out: the
-//             offer and its verdict, the chain of parts each with a state from
-//             the rows, one bet at a time judged by them, the assets the
-//             business sells with, and its history
+//   Decide    what waits on me: one deck, every decision a card — today's call,
+//             a project that stopped to ask, an introduction, what Claude
+//             proposed, the posts a bet found — and then the people worth a
+//             message. Right does it, left puts it off (lib/copilot/decide.ts).
+//             Its key is still `swipe`.
+//   System    what runs, and what it has proven: the count that proves the
+//             business, the five parts, the workflow on trial with who runs each
+//             step and what each has produced, and every workflow tried. Its key
+//             is still `proof`; it was Engine, which was Proof.
 //   Money     where did it go: log a move, the list under the balance, the
 //             calendar (MoneyTab.tsx says why this is a tab and not a sheet)
-//   You       how am I doing: money, runway, deep work, the week read back,
-//             goals, settings
 //
-// The Path replaced Today: the call, what moved and what comes next are one
-// stream on a time axis (lib/copilot/pathway.ts).
+// You — the numbers, the week read back, goals, records, settings — is a screen
+// the avatar in the header opens, on every tab. It is visited, not lived in.
 //
-// Proof (ProofTab.tsx) replaced Work and the Lab. Work said which part of the
-// business was weak; the Lab was where a bet on that part was written down and
-// judged. Two tabs asked one question in two places — the verdict on one, the
-// bet that moves it on the other — and a checkpoint on the Lab read its
-// decision back against a chain drawn on Work. Its owner asked for one tab, for
-// a business that does not sell by outreach as much as one that does, with
-// ideas a model writes so it is not the same tab every week, the assets as
-// things with versions, and the history in one place. Every name either tab had
-// still lands on it.
+// Why Path went. The day's work was spread over three screens: the call, the
+// move and "Needs you" on Path; the bet's move and the people it found on
+// Engine; the businesses on Swipe. Its owner's verdict on Engine was that half
+// of it was things Swipe could do, and their counts said the rest: of the calls
+// carried out, none moved the number it named, and 27 were never done. A plan
+// and "what to do today" are what a chat with the whole record does better
+// (DIRECTION.md, the survival test); what only this app has is the rows that
+// wait on the person, and those are Decide's cards now. The plan is still drawn
+// — the call is picked from it, and Claude reads it over the connector — so
+// opening the app draws it when it is due, as opening Path did (usePlanDraw).
+//
+// Proof (ProofTab.tsx) replaced Work and the Lab, and Swipe (SwipeTab.tsx)
+// replaced Matches, each after its owner lived with both: every name any of
+// them had still lands somewhere sensible (ALIAS).
 //
 // Why a second layout rather than a rework of the first. The two-tab app was
 // built by removing things, one argued step at a time, and every step was right
@@ -36,34 +40,24 @@
 // the sheets and every action are shared — useCopilot — and only the arrangement
 // is new. Both can be installed and lived with; the one that gets opened wins.
 //
-// Swipe (SwipeTab.tsx) replaced Matches, a filtered list of the same people,
-// after one release side by side: its owner lived with both and kept the deck.
-// What the list did that a deck does not — who is waiting, who replied, every
-// draft at once with a way to clear them — is the outreach sheet (Outreach.tsx).
-// Every way into Matches still lands: its tab names open Swipe, its New opens
-// Swipe, and its other pills open the sheet on the same stage.
-//
 // The header's corner is the mic (VoiceLog.tsx): say what happened from any
 // tab and the sheet for it opens filled in — a move in the book, as it always
 // did, or a conversation, a sale, a meeting, a change to the offer, a note for
 // the plan (lib/copilot/tell.ts sorts; TellSheets.tsx says what it heard and
 // who sorted it). Keeping it is still a tap. Ask a question — "how much did I
 // spend this week?" — and the Ask sheet answers it, counted from the rows and
-// read aloud (lib/copilot/asked.ts). It held the capacity pill, a setting
-// shown on every screen and changed about never; that is in You → Settings.
-import { useCallback, useRef, useState } from 'react';
+// read aloud (lib/copilot/asked.ts). Beside it, the avatar opens You.
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView } from '@/lib/copilot/nightly';
 import { askedOutright, clearlyMoney, readByRules } from '@/lib/copilot/tell';
 import type { HomeData } from '@/lib/copilot/types';
-import { greeting } from '../format';
 import Sheet from '../Sheet';
 import SheetContent from '../SheetContent';
-import type { Tab2 } from '../shared';
+import type { Actions, Tab2 } from '../shared';
 import { sheetKey, useCopilot } from '../useCopilot';
-import { useDerived } from './derive';
-import { IconEngine, IconMoney, IconPath, IconSwipe, IconYou } from './icons2';
-import PathTab from './PathTab';
+import { useDerived, type Derived } from './derive';
+import { IconMoney, IconSwipe, IconSystem, IconYou } from './icons2';
 import ProofTab from './ProofTab';
 import MoneyTab, { BookFab, BookSheet, MoneyTabGuard, useBook } from './MoneyTab';
 import YouTab from './YouTab';
@@ -71,33 +65,69 @@ import SwipeTab from './SwipeTab';
 import { useVoice, VoiceButton, VoiceLive } from './VoiceLog';
 import { openReading } from './TellSheets';
 
-const TABS: Tab2[] = ['path', 'swipe', 'proof', 'money', 'you'];
-// The tab is called Engine; its key stays `proof`, because every route, shortcut,
-// push and file that names it already does (ALIAS below maps both names onto it).
-const LABEL: Record<Tab2, string> = { path: 'Path', swipe: 'Swipe', proof: 'Engine', money: 'Money', you: 'You' };
-const ICON: Record<Tab2, () => React.ReactElement> = { path: IconPath, swipe: IconSwipe, proof: IconEngine, money: IconMoney, you: IconYou };
+/** The nav. You is not on it: the avatar in the header opens it. */
+const TABS: Tab2[] = ['swipe', 'proof', 'money'];
+// The tabs are called Decide and System; their keys stay `swipe` and `proof`,
+// because every route, shortcut, push and file that names them already does
+// (ALIAS below maps every name onto them).
+const LABEL: Record<Tab2, string> = { swipe: 'Decide', proof: 'System', money: 'Money', you: 'You' };
+const ICON: Record<Tab2, () => React.ReactElement> = { swipe: IconSwipe, proof: IconSystem, money: IconMoney, you: IconYou };
 /** After the last move logged in a burst, the rest of the app re-reads runway once, not once per coffee. */
 const HOME_AFTER_BOOK_MS = 4_000;
 /**
  * Every tab name either shell has ever used, mapped onto this one. A push or an
  * installed shortcut carrying `?tab=working` lands somewhere sensible here too,
- * and so does Today, which the Path replaced.
+ * and so does Path, whose call and asks are Decide's cards now.
  */
 const ALIAS: Record<string, Tab2> = {
-  path: 'path', today: 'path', now: 'path',
-  // Matches was a tab until Swipe replaced it; a shortcut or a push naming it opens the deck.
+  // Path, and Today before it: the day's call and what needs you, which Decide deals.
+  path: 'swipe', today: 'swipe', now: 'swipe',
+  decide: 'swipe', inbox: 'swipe', needs: 'swipe',
+  // Matches was a tab until Swipe replaced it, and Swipe is now Decide; a shortcut or a push naming any of them opens the deck.
   matches: 'swipe', pipeline: 'swipe', opportunities: 'swipe', signals: 'swipe',
   swipe: 'swipe', deck: 'swipe', triage: 'swipe',
-  // Work and the Lab were tabs until Proof replaced both, and Proof is now called Engine; a shortcut or a push naming any of them opens it.
-  proof: 'proof', engine: 'proof', work: 'proof', business: 'proof', assets: 'proof', history: 'proof',
-  lab: 'proof', bets: 'proof', bet: 'proof', experiments: 'proof', tests: 'proof',
+  // Work and the Lab were tabs until Proof replaced both, Proof became Engine and Engine is System; any of them opens it.
+  proof: 'proof', engine: 'proof', system: 'proof', work: 'proof', business: 'proof', assets: 'proof', history: 'proof',
+  lab: 'proof', bets: 'proof', bet: 'proof', experiments: 'proof', tests: 'proof', workflow: 'proof',
   money: 'money', book: 'money', cash: 'money',
   you: 'you', working: 'you',
 };
 
+/**
+ * Draw the plan when opening the app finds the person said something it has not
+ * heard — a goal, a note, a changed day — or there is no plan yet. Path did this
+ * on opening; with Path gone the shell does, because the call Decide deals is
+ * picked from the plan, and a plan that never redraws is a call that never
+ * changes. Once per thing said: the key is what was due and the plan it was due
+ * against, so a draw that fails to start is not retried on every render.
+ * roadmapDue already holds off for an hour after a failed draw, and the route
+ * caps the day.
+ */
+function usePlanDraw(home: HomeData, d: Derived, actions: Actions) {
+  const asked = useRef<string | null>(null);
+  const due = d.path.planDue;
+  const key = due ? `${due}:${home.roadmap?.current?.id ?? ''}:${home.roadmap?.latest?.id ?? ''}:${home.contextCount}:${home.goals.length}` : null;
+  useEffect(() => {
+    if (!due || !key || asked.current === key) return;
+    asked.current = key;
+    void actions.drawRoadmap(due);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+}
+
+/** You, in the header's corner on every tab: the person's initial, or the glyph before there is a name. */
+function MeButton({ home, on, onOpen }: { home: HomeData; on: boolean; onOpen: () => void }) {
+  const initial = home.profile.name?.trim().charAt(0).toUpperCase() || null;
+  return (
+    <button className={`cp2-me-btn${on ? ' on' : ''}`} onClick={onOpen} aria-label="You: your numbers, goals and settings" aria-current={on ? 'page' : undefined}>
+      {initial ?? <IconYou />}
+    </button>
+  );
+}
+
 export default function CopilotApp2({ initial }: { initial: HomeData }) {
   const { home, tab, setTab, actions, sheet, sheetOpen, dismissSheets, briefing, finding, toast, mainRef, say, refresh, arrival, clearArrival } =
-    useCopilot<Tab2>(initial, { initialTab: 'path', alias: ALIAS });
+    useCopilot<Tab2>(initial, { initialTab: 'swipe', alias: ALIAS });
   // A logged move changes runway, which the other tabs read off the home load.
   const homeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onMoved = useCallback(() => {
@@ -116,7 +146,7 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
   };
   // The book's own sheet, from a sort or the chooser: whatever sheet asked goes first.
   const openMoney = (heard: string) => { dismissSheets(); logMove(heard); };
-  // What the mic heard while it is being sorted, under the greeting: a second
+  // What the mic heard while it is being sorted, under the title: a second
   // of waiting is a second of reading the words back.
   const [sorting, setSorting] = useState<string | null>(null);
   const tells = useRef(0);
@@ -154,34 +184,39 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     onFailed: (why, type) => { say(why); if (type) logMove(); },
   });
   const d = useDerived(home);
+  usePlanDraw(home, d, actions);
   const status = d.status[tab];
   const nightly = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? nightlyView(home.nightly.run, new Date()) : null;
-  // Where the Path and the week's review send someone about their matches: the
-  // new ones to the deck, everyone already written to into the outreach sheet,
-  // on the stage that was asked for — "send the drafts" lands on To send.
+  // Where the week's review sends someone about their matches: the new ones to
+  // the deck, everyone already written to into the outreach sheet, on the stage
+  // that was asked for — "send the drafts" lands on To send.
   const openMatches = (s: MatchStage) => {
     if (s === 'new') setTab('swipe');
     else actions.openSheet({ kind: 'outreach', stage: s });
   };
+  // The header's corner, on every tab: the mic, then You. Decide draws it in its own top line.
+  const corner = (
+    <>
+      <VoiceButton voice={voice} onType={() => logMove()} label="Say what happened, or ask" />
+      <MeButton home={home} on={tab === 'you'} onOpen={() => setTab('you')} />
+    </>
+  );
+  // While the mic is open, what it hears; while it is sorted, the words being sorted.
+  const live = voice.listening
+    ? <VoiceLive voice={voice} hint="Listening… say what happened, or ask" />
+    : sorting ? <p className="cp2-voice-live" aria-live="polite">Sorting… &ldquo;{sorting}&rdquo;</p>
+    : null;
 
   return (
     <div className={`cp-frame cp2-frame${tab === 'swipe' ? ' cp2-swiping' : ''}${tab === 'money' ? ' cp2-booking' : ''}`}>
-      {/* No header on Swipe: the card is the screen, as a deck of cards has to be to be read at a glance. */}
+      {/* No header on Decide: the card is the screen, as a deck of cards has to be to be read at a glance. Its top line carries the corner. */}
       {tab !== 'swipe' && <header className="cp-header">
         <div className="cp2-header-text">
-          {/* The greeting once, on the tab a day starts on; elsewhere the tab says
-              where you are. "Good morning, Alex" over a balance or a settings list
-              was 60px of the same words on every screen. */}
-          <h1>{tab === 'path' ? greeting(home.profile.timezone, home.profile.name) : LABEL[tab]}</h1>
+          <h1>{LABEL[tab]}</h1>
           {/* Tab-aware, and nothing when there is nothing true to say. While the mic is open, what it hears. */}
-          {voice.listening
-            ? <VoiceLive voice={voice} hint="Listening… say what happened, or ask" />
-            : sorting ? <p className="cp2-voice-live" aria-live="polite">Sorting… &ldquo;{sorting}&rdquo;</p>
-            : status && <p>{status}</p>}
+          {live ?? (status && <p>{status}</p>)}
         </div>
-        <div className="cp-header-right">
-          <VoiceButton voice={voice} onType={() => logMove()} label="Say what happened, or ask" />
-        </div>
+        <div className="cp-header-right">{corner}</div>
       </header>}
 
       <main className="cp-content" ref={mainRef}>
@@ -190,18 +225,17 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
         {nightly?.state === 'running'
           ? <div className="cp-banner"><span className="dot" />Nightly run · {nightly.stepN ? `${nightly.stepN} of ${nightly.of} · ` : ''}{nightly.doing}</div>
           : (briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
-        {tab === 'path' && <PathTab home={home} d={d} actions={actions} briefing={briefing} finding={finding} openMatches={openMatches} />}
-        {tab === 'swipe' && <SwipeTab home={home} d={d} actions={actions} finding={finding} say={say} refresh={refresh} />}
+        {tab === 'swipe' && <SwipeTab home={home} d={d} actions={actions} finding={finding} briefing={briefing} say={say} refresh={refresh} corner={corner} live={live} />}
         {tab === 'proof' && <ProofTab home={home} d={d} actions={actions} briefing={briefing} />}
         {tab === 'money' && <MoneyTabGuard><MoneyTab book={book} actions={actions} say={say} arrival={arrival} clearArrival={clearArrival} /></MoneyTabGuard>}
-        {tab === 'you' && <YouTab home={home} d={d} actions={actions} openMatches={openMatches} />}
+        {tab === 'you' && <YouTab home={home} d={d} actions={actions} openMatches={openMatches} briefing={briefing} />}
       </main>
 
       <nav className="cp-nav cp2-nav" aria-label="Sections">
         {TABS.map((t) => {
           const Icon = ICON[t];
-          // One count, on the one tab where it is an ask: what needs you today.
-          const badge = t === 'path' ? d.asks.length : 0;
+          // One count, on the one tab where it is an ask: what waits on you. The posts a bet found are leads, as businesses are, and not counted.
+          const badge = t === 'swipe' ? d.decideNeeds : 0;
           return (
             <button
               key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)} aria-current={tab === t ? 'page' : undefined}

@@ -7,9 +7,15 @@ Two products share this repository and almost nothing else.
 | **Launchfly** | `src/app/*` (except below), `src/lib/*` (except below) | The original product: AI website/store generation, WhatsApp sales agents, prospect pipeline. |
 | **The Copilot** | `src/app/copilot/`, `src/app/lifeos/`, `src/app/copilot2/`, `src/app/api/copilot/`, `src/lib/copilot/`, `scripts/tests/copilot-core.test.ts` | A mobile-first installable PWA for local outbound. Shares the Supabase project, the Next runtime, the WhatsApp provider, Resend and the Apify Maps scraper — **none of the business logic**. |
 
-The copilot's fourth tab is called **Engine** on screen (it was Proof until October
-2026). Its key, files, routes and the connector's `get_proof` are still `proof`, and
-both names open it. Code and docs that say Proof mean this tab.
+`/copilot2` has three tabs — **Decide**, **System**, **Money** — and You behind the
+avatar in the header (October 2026; Path was dropped). Decide is the deck that was
+Swipe, now dealing every decision as a card ahead of the businesses
+(`lib/copilot/decide.ts`); its key and file are still `swipe` / `SwipeTab.tsx`.
+System is the tab that was Engine, which was Proof; its key, files, routes and the
+connector's `get_proof` are still `proof`. Every old name (`path`, `engine`,
+`proof`, `swipe`, …) still opens the tab that took its job. Code and docs that say
+Proof or Engine mean System; Swipe means Decide; Path's call and asks are Decide's
+cards.
 
 Almost all recent work is the copilot. Two docs carry the context this file
 deliberately does not repeat:
@@ -27,7 +33,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 95 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 96 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -51,7 +57,7 @@ static check. Do not report that lint passed; there is nothing to run.
 `/opt/pw-browsers/chromium`; shoot at 390×844. The pattern that works: a
 throwaway `src/app/copilot/zz-preview/page.tsx` rendering `<CopilotApp initial={fixture}/>`
 (or `src/app/copilot2/zz-preview/page.tsx` rendering `<CopilotApp2 …/>` for the
-four-tab layout, so it picks up the calm theme from that layout), screenshot it,
+three-tab layout, so it picks up the calm theme from that layout), screenshot it,
 then **delete it and confirm `git status` before committing**.
 Never verify inside a `/tmp` worktree — Turbopack rejects a symlinked
 `node_modules` with "Symlink node_modules is invalid, it points out of the
@@ -108,7 +114,7 @@ stale, not the schema — `notify pgrst, 'reload schema';`.
 
 The app's own web searches (`copilot_hunts`, 20260925) need `EXA_API_KEY` and
 that migration. Without either, Maps and feeds run as before and the Scout (in the
-crew on Engine) says what is missing — there is no screen of searches to check instead.
+crew on System) says what is missing — there is no screen of searches to check instead.
 
 Bank statements (`copilot_money_*`, `copilot_transactions`,
 `copilot_counterparties`, 20260929) need that migration and nothing else for CSV
@@ -141,10 +147,10 @@ needs no migration and no new secret: links are signed with a key derived from
 from `NEXT_PUBLIC_APP_URL`, and `/api/copilot/signal/*` must be reachable from
 the outside (Stripe, form tools). Rotating the session secret ends every link. If
 the app is what you sell, set `COPILOT_OWN_COUNT_LINK` to your own link and each
-new account counts as a sign-up on your Proof; `/api/copilot/health` says when
+new account counts as a sign-up on System; `/api/copilot/health` says when
 it is set and wrong.
 
-**People who said it** (a conversation bet's posts, Proof) needs `EXA_API_KEY` and
+**People who said it** (a conversation bet's posts, dealt as cards on Decide) needs `EXA_API_KEY` and
 no migration: searches and set-asides are `copilot_events` rows, and each post kept
 spends one of the month's matches. Without the key the section is not shown.
 
@@ -197,14 +203,14 @@ account whose server speaks MCP over HTTPS can be connected — through its own
 OAuth (discovery, dynamic client registration, PKCE) or a token the person
 pastes.
 
-**A bet's plan** (Engine, `betplan.ts`, `planrun.ts`) needs no migration: the plan
+**A bet's plan** (System, `betplan.ts`, `planrun.ts`) needs no migration: the plan
 and each crew step's runs are `copilot_events` rows (`lab_plan`, `lab_plan_run`).
 Its crew is whatever is configured — the Scout needs `EXA_API_KEY`, drafts and the
 Writer a model, research a worker (`COPILOT_JOBS_URL` or the Claude agent) — and a
 step none of them can take is drawn as the person's. The nightly pass takes every
 running bet's plan up again in its jobs step (`bet_plan`, before `commission`).
 
-**Ideas** (Engine, `ideas.ts writeIdeaSet`) need no migration: six are written,
+**Ideas** (System, `ideas.ts writeIdeaSet`) need no migration: six are written,
 read again by a second call that only sets aside, and three kept; what the review
 set aside is on the `lab_ideas` row, and a set it did not read says so under the
 card. `COPILOT_IDEAS_MODEL` (optional `COPILOT_IDEAS_API_KEY` /
@@ -265,7 +271,7 @@ itself — so an "offline" test with it quietly sends everything. Stop the serve
 instead, with `launchPersistentContext` so the worker, its caches and the
 outbox survive between the phases.
 
-**Testing the Swipe tab:** a right swipe hands `sms:`, `tel:` and `mailto:` to
+**Testing the deck (Decide):** a right swipe hands `sms:`, `tel:` and `mailto:` to
 the phone's own apps. Headless Chromium has none, and its "open external app"
 prompt then swallows every click on the page — the test looks like a dead
 button. Wrap `HTMLAnchorElement.prototype.click` in an init script to record
@@ -275,6 +281,12 @@ cards' messages need a model: a stand-in must answer the Responses API
 the mouse: a `hasTouch` context and CDP `Input.dispatchTouchEvent`. Only touch
 input goes through `touch-action`, and a mouse-drag test passed while on every
 phone the card moved a few pixels and sprang back (COPILOT.md → **Swipe**).
+A drag never starts on a decision card's own answers (`NO_DRAG` in `SwipeTab.tsx`:
+the call's buttons, how a conversation ended), so a touch test that lands on "I
+did it" moves nothing and looks broken — start it on the card's title. A post
+already opened is read from `localStorage` (`cp2.voices.opened:<pid>`) after
+mount: set it in an init script to see "did they answer?". Answer the API with
+errors and a post set aside must come back, said — the failure path is the test.
 
 **Testing the mic:** headless Chromium has no microphone, and its own
 `webkitSpeechRecognition` fails. Put a stand-in `SpeechRecognition` on the page

@@ -1,4 +1,4 @@
-// Everything the four tabs render, derived once from HomeData.
+// Everything the tabs render, derived once from HomeData.
 //
 // One pass, memoised on the home object, for two reasons. The header's status
 // line and the tab under it must say the same number — the old app shipped "61"
@@ -15,17 +15,22 @@ import { focusWeek } from '@/lib/copilot/focus';
 import { agentRoster } from '@/lib/copilot/machine';
 import { businessChain, verdictCount, waitingOnYou } from '@/lib/copilot/business';
 import { crewLine, crewOf } from '@/lib/copilot/crew';
-import { builtSoFar } from '@/lib/copilot/engine';
+import { builtSoFar, engineStep, payoffGoal, type Step, type StepPlay } from '@/lib/copilot/engine';
+import { decideCards, decideCount, type DecideInput } from '@/lib/copilot/decide';
+import { SCOUT_SEARCHING, stepBusy } from '@/lib/copilot/betplan';
+import { betVoiced, betVoices, voiceRefusal } from '@/lib/copilot/voices';
+import { unitSignal } from '@/lib/copilot/signal';
+import { secondPerson } from '@/lib/copilot/you';
 import { lapsedOn } from '@/lib/copilot/commission';
 import { assetGaps } from '@/lib/copilot/assets';
 import { historyOf } from '@/lib/copilot/history';
-import { betPrice, labView, openIntros } from '@/lib/copilot/lab';
+import { betPrice, labView, openIntros, playOf, unitPage, type LabView } from '@/lib/copilot/lab';
 import { proposalLine } from '@/lib/copilot/proposals';
 import { chainInputOf, foundOf, saidOf } from '@/lib/copilot/proof';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
 import { isFoundBy, offerIsEmpty } from '@/lib/copilot/offer';
 import { pathLadder, pathNext, pathPast, pathSwap, pathWeek } from '@/lib/copilot/pathway';
-import { pathAhead, pathHere, pathNow, planStatus, priceOf } from '@/lib/copilot/plan';
+import { pathAhead, pathHere, pathNow, priceOf } from '@/lib/copilot/plan';
 import { SIZE_LABEL, goalMarkers, markMap, moneyWaiting, replacesCall, roadmapDue, roadmapFirstStep, roadmapLeadGoal, roadmapSignature, roadmapView } from '@/lib/copilot/roadmap';
 import { VERDICT_WORDS, goalOutlooks } from '@/lib/copilot/outlook';
 import { weekReview } from '@/lib/copilot/review';
@@ -63,7 +68,7 @@ export function derive(home: HomeData) {
   const webReady = !!home.hunting?.webReady && !noOffer && !home.hunting?.unreadable;
   const searching = mapsReady || webReady;
 
-  /* Path — what was Today: the call, what needs you, and what broke, said beside it */
+  /* What needs you — the call, the asks, and what broke, said beside them. Path showed these until Decide took them. */
   const ownMoves = [...home.moves, ...(home.callMove ? [home.callMove] : [])].filter((m) => m.job !== 'watch');
   const done = doneForYou({
     now,
@@ -78,8 +83,8 @@ export function derive(home: HomeData) {
     outcomes: home.recent.outcomes,
     moves: ownMoves,
   });
-  // Introductions somebody offered and nobody has followed up: on the Path,
-  // because they are lost by waiting, and on Proof beside the conversations.
+  // Introductions somebody offered and nobody has followed up: a card on Decide,
+  // because they are lost by waiting, and on System beside the conversations.
   const intros = openIntros(home.lab?.talks ?? [], home.lab?.intros, home.recent.today);
   const asks = needsYou({
     commissions: home.commissions,
@@ -350,6 +355,28 @@ export function derive(home: HomeData) {
     intros,
   };
 
+  /* Decide — every card that waits on the person, ahead of the people worth a message.
+     Read here with no posts opened: which posts this device opened is the
+     device's (engine.ts parseOpened), and an opened post is the same one card,
+     so the count on the badge and the pile under it agree. */
+  const step = stepOf(home, lab, chain, found.value, noOffer, now);
+  const voices = step.voices?.open ?? [];
+  const decideInput: Omit<DecideInput, 'opened'> = {
+    noOffer,
+    callPending: move.now.kind === 'call',
+    callHandsOver: home.callMove?.artifact?.kind === 'plan',
+    now: move.now,
+    asks,
+    step: step.step,
+    voices,
+    pivotLeft: !!home.pivotLeft,
+    checkpoint: { due: lab.checkpoint.due, ended: lab.checkpoint.ended.length },
+    cannotSearch: !searching,
+    // As the Path drew it: nothing to do and no call picked — the brief has not run.
+    noCall: !home.decision && move.now.kind === 'rest',
+  };
+  const decide = decideCards({ ...decideInput, opened: {} });
+
   const review = weekReview({
     now,
     today: home.recent.today,
@@ -376,12 +403,11 @@ export function derive(home: HomeData) {
   const week = focusWeek(home.recent.focus, home.recent.today);
 
   const status: Record<Tab2, string | null> = {
-    path: planStatus(asks.length, path.week.streak),
     // The deck has no header: the card is the screen, and its own top line counts what is left.
     swipe: null,
-    // The verdict and the bet's day are the first two cards, and what waits on
-    // you is on the Path's badge: "Not proven · day 2 of 14 on who buys · 3
-    // waiting on you" said the screen under it again, over two lines.
+    // The verdict and the workflow on trial are the first two cards, and what
+    // waits on you is on Decide's badge: "Not proven · day 2 of 14 on who buys ·
+    // 3 waiting on you" said the screen under it again, over two lines.
     proof: null,
     // The balance is the first thing on the tab; a header saying it again is noise.
     money: null,
@@ -392,11 +418,61 @@ export function derive(home: HomeData) {
   return {
     now, noOffer, queueCount, oldestDays, queueBacked, currency,
     done, asks, nothingYet, path,
+    /** The bet's step and its people (engine.ts), read once for Decide and System alike. */
+    step,
+    decide, decideInput, decideNeeds: decideCount(decide),
     feed, good, counts, stages, searching,
     team, running, proof,
     review, week,
     status,
   };
+}
+
+/**
+ * The running bet's next step (engine.ts engineStep) and the people it found,
+ * off the rows. Read with no posts opened: the posts are Decide's cards, each
+ * one, so the step that says "reply to one of them" is never a card of its own.
+ */
+function stepOf(
+  home: HomeData,
+  lab: LabView,
+  chain: ReturnType<typeof businessChain>,
+  found: ReturnType<typeof foundOf>['value'],
+  noOffer: boolean,
+  now: Date,
+): { step: Step | null; voices: ReturnType<typeof betVoices> | null } {
+  const view = lab.current;
+  const b = view?.bet ?? null;
+  const read = home.lab?.voices;
+  const voices = view && b && betVoiced(b) ? betVoices(read, b, home.lab?.talks ?? []) : null;
+  // Said the same way the route refuses it, so a button that could only be refused is not the step —
+  // and not while the plan's Scout is searching, so a tap does not start a second search beside it.
+  const searchRefusal = voices
+    ? read?.unreadable
+      ? 'The people found for this bet could not be read just now.'
+      : stepBusy(lab.planRuns, 'find', now)
+      ? SCOUT_SEARCHING
+      : voiceRefusal({ running: true, voiced: true, searches: voices.searches, ready: !!home.hunting?.webReady, remaining: home.billing.matches.remaining })
+    : null;
+  const weak = chain.weak ? chain.links.find((l) => l.key === chain.weak) ?? null : null;
+  // The play the bet runs, and what a step can do for it (engine.ts StepPlay).
+  const played = b ? playOf(b) : null;
+  const play: StepPlay | null = b && played ? {
+    label: secondPerson(played.label), how: secondPerson(played.how),
+    counted: home.signals?.made && unitSignal(b.unit) ? 'link' : home.page?.live && unitPage(b.unit) ? 'page' : null,
+    script: (home.assets?.assets ?? []).find((a) => a.kind === 'script' && !a.retired && a.versions.some((v) => v.bet === b.id))?.id ?? null,
+    canDraft: !!home.ai && !noOffer,
+    pageOnline: !!home.page?.live,
+  } : null;
+  const step = engineStep({
+    today: home.recent.today, offerSet: !noOffer, unreadable: !!lab.unreadable,
+    checkpoint: { due: lab.checkpoint.due, ended: lab.checkpoint.ended.length },
+    current: view, talks: lab.talks, found, voices, opened: new Set<string>(), searchRefusal,
+    shelf: lab.shelf, weak: weak ? { key: weak.key, label: weak.label, why: weak.why } : null,
+    goal: payoffGoal(home.goals, home.recent.today),
+    play,
+  });
+  return { step, voices };
 }
 
 function searchProblemOf(home: HomeData, noOffer: boolean): string | null {

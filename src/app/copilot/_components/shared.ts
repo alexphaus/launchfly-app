@@ -33,15 +33,19 @@ import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, O
 export type Tab = 'now' | 'working';
 
 /**
- * The tabs of the shell at /copilot2, one question each: where am I and what
- * moves it, who is worth contacting, is the business proven and what is being
- * bet to find out, where did the money go, and how am I doing.
+ * The tabs of the shell at /copilot2, one question each: what waits on me
+ * (Decide — the deck, key `swipe`), what runs and what it has proven (System —
+ * key `proof`), and where did the money go. You is not a tab: it opens from the
+ * avatar in the header, and `you` is the screen it opens.
+ *
+ * The keys stay what every route, push and shortcut already names; the shell's
+ * ALIAS maps every name either shell has used onto them, Path's included.
  *
  * Its own type rather than a widening of Tab, because the two shells are two
  * layouts over one app — a v1 screen that could be told to open `proof` would
  * have nothing to render.
  */
-export type Tab2 = 'path' | 'swipe' | 'proof' | 'money' | 'you';
+export type Tab2 = 'swipe' | 'proof' | 'money' | 'you';
 
 export type SheetState =
   | { kind: 'capacity' }

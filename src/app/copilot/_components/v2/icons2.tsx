@@ -189,3 +189,44 @@ export function AssetGlyph({ kind }: { kind: AssetKind }) {
     case 'price_test': return (<svg {...base}><path d="M12 4v16M7 20h10" /><path d="M5 7h14" /><path d="M5 7l-2.5 6a2.5 2.5 0 0 0 5 0L5 7zM19 7l-2.5 6a2.5 2.5 0 0 0 5 0L19 7z" /></svg>);
   }
 }
+
+/** Headphones: Decide read aloud, card by card, answered by voice. */
+export const IconHeadphones = () => (<svg {...base}><path d="M4 15v-3a8 8 0 0 1 16 0v3" /><rect x="3" y="14" width="4.5" height="7" rx="1.8" /><rect x="16.5" y="14" width="4.5" height="7" rx="1.8" /></svg>);
+/** A speaker: read this aloud. */
+export const IconSpeaker = () => (<svg {...base}><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></svg>);
+
+/**
+ * One glyph per kind of decision on Decide, at the top of its card: what kind of
+ * thing waits on you reads before what it says. The posts are speech bubbles,
+ * like the replies on the Path; money is the note; a breakage is the alert.
+ */
+export function DecideGlyph({ kind, ask }: { kind: string; ask?: string }) {
+  if (kind === 'ask') {
+    switch (ask) {
+      // A question mark in a bubble: a project stopped to ask.
+      case 'question': return (<svg {...base}><path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L3 21l2-5.6A8.4 8.4 0 1 1 21 11.5Z" /><path d="M10 9.5a2.2 2.2 0 1 1 3 2c-.6.3-1 .8-1 1.5M12 15.5h.01" /></svg>);
+      // Two people: somebody offered to introduce you.
+      case 'intro': return (<svg {...base}><circle cx="8.5" cy="8.5" r="3.2" /><circle cx="16.5" cy="9.5" r="2.6" /><path d="M2.5 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M14.5 14.6c3.2-.4 6.5 1.4 6.5 4.9" /></svg>);
+      // A wrench: work that needs another go.
+      case 'fix': return (<svg {...base}><path d="M14.5 6.5a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.5-1.5a4 4 0 0 0-5-5l2.5 2.5-1.5 2-2-.5-.5-2 2-1.5z" /></svg>);
+      // A spark: Claude proposed it.
+      case 'proposal': return (<svg {...base}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18" /></svg>);
+      case 'confirm': return <IconSend />;
+      case 'approve': return <IconCheck />;
+      default: return <IconAlert />;
+    }
+  }
+  switch (kind) {
+    case 'call': case 'brief': return <IconToday />;
+    case 'voice': case 'answered': return (<svg {...base}><path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L3 21l2-5.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>);
+    case 'bet': return <IconFlask />;
+    case 'move': return <IconPath />;
+    case 'checkpoint': return <IconFlag />;
+    case 'pivot': return <IconSwap />;
+    case 'payer': return <IconMoney />;
+    case 'broke': return <IconAlert />;
+    case 'setup': return <IconTarget />;
+    // A pen: write what you sell.
+    default: return (<svg {...base}><path d="M4 20l4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20z" /><path d="M14 7.5l2.5 2.5" /></svg>);
+  }
+}

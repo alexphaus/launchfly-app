@@ -477,7 +477,8 @@ function Settings({ home, d, actions }: { home: HomeData; d: Derived; actions: A
     <>
       <div className="cp-section"><span className="lead">Settings</span></div>
       <div className="cp-list cp2-rows cp2-settings"><SettingRows rows={business} /></div>
-      <div className="cp-section"><span className="lead">Nightly run</span></div>
+      {/* Decide's "See the nightly run" scrolls here: the row is the fix for a night that did not run. */}
+      <div className="cp-section" id="cp2-you-nightly"><span className="lead">Nightly run</span></div>
       <div className="cp-list cp2-rows cp2-settings"><NightlyRow home={home} d={d} actions={actions} /></div>
       <div className="cp-section"><span className="lead">Account</span></div>
       <div className="cp-list cp2-rows cp2-settings"><SettingRows rows={account} /></div>

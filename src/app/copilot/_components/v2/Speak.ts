@@ -38,6 +38,39 @@ export function canSpeak(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
 }
 
+/**
+ * Read one thing aloud and wait for it to end: the walk through Decide reads a
+ * card, then listens, and a mic opened over its own voice hears itself. Resolves
+ * null once said, 'interrupted' when cut off by a stop, or why it could not be.
+ * A guard ends the wait where a browser never says it finished (Chrome, on a
+ * long utterance) — set past any honest reading speed, so the mic does not open
+ * over the end of the sentence.
+ */
+export function sayAloud(text: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (!canSpeak()) { resolve('This browser cannot read aloud.'); return; }
+    const synth = window.speechSynthesis;
+    let settled = false;
+    const done = (v: string | null) => { if (!settled) { settled = true; resolve(v); } };
+    try {
+      synth.cancel();
+      const u = new window.SpeechSynthesisUtterance(text);
+      u.lang = speechLang();
+      u.onend = () => done(null);
+      u.onerror = (e) => done(e.error === 'interrupted' || e.error === 'canceled' ? 'interrupted' : `It could not be read aloud (${e.error}).`);
+      synth.speak(u);
+      window.setTimeout(() => done(null), Math.min(60_000, 4_000 + text.length * 90));
+    } catch (e) {
+      done(`It could not be read aloud: ${e instanceof Error ? e.message : String(e)}.`);
+    }
+  });
+}
+
+/** Stops whatever is being read. */
+export function stopSpeaking(): void {
+  try { window.speechSynthesis?.cancel(); } catch { /* nothing was speaking */ }
+}
+
 export function useSpeech(): Speech {
   const [supported, setSupported] = useState(false);
   const [speaking, setSpeaking] = useState(false);

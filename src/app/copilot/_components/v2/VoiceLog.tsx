@@ -148,6 +148,54 @@ export function useVoice(opts: {
   return { supported, listening, interim, toggle };
 }
 
+/** Whether this browser can hear at all: asked in the browser, after mount. */
+export function canListen(): boolean {
+  return !!recognition();
+}
+
+/** What the walk through Decide says when the mic stops, by its code (walk.ts reads the words). */
+export function micWhy(code: string): string {
+  switch (code) {
+    case 'not-allowed':
+    case 'service-not-allowed': return 'The mic is not allowed for this app. Allow it in the browser’s site settings, then tap Listen.';
+    case 'audio-capture': return 'No mic could be opened.';
+    case 'network': return 'Voice needs a connection.';
+    case 'unsupported': return 'This browser does not take voice.';
+    default: return `The mic stopped (${code}).`;
+  }
+}
+
+/**
+ * One answer, heard: for the walk through Decide, which reads a card and then
+ * listens once. English, as the answers are — "yes", "later", "not a fit" — in
+ * the phone's own English where it has one. Resolves with the words, or with
+ * the code it stopped on; never throws.
+ */
+export function listenOnce(): { heard: Promise<{ text: string | null; code: string | null }>; stop: () => void } {
+  const Ctor = recognition();
+  if (!Ctor) return { heard: Promise.resolve({ text: null, code: 'unsupported' }), stop: () => {} };
+  const r = new Ctor();
+  const lang = typeof navigator !== 'undefined' && /^en\b/i.test(navigator.language || '') ? navigator.language : 'en-US';
+  r.lang = lang;
+  r.continuous = false;
+  r.interimResults = false;
+  r.maxAlternatives = 1;
+  let text = '';
+  let failed: string | null = null;
+  const heard = new Promise<{ text: string | null; code: string | null }>((resolve) => {
+    r.onresult = (e) => {
+      let all = '';
+      for (let i = 0; i < e.results.length; i++) all += ` ${e.results[i][0].transcript}`;
+      text = all.trim();
+    };
+    r.onerror = (e) => { failed = e.error || 'unknown'; };
+    const timer = window.setTimeout(() => { try { r.stop(); } catch { /* it ended already, and onend says how */ } }, LISTEN_MS);
+    r.onend = () => { window.clearTimeout(timer); resolve(text ? { text, code: null } : { text: null, code: failed ?? 'no-speech' }); };
+    try { r.start(); } catch { window.clearTimeout(timer); resolve({ text: null, code: 'not-allowed' }); }
+  });
+  return { heard, stop: () => { r.onresult = null; try { r.abort(); } catch { /* ended already */ } } };
+}
+
 /** `label`: what the mic takes, said to a screen reader — a move on the book's own page, anything in the shell's header. */
 export function VoiceButton({ voice, onType, label = 'Say a move to log' }: { voice: Voice; onType: () => void; label?: string }) {
   if (!voice.supported) return <button className="cp2-voice-btn plus" onClick={onType} aria-label="Log a move">+</button>;

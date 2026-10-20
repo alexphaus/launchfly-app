@@ -19,6 +19,7 @@ import type { HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 import { AgentGlyph, IconCheck, IconChevron, IconSwipe, IconYou } from './icons2';
 import { MoveNote, type Brief } from './MoveKit';
+import { writeDeckFocus } from './deckFocus';
 
 const MARK: Record<StepState, string> = { done: 'done', working: 'working', needs: 'needs', failed: 'failed', waiting: 'waiting', stopped: 'stopped', open: 'open' };
 
@@ -108,8 +109,8 @@ export function BetPlan({ home, view, pv, actions, brief }: { home: HomeData; vi
     if (s.project) return () => actions.openSheet({ kind: 'commission', id: s.project! });
     if (s.asset) return () => actions.openSheet({ kind: 'asset', id: s.asset! });
     switch (s.step.kind) {
-      // The people found are answered on Decide, a card each, from the person's own account.
-      case 'reply': return (home.lab?.voices?.searches ?? []).some((x) => x.bet === view.bet.id) ? () => actions.setTab('swipe') : null;
+      // The people found are answered on Decide, a card each, from the person's own account — opened on them, not on the whole pile.
+      case 'reply': return (home.lab?.voices?.searches ?? []).some((x) => x.bet === view.bet.id) ? () => { writeDeckFocus(home.profile.id, 'people'); actions.setTab('swipe'); } : null;
       case 'page': return () => actions.openSheet({ kind: 'asset', ...pageTarget(home, view) });
       case 'draft': return s.step.by === 'you' && s.step.asset ? () => actions.openSheet({ kind: 'asset', assetKind: s.step.asset!, bet: view.bet.id }) : null;
       // Nobody here takes it: the same ask, with the whole record, for a chat.

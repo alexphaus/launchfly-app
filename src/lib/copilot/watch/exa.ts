@@ -31,6 +31,8 @@ export interface ExaHit {
   highlight?: string;
   /** The name the page is signed with, where the index has one. */
   author?: string;
+  /** The picture the page names for itself (its og:image), where the index has one. https only: it is shown on a card. */
+  image?: string;
 }
 
 export const EXA_ENDPOINT = 'https://api.exa.ai/search';
@@ -64,11 +66,13 @@ export function exaHits(json: unknown): ExaHit[] {
     const publishedDate = typeof row.publishedDate === 'string' ? row.publishedDate : undefined;
     const highlight = Array.isArray(row.highlights) && typeof row.highlights[0] === 'string' && row.highlights[0].trim() ? row.highlights[0].trim() : undefined;
     const author = typeof row.author === 'string' && row.author.trim() ? row.author.trim() : undefined;
+    const image = typeof row.image === 'string' && /^https:\/\/[^\s"'<>]+$/i.test(row.image.trim()) && row.image.trim().length <= 500 ? row.image.trim() : undefined;
     out.push({
       title: title.slice(0, 200), url, publishedDate,
       ...(summary ? { summary: summary.slice(0, 300) } : {}),
       ...(highlight ? { highlight: highlight.slice(0, 600) } : {}),
       ...(author ? { author: author.slice(0, 80) } : {}),
+      ...(image ? { image } : {}),
     });
   }
   return out;

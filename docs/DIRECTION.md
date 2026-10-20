@@ -688,6 +688,25 @@ the pile on their own — the connector proposes a conversation or a test, and a
 message to queue would be the next tool — and a workflow that passed kept running as
 the part's standard. See COPILOT.md → **Decide, System, Money**.
 
+**Then — Decide, the second pass: why, and by voice, not a chat.** Its owner asked
+whether the app needed a quick chat — an AI co-founder to talk next moves through
+with. Declined, on this document's own test: an open chat is the thing every
+harness does better, on ground with no edge for this app, and the moment it
+answers "what should I do?" it is a second planner beside the one already being
+read. What only this app has is the pile — rows that wait on the person — so the
+two built were about the pile: **every card says why it is there**, from the rule
+that dealt it and the rows behind it, read aloud when asked ("why this one?"), and
+**the pile walked through by voice**, read card by card and answered with the
+deck's own answers — where a spoken "I did it" may grade the call because, unlike
+a swipe, it is deliberate. A third, a chat about the record with the way back into
+it, stays Claude's, over the connector. The same pass fixed what its owner felt as
+repetition (a card put off came back on every return to the tab — the pile's order
+lived in the component), put every decision ahead of the bet's posts, gave the
+pile chips by focus, moved what broke from a banner over every card to a card of
+its own, and dealt money in from somebody unnamed as a card, since a client's
+payment is a sale nobody opened the Bank sheet to record. See COPILOT.md →
+**Decide, the second pass**.
+
 ---
 
 ## Where it actually stands
@@ -809,7 +828,12 @@ direction better than "copilot" does.
   off. The counts to watch: cards answered against cards put off per session,
   and sends per session, as Swipe always was. If the pile grows and "later" is
   the commonest answer, it is a better-drawn inbox, and the decisions belong back
-  beside the work they are about.
+  beside the work they are about. Later is kept for the day now, so "Go through
+  them again" being tapped is itself the count: a pile that is only ever gone
+  through twice is being sorted, not answered.
+- **Whether anyone walks through it by voice.** The walk is built for a commute
+  and a kitchen; if nobody starts it twice, the why lines on the cards were the
+  part worth keeping, and the walk is a feature to take out rather than polish.
 - **Unknown: whether the moat is operational or imaginary.** "They cannot
   maintain a deduped pool under a budget" is an assertion about effort, not
   about capability. If a Hermes skill plus one Apify key gets someone 80% of

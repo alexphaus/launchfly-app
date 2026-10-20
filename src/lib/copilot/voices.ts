@@ -92,6 +92,12 @@ export interface Voice {
   author: string | null;
   /** The day it was posted, where the index knows it. */
   posted: string | null;
+  /**
+   * The picture the page names for itself, where the index had one: a card with
+   * a face reads faster than a card of text. https only, and optional — posts
+   * found before it was kept have none, and nothing is fetched to make one.
+   */
+  image?: string | null;
 }
 
 export interface VoiceSearch {
@@ -115,7 +121,13 @@ export interface VoicesHome {
 }
 
 /** What the route hands over from a search hit: watch/exa.ts ExaHit's fields. */
-export interface VoiceHit { url: string; title: string; highlight?: string; author?: string; publishedDate?: string }
+export interface VoiceHit { url: string; title: string; highlight?: string; author?: string; publishedDate?: string; image?: string }
+
+/** A picture a card may show: an https address and nothing else, since it is put in an <img> on the person's phone. */
+export function voiceImage(v: unknown): string | null {
+  const t = typeof v === 'string' ? v.trim() : '';
+  return t && t.length <= 500 && /^https:\/\/[^\s"'<>]+$/i.test(t) ? t : null;
+}
 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const line = (v: unknown, max: number): string | null => {
@@ -231,6 +243,7 @@ export function voicesFromHits(hits: VoiceHit[], seen: ReadonlySet<string>, max 
       id, url: h.url.slice(0, 500), where, title: title ?? where, said,
       author: authorOf(h.author),
       posted: typeof h.publishedDate === 'string' && isDay(h.publishedDate.slice(0, 10)) ? h.publishedDate.slice(0, 10) : null,
+      image: voiceImage(h.image),
     });
   }
   return out;
@@ -320,6 +333,7 @@ export function voicesFromEvents(rows: VoiceEventRow[]): VoicesHome {
         said: cleanSaid(v.said),
         author: authorOf(v.author),
         posted: isDay(v.posted) ? v.posted : null,
+        image: voiceImage(v.image),
       });
     }
     const queries = (Array.isArray(p.queries) ? p.queries : []).map((q) => line(q, VOICE_QUERY_MAX)).filter((q): q is string => !!q).slice(0, VOICE_QUERIES);

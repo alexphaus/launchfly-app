@@ -20,6 +20,7 @@
 
 import { blockedOn, lapsedOn, refusal } from './commission';
 import type { CaptureAsk } from './capture';
+import { agoLabel } from './machine';
 import type { MotionRow } from './motion';
 import type { RecentOutcome } from './review';
 import type { CommissionThread, JobsRunSummary, Move } from './types';
@@ -216,6 +217,67 @@ export function doneForYou(input: DoneInput): DoneReport {
   };
 }
 
+/**
+ * System's subheader: when the nightly run last ran, and what of it failed. The
+ * tab is what runs without the person, and this is its pulse — said as a
+ * failure when it is one (invariant 13), since the deck no longer carries a
+ * banner over the pile saying so.
+ */
+export function systemLine(i: { now: Date; lastCronRun: string | null; stale: boolean; broke: number; failing: number }): string {
+  const run = !i.lastCronRun
+    ? 'The nightly run has never run'
+    : i.stale ? `Nothing ran overnight · last run ${agoLabel(i.lastCronRun, i.now)}` : `Last run ${agoLabel(i.lastCronRun, i.now)}`;
+  return [
+    run,
+    i.broke ? `${plural(i.broke, 'check')} failed` : null,
+    i.failing ? `${plural(i.failing, 'source')} failing` : null,
+  ].filter(Boolean).join(' · ');
+}
+
+/**
+ * Money's subheader: how long the money lasts, which the tab under it does not
+ * say — it shows the balance and what is safe today — and the payers the bank
+ * names that the person has not, which Decide deals as cards.
+ */
+export function moneyLine(i: { runwayMonths: number | null; toName: number }): string {
+  const runway = i.runwayMonths != null
+    ? `${i.runwayMonths} ${i.runwayMonths === 1 ? 'month' : 'months'} of runway`
+    : 'No runway yet: it needs your cash and what goes out a month';
+  return i.toName ? `${runway} · ${plural(i.toName, 'payer')} to name` : runway;
+}
+
+/**
+ * What broke, in words, most serious first, with where each is fixed: a read
+ * that failed (the screen itself is missing rows), the nightly run not running,
+ * a check that failed on it, a watched source failing. Decide deals them as one
+ * card and System's subheader counts them — the yellow banner that said them
+ * over the pile took a third of the screen on every visit, whatever was on top.
+ */
+export function brokeLines(i: {
+  now: Date;
+  unread: string[];
+  done: Pick<DoneReport, 'stale' | 'broke' | 'rows'>;
+  lastCronRun: string | null;
+}): Array<{ key: string; title: string; detail: string; fix: 'sources' | 'nightly' | 'reload' }> {
+  const out: Array<{ key: string; title: string; detail: string; fix: 'sources' | 'nightly' | 'reload' }> = [];
+  if (i.unread.length) {
+    out.push({ key: 'unread', title: `Could not read your ${i.unread.join(', ')}`, detail: 'Some of what came back is missing, so a quiet pile is not a quiet week.', fix: 'reload' });
+  }
+  if (i.done.stale) {
+    out.push({
+      key: 'stale', title: 'Nothing ran overnight', fix: 'nightly',
+      detail: i.lastCronRun
+        ? `The nightly job last finished ${agoLabel(i.lastCronRun, i.now)}. Until it runs again, nothing is found while you are away.`
+        : 'The nightly job has never run, so nothing is found while you are away.',
+    });
+  }
+  if (i.done.broke.length) {
+    out.push({ key: 'checks', title: i.done.broke.length === 1 ? 'A check failed on the last run' : `${i.done.broke.length} checks failed on the last run`, detail: i.done.broke.join(' · '), fix: 'nightly' });
+  }
+  for (const w of i.done.rows) if (w.tone === 'warn') out.push({ key: w.key, title: w.label, detail: w.detail, fix: 'sources' });
+  return out;
+}
+
 /* ─── Needs you ───────────────────────────────────────────────────────────── */
 
 export type AskKind = 'question' | 'intro' | 'fix' | 'approve' | 'confirm' | 'send' | 'proposal';
@@ -237,6 +299,10 @@ export interface AskRow {
   detail: string;
   /** The commission, for question / fix / approve; the conversation it was offered in, for intro. */
   id?: string;
+  /** When it started waiting on the person, where a row says: the question asked, the stop, the draft written, the proposal made. */
+  since?: string | null;
+  /** A proposal's kind: a conversation, or a test for the shelf (proposals.ts). */
+  about?: 'talk' | 'test';
 }
 
 /** An introduction somebody offered that nobody has followed up (lab.ts openIntros). */
@@ -259,7 +325,7 @@ export interface NeedsInput {
   /** The person's day: a project waiting on a day that has passed is not asked about (commission.ts lapsedOn). */
   today?: string;
   /** What Claude proposed, waiting to be kept or dropped (proposals.ts), with each one's line. */
-  proposals?: Array<{ id: string; line: string; why: string | null }>;
+  proposals?: Array<{ id: string; line: string; why: string | null; at?: string; kind?: 'talk' | 'test' }>;
 }
 
 /**
@@ -284,17 +350,17 @@ export function needsYou(input: NeedsInput): AskRow[] {
     // said on its card under Projects, with Stop, and not asked here.
     if (input.today && lapsedOn(c, input.today)) continue;
     if (c.status === 'draft') {
-      approvals.push({ key: `a:${c.id}`, kind: 'approve', title: c.objective, detail: 'Written and waiting — nothing runs until you approve it', id: c.id });
+      approvals.push({ key: `a:${c.id}`, kind: 'approve', title: c.objective, detail: 'Written and waiting — nothing runs until you approve it', id: c.id, since: c.created_at });
       continue;
     }
     const on = blockedOn(c, t.report);
     if (on === 'you') {
-      questions.push({ key: `q:${c.id}`, kind: 'question', title: t.report.yours[0]?.summary ?? 'It stopped to ask you something', detail: c.objective, id: c.id });
+      questions.push({ key: `q:${c.id}`, kind: 'question', title: t.report.yours[0]?.summary ?? 'It stopped to ask you something', detail: c.objective, id: c.id, since: t.report.yours[0]?.at ?? null });
     } else if (on === 'worker') {
       // A delivery the app would not take is not a crash: say which check it failed.
       const refused = refusal(t.report);
       const failed = refused?.checks.find((k) => k.state === 'fail')?.line;
-      fixes.push({ key: `f:${c.id}`, kind: 'fix', title: c.objective, detail: refused ? `Its work did not pass the app's checks${failed ? `: ${failed}` : ''} — one tap tries it again` : 'The worker could not finish — one tap tries it again', id: c.id });
+      fixes.push({ key: `f:${c.id}`, kind: 'fix', title: c.objective, detail: refused ? `Its work did not pass the app's checks${failed ? `: ${failed}` : ''} — one tap tries it again` : 'The worker could not finish — one tap tries it again', id: c.id, since: t.report.stopped[0]?.at ?? c.last_run_at });
     }
   }
 
@@ -309,6 +375,7 @@ export function needsYou(input: NeedsInput): AskRow[] {
   const proposed: AskRow[] = (input.proposals ?? []).map((p) => ({
     key: `p:${p.id}`, kind: 'proposal', id: p.id, title: p.line,
     detail: `Proposed by Claude${p.why ? ` — ${p.why}` : ''}. Not logged until you keep it.`,
+    since: p.at ?? null, ...(p.kind ? { about: p.kind } : {}),
   }));
   const out: AskRow[] = [...questions, ...intros, ...fixes, ...proposed];
   if (input.capture) out.push({ key: 'capture', kind: 'confirm', title: input.capture.headline, detail: input.capture.because });

@@ -1,8 +1,8 @@
 'use client';
 // Decide (key `swipe`): every decision that waits on the person, then the
-// people worth a message, one card at a time, the whole screen each. Right does
-// it; left puts it off. lib/copilot/decide.ts says what is a decision and in
-// what order; this file is the hand on the pile.
+// people worth a message, one card at a time. Right does it; left puts it off.
+// lib/copilot/decide.ts says what is a decision and in what order; this file is
+// the hand on the pile.
 //
 // What it took over. Path held the call, the move and "Needs you"; Engine held
 // the bet's move and the people the bet found. Each is a card here now, ahead of
@@ -11,67 +11,73 @@
 //   - Today's call, with its own buttons. A swipe never answers it "I did it":
 //     the answer grades the call, and a gesture that cheap would grade it wrong.
 //     Right hands it over only where the call is work the app offers to do.
-//   - What needs you (today.ts needsYou): a project that stopped to ask, an
-//     introduction, work that failed a check, what Claude proposed, opened drafts
-//     to confirm, a plan to approve. Right opens where each is answered; the card
-//     leaves once the answer is in the rows, and not before.
+//   - What needs you (today.ts needsYou): a project that stopped to ask — answered
+//     on the card itself — an introduction, work that failed a check (right
+//     starts it again), what Claude proposed, opened drafts to confirm, a plan to
+//     approve. Right opens where each is answered; the card leaves once the
+//     answer is in the rows, and not before.
+//   - Money in from somebody the bank names and the person has not, what broke
+//     overnight, the bet's own step, the plan's step, what a pivot left behind.
 //   - The posts the running bet found (voices.ts). Right copies the opener and
 //     opens the post — the reply goes from the person's own account (invariant
-//     4) — and the post comes back later in the pile as "did they answer?", one
-//     tap on how it ended. Left is not a fit, with a way back.
-//   - The bet's own next step, the plan's step, what a pivot left behind, and
-//     what has to be set up before anything can be found.
+//     4) — and the post comes back later as "did they answer?", one tap on how
+//     it ended. Left is not a fit, with a way back.
 //
 // The businesses, as Swipe dealt them. lib/copilot/deck.ts says why a deck works
 // here when the first one did not: "yes" is the send itself, not a draft to go
-// and send later.
+// and send later. The card carries everything the old list sent its owner away
+// to open; the message is written for it before it is shown; right is the send,
+// from the person's own number or their own apps; left is not for me.
 //
-//   - The card carries everything the old Matches list sent its owner away to
-//     open ("little info on each card, then open it"): the photo, what the
-//     place is and where, every reason it was picked, the post itself for a
-//     find, and how they can actually be reached. It reaches to the foot of the
-//     screen, the buttons and the nav frosted over it, and reads like a
-//     profile: up and down scrolls it, sideways moves the card.
-//   - The message is written for the card before it is shown — the card on
-//     screen and the next two — so by the time a thumb reaches one it is there.
-//     One the model did not write says who did, and why.
-//   - Right is the send: from the person's own number or address when they
-//     connected one; otherwise their own WhatsApp, texts, phone or mail opens
-//     with it in, and the deck asks whether it went when they are back. A reply
-//     to a post is copied and the post opened.
-//   - Left is not for me, and can be taken back until the next card is
-//     answered. The star is later: to the back of the pile.
-//   - Every gesture is a button too (triage.ts: a deck answerable only by
-//     dragging is unusable one-handed or with assistive tech).
+// The pile, for a session (a day on this phone). What was answered is not dealt
+// again, and neither is what was put off: "later" is to the end of the pile and
+// stays there until the rest is done and the person asks for them again. The
+// owner's verdict on the first Decide was that it felt repetitive — a card
+// swiped left came straight back after a trip to another tab, because the pile's
+// order lived in the component and was dealt again from the top on every return.
+// Both lists are kept for the day in sessionStorage, so a tab switch, a reload or
+// a sheet changes nothing about what is left. The card on screen stays on top
+// while a refresh lands behind it; a decision that arrives meanwhile is next.
 //
-// The deck keeps its own order for the session, so a home refresh behind it —
-// asked for once, after the last swipe in a burst — never reshuffles the card
-// under the thumb. A decision that arrives meanwhile is dealt next, not last.
+// One bar for every card, the same four places: Undo, the left answer, the
+// right answer, Later. The big buttons never move between cards — the first
+// Decide put the right answer third of three on a decision and fourth of five on
+// a business, and the thumb missed it on every change of kind. Later sits apart
+// only where left is for good (a business, a post); where left already is later,
+// its place is kept empty. Looking a business up is on the card.
+//
+// Chips over the pile choose what it deals: Clients, People, Projects, Bets —
+// for a low-energy hour on only the people, or a sales hour on only the clients.
+// Every card says why it is there ("Why this?"), and the whole pile can be
+// walked through by voice (walk.ts): read aloud, answered aloud.
 //
 // What the list did that a deck does not — who is waiting, who replied, the
 // drafts as a list with a way to clear them — is the outreach sheet
-// (Outreach.tsx), one tap from the top of the deck.
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+// (Outreach.tsx), one tap from the header.
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from 'react';
 import { VIA_LABEL, deckCards, reachLink, type DeckCard, type DeckDraft, type DeckReach, type ReachVia } from '@/lib/copilot/deck';
 import type { LinkMove } from '@/lib/copilot/business';
-import { decideCards, type DecideCard } from '@/lib/copilot/decide';
+import { FOCUSES, FOCUS_LABEL, decideCards, deckLine, leadFocus, leadWhy, type DecideCard, type Focus } from '@/lib/copilot/decide';
 import { OPENED_KEY, clearOpened, markOpened, parseOpened, type StepGo } from '@/lib/copilot/engine';
 import { COMMITMENTS, COMMITMENT_LABEL, dayIn, dayWords, type Commitment } from '@/lib/copilot/lab';
-import { agoLabel } from '@/lib/copilot/machine';
 import { outreachLine, tintOf } from '@/lib/copilot/matches';
 import type { BetNextGo } from '@/lib/copilot/proof';
 import { PLANS } from '@/lib/copilot/plans';
 import type { AskRow } from '@/lib/copilot/today';
 import type { HomeData } from '@/lib/copilot/types';
 import { VOICE_OPENER, postedWords, voiceTalk, type Voice } from '@/lib/copilot/voices';
+import { WALK_HELP, decisionWords, ends, leadWords, spokenRight, walkAnswer, walkPrompt, whyWords, type CallAnswer } from '@/lib/copilot/walk';
 import { api } from '../api';
 import type { Actions, SheetState } from '../shared';
 import { useShell } from '../shell';
 import { CallCard } from '../views/NowView';
 import { local } from './bookLocal';
+import { readDeckFocus, writeDeckFocus, type DeckFocus } from './deckFocus';
 import type { Derived } from './derive';
-import { IconAlert, IconChevron, IconCross, IconExternal, IconPhone, IconSend, IconStar, IconUndo, MatchGlyph } from './icons2';
+import { DecideGlyph, IconCheck, IconChevron, IconCross, IconExternal, IconPhone, IconSend, IconSpeaker, IconStar, IconUndo, MatchGlyph } from './icons2';
 import { MoveNote, useBrief, useMove } from './MoveKit';
+import { canSpeak, sayAloud, stopSpeaking } from './Speak';
+import { listenOnce, micWhy } from './VoiceLog';
 
 /** The card on screen and this many after it have their message written ahead. */
 const PREFETCH = 2;
@@ -89,17 +95,21 @@ const TILT = 1 / 18;
 const FOLLOW_Y = 0.3;
 /** The spring back when a drag is let go short. */
 const SETTLE_MS = 280;
+/** After an answer by voice, the next card is read once the last one has flown off. */
+const WALK_NEXT_MS = 450;
 /**
  * Small controls on the card stay controls: a drag never starts on them. Not
  * every button — the message is one, it is most of the card, and a swipe that
  * starts on it is still a swipe — but a decision's own answers are.
  */
-const NO_DRAG = 'a, textarea, input, select, .cp2-swp-vias, .cp2-swp-meta, .cp2-swp-msg.err, .cp2-swp-more, .cp2-dk-call button, .cp2-dk-ended, .cp2-dk-face .cp2-link';
+const NO_DRAG = 'a, textarea, input, select, .cp2-swp-vias, .cp2-swp-meta, .cp2-swp-msg.err, .cp2-swp-more, .cp2-dk-call button, .cp2-dk-ended, .cp2-dk-face .cp2-link, .cp2-dk-why button, .cp2-dk-reply';
 /** Messages the model wrote are kept on this phone this long, so a reload does not write them again. */
 const DRAFT_CACHE_MS = 3 * 86_400_000;
 const DRAFT_CACHE_MAX = 120;
 /** What a post's card says under the opener: where the reply goes from. */
 const POST_HINT = 'Their post opens in a new tab and the opener is copied. You reply from your own account; nothing is sent from here.';
+/** Kept for the day: past this many, the oldest answers are dropped from the phone (the server has them). */
+const SESSION_KEEP = 300;
 
 type DraftState =
   | { state: 'loading' }
@@ -132,6 +142,13 @@ interface Held { key: string; title: string; label: string; timer: ReturnType<ty
 /** What a right swipe on a decision does: run now, and whether the card leaves the pile or stays until the rows say it is answered. */
 type Right = { leave: boolean; run: () => unknown; hold?: undefined } | { hold: { label: string; commit: () => Promise<void> }; leave?: undefined; run?: undefined };
 
+/** What the shell's mic and header can ask of the deck: why the card on top is there, and the walk through it. */
+export interface DeckHandle { why: () => void; walk: () => void }
+
+/** The walk through the pile by voice: reading a card, listening for the answer, or waiting on a tap. */
+interface Walk { on: boolean; phase: 'speaking' | 'listening' | 'waiting'; heard: string | null; note: string | null }
+const WALK_OFF: Walk = { on: false, phase: 'waiting', heard: null, note: null };
+
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** A sentence ending in a name that ends in a full stop: "Infinity Pest Control Ents.", not "Ents..". */
 const said = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
@@ -139,6 +156,8 @@ const post = <T,>(body: Record<string, unknown>, keepalive = false) =>
   api<T>('/deck', { method: 'POST', body: JSON.stringify(body), keepalive });
 /** A lab write that said no is an error here: the caller says it and puts the card back. */
 const labOk = (r: { ok: boolean; error?: string }, what: string) => { if (!r.ok) throw new Error(r.error ?? `${what} did not save`); };
+const focusOf = (it: Item): Focus => (it.t === 'decide' ? it.card.focus : leadFocus(it.card));
+const titleOf = (it: Item | undefined): string => (!it ? '' : it.card.title || (it.t === 'decide' ? it.card.eyebrow : ''));
 
 /* ─── Messages kept on the phone ──────────────────────────────────────────── */
 
@@ -159,6 +178,19 @@ function writeDraftCache(pid: string, sig: string, key: string, d: DeckDraft): v
   all[key] = { ...d, at: Date.now(), sig };
   const kept = Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, DRAFT_CACHE_MAX);
   local.set(cacheKey(pid), JSON.stringify(Object.fromEntries(kept)));
+}
+
+/* ─── The session's pile, kept on the phone for the day ───────────────────── */
+
+/** The keys kept under `key` for `day`; nothing for another day, or where storage keeps nothing. */
+function readSession(key: string, day: string): string[] {
+  try {
+    const raw = JSON.parse(window.sessionStorage.getItem(key) ?? 'null') as { day: string; keys: string[] } | null;
+    return raw && raw.day === day && Array.isArray(raw.keys) ? raw.keys.filter((k) => typeof k === 'string') : [];
+  } catch { return []; }
+}
+function writeSession(key: string, day: string, keys: string[]): void {
+  try { window.sessionStorage.setItem(key, JSON.stringify({ day, keys: keys.slice(-SESSION_KEEP) })); } catch { /* kept on screen only */ }
 }
 
 /* ─── Posts this device opened ────────────────────────────────────────────── */
@@ -193,115 +225,115 @@ function useOpened(profileId: string) {
 
 /* ─── The tab ─────────────────────────────────────────────────────────────── */
 
-export default function SwipeTab({ home, d, actions, finding, briefing, say, refresh, corner, live: heard }: {
+export default function SwipeTab({ home, d, actions, finding, briefing, say: toast, refresh, onLine, handle, onWalk }: {
   home: HomeData; d: Derived; actions: Actions; finding: boolean; briefing: boolean; say: (m: string) => void; refresh: () => Promise<void>;
-  /** The header's corner — the mic and You — drawn in the deck's own top line, since the deck has no header. */
-  corner: ReactNode;
-  /** What the mic hears while it is open, in place of the count. */
-  live: ReactNode;
+  /** The header's subheader: what is left in the pile as it stands on this phone. */
+  onLine: (line: string) => void;
+  /** Filled in for the shell: the mic's "why this?" and "walk me through", and the header's walk button. */
+  handle: MutableRefObject<DeckHandle | null>;
+  /** Whether the walk is on, for the header's button. */
+  onWalk: (on: boolean) => void;
 }) {
   const shell = useShell();
+  // What the deck says goes on the screen, and — while the pile is being walked by voice — is said before the next card:
+  // somebody walking is not looking, and a failure only shown is a failure they never hear (invariant 13).
+  const walkingRef = useRef(false);
+  const walkNotes = useRef<string[]>([]);
+  const say = useCallback((m: string) => { toast(m); if (walkingRef.current) walkNotes.current.push(m); }, [toast]);
   const pid = home.profile.id;
+  const today = home.recent.today;
   const opened = useOpened(pid);
   const offerSig = useMemo(() => JSON.stringify(home.profile.offer ?? {}), [home.profile.offer]);
   // Nothing drafts from a blank offer (invariant 1): with none, the only cards are decisions, the first of them writing it.
   const leads = useMemo(() => (d.noOffer ? [] : deckCards({
-    now: d.now, today: home.recent.today, items: d.good, toSend: d.stages.to_send, queue: home.queue, pipeline: home.pipeline, moves: home.moves,
-  })), [d, home]);
+    now: d.now, today, items: d.good, toSend: d.stages.to_send, queue: home.queue, pipeline: home.pipeline, moves: home.moves,
+  })), [d, home, today]);
   const decisions = useMemo(
     // While the call is being picked, the card that offers to pick it would be a second tap on the same thing.
     () => decideCards({ ...d.decideInput, opened: opened.map }).filter((c) => !(briefing && c.kind === 'brief')),
     [d.decideInput, opened.map, briefing],
   );
-  const items = useMemo<Item[]>(() => [
-    ...decisions.map((c): Item => ({ t: 'decide', key: c.key, card: c })),
-    ...leads.map((c): Item => ({ t: 'lead', key: c.key, card: c })),
-  ], [decisions, leads]);
-
-  // The session's pile: its order, and every card it has dealt, kept even once
-  // a refresh no longer returns it (the one on screen, one being asked about).
+  // Every card this session has dealt, kept even once a refresh no longer
+  // returns it: the business on screen while the refresh behind it turns it into
+  // a draft, the one being asked about.
   const store = useRef(new Map<string, Item>());
-  const [order, setOrder] = useState<string[]>([]);
-  const [gone, setGoneState] = useState<Set<string>>(() => new Set());
-  const goneRef = useRef(gone);
-  goneRef.current = gone;
-  // What was answered this session is remembered on the phone too: the tab is
-  // unmounted by a trip to another tab, and the home it comes back to can be a few
-  // seconds older than the answers — a card skipped on the way out is not dealt
-  // again while the refresh behind it lands.
+  const items = useMemo<Item[]>(() => {
+    const out: Item[] = [
+      ...decisions.map((c): Item => ({ t: 'decide', key: c.key, card: c })),
+      ...leads.map((c): Item => ({ t: 'lead', key: c.key, card: c })),
+    ];
+    for (const it of out) store.current.set(it.key, it);
+    return out;
+  }, [decisions, leads]);
+
+  /* The session: answered, put off, the chip, the card on top */
   const goneKey = `cp2.swipe.gone.${pid}`;
+  const laterKey = `cp2.swipe.later.${pid}`;
+  const topKey = `cp2.swipe.top.${pid}`;
+  const [restored, setRestored] = useState(false);
+  const [gone, setGoneState] = useState<Set<string>>(() => new Set());
+  const [later, setLaterState] = useState<string[]>([]);
+  const [focus, setFocusState] = useState<DeckFocus>('all');
+  const [pinned, setPinnedState] = useState<string | null>(null);
+  // Read after mount, never during render: the first paint is the server's, and the phone's answers land a frame later.
   useEffect(() => {
-    try {
-      const raw = JSON.parse(window.sessionStorage.getItem(goneKey) ?? 'null') as { day: string; keys: string[] } | null;
-      if (raw && raw.day === home.recent.today && Array.isArray(raw.keys)) setGoneState(new Set(raw.keys));
-    } catch { /* nothing kept: the server's answers are the record */ }
-  }, [goneKey, home.recent.today]);
+    setGoneState(new Set(readSession(goneKey, today)));
+    setLaterState(readSession(laterKey, today));
+    setPinnedState(readSession(topKey, today)[0] ?? null);
+    setFocusState(readDeckFocus(pid));
+    setRestored(true);
+  }, [goneKey, laterKey, topKey, pid, today]);
+  // The card on top is kept too: back from another tab, the same card is waiting, not the top of the pile again.
+  const setPinned = (key: string | null) => { setPinnedState(key); writeSession(topKey, today, key ? [key] : []); };
   const setGone = (f: (g: Set<string>) => Set<string>) => setGoneState((g) => {
     const n = f(g);
-    try { window.sessionStorage.setItem(goneKey, JSON.stringify({ day: home.recent.today, keys: [...n].slice(-200) })); } catch { /* on screen only */ }
+    writeSession(goneKey, today, [...n]);
     return n;
   });
-  const orderRef = useRef(order);
-  orderRef.current = order;
-  // Posts opened from this pile in this sitting: their "did they answer?" goes
-  // to the back. One opened on another day comes back where decide.ts deals it —
-  // and arrives a render late, since which posts were opened is read after mount.
-  const openedNow = useRef(new Set<string>());
-  useEffect(() => {
-    const before = new Map(store.current);
-    for (const it of items) store.current.set(it.key, it);
-    const prev = orderRef.current;
-    const live = new Set(items.map((c) => c.key));
-    const known = new Set(prev);
-    const next = [...prev];
-    // New decisions are dealt next, after the card on screen; new people go to the back.
-    const front: string[] = [];
-    const added: string[] = [];
-    const swaps: Array<[string, string]> = [];
-    for (const it of items) {
-      if (known.has(it.key)) continue;
-      if (it.t === 'decide') {
-        // A post opened this sitting is asked about later, not the moment its tab is closed.
-        if (it.card.kind === 'answered' && it.card.voice && openedNow.current.has(it.card.voice.id)) added.push(it.key);
-        else front.push(it.key);
-        continue;
-      }
-      const c = it.card;
-      // A business swiped right this session comes back from the server as a
-      // draft in To send. It is the same person: while still in the pile (it
-      // did not go, and was put back) the draft takes its place, keeping the
-      // way picked and the words typed; once answered, it is not dealt again.
-      const was = c.kind === 'draft' && c.oppId
-        ? prev.find((k) => k !== c.key && (() => { const b = before.get(k); return b?.t === 'lead' && b.card.oppId === c.oppId; })())
-        : undefined;
-      if (was) {
-        if (!goneRef.current.has(was)) { next[next.indexOf(was)] = c.key; swaps.push([was, c.key]); }
-        continue;
-      }
-      added.push(c.key);
-    }
-    const showing = next.find((k) => !goneRef.current.has(k));
-    // The person on screen stays while the refresh behind it lands; a decision
-    // answered elsewhere — its sheet, its own buttons — leaves, as answered.
-    const kept = next.filter((k) => live.has(k) || (k === showing && !k.startsWith('d:')));
-    const at = showing && kept.includes(showing) ? kept.indexOf(showing) + 1 : 0;
-    setOrder([...kept.slice(0, at), ...front, ...kept.slice(at), ...added]);
-    if (!swaps.length) return;
-    const move = <T,>(m: Record<string, T>): Record<string, T> => {
-      const out = { ...m };
-      for (const [from, to] of swaps) {
-        for (const key of Object.keys(m)) {
-          if (key === from || key.startsWith(`${from}|`)) { out[to + key.slice(from.length)] = m[key]; delete out[key]; }
-        }
-      }
-      return out;
-    };
-    setViaOf(move); setHint(move); setEdits(move); setDrafts(move);
-  }, [items]);
+  const setLater = (f: (l: string[]) => string[]) => setLaterState((l) => {
+    const n = f(l);
+    writeSession(laterKey, today, n);
+    return n;
+  });
+  // A new chip starts at its own top: the card kept on top was the last chip's.
+  const setFocus = (f: DeckFocus) => { setFocusState(f); writeDeckFocus(pid, f); setPinnedState(null); };
 
-  const pile = order.filter((k) => !gone.has(k) && store.current.has(k));
-  const current = pile[0] ? store.current.get(pile[0]) ?? null : null;
-  const next = pile[1] ? store.current.get(pile[1]) ?? null : null;
+  // The pile: the card on top first, then everything live by priority, less what
+  // was answered or put off. One person is one card: a business turned into a
+  // draft by a refresh behind the card on screen is not dealt twice.
+  const laterSet = useMemo(() => new Set(later), [later]);
+  const pileAll = useMemo<Item[]>(() => {
+    const live = new Set(items.map((it) => it.key));
+    const out: Item[] = [];
+    const opps = new Set<string>();
+    const add = (it: Item) => {
+      if (it.t === 'lead' && it.card.oppId) {
+        if (opps.has(it.card.oppId) || gone.has(`opp:${it.card.oppId}`)) return;
+        opps.add(it.card.oppId);
+      }
+      out.push(it);
+    };
+    // The person on screen stays while the refresh behind it lands; a decision answered elsewhere — its sheet, its own buttons — leaves, as answered.
+    const pin = pinned && !gone.has(pinned) && !laterSet.has(pinned) ? store.current.get(pinned) : undefined;
+    if (pin && (live.has(pin.key) || pin.t === 'lead')) add(pin);
+    for (const it of items) if (it.key !== pin?.key && !gone.has(it.key) && !laterSet.has(it.key)) add(it);
+    return out;
+  }, [items, pinned, gone, laterSet]);
+  const pile = useMemo(() => (focus === 'all' ? pileAll : pileAll.filter((it) => focusOf(it) === focus)), [pileAll, focus]);
+  const current = restored ? pile[0] ?? null : null;
+  const next = restored ? pile[1] ?? null : null;
+  useEffect(() => { if (current && current.key !== pinned) setPinned(current.key); }, [current, pinned]);
+  const counts = useMemo(() => {
+    const c: Record<DeckFocus, number> = { all: pileAll.length, clients: 0, people: 0, projects: 0, bets: 0 };
+    for (const it of pileAll) c[focusOf(it)] += 1;
+    return c;
+  }, [pileAll]);
+  // Put off and still waiting, by chip: what the end of each pile offers to go through again.
+  const laterLive = useMemo(() => {
+    const live = new Set(items.map((it) => it.key));
+    return later.map((k) => store.current.get(k)).filter((it): it is Item => !!it && live.has(it.key) && !gone.has(it.key));
+  }, [later, items, gone]);
+  const laterHere = useMemo(() => laterLive.filter((it) => focus === 'all' || focusOf(it) === focus).map((it) => it.key), [laterLive, focus]);
 
   const [viaOf, setViaOf] = useState<Record<string, ReachVia>>({});
   const viaFor = useCallback((c: DeckCard): ReachVia | null => viaOf[c.key] ?? c.reach[0]?.via ?? null, [viaOf]);
@@ -333,16 +365,16 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
   }, [pid, offerSig]);
 
   // Only the people on the pile have a message to write; a decision carries its own words.
-  const ahead = pile.slice(0, 1 + PREFETCH).join(',');
+  const ahead = pile.slice(0, 1 + PREFETCH).map((it) => it.key).join(',');
   useEffect(() => {
-    if (d.noOffer) return;
+    if (d.noOffer || !restored) return;
     for (const k of ahead.split(',').filter(Boolean)) {
       const it = store.current.get(k);
       if (it?.t !== 'lead') continue;
       const v = viaFor(it.card);
       if (v) void loadDraft(it.card, v);
     }
-  }, [ahead, viaFor, loadDraft, d.noOffer]);
+  }, [ahead, viaFor, loadDraft, d.noOffer, restored]);
 
   /* Refresh the rest of the app once a burst of swipes is over */
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -356,6 +388,7 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
   /* Leaving cards: the one answered flies off while the next is already there */
   const cardRef = useRef<HTMLDivElement | null>(null);
   const underRef = useRef<HTMLDivElement | null>(null);
+  const stackRef = useRef<HTMLDivElement | null>(null);
   const ghostsRef = useRef<HTMLDivElement | null>(null);
   /** Where the drag last put the card, so it leaves from there, at the speed it was thrown. */
   const heldRef = useRef({ dx: 0, dy: 0, vx: 0 });
@@ -371,6 +404,8 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
     const box = ghostsRef.current;
     const held = heldRef.current;
     heldRef.current = { dx: 0, dy: 0, vx: 0 };
+    // The drag is over however it ended: the card dealt under the next one is only an edge again.
+    stackRef.current?.classList.remove('dragging');
     // The card underneath is the same element React deals next (one key), so
     // it keeps the size the drag had brought it to: let it finish growing.
     const u = underRef.current;
@@ -405,10 +440,25 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
     anim.onfinish = done;
     anim.oncancel = done;
   };
-  const markGone = (key: string) => setGone((g) => new Set(g).add(key));
+  /** Answered: not dealt again today. A business is one person, so the draft a refresh turns it into is not dealt either. */
+  const markGone = (key: string) => setGone((g) => {
+    const n = new Set(g).add(key);
+    const it = store.current.get(key);
+    if (it?.t === 'lead' && it.card.oppId) n.add(`opp:${it.card.oppId}`);
+    return n;
+  });
+  const unGone = (key: string) => setGone((g) => {
+    const n = new Set(g);
+    n.delete(key);
+    const it = store.current.get(key);
+    if (it?.t === 'lead' && it.card.oppId) n.delete(`opp:${it.card.oppId}`);
+    return n;
+  });
+  /** Back on the pile: on top (an undo, a save that failed), or put off with the rest. */
   const redeal = (key: string, where: 'front' | 'back') => {
-    setGone((g) => { const n = new Set(g); n.delete(key); return n; });
-    setOrder((o) => (where === 'front' ? [key, ...o.filter((k) => k !== key)] : [...o.filter((k) => k !== key), key]));
+    unGone(key);
+    if (where === 'front') { setLater((l) => l.filter((k) => k !== key)); setPinned(key); }
+    else setLater((l) => [...l.filter((k) => k !== key), key]);
   };
 
   // The session's count — the number this tab is judged by (sends, not swipes)
@@ -419,12 +469,12 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
   useEffect(() => {
     try {
       const raw = JSON.parse(window.sessionStorage.getItem(statsKey) ?? 'null') as { sent: number; skipped: number; day: string } | null;
-      if (raw && raw.day === home.recent.today) setStatsState({ sent: raw.sent, skipped: raw.skipped });
+      if (raw && raw.day === today) setStatsState({ sent: raw.sent, skipped: raw.skipped });
     } catch { /* a phone that keeps nothing starts at nothing */ }
-  }, [statsKey, home.recent.today]);
+  }, [statsKey, today]);
   const setStats = (f: (s: { sent: number; skipped: number }) => { sent: number; skipped: number }) => setStatsState((s) => {
     const n = f(s);
-    try { window.sessionStorage.setItem(statsKey, JSON.stringify({ ...n, day: home.recent.today })); } catch { /* kept on screen only */ }
+    try { window.sessionStorage.setItem(statsKey, JSON.stringify({ ...n, day: today })); } catch { /* kept on screen only */ }
     return n;
   });
 
@@ -437,8 +487,9 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
       .then(() => settle())
       .catch((e: unknown) => {
         say(`“Not for me” on ${card.title} did not save: ${msg(e)}`);
-        setGone((g) => { const n = new Set(g); n.delete(card.key); return n; });
+        setGone((g) => { const n = new Set(g); n.delete(card.key); if (card.oppId) n.delete(`opp:${card.oppId}`); return n; });
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [say, settle]);
   const flushSkip = () => {
     const s = skippingRef.current;
@@ -453,7 +504,7 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
     if (s) { clearTimeout(s.timer); commitSkip(s.card, true); }
   }, [commitSkip]);
 
-  /* A decision put off for its undo window: a post not a fit, a plan step done */
+  /* A decision put off for its undo window before it is saved: a post not a fit, a plan step done */
   const [held, setHeld] = useState<Held | null>(null);
   const heldDecisionRef = useRef(held);
   heldDecisionRef.current = held;
@@ -465,6 +516,7 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
         say(`${h.label} on ${h.title} did not save: ${msg(e)}`);
         setGone((g) => { const n = new Set(g); n.delete(h.key); return n; });
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [say, settle]);
   const flushHeld = () => {
     const h = heldDecisionRef.current;
@@ -477,8 +529,20 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
     const h = heldDecisionRef.current;
     if (h) { clearTimeout(h.timer); commitHeld(h); }
   }, [commitHeld]);
+
+  /* Put off for later, with a way back: nothing to save, so the undo is only on screen */
+  const [putting, setPutting] = useState<{ key: string; title: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const puttingRef = useRef(putting);
+  puttingRef.current = putting;
+  const flushPut = () => {
+    const p = puttingRef.current;
+    if (!p) return;
+    clearTimeout(p.timer);
+    setPutting(null);
+  };
+
   /** Whatever waits on its undo window is saved before the next card is answered. */
-  const flushAll = () => { flushSkip(); flushHeld(); };
+  const flushAll = () => { flushSkip(); flushHeld(); flushPut(); };
   const hold = (c: DecideCard, label: string, commit: () => Promise<void>) => {
     flushAll();
     const timer = setTimeout(() => {
@@ -493,11 +557,19 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
 
   const [editing, setEditing] = useState<string | null>(null);
 
+  /** To the end of the pile, and not dealt again today until the rest is done and they are asked for. */
   const goLater = (key: string) => {
     if (pending) return;
     flushAll();
     leave('up');
-    setOrder((o) => [...o.filter((k) => k !== key), key]);
+    setLater((l) => [...l.filter((k) => k !== key), key]);
+    const timer = setTimeout(() => setPutting((cur) => (cur?.key === key ? null : cur)), UNDO_MS);
+    setPutting({ key, title: titleOf(store.current.get(key)), timer });
+  };
+  /** Everything put off, back on the pile in its place. */
+  const dealLaterAgain = () => {
+    const back = new Set(laterHere);
+    setLater((l) => l.filter((k) => !back.has(k)));
   };
 
   const goLeftLead = (card: DeckCard) => {
@@ -523,10 +595,18 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
       return;
     }
     const h = heldDecisionRef.current;
-    if (!h) return;
-    clearTimeout(h.timer);
-    setHeld(null);
-    redeal(h.key, 'front');
+    if (h) {
+      clearTimeout(h.timer);
+      setHeld(null);
+      redeal(h.key, 'front');
+      return;
+    }
+    const p = puttingRef.current;
+    if (p) {
+      clearTimeout(p.timer);
+      setPutting(null);
+      redeal(p.key, 'front');
+    }
   };
 
   /** Right. Returns false when there is nothing to send yet, and the card springs back. */
@@ -678,7 +758,25 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
           },
         };
       }
-      case 'ask': return c.ask ? { leave: false, run: () => openAsk(c.ask!) } : null;
+      case 'ask': {
+        const a = c.ask;
+        if (!a) return null;
+        // "One tap tries it again", the card says, and one tap does: the project goes back to its worker as it was.
+        if (a.kind === 'fix' && a.id) {
+          const id = a.id;
+          return {
+            leave: true,
+            run: async () => {
+              const r = await actions.commissionAction(id, 'unblock');
+              if (!r.ok) throw new Error(r.error ?? 'Could not start it again');
+              const run = await actions.runCommissionsNow();
+              // Started again either way; said when it waits for tonight instead of going now.
+              if (!run.ok) say(`Started again, but it could not be handed over just now (${run.error ?? 'no answer'}). It goes tonight.`);
+            },
+          };
+        }
+        return { leave: false, run: () => openAsk(a) };
+      }
       case 'answered': return c.voice ? { leave: false, run: () => actions.openSheet({ kind: 'talk', voice: c.voice!.id }) } : null;
       case 'voice': {
         const v = c.voice;
@@ -689,8 +787,9 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
           run: () => {
             const copying = navigator.clipboard?.writeText ? navigator.clipboard.writeText(VOICE_OPENER).then(() => true, () => false) : Promise.resolve(false);
             openLink(v.url);
-            openedNow.current.add(v.id);
             opened.mark(v.id);
+            // "Did they answer?" is asked later, not the moment their tab is closed: it is put off with the rest.
+            setLater((l) => [...l.filter((k) => k !== `d:a:${v.id}`), `d:a:${v.id}`]);
             void copying.then((ok) => say(ok ? 'The opener is copied: paste it into your reply, then change it to fit their post.' : 'Opened their post. The opener could not be copied on this phone.'));
           },
         };
@@ -710,36 +809,50 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
         if (!left) return null;
         return { leave: true, run: async () => { labOk(await actions.lab({ action: 'pivot_left', day: left.day, keep: false }), 'Setting them aside'); } };
       }
+      // Who they are is answered on the Bank sheet, beside every other payer: a client's payment counts as a sale there.
+      case 'payer': return { leave: false, run: () => actions.openSheet({ kind: 'bank' }) };
+      case 'broke': {
+        const fix = c.broke?.[0]?.fix;
+        if (fix === 'sources') return { leave: false, run: () => actions.openSheet({ kind: 'watchlist' }) };
+        // The nightly run and its Run again are on You, near its foot: opened there, not at the top of a long screen.
+        if (fix === 'nightly') return { leave: false, run: () => { actions.setTab('you'); scrollToSoon('cp2-you-nightly'); } };
+        return { leave: false, run: () => refresh() };
+      }
       case 'checkpoint': return { leave: false, run: () => actions.setTab('proof') };
       case 'setup': return { leave: false, run: () => actions.openSheet({ kind: 'targeting' }) };
       case 'brief': return { leave: true, run: () => actions.runBrief('manual') };
     }
   };
 
-  const goRightDecide = (c: DecideCard): boolean => {
-    if (pending) return false;
+  /** `done` hears how it went, once it has: the walk reads the next card then, not before. */
+  const goRightDecide = (c: DecideCard, done?: () => void): boolean => {
+    if (pending) { done?.(); return false; }
     const r = rightOf(c);
     if (!r) {
       say(c.kind === 'call' ? 'Answer the call on its card: I did it, Not doing it, or Wrong call.' : 'Nothing to do on this one yet.');
+      done?.();
       return false;
     }
     if (r.hold) {
       leave('right');
       markGone(c.key);
       hold(c, r.hold.label, r.hold.commit);
+      done?.();
       return true;
     }
     flushAll();
     if (r.leave) { leave('right'); markGone(c.key); }
     // Run inside the gesture — what opens a page or copies must — and said when it fails, with the card dealt again.
     try {
-      void Promise.resolve(r.run()).then(() => { if (r.leave) settle(); }, (e: unknown) => {
+      void Promise.resolve(r.run()).then(() => { if (r.leave) settle(); done?.(); }, (e: unknown) => {
         say(msg(e));
         if (r.leave) redeal(c.key, 'front');
+        done?.();
       });
     } catch (e) {
       say(msg(e));
       if (r.leave) redeal(c.key, 'front');
+      done?.();
     }
     // A card that opens where it is answered springs back: it leaves once the rows say it was answered.
     return r.leave;
@@ -756,6 +869,18 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
       labOk(await actions.lab({ action: 'voice_gone', voice: v.id }), 'Not a fit');
       opened.clear(v.id);
     });
+  };
+
+  /** A conversation from a post, kept with how it ended: who it was with is their post's name, and the ending is theirs. */
+  const logEnded = async (c: DecideCard, x: Voice, commitment: Commitment): Promise<string | null> => {
+    const r = await actions.lab({ action: 'talk', talk: voiceTalk(x, commitment) });
+    if (!r.ok) return r.error ?? 'Could not log that';
+    leave('right');
+    markGone(c.key);
+    opened.clear(x.id);
+    say('Logged. It counts toward your bet.');
+    settle();
+    return null;
   };
 
   const goRight = (it: Item): boolean => (it.t === 'lead' ? goRightLead(it.card) : goRightDecide(it.card));
@@ -806,14 +931,205 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
       redeal(p.card.key, 'front');
     } else {
       redeal(p.card.key, 'back');
-      say('Put back — it comes round again after the rest.');
+      say('Put back with the ones for later.');
     }
     settle();
   };
 
-  /* Keys, for a desk */
+  /* ─── Why this card, and the walk through the pile by voice ─────────────── */
+
   const currentRef = useRef(current);
   currentRef.current = current;
+  /** Why the card is here: a decision's own lines; for a business, where the pile put it, then why the matcher picked it. */
+  const whyOf = (it: Item): string[] => (it.t === 'decide' ? it.card.why : [...leadWhy(it.card, today, home.profile.timezone), ...it.card.why]);
+  const whyAloud = () => {
+    const it = currentRef.current;
+    if (!it) return say('Nothing is on the pile.');
+    cardRef.current?.querySelector('.cp2-dk-why')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (!canSpeak()) return say(whyOf(it)[0] ?? 'It waits on you.');
+    void sayAloud(whyWords(whyOf(it))).then((why) => { if (why && why !== 'interrupted') say(why); });
+  };
+
+  const [walk, setWalkState] = useState<Walk>(WALK_OFF);
+  const setWalk = (f: (w: Walk) => Walk) => setWalkState(f);
+  // A stopped or paused walk's answers that land late do nothing: each listen and each sentence carries the walk it belongs to.
+  const walkGen = useRef(0);
+  const listener = useRef<{ stop: () => void } | null>(null);
+  const misses = useRef(0);
+  /** Businesses whose message was read aloud this walk: nothing is sent unheard. */
+  const heardMsg = useRef(new Set<string>());
+  walkingRef.current = walk.on;
+  useEffect(() => { onWalk(walk.on); }, [walk.on, onWalk]);
+
+  const walkEnd = (note: string | null = null) => {
+    walkGen.current += 1;
+    listener.current?.stop();
+    listener.current = null;
+    stopSpeaking();
+    setWalkState({ ...WALK_OFF, note });
+  };
+  /** Waiting on a tap: a sheet is open, something needs the thumb, or the mic stopped. Said, never silent. */
+  const walkWait = (note: string) => {
+    walkGen.current += 1;
+    listener.current?.stop();
+    listener.current = null;
+    setWalk((w) => ({ ...w, on: true, phase: 'waiting', note }));
+  };
+  const messageOf = (card: DeckCard): string | null => {
+    const v = viaFor(card);
+    if (!v) return null;
+    const k = dk(card, v);
+    const dr = drafts[k];
+    return (edits[k] ?? (dr?.state === 'ready' ? dr.body : '')).trim() || null;
+  };
+  const ownedFor = (card: DeckCard) => {
+    const v = viaFor(card);
+    return card.kind !== 'find' && ((v === 'whatsapp' && home.channels.whatsapp) || (v === 'email' && home.channels.email));
+  };
+  const wordsOf = (it: Item): string => (it.t === 'decide'
+    ? decisionWords(it.card)
+    : leadWords({ title: it.card.title, sub: it.card.sub, why: whyOf(it) }, ownedFor(it.card)));
+  const promptOf = (it: Item): string => (it.t === 'decide' ? walkPrompt(it.card) : `Say read it${ownedFor(it.card) ? ', send' : ''}, skip, or later.`);
+
+  const speakThen = async (text: string, gen: number) => {
+    setWalk((w) => ({ ...w, phase: 'speaking', note: null }));
+    const why = await sayAloud(text);
+    if (gen !== walkGen.current) return;
+    if (why && why !== 'interrupted') return walkEnd(why);
+    void listen(gen);
+  };
+  const speakCard = (gen: number, lead = '') => {
+    // What the last answer came to — "Logged.", or why it did not go — first.
+    const notes = walkNotes.current.splice(0).map(ends).join(' ');
+    const pre = notes ? `${notes} ` : '';
+    const it = currentRef.current;
+    if (!it) {
+      void sayAloud(`${pre}${laterHere.length ? `That is everything, with ${laterHere.length} put off for later.` : 'That is everything for now.'}`)
+        .then(() => { if (gen === walkGen.current) walkEnd(); });
+      return;
+    }
+    void speakThen(`${pre}${lead}${wordsOf(it)}`, gen);
+  };
+  /** The next card, once the one answered has flown off and the pile has moved. */
+  const walkOn = (gen: number) => { setTimeout(() => { if (gen === walkGen.current) speakCard(gen); }, WALK_NEXT_MS); };
+
+  const listen = async (gen: number) => {
+    setWalk((w) => ({ ...w, phase: 'listening', heard: null }));
+    const l = listenOnce();
+    listener.current = l;
+    const r = await l.heard;
+    if (gen !== walkGen.current) return;
+    listener.current = null;
+    if (!r.text) {
+      if (r.code === 'no-speech' && misses.current < 1) {
+        misses.current += 1;
+        return speakThen('Say yes, no, later, or stop.', gen);
+      }
+      misses.current = 0;
+      return walkWait(r.code === 'no-speech' ? 'Paused: nothing was heard.' : micWhy(r.code ?? 'unknown'));
+    }
+    misses.current = 0;
+    setWalk((w) => ({ ...w, heard: r.text }));
+    void answerAloud(r.text, gen);
+  };
+
+  const answerAloud = async (heard: string, gen: number) => {
+    const it = currentRef.current;
+    if (!it) return speakCard(gen);
+    const a = walkAnswer(heard, it.t === 'decide' ? it.card.kind : 'lead');
+    switch (a.do) {
+      case 'stop': return walkEnd('Stopped.');
+      case 'help': return speakThen(`${WALK_HELP} ${promptOf(it)}`, gen);
+      case 'why': return speakThen(`${whyWords(whyOf(it))} ${promptOf(it)}`, gen);
+      case 'again': return speakCard(gen);
+      case 'unknown': return speakThen(`I did not catch that. ${promptOf(it)}`, gen);
+      case 'read': {
+        if (it.t === 'lead') {
+          const m = messageOf(it.card);
+          if (!m) return speakThen(`The message is still being written. ${promptOf(it)}`, gen);
+          heardMsg.current.add(it.key);
+          return speakThen(`The message: ${m} ${ownedFor(it.card) ? 'Say send to send it, skip, or later.' : promptOf(it)}`, gen);
+        }
+        return speakThen(`${it.card.detail ?? it.card.title} ${promptOf(it)}`, gen);
+      }
+      case 'no': { goLeft(it); return walkOn(gen); }
+      case 'later': { goLater(it.key); return walkOn(gen); }
+      case 'call': {
+        const ok = await actions.answerCall(a.answer as CallAnswer);
+        if (gen !== walkGen.current) return;
+        if (!ok) return speakThen(`That did not save. ${promptOf(it)}`, gen);
+        // Answered on its own words: it leaves as the rows say so, and the next card is read.
+        markGone(it.key);
+        settle();
+        return walkOn(gen);
+      }
+      case 'ended': {
+        if (it.t !== 'decide' || !it.card.voice) return speakThen(promptOf(it), gen);
+        const err = await logEnded(it.card, it.card.voice, a.commitment);
+        if (gen !== walkGen.current) return;
+        if (err) return speakThen(`${err}. ${promptOf(it)}`, gen);
+        return walkOn(gen);
+      }
+      case 'yes': {
+        if (it.t === 'lead') {
+          if (!ownedFor(it.card)) {
+            const v = viaFor(it.card);
+            const how = v ? VIA_LABEL[v] : 'Send';
+            void sayAloud(`${how} takes a tap: your phone opens it only from your thumb.`);
+            return walkWait(`Tap ${how} to send it, then Listen to carry on.`);
+          }
+          // Never sent unheard: the message first, then "send" again.
+          if (!heardMsg.current.has(it.key)) {
+            const m = messageOf(it.card);
+            if (!m) return speakThen(`The message is still being written. ${promptOf(it)}`, gen);
+            heardMsg.current.add(it.key);
+            return speakThen(`It says: ${m} Say send to send it from your own ${viaFor(it.card) === 'email' ? 'address' : 'number'}, or skip.`, gen);
+          }
+          if (goRightLead(it.card)) return walkOn(gen);
+          return speakThen(promptOf(it), gen);
+        }
+        const r = spokenRight(it.card);
+        if (r === 'none') return speakThen(`That one is answered on its own buttons. ${promptOf(it)}`, gen);
+        if (r === 'tap') {
+          void sayAloud(`${it.card.right} takes a tap.`);
+          return walkWait(`Tap ${it.card.right} on the card, then Listen to carry on.`);
+        }
+        if (r === 'sheet') {
+          goRightDecide(it.card);
+          void sayAloud('Opened. Tap Listen when you are back.');
+          return walkWait('Opened. Tap Listen when you are back.');
+        }
+        // Run here: the next card is read once it has gone, or once it is known why it did not — `done` is called once, whichever.
+        goRightDecide(it.card, () => walkOn(gen));
+        return;
+      }
+    }
+  };
+
+  const walkStart = () => {
+    if (walk.on) return walkEnd();
+    if (!canSpeak()) return say('This browser cannot read aloud, so the walk through cannot start here.');
+    walkNotes.current = [];
+    walkGen.current += 1;
+    misses.current = 0;
+    heardMsg.current = new Set();
+    setWalkState({ on: true, phase: 'speaking', heard: null, note: null });
+    // Called inside the tap: a phone lets a page speak only after one.
+    speakCard(walkGen.current, pile.length ? `${pile.length} to go. ` : '');
+  };
+  const walkListen = () => {
+    walkGen.current += 1;
+    misses.current = 0;
+    setWalk((w) => ({ ...w, on: true, note: null }));
+    speakCard(walkGen.current);
+  };
+  // Leaving the tab ends the walk: a voice reading cards nobody can see is not a walk through them.
+  useEffect(() => () => { walkGen.current += 1; listener.current?.stop(); stopSpeaking(); }, []);
+
+  // The handle is rebuilt each render, so the shell always calls the current deck.
+  handle.current = { why: whyAloud, walk: walkStart };
+
+  /* Keys, for a desk */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -856,7 +1172,8 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
       el.style.setProperty('--cp2-swp-yes', String(Math.max(0, Math.min(1, dx / SWIPE_PX))));
       el.style.setProperty('--cp2-swp-no', String(Math.max(0, Math.min(1, -dx / SWIPE_PX))));
     }
-    // The next card comes forward as this one goes, so letting go finds it already in place.
+    // The next card comes forward as this one goes, so letting go finds it already in place — written on, once it is being uncovered.
+    stackRef.current?.classList.toggle('dragging', !!(dx || dy));
     const under = underRef.current;
     if (under) {
       const p = Math.min(1, Math.abs(dx) / SWIPE_PX);
@@ -952,35 +1269,11 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
 
   /* ─── What is on screen ─────────────────────────────────────────────────── */
 
-  const remaining = pile.length;
-  const b = home.billing;
-  // Who is waiting and who replied — the list's other pills — one tap from the deck.
-  const entry = outreachLine({ to_send: d.stages.to_send.length, waiting: d.stages.waiting.length, replied: d.stages.replied.length });
-  const deciding = current?.t === 'decide';
-  const top = (
-    <div className="cp2-swp-top cp2-dk-head">
-      <div className="cp2-dk-headrow">
-        <h1 className="cp2-dk-name">Decide</h1>
-        <div className="cp2-dk-corner">
-          {entry && (
-            <button className={`cp2-swp-outbtn${entry.replied ? ' hot' : ''}`} onClick={() => actions.openSheet({ kind: 'outreach', stage: entry.stage })}>
-              <span>{entry.label}</span><IconChevron />
-            </button>
-          )}
-          {corner}
-        </div>
-      </div>
-      {heard ?? (
-        <div className="cp2-swp-tally">
-          <b>{remaining ? `${remaining} to go` : 'All done'}</b>
-          {/* The frame's "finding" banner is under the deck, so the deck says it. */}
-          <span>{finding ? 'Looking for more…' : stats.sent ? `${stats.sent} sent` : !remaining ? '' : deciding ? 'Right does it · left puts it off' : 'Right sends · left skips'}</span>
-        </div>
-      )}
-      <Notices home={home} d={d} actions={actions} />
-    </div>
-  );
+  // The subheader: what is left here, how much of it waits on you, what went.
+  const line = deckLine({ left: pile.length, needs: pile.filter((it) => it.t === 'decide' && it.card.needs).length, sent: stats.sent, later: laterHere.length });
+  useEffect(() => { if (restored) onLine(line); }, [line, onLine, restored]);
 
+  const b = home.billing;
   const faceOf = (c: DeckCard) => {
     const fv = viaFor(c);
     const fk = fv ? dk(c, fv) : null;
@@ -1006,44 +1299,98 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
   const v = f?.via ?? null;
   const k = f?.key ?? null;
   const owned = !!f?.owned;
-  const yes = choice ? choice.right ?? 'On the card' : !v ? 'Keep' : owned ? 'Send' : VIA_LABEL[v];
-  const no = choice ? (choice.left === 'not_fit' ? 'Not a fit' : 'Later') : 'Not for me';
+  // The call answers on its own buttons, above the bar: the right one says where.
+  const yes = choice ? choice.right ?? 'Answer above' : !v ? 'Keep' : owned ? 'Send' : VIA_LABEL[v];
+  // Left is for good on a business and a post; on a decision it is later.
+  const leftForGood = !!lead || choice?.left === 'not_fit';
+  const no = choice ? (choice.left === 'not_fit' ? 'Not a fit' : 'Later') : 'Skip';
   const more = lead ? moreOf(lead) : null;
   const setAside = d.feed.filter((i) => i.below).length;
   const canLook = d.searching && !finding && b.matches.remaining > 0;
   const walled = b.matches.remaining === 0 && b.effective !== 'operator';
   const none = () => {};
-  const undoing = skipping ? `Not for me: ${skipping.card.title}` : held ? `${held.label}: ${held.title}` : null;
+  const undoing = skipping ? `Not for me: ${skipping.card.title}` : held ? `${held.label}: ${held.title}` : putting ? `Later: ${putting.title}` : null;
   /** A step's second way on, from its card: the same doing as the swipe, without the card leaving. */
   const onStep = (g: StepGo) => {
     const r = stepGo(g);
     if (r.run) { try { void Promise.resolve(r.run()).catch((e: unknown) => say(msg(e))); } catch (e) { say(msg(e)); } }
   };
+  const hearIt = (lines: string[]) => {
+    if (!canSpeak()) return say('This browser cannot read aloud.');
+    void sayAloud(whyWords(lines)).then((why) => { if (why && why !== 'interrupted') say(why); });
+  };
   /** Each decision's face, drawn with what it needs and the taps it carries besides the swipe. */
   const decideFace = (c: DecideCard, live: boolean) => (
-    <DecideFace card={c} home={home} d={d} actions={actions} opened={opened} say={say} live={live} onStep={onStep} onNotFit={() => goLeftDecide(c, true)} />
+    <DecideFace
+      card={c} home={home} d={d} actions={actions} say={say} live={live} onStep={onStep}
+      onNotFit={() => goLeftDecide(c, true)} onEnded={(x, cm) => logEnded(c, x, cm)}
+      onAnswered={() => { leave('right'); markGone(c.key); settle(); }}
+      onHear={() => hearIt(c.why)}
+    />
   );
+  const leadFace = (it: { key: string; card: DeckCard }, live: boolean) => {
+    const lf = faceOf(it.card);
+    const lk = lf.key;
+    return (
+      <>
+        <Hero card={it.card} />
+        <Face
+          card={it.card} via={lf.via} owned={lf.owned} draft={lf.draft} edited={lf.edited} hint={lf.hint}
+          why={whyOf({ t: 'lead', key: it.key, card: it.card })}
+          editing={live && editing === lk}
+          onVia={live ? (nv) => { setViaOf((m) => ({ ...m, [it.card.key]: nv })); setHint((m) => ({ ...m, [it.card.key]: '' })); } : none}
+          onEdit={live ? (text) => lk && setEdits((m) => ({ ...m, [lk]: text })) : none}
+          onEditing={live ? (on) => setEditing(on ? lk : null) : none}
+          onRewrite={live ? () => { if (!lf.via || !lk) return; setEdits((m) => { const n = { ...m }; delete n[lk]; return n; }); void loadDraft(it.card, lf.via, true); } : none}
+          onMore={live && more ? () => actions.openSheet(more) : null}
+          onHear={live ? () => hearIt(whyOf({ t: 'lead', key: it.key, card: it.card })) : null}
+        />
+      </>
+    );
+  };
+  // A chip shows while it has cards, dealt or put off: the way back to what was put off is on the chip it was put off on.
+  const chips: DeckFocus[] = ['all', ...FOCUSES.filter((x) => counts[x] > 0 || focus === x || laterLive.some((it) => focusOf(it) === x))];
+  // Who is waiting and who replied — the outreach list's pills — at the end of the chips: the people already written to.
+  const entry = outreachLine({ to_send: d.stages.to_send.length, waiting: d.stages.waiting.length, replied: d.stages.replied.length });
 
   return (
     <div className="cp2-swp">
-      {top}
-      <div className="cp2-swp-stack">
+      {walk.on || walk.note ? (
+        <div className={`cp2-dk-walk ${walk.on ? walk.phase : 'done'}`} role="status" aria-live="polite">
+          <span className="cp2-dk-walk-say">
+            {!walk.on ? walk.note
+              : walk.phase === 'waiting' ? walk.note ?? 'Waiting'
+              : walk.phase === 'listening' ? (walk.heard ? `“${walk.heard}”` : 'Listening…')
+              : walk.heard ? `“${walk.heard}”` : 'Reading it to you…'}
+          </span>
+          {walk.on && walk.phase === 'waiting' && <button className="cp2-dk-walk-btn" onClick={walkListen}>Listen</button>}
+          {walk.on
+            ? <button className="cp2-dk-walk-btn quiet" onClick={() => walkEnd()}>Stop</button>
+            : <button className="cp2-dk-walk-btn quiet" onClick={() => setWalkState(WALK_OFF)} aria-label="Close">OK</button>}
+        </div>
+      ) : (
+        <div className="cp2-dkf" role="tablist" aria-label="Show on the pile">
+          {chips.map((x) => (
+            <button
+              key={x} role="tab" aria-selected={focus === x} className={`cp2-dkf-chip${focus === x ? ' on' : ''}`}
+              onClick={() => setFocus(x)}
+            >
+              {x === 'all' ? 'All' : FOCUS_LABEL[x]}<i>{counts[x]}</i>
+            </button>
+          ))}
+          {entry && (
+            <button className={`cp2-swp-outbtn${entry.replied ? ' hot' : ''}`} onClick={() => actions.openSheet({ kind: 'outreach', stage: entry.stage })}>
+              <span>{entry.label}</span><IconChevron />
+            </button>
+          )}
+        </div>
+      )}
+      <div className="cp2-swp-stack" ref={stackRef}>
         {/* The next card whole, not a picture of one: a drag uncovers what will be there. */}
         {next && (
           <div key={next.key} ref={underRef} className="cp2-swp-card cp2-swp-under" aria-hidden inert>
             <div className="cp2-swp-scroll">
-              {next.t === 'decide' ? decideFace(next.card, false) : (() => {
-                const nf = faceOf(next.card);
-                return (
-                  <>
-                    <Hero card={next.card} />
-                    <Face
-                      card={next.card} via={nf.via} owned={nf.owned} draft={nf.draft} edited={nf.edited} hint={nf.hint} editing={false}
-                      onVia={none} onEdit={none} onEditing={none} onRewrite={none} onMore={null}
-                    />
-                  </>
-                );
-              })()}
+              {next.t === 'decide' ? decideFace(next.card, false) : leadFace(next, false)}
             </div>
           </div>
         )}
@@ -1057,30 +1404,24 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
             <span className="cp2-swp-stamp yes" aria-hidden>{yes}</span>
             <span className="cp2-swp-stamp no" aria-hidden>{no}</span>
             <div className="cp2-swp-scroll">
-              {choice ? decideFace(choice, true) : lead && (
-                <>
-                  <Hero card={lead} />
-                  <Face
-                    card={lead}
-                    via={v}
-                    owned={owned}
-                    draft={f?.draft}
-                    edited={f?.edited}
-                    hint={f?.hint ?? null}
-                    editing={editing === k}
-                    onVia={(nv) => { setViaOf((m) => ({ ...m, [lead.key]: nv })); setHint((m) => ({ ...m, [lead.key]: '' })); }}
-                    onEdit={(text) => k && setEdits((m) => ({ ...m, [k]: text }))}
-                    onEditing={(on) => setEditing(on ? k : null)}
-                    onRewrite={() => { if (!v || !k) return; setEdits((m) => { const n = { ...m }; delete n[k]; return n; }); void loadDraft(lead, v, true); }}
-                    onMore={more ? () => actions.openSheet(more) : null}
-                  />
-                </>
-              )}
+              {choice ? decideFace(choice, true) : lead && current.t === 'lead' && leadFace(current, true)}
             </div>
           </div>
-        ) : (
+        ) : restored && (
           <div className="cp2-swp-empty">
-            {finding ? (
+            {laterHere.length > 0 ? (
+              <>
+                <b>{counts[focus] ? 'Nothing else here' : 'Done, but for later'}</b>
+                <p>{laterHere.length === 1 ? 'One was put off for later today.' : `${laterHere.length} were put off for later today.`} They stay off the pile until you ask for them.</p>
+                <button className="cp-btn primary" onClick={dealLaterAgain}>Go through them again</button>
+              </>
+            ) : focus !== 'all' && counts.all > 0 ? (
+              <>
+                <b>No {FOCUS_LABEL[focus].toLowerCase()} waiting</b>
+                <p>{counts.all === 1 ? 'One card is' : `${counts.all} cards are`} on the rest of the pile.</p>
+                <button className="cp-btn primary" onClick={() => setFocus('all')}>Show all</button>
+              </>
+            ) : finding ? (
               <><b>Looking now</b><p>Real listings and real pages, not a sample — the first pass takes a minute.</p></>
             ) : stats.sent || stats.skipped ? (
               <><b>That is everyone for now</b><p>{stats.sent} sent, {stats.skipped} not for you. New ones arrive as the app finds them.</p></>
@@ -1089,10 +1430,10 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
               // can search yet, and the Scout in the crew on System names what is missing.
               <><b>Nothing can look for you yet</b><p>Web search is not set up on this server. The Scout, in your crew on System, says what is missing.</p></>
             ) : (
-              // "Every night" only while the nightly job is running; the notice above says when it is not.
+              // "Every night" only while the nightly job is running; System's subheader says when it is not.
               <><b>Nothing waits on you</b><p>{setAside ? `It went through ${setAside} and none were worth a message. ` : ''}{d.done.stale ? 'New ones land here as they are found.' : 'It keeps looking every night, and new ones land here.'}</p></>
             )}
-            {canLook && <button className="cp-btn primary" onClick={() => void actions.findMatches()}>Look for more now</button>}
+            {canLook && !laterHere.length && (focus === 'all' || focus === 'clients') && <button className="cp-btn" onClick={() => void actions.findMatches()}>Look for more now</button>}
             {walled && (
               <div className="cp2-swp-wall">
                 <b>Out of matches</b>
@@ -1105,46 +1446,38 @@ export default function SwipeTab({ home, d, actions, finding, briefing, say, ref
           </div>
         )}
         <div className="cp2-swp-ghosts" ref={ghostsRef} aria-hidden />
+        {undoing && !pending && (
+          <div className="cp2-swp-undo" role="status">
+            <span>{undoing}</span>
+            <button onClick={undo}>Undo</button>
+          </div>
+        )}
       </div>
 
-      {/* Frosted over the foot of the card: the buttons and the nav sit on the card, not under it. */}
-      {current && <div className="cp2-swp-veil" aria-hidden />}
-
-      {current && lead && (
-        <div className="cp2-swp-bar">
+      {/* One bar for every card, the same four places: the big answers never move between kinds. */}
+      {current && (
+        <div className="cp2-swp-bar" role="group" aria-label="Answer this card">
           <button className="cp2-swp-act sm" onClick={undo} disabled={!undoing} aria-label="Take back the last one put away"><i><IconUndo /></i><span>Undo</span></button>
-          <button className="cp2-swp-act no" onClick={() => goLeftLead(lead)} disabled={!!pending} aria-label={`Not for me: ${lead.title}`}><i><IconCross /></i><span>Skip</span></button>
-          <button className="cp2-swp-act sm" onClick={() => goLater(lead.key)} disabled={!!pending} aria-label="Later: to the back of the pile"><i><IconStar /></i><span>Later</span></button>
-          <button className="cp2-swp-act yes" onClick={() => goRightLead(lead)} disabled={!!pending} aria-label={`${yes}: ${lead.title}`}>
-            <i>{v === 'call' ? <IconPhone /> : <IconSend />}</i><span>{yes}</span>
-          </button>
-          <a
-            className={`cp2-swp-act sm${lead.link ? '' : ' off'}`} href={lead.link ?? undefined} target="_blank" rel="noreferrer"
-            aria-label={`Look ${lead.title} up`} aria-disabled={!lead.link}
-            onClick={(e) => { if (!lead.link) e.preventDefault(); }}
+          <button
+            className={`cp2-swp-act no${leftForGood ? '' : ' later'}`} onClick={() => goLeft(current)} disabled={!!pending}
+            aria-label={`${choice ? no : 'Not for me'}: ${titleOf(current)}`}
           >
-            <i><IconExternal /></i><span>Look up</span>
-          </a>
-        </div>
-      )}
-
-      {current && choice && (
-        <div className="cp2-swp-bar">
-          <button className="cp2-swp-act sm" onClick={undo} disabled={!undoing} aria-label="Take back the last one put away"><i><IconUndo /></i><span>Undo</span></button>
-          <button className="cp2-swp-act no" onClick={() => goLeftDecide(choice)} disabled={!!pending} aria-label={`${no}: ${choice.title || choice.eyebrow}`}>
-            <i>{choice.left === 'not_fit' ? <IconCross /> : <IconStar />}</i><span>{no}</span>
+            <i>{leftForGood ? <IconCross /> : <IconStar />}</i><span>{no}</span>
           </button>
           {/* The call is answered on its own buttons: no right swipe says "I did it". */}
-          <button className={`cp2-swp-act yes${choice.right ? '' : ' off'}`} onClick={() => goRightDecide(choice)} disabled={!!pending || !choice.right} aria-label={`${yes}: ${choice.title || choice.eyebrow}`}>
-            <i><IconSend /></i><span>{choice.right ?? 'On the card'}</span>
+          <button
+            className={`cp2-swp-act yes${choice && !choice.right ? ' off' : ''}`} onClick={() => goRight(current)}
+            disabled={!!pending || (!!choice && !choice.right)} aria-label={`${yes}: ${titleOf(current)}`}
+          >
+            <i>{choice ? <IconCheck /> : v === 'call' ? <IconPhone /> : <IconSend />}</i><span>{yes}</span>
           </button>
-        </div>
-      )}
-
-      {undoing && !pending && (
-        <div className="cp2-swp-undo" role="status">
-          <span>{undoing}</span>
-          <button onClick={undo}>Undo</button>
+          <button
+            className={`cp2-swp-act sm${leftForGood ? '' : ' hide'}`} onClick={() => goLater(current.key)}
+            disabled={!!pending || !leftForGood} aria-hidden={!leftForGood} tabIndex={leftForGood ? 0 : -1}
+            aria-label="Later: to the end of the pile, not again today unless you ask"
+          >
+            <i><IconStar /></i><span>Later</span>
+          </button>
         </div>
       )}
 
@@ -1200,6 +1533,13 @@ function openLink(link: string): void {
   a.click();
 }
 
+/** Scroll to a row on the tab just opened, once it has drawn: a few frames, then nothing. */
+function scrollToSoon(id: string, tries = 10): void {
+  const el = document.getElementById(id);
+  if (el) { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+  if (tries > 0) requestAnimationFrame(() => scrollToSoon(id, tries - 1));
+}
+
 const AGAIN: Record<ReachVia, string> = {
   whatsapp: 'Open WhatsApp again', sms: 'Open your texts again', call: 'Call again', email: 'Open your email again',
   site: 'Open their site again', post: 'Open the post again',
@@ -1212,38 +1552,19 @@ function askLine(p: Pending): string {
   return `Did it go to ${p.card.title}?`;
 }
 
-/* ─── What broke ──────────────────────────────────────────────────────────── */
+/* ─── Why this? ───────────────────────────────────────────────────────────── */
 
-/**
- * What broke, said over the pile: a nightly run that never ran, a failed check,
- * a source failing, a read that failed. The Path said these at the foot of its
- * evidence; a quiet deck over any of them is what invariant 13 is written
- * against, so they stay on the tab that is opened every day.
- */
-function Notices({ home, d, actions }: { home: HomeData; d: Derived; actions: Actions }) {
-  const r = d.done;
-  const warns = r.rows.filter((x) => x.tone === 'warn');
-  const unread = home.recent.unreadable;
-  const rows: Array<{ key: string; t: string; s: string; tap?: () => void }> = [];
-  if (unread.length) rows.push({ key: 'unread', t: `Could not read your ${unread.join(', ')}`, s: 'Some of what came back is missing, so a quiet pile is not a quiet week.' });
-  if (r.stale) {
-    rows.push({
-      key: 'stale', t: 'Nothing ran overnight',
-      s: home.lastCronRun ? `The nightly job last finished ${agoLabel(home.lastCronRun, d.now)}. Until it runs again, nothing is found while you are away.` : 'The nightly job has never run, so nothing is found while you are away.',
-    });
-  }
-  if (r.broke.length) rows.push({ key: 'broke', t: r.broke.length === 1 ? 'A check failed on the last run' : `${r.broke.length} checks failed on the last run`, s: r.broke.join(' · ') });
-  for (const w of warns) rows.push({ key: w.key, t: w.label, s: w.detail, tap: () => actions.openSheet({ kind: 'watchlist' }) });
-  if (!rows.length) return null;
+/** Why a card is here, on every card the same way, with a way to hear it. */
+function Why({ lines, onHear }: { lines: string[]; onHear: (() => void) | null }) {
+  if (!lines.length) return null;
   return (
-    <div className="cp2-dk-notes">
-      {rows.map((x) => {
-        const body = (<><IconAlert /><span><b>{x.t}</b> {x.s}</span></>);
-        return x.tap
-          ? <button key={x.key} className="cp2-dk-note" onClick={x.tap}>{body}</button>
-          : <div key={x.key} className="cp2-dk-note">{body}</div>;
-      })}
-    </div>
+    <section className="cp2-dk-why" aria-label="Why this?">
+      <div className="cp2-dk-why-top">
+        <h3>Why this?</h3>
+        {onHear && <button className="cp2-dk-hear" onClick={onHear} aria-label="Read why aloud"><IconSpeaker /></button>}
+      </div>
+      {lines.map((l, i) => <p key={i}>{l}</p>)}
+    </section>
   );
 }
 
@@ -1251,42 +1572,47 @@ function Notices({ home, d, actions }: { home: HomeData; d: Derived; actions: Ac
 
 /**
  * What a decision says, and the taps it carries besides the swipe: the call's
- * own answers, how a conversation ended, the opener to copy, the way to keep what
- * a pivot left. `live` is the card on top; the one under it is drawn, not used.
+ * own answers, a project's question answered in place, how a conversation ended,
+ * the opener to copy, the way to keep what a pivot left. `live` is the card on
+ * top; the one under it is drawn, not used.
  */
-function DecideFace({ card: c, home, d, actions, opened, say, live, onStep, onNotFit }: {
+function DecideFace({ card: c, home, d, actions, say, live, onStep, onNotFit, onEnded, onAnswered, onHear }: {
   card: DecideCard; home: HomeData; d: Derived; actions: Actions;
-  opened: { map: Record<string, string>; clear: (id: string) => void };
   say: (m: string) => void; live: boolean;
   /** A step's second button, done as the swipe would do the first. */
   onStep: (g: StepGo) => void;
   /** An opened post said not to be a fit: set aside, with the way back the swipe has. */
   onNotFit: () => void;
+  /** How a conversation from a post ended: logged, and the card leaves. Resolves with why not, when it did not save. */
+  onEnded: (x: Voice, commitment: Commitment) => Promise<string | null>;
+  /** A project's question answered on the card: it leaves. */
+  onAnswered: () => void;
+  onHear: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reply, setReply] = useState('');
   // Thinking a bet through is a chat with the whole record (DIRECTION.md): copied for Claude, never asked of this app.
   const brief = useBrief(actions);
   const move = useMove(actions, brief);
   const today = home.recent.today;
+  const hear = live && canSpeak() ? onHear : null;
 
   if (c.kind === 'call' && home.decision) {
     return (
       <div className="cp2-dk-face call">
         <div className="cp2-dk-call"><CallCard decision={home.decision} home={home} actions={actions} noOffer={d.noOffer} compact /></div>
+        <div className="cp2-dk-body"><Why lines={c.why} onHear={hear} /></div>
       </div>
     );
   }
 
   const v = c.voice ?? null;
-  // The conversation, kept with one tap: who it was with is their post's name, and the ending is theirs.
   const logIt = async (x: Voice, commitment: Commitment) => {
     setBusy(true); setError(null);
-    const r = await actions.lab({ action: 'talk', talk: voiceTalk(x, commitment) });
+    const why = await onEnded(x, commitment);
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not log that');
-    opened.clear(x.id);
-    say('Logged. It counts toward your bet.');
+    if (why) setError(why);
   };
   const keepLeft = async () => {
     const left = home.pivotLeft;
@@ -1300,19 +1626,47 @@ function DecideFace({ card: c, home, d, actions, opened, say, live, onStep, onNo
     try { await navigator.clipboard.writeText(VOICE_OPENER); say('Copied. Change it to fit their post.'); }
     catch { say('Your browser did not let it be copied. Select the words and copy them from there.'); }
   };
+  // A project's question, answered where it is asked: the answer goes to its worker, as the project's own card sends it.
+  const answer = async () => {
+    const a = c.ask;
+    if (!a?.id || !reply.trim()) return;
+    setBusy(true); setError(null);
+    const r = await actions.commissionAction(a.id, 'unblock', undefined, reply.trim());
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? 'It did not send');
+    onAnswered();
+  };
   const meta = v ? [v.where, postedWords(v.posted, today), v.author].filter(Boolean).join(' · ') : null;
   const step = c.step ?? null;
   const ask: LinkMove | null = step?.claude ? { key: 'decide-ask', label: 'Think it through with Claude', by: 'claude', ask: step.claude } : null;
+  const a = c.ask ?? null;
 
   return (
-    <div className={`cp2-dk-face ${c.kind}`}>
+    <div className={`cp2-dk-face ${c.kind}${a ? ` ask-${a.kind}` : ''}`}>
       <div className="cp2-dk-top">
-        <span className="cp2-dk-eyebrow">{c.eyebrow}</span>
+        <div className="cp2-dk-toprow">
+          <span className="cp2-dk-glyph" aria-hidden><DecideGlyph kind={c.kind} ask={a?.kind} /></span>
+          <span className="cp2-dk-eyebrow">{c.eyebrow}</span>
+        </div>
+        {v?.image && <img className="cp2-dk-img" src={v.image} alt="" referrerPolicy="no-referrer" draggable={false} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
         <h2 className="cp2-dk-title">{c.title}</h2>
         {c.detail && (v ? <blockquote className="cp2-dk-said">&ldquo;{c.detail}&rdquo;</blockquote> : <p className="cp2-dk-detail">{c.detail}</p>)}
         {meta && <span className="cp2-dk-meta">{meta}</span>}
       </div>
       <div className="cp2-dk-body">
+        {a?.kind === 'question' && a.id && (
+          <div className="cp2-dk-reply">
+            <input
+              className="cp-input" value={reply} maxLength={300} placeholder="Your answer" aria-label={`Answer: ${c.title}`} disabled={!live || busy}
+              onChange={(e) => { setReply(e.target.value); setError(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') void answer(); }}
+            />
+            <button className="cp-btn primary sm" disabled={!live || busy || !reply.trim()} onClick={() => void answer()}>{busy ? 'Sending' : 'Send'}</button>
+          </div>
+        )}
+        {a?.kind === 'fix' && a.id && live && (
+          <button className="cp2-link" onClick={() => actions.openSheet({ kind: 'commission', id: a.id! })}>See what it sent back</button>
+        )}
         {c.kind === 'voice' && (
           <>
             <div className="cp2-dk-opener">
@@ -1335,8 +1689,19 @@ function DecideFace({ card: c, home, d, actions, opened, say, live, onStep, onNo
               <a className="cp2-link" href={v.url} target="_blank" rel="noopener noreferrer nofollow">Open it again <IconExternal /></a>
               {live && <button className="cp2-link muted" disabled={busy} onClick={onNotFit}>Not a fit</button>}
             </div>
-            <span className="cp2-dk-sub">No answer yet? Swipe left and it comes back later.</span>
+            <span className="cp2-dk-sub">No answer yet? Later puts it off until you ask for it again.</span>
           </div>
+        )}
+        {c.kind === 'payer' && c.payer && (
+          <div className="cp2-dk-payer">
+            <span>{c.payer.name}</span>
+            <b>{c.payer.total}</b>
+          </div>
+        )}
+        {c.kind === 'broke' && (c.broke?.length ?? 0) > 1 && (
+          <ul className="cp2-dk-broke">
+            {c.broke!.slice(1).map((x) => <li key={x.key}><b>{x.title}</b> {x.detail}</li>)}
+          </ul>
         )}
         {c.kind === 'bet' && step && (
           <>
@@ -1364,6 +1729,7 @@ function DecideFace({ card: c, home, d, actions, opened, say, live, onStep, onNo
             {live && <button className="cp2-link" disabled={busy} onClick={() => void keepLeft()}>{busy ? 'Saving…' : 'Keep them'}</button>}
           </>
         )}
+        <Why lines={c.kind === 'broke' ? c.why.slice(0, 1) : c.why} onHear={hear} />
         {error && <p className="cp-help cp2-err">{error}</p>}
       </div>
     </div>
@@ -1410,29 +1776,32 @@ const MESSAGE_LABEL: Record<ReachVia, string> = {
   site: 'For their contact form — copied when you swipe right', post: 'Your reply — copied when you swipe right',
 };
 
-function Face({ card, via, owned, draft, edited, hint, editing, onVia, onEdit, onEditing, onRewrite, onMore }: {
-  card: DeckCard; via: ReachVia | null; owned: boolean; draft: DraftState | undefined; edited: string | undefined; hint: string | null; editing: boolean;
+function Face({ card, via, owned, draft, edited, hint, why, editing, onVia, onEdit, onEditing, onRewrite, onMore, onHear }: {
+  card: DeckCard; via: ReachVia | null; owned: boolean; draft: DraftState | undefined; edited: string | undefined; hint: string | null;
+  /** Why it is here: where the pile put it, then why the matcher picked it. */
+  why: string[];
+  editing: boolean;
   onVia: (v: ReachVia) => void; onEdit: (text: string) => void; onEditing: (on: boolean) => void; onRewrite: () => void;
   /** The record behind the card, when there is one: a feed's find carries all of itself on the card. */
   onMore: (() => void) | null;
+  onHear: (() => void) | null;
 }) {
   const reach = reachLine(card);
   const vias = [...new Set(card.reach.map((r) => r.via))];
   const text = edited ?? (draft?.state === 'ready' ? draft.body : '');
   return (
     <div className="cp2-swp-body">
-      {(card.facts.length > 0 || reach) && (
+      {(card.facts.length > 0 || reach || card.link) && (
         <div className="cp2-swp-facts">
           {card.facts.map((f) => <span key={f}>{f}</span>)}
           {reach && <span className="reach">{reach}</span>}
+          {/* Looking them up was a fifth button under every card; it is the listing's own fact, so it sits with the rest. */}
+          {card.link && (
+            <a className="look" href={card.link} target="_blank" rel="noreferrer" aria-label={`Look ${card.title} up`}>
+              Look up <IconExternal />
+            </a>
+          )}
         </div>
-      )}
-
-      {card.why.length > 0 && (
-        <section className="cp2-swp-sec">
-          <h3>Why this one</h3>
-          {card.why.map((w, i) => <p key={i}>{w}</p>)}
-        </section>
       )}
 
       {card.post && (
@@ -1485,6 +1854,8 @@ function Face({ card, via, owned, draft, edited, hint, editing, onVia, onEdit, o
           )}
         </section>
       )}
+
+      <Why lines={why} onHear={onHear && canSpeak() ? onHear : null} />
 
       {onMore && (
         <button className="cp2-swp-more" onClick={onMore}>

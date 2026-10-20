@@ -2332,26 +2332,34 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
    buttons and the nav float on the card, frosted, under the thumb — read like a
    profile, the card scrolls up and down and moves sideways. Names are cp2-swp-*,
    none a bare word (CLAUDE.md: .cp-steps once styled every span inside it). */
+/* Under the same header as every tab, in the tab's own space: the deck fills
+   what is left between the header and the nav, the card as wide as the cards on
+   System and Money, and its foot above the buttons rather than under them. */
+.cp-root[data-theme="soft"] .cp2-swiping .cp-content { position: relative; overflow: hidden; padding-bottom: 0; }
 .cp-root[data-theme="soft"] .cp2-swp {
   position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--bg);
-  padding: calc(10px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom));
+  padding: 2px 20px calc(100px + env(safe-area-inset-bottom));
 }
-.cp-root[data-theme="soft"] .cp2-swp-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 4px 6px 10px 8px; }
-.cp-root[data-theme="soft"] .cp2-swp-tally { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-swp-tally b { font-family: var(--display); font-size: 16px; font-weight: 700; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-swp-tally span { overflow: hidden; text-overflow: ellipsis; }
 /* The door to everyone already written to. A reply is the warm one, so it is the one in colour. */
 .cp-root[data-theme="soft"] .cp2-swp-outbtn { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 7px 8px 7px 13px; border: 0; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .cp-root[data-theme="soft"] .cp2-swp-outbtn svg { width: 15px; height: 15px; color: var(--dim); }
 .cp-root[data-theme="soft"] .cp2-swp-outbtn.hot { background: var(--ai-tint); color: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-swp-outbtn.hot svg { color: var(--ai); }
-.cp-root[data-theme="soft"] .cp2-swp-stack { position: relative; flex: 1; min-height: 0; }
+.cp-root[data-theme="soft"] .cp2-swp-stack { position: relative; flex: 1; min-height: 0; margin-bottom: 12px; }
+/* A card with an edge all the way round: the frost that ran its foot into the nav read as a card with no end. */
 .cp-root[data-theme="soft"] .cp2-swp-card {
-  position: absolute; inset: 0; border-radius: 26px; overflow: hidden; background: var(--surface);
-  box-shadow: 0 18px 40px rgba(20, 25, 45, 0.14); touch-action: pan-y; user-select: none; -webkit-user-select: none;
-  will-change: transform;
+  position: absolute; inset: 0; border-radius: 24px; overflow: hidden; background: var(--surface);
+  border: 1px solid rgba(20, 25, 45, 0.08); box-shadow: 0 10px 28px rgba(20, 25, 45, 0.1);
+  touch-action: pan-y; user-select: none; -webkit-user-select: none; will-change: transform;
 }
-.cp-root[data-theme="soft"] .cp2-swp-under { transform: translate3d(0, 12px, 0) scale(0.95); opacity: 0.75; pointer-events: none; box-shadow: none; }
+/* The next card shows its foot under this one, so the pile reads as a pile. */
+.cp-root[data-theme="soft"] .cp2-swp-under { transform-origin: 50% 100%; transform: translate3d(0, 10px, 0) scale(0.94); opacity: 0.75; pointer-events: none; box-shadow: none; }
+/* At rest only its edge shows: what was written at its foot showed through the
+   strip as cut-off words, and neither a strip over it nor a mask on its scroller
+   hid text the compositor paints on its own layer. A drag uncovers it whole
+   (SwipeTab.tsx setDrag marks the stack). */
+.cp-root[data-theme="soft"] .cp2-swp-under .cp2-swp-scroll { visibility: hidden; }
+.cp-root[data-theme="soft"] .cp2-swp-stack.dragging .cp2-swp-under .cp2-swp-scroll { visibility: visible; }
 /* A copy of the card answered, flying off (SwipeTab.tsx leave()); it removes itself. */
 .cp-root[data-theme="soft"] .cp2-swp-ghosts { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
 .cp-root[data-theme="soft"] .cp2-swp-ghost { pointer-events: none; }
@@ -2384,7 +2392,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-swp-hero.photo .cp2-swp-title p { color: #fff; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35); }
 
 /* What it is, why it was picked, the post, and the message */
-.cp-root[data-theme="soft"] .cp2-swp-body { display: flex; flex-direction: column; gap: 18px; padding: 16px 18px calc(196px + env(safe-area-inset-bottom)); }
+.cp-root[data-theme="soft"] .cp2-swp-body { display: flex; flex-direction: column; gap: 18px; padding: 16px 18px 22px; }
 .cp-root[data-theme="soft"] .cp2-swp-facts { display: flex; flex-wrap: wrap; gap: 6px; }
 .cp-root[data-theme="soft"] .cp2-swp-facts span { padding: 5px 10px; border-radius: 999px; background: var(--line); color: var(--muted); font-size: 12px; font-weight: 600; }
 .cp-root[data-theme="soft"] .cp2-swp-facts .reach { background: var(--tint); color: var(--blue); }
@@ -2414,40 +2422,33 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-swp-stamp.yes { left: 20px; color: var(--ai); border-color: var(--ai); transform: rotate(-12deg); opacity: var(--cp2-swp-yes, 0); }
 .cp-root[data-theme="soft"] .cp2-swp-stamp.no { right: 20px; color: var(--bad); border-color: var(--bad); transform: rotate(12deg); opacity: var(--cp2-swp-no, 0); }
 
-/* The buttons, one per gesture */
-/* Over the foot of the card, a frost that thickens toward the nav: what is
-   under the buttons is still there, out of focus, and the buttons read on any
-   photo. Masked rather than faded, so the blur itself fades in. */
-.cp-root[data-theme="soft"] .cp2-swp-veil {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 7; height: calc(206px + env(safe-area-inset-bottom)); pointer-events: none;
-  background: linear-gradient(to top, rgba(238, 241, 247, 0.72), rgba(238, 241, 247, 0.28) 70%, rgba(238, 241, 247, 0));
-  -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3);
-  -webkit-mask-image: linear-gradient(to top, #000 52%, transparent); mask-image: linear-gradient(to top, #000 52%, transparent);
-}
-.cp-root[data-theme="soft"] .cp2-swp-bar {
-  position: absolute; left: 0; right: 0; bottom: calc(94px + env(safe-area-inset-bottom)); z-index: 8;
-  display: flex; justify-content: center; align-items: flex-end; gap: 12px; pointer-events: none;
-}
-.cp-root[data-theme="soft"] .cp2-swp-bar > * { pointer-events: auto; }
-.cp-root[data-theme="soft"] .cp2-swp-act { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 11px; font-weight: 700; text-shadow: 0 0 8px rgba(255, 255, 255, 0.9); cursor: pointer; }
+/* The buttons, one per gesture, in the same four places on every card: Undo,
+   the left answer, the right answer, Later. Under the card, not over it. */
+.cp-root[data-theme="soft"] .cp2-swp-bar { display: flex; justify-content: center; align-items: flex-start; gap: 16px; }
+.cp-root[data-theme="soft"] .cp2-swp-act { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 64px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-swp-act span { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-swp-act.yes { width: 92px; }
 .cp-root[data-theme="soft"] .cp2-swp-act i {
-  display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.8); box-shadow: 0 6px 18px rgba(20, 25, 45, 0.14);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
+  display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--surface); box-shadow: var(--shadow-sm);
 }
 .cp-root[data-theme="soft"] .cp2-swp-act svg { width: 20px; height: 20px; }
 .cp-root[data-theme="soft"] .cp2-swp-act.no i,
-.cp-root[data-theme="soft"] .cp2-swp-act.yes i { width: 60px; height: 60px; }
+.cp-root[data-theme="soft"] .cp2-swp-act.yes i { width: 56px; height: 56px; }
 .cp-root[data-theme="soft"] .cp2-swp-act.no i svg,
 .cp-root[data-theme="soft"] .cp2-swp-act.yes i svg { width: 26px; height: 26px; }
 .cp-root[data-theme="soft"] .cp2-swp-act.no i { color: var(--bad); }
+/* Left that is only later is not a no: the same place, without the red. */
+.cp-root[data-theme="soft"] .cp2-swp-act.no.later i { color: var(--muted); }
+/* Later's place kept empty where left already is later: the big answers do not move. */
+.cp-root[data-theme="soft"] .cp2-swp-act.hide { visibility: hidden; }
 .cp-root[data-theme="soft"] .cp2-swp-act.yes i { background: var(--blue); color: #fff; box-shadow: var(--lift); }
 .cp-root[data-theme="soft"] .cp2-swp-act.yes span { color: var(--blue); }
 .cp-root[data-theme="soft"] .cp2-swp-act:disabled,
 .cp-root[data-theme="soft"] .cp2-swp-act.off { opacity: 0.4; cursor: default; }
 
 /* "Not for me", with the way back */
-.cp-root[data-theme="soft"] .cp2-swp-undo { position: absolute; left: 22px; right: 22px; bottom: calc(178px + env(safe-area-inset-bottom)); z-index: 8; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: var(--ink); color: #fff; font-size: 13px; box-shadow: 0 12px 30px rgba(20, 25, 45, 0.25); }
+.cp-root[data-theme="soft"] .cp2-swp-undo { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 8; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: var(--ink); color: #fff; font-size: 13px; box-shadow: 0 12px 30px rgba(20, 25, 45, 0.25); }
 .cp-root[data-theme="soft"] .cp2-swp-undo span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-root[data-theme="soft"] .cp2-swp-undo button { flex: none; padding: 0; border: 0; background: none; color: #B9C5FF; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
 
@@ -2465,12 +2466,6 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 
 /* The app's toast, on this tab only, at the top: at the bottom it covered the buttons. */
 .cp-root[data-theme="soft"] .cp2-swiping .cp-toast { top: calc(48px + env(safe-area-inset-top)); bottom: auto; }
-/* The nav, on this tab only, is frosted glass over the card rather than a white pill cut out of it. */
-.cp-root[data-theme="soft"] .cp2-swiping .cp2-nav {
-  background: rgba(255, 255, 255, 0.66); box-shadow: 0 10px 30px rgba(20, 25, 45, 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
-}
-.cp-root[data-theme="soft"] .cp2-swiping .cp2-nav button.active { background: rgba(79, 99, 210, 0.12); }
 
 /* The record behind a card, at its foot: notes, history, every field. */
 .cp-root[data-theme="soft"] .cp2-swp-more { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 13px 15px; border: 0; border-radius: 14px; background: var(--line); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; text-align: left; cursor: pointer; }
@@ -2478,7 +2473,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-swp-more svg { flex: none; width: 16px; height: 16px; color: var(--dim); }
 
 /* Nothing on the pile */
-.cp-root[data-theme="soft"] .cp2-swp-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: safe center; gap: 10px; height: 100%; padding: 28px 28px calc(104px + env(safe-area-inset-bottom)); border-radius: 26px; background: var(--surface); text-align: center; overflow-y: auto; }
+.cp-root[data-theme="soft"] .cp2-swp-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: safe center; gap: 10px; height: 100%; padding: 28px; border: 1px solid rgba(20, 25, 45, 0.08); border-radius: 24px; background: var(--surface); text-align: center; overflow-y: auto; }
 .cp-root[data-theme="soft"] .cp2-swp-empty b { font-family: var(--display); font-size: 19px; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-swp-empty p { margin: 0 0 6px; font-size: 14px; line-height: 1.5; color: var(--muted); }
 /* Out of matches for the month: said where the pile ran out, with the way to more. */
@@ -2702,42 +2697,61 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-me-btn.on { background: var(--blue); color: #fff; }
 
 /* ── Decide (v2/SwipeTab.tsx, lib/copilot/decide.ts) ──────────────────────
-   The deck has no header, so its top line carries the tab's name, the door to
-   everyone already written to, the mic and You, then the count and anything
-   that broke. A decision's card is drawn by kind; the businesses keep Swipe's.
-   Names are cp2-dk-*: none a bare word, none another component's. */
-.cp-root[data-theme="soft"] .cp2-swp-top.cp2-dk-head { flex-direction: column; align-items: stretch; gap: 2px; padding: 0 4px 10px 8px; }
-.cp-root[data-theme="soft"] .cp2-dk-headrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-dk-name { margin: 0; font-family: var(--display); font-size: 26px; font-weight: 800; letter-spacing: -0.4px; color: var(--ink); }
-.cp-root[data-theme="soft"] .cp2-dk-corner { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-dk-corner .cp2-swp-outbtn { min-width: 0; }
-.cp-root[data-theme="soft"] .cp2-dk-corner .cp2-swp-outbtn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-dk-head .cp2-voice-live { margin: 2px 0 0; font-size: 13px; font-weight: 600; color: var(--blue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cp-root[data-theme="soft"] .cp2-dk-notes { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.cp-root[data-theme="soft"] .cp2-dk-note {
-  display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 9px 11px; border: 0; border-radius: 12px;
-  background: var(--warn-tint); color: var(--ink); font: inherit; font-size: 12px; line-height: 1.4; text-align: left;
-}
-.cp-root[data-theme="soft"] button.cp2-dk-note { cursor: pointer; }
-.cp-root[data-theme="soft"] .cp2-dk-note svg { flex: none; width: 15px; height: 15px; margin-top: 1px; color: var(--warn); }
-.cp-root[data-theme="soft"] .cp2-dk-note b { font-weight: 700; }
+   Under the same header as every tab. Over the pile, the chips that choose what
+   it deals and the door to everyone already written to; on each card, what it
+   is, a glyph for its kind, and why it is here. A decision's card is drawn by
+   kind; the businesses keep Swipe's. Names are cp2-dk-* and cp2-dkf-*: none a
+   bare word, none another component's. */
+.cp-root[data-theme="soft"] .cp2-dkf { display: flex; align-items: center; gap: 6px; margin: 0 -20px; padding: 2px 20px 10px; overflow-x: auto; scrollbar-width: none; }
+.cp-root[data-theme="soft"] .cp2-dkf::-webkit-scrollbar { display: none; }
+.cp-root[data-theme="soft"] .cp2-dkf-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 0; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-sm); color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-dkf-chip i { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-dkf-chip.on { background: var(--ink); color: #fff; }
+.cp-root[data-theme="soft"] .cp2-dkf-chip.on i { color: rgba(255, 255, 255, 0.7); }
+.cp-root[data-theme="soft"] .cp2-dkf .cp2-swp-outbtn { margin-left: auto; }
+/* The walk through the pile by voice, where the chips were: what it is reading, what it heard, what it waits on. */
+.cp-root[data-theme="soft"] .cp2-dk-walk { display: flex; align-items: center; gap: 8px; min-height: 38px; margin-bottom: 10px; padding: 5px 5px 5px 14px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 600; }
+.cp-root[data-theme="soft"] .cp2-dk-walk.listening::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%; background: #FF7A6B; animation: cp-blink 1s steps(2) infinite; }
+.cp-root[data-theme="soft"] .cp2-dk-walk.done { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp2-dk-walk-say { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-root[data-theme="soft"] .cp2-dk-walk-btn { flex: none; padding: 7px 13px; border: 0; border-radius: 999px; background: #fff; color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-dk-walk-btn.quiet { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.cp-root[data-theme="soft"] .cp2-dk-walk.done .cp2-dk-walk-btn.quiet { background: var(--line); color: var(--ink); }
+/* The header's walk button, beside the mic and the same size. */
+.cp-root[data-theme="soft"] .cp2-walk-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; background: var(--surface); color: var(--blue); box-shadow: var(--shadow-sm); cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-walk-btn svg { width: 20px; height: 20px; }
+.cp-root[data-theme="soft"] .cp2-walk-btn.on { background: var(--ink); color: #fff; }
 
 .cp-root[data-theme="soft"] .cp2-dk-face { display: flex; flex-direction: column; min-height: 100%; }
-.cp-root[data-theme="soft"] .cp2-dk-top { display: flex; flex-direction: column; gap: 8px; padding: 26px 22px 20px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-dk-top { display: flex; flex-direction: column; gap: 8px; padding: 20px 20px 18px; background: var(--tint); }
+.cp-root[data-theme="soft"] .cp2-dk-toprow { display: flex; align-items: center; gap: 10px; }
+.cp-root[data-theme="soft"] .cp2-dk-glyph { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 12px; background: var(--surface); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp2-dk-glyph svg { width: 20px; height: 20px; }
+.cp-root[data-theme="soft"] .cp2-dk-img { display: block; width: 100%; max-height: 170px; margin: 4px 0 2px; border-radius: 14px; object-fit: cover; background: var(--surface); }
 .cp-root[data-theme="soft"] .cp2-dk-face.voice .cp2-dk-top,
 .cp-root[data-theme="soft"] .cp2-dk-face.answered .cp2-dk-top { background: var(--ai-tint); }
 .cp-root[data-theme="soft"] .cp2-dk-face.pivot .cp2-dk-top,
 .cp-root[data-theme="soft"] .cp2-dk-face.setup .cp2-dk-top { background: var(--warn-tint); }
+.cp-root[data-theme="soft"] .cp2-dk-face.broke .cp2-dk-top,
+.cp-root[data-theme="soft"] .cp2-dk-face.ask-fix .cp2-dk-top { background: var(--bad-tint); }
+.cp-root[data-theme="soft"] .cp2-dk-face.payer .cp2-dk-top { background: var(--ai-tint); }
 .cp-root[data-theme="soft"] .cp2-dk-eyebrow { align-self: flex-start; padding: 5px 11px; border-radius: 999px; background: var(--surface); color: var(--blue); font-size: 11.5px; font-weight: 700; }
 .cp-root[data-theme="soft"] .cp2-dk-face.voice .cp2-dk-eyebrow,
 .cp-root[data-theme="soft"] .cp2-dk-face.answered .cp2-dk-eyebrow { color: var(--ai); }
 .cp-root[data-theme="soft"] .cp2-dk-face.pivot .cp2-dk-eyebrow,
 .cp-root[data-theme="soft"] .cp2-dk-face.setup .cp2-dk-eyebrow { color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-dk-face.broke .cp2-dk-eyebrow,
+.cp-root[data-theme="soft"] .cp2-dk-face.ask-fix .cp2-dk-eyebrow { color: var(--bad); }
+.cp-root[data-theme="soft"] .cp2-dk-face.payer .cp2-dk-eyebrow { color: var(--ai); }
+/* The glyph takes the card's colour: a post the conversation green, a breakage the failure brown. */
+.cp-root[data-theme="soft"] .cp2-dk-face:is(.voice, .answered, .payer) .cp2-dk-glyph { color: var(--ai); }
+.cp-root[data-theme="soft"] .cp2-dk-face:is(.pivot, .setup) .cp2-dk-glyph { color: var(--warn); }
+.cp-root[data-theme="soft"] .cp2-dk-face:is(.broke, .ask-fix) .cp2-dk-glyph { color: var(--bad); }
 .cp-root[data-theme="soft"] .cp2-dk-title { margin: 2px 0 0; font-family: var(--display); font-size: 23px; font-weight: 800; line-height: 1.2; letter-spacing: -0.3px; color: var(--ink); overflow-wrap: anywhere; }
 .cp-root[data-theme="soft"] .cp2-dk-detail { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink); }
 .cp-root[data-theme="soft"] .cp2-dk-said { margin: 2px 0 0; padding: 12px 14px; border-radius: 14px; background: var(--surface); font-size: 14.5px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
 .cp-root[data-theme="soft"] .cp2-dk-meta { font-size: 12.5px; font-weight: 600; color: var(--muted); }
-.cp-root[data-theme="soft"] .cp2-dk-body { display: flex; flex-direction: column; gap: 12px; padding: 18px 22px calc(196px + env(safe-area-inset-bottom)); }
+.cp-root[data-theme="soft"] .cp2-dk-body { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px 22px; }
 .cp-root[data-theme="soft"] .cp2-dk-opener { display: flex; flex-direction: column; gap: 6px; padding: 13px 15px; border-radius: 16px; background: var(--line); }
 .cp-root[data-theme="soft"] .cp2-dk-opener span { font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--dim); }
 .cp-root[data-theme="soft"] .cp2-dk-opener q { font-size: 14.5px; line-height: 1.5; color: var(--ink); }
@@ -2751,8 +2765,31 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp2-dk-links svg { width: 14px; height: 14px; }
 .cp-root[data-theme="soft"] .cp2-dk-sub { font-size: 12px; line-height: 1.4; color: var(--dim); }
 /* The call keeps its own card's insides, answers and all, without a second card's frame inside this one. */
-.cp-root[data-theme="soft"] .cp2-dk-face.call { padding: 18px 16px calc(196px + env(safe-area-inset-bottom)); }
+.cp-root[data-theme="soft"] .cp2-dk-face.call { padding: 18px 16px 0; }
+.cp-root[data-theme="soft"] .cp2-dk-face.call .cp2-dk-body { padding: 4px 4px 22px; }
 .cp-root[data-theme="soft"] .cp2-dk-call .cp-card { margin: 0; padding: 4px 4px 0; border: 0; background: none; box-shadow: none; }
+/* Why this? On every card, the same way: the rule that dealt it and the rows behind it, and a way to hear it. */
+.cp-root[data-theme="soft"] .cp2-dk-why { display: flex; flex-direction: column; gap: 6px; padding: 13px 15px; border-radius: 16px; background: var(--bg); }
+.cp-root[data-theme="soft"] .cp2-dk-why-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; }
+.cp-root[data-theme="soft"] .cp2-dk-why h3 { margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+.cp-root[data-theme="soft"] .cp2-dk-why p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-dk-why p + p { color: var(--muted); }
+.cp-root[data-theme="soft"] .cp2-dk-hear { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--surface); color: var(--blue); box-shadow: var(--shadow-sm); cursor: pointer; }
+.cp-root[data-theme="soft"] .cp2-dk-hear svg { width: 16px; height: 16px; }
+/* A project's question, answered on its card. */
+.cp-root[data-theme="soft"] .cp2-dk-reply { display: flex; gap: 8px; }
+.cp-root[data-theme="soft"] .cp2-dk-reply .cp-input { flex: 1; min-width: 0; }
+/* Who paid, and how much, the figure as the bank has it. */
+.cp-root[data-theme="soft"] .cp2-dk-payer { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 13px 15px; border-radius: 16px; background: var(--ai-tint); }
+.cp-root[data-theme="soft"] .cp2-dk-payer span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-dk-payer b { flex: none; font-family: var(--display); font-size: 20px; font-weight: 800; color: var(--ink); }
+/* Everything else that broke, under the first. */
+.cp-root[data-theme="soft"] .cp2-dk-broke { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.cp-root[data-theme="soft"] .cp2-dk-broke li { padding: 10px 12px; border-radius: 12px; background: var(--bad-tint); font-size: 13px; line-height: 1.45; color: var(--ink); }
+.cp-root[data-theme="soft"] .cp2-dk-broke b { font-weight: 700; }
+/* Looking a business up, beside its facts: it was a fifth button under every card. */
+.cp-root[data-theme="soft"] .cp2-swp-facts a.look { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--blue); font-size: 12px; font-weight: 700; text-decoration: none; }
+.cp-root[data-theme="soft"] .cp2-swp-facts a.look svg { width: 12px; height: 12px; }
 
 /* ── System (v2/ProofTab.tsx): the workflow on trial, and what was tried ───
    The bet sits inside the part it tests: the play as the workflow's name, the

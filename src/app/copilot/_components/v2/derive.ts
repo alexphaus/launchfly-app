@@ -16,7 +16,7 @@ import { agentRoster } from '@/lib/copilot/machine';
 import { businessChain, verdictCount, waitingOnYou } from '@/lib/copilot/business';
 import { crewLine, crewOf } from '@/lib/copilot/crew';
 import { builtSoFar, engineStep, payoffGoal, type Step, type StepPlay } from '@/lib/copilot/engine';
-import { decideCards, decideCount, type DecideInput } from '@/lib/copilot/decide';
+import { callRecord, decideCards, decideCount, type DecideInput, type PayerAsk } from '@/lib/copilot/decide';
 import { SCOUT_SEARCHING, stepBusy } from '@/lib/copilot/betplan';
 import { betVoiced, betVoices, voiceRefusal } from '@/lib/copilot/voices';
 import { unitSignal } from '@/lib/copilot/signal';
@@ -24,7 +24,7 @@ import { secondPerson } from '@/lib/copilot/you';
 import { lapsedOn } from '@/lib/copilot/commission';
 import { assetGaps } from '@/lib/copilot/assets';
 import { historyOf } from '@/lib/copilot/history';
-import { betPrice, labView, openIntros, playOf, unitPage, type LabView } from '@/lib/copilot/lab';
+import { betPrice, labView, openIntros, playOf, resultLine, unitPage, type LabView } from '@/lib/copilot/lab';
 import { proposalLine } from '@/lib/copilot/proposals';
 import { chainInputOf, foundOf, saidOf } from '@/lib/copilot/proof';
 import { matchCounts, matchFeed, stageCards } from '@/lib/copilot/matches';
@@ -34,10 +34,10 @@ import { pathAhead, pathHere, pathNow, priceOf } from '@/lib/copilot/plan';
 import { SIZE_LABEL, goalMarkers, markMap, moneyWaiting, replacesCall, roadmapDue, roadmapFirstStep, roadmapLeadGoal, roadmapSignature, roadmapView } from '@/lib/copilot/roadmap';
 import { VERDICT_WORDS, goalOutlooks } from '@/lib/copilot/outlook';
 import { weekReview } from '@/lib/copilot/review';
-import { doneForYou, needsYou, worthDoing } from '@/lib/copilot/today';
+import { brokeLines, doneForYou, moneyLine, needsYou, systemLine, worthDoing } from '@/lib/copilot/today';
 import { oldestWaitDays, queueIsBacked } from '@/lib/copilot/triage';
 import type { HomeData } from '@/lib/copilot/types';
-import { moneyForPlan } from '@/lib/copilot/money/ledger';
+import { moneyForPlan, readMoney } from '@/lib/copilot/money/ledger';
 import type { Tab2 } from '../shared';
 import { salesCurrency } from '@/lib/copilot/metrics';
 
@@ -94,7 +94,7 @@ export function derive(home: HomeData) {
     noOffer,
     intros,
     today: home.recent.today,
-    proposals: (home.proposals?.open ?? []).map((p) => ({ id: p.id, line: proposalLine(p, betPrice(home.profile.offer?.price_band, currency).priceLabel), why: p.why })),
+    proposals: (home.proposals?.open ?? []).map((p) => ({ id: p.id, line: proposalLine(p, betPrice(home.profile.offer?.price_band, currency).priceLabel), why: p.why, at: p.at, kind: p.kind })),
   });
   // A brand new account: nothing to call, nothing found, nothing handed over.
   // One card that says what is happening beats five empty sections.
@@ -361,19 +361,36 @@ export function derive(home: HomeData) {
      so the count on the badge and the pile under it agree. */
   const step = stepOf(home, lab, chain, found.value, noOffer, now);
   const voices = step.voices?.open ?? [];
+  // What broke, said once as a card on Decide and counted in System's subheader (invariant 13).
+  const broke = brokeLines({ now, unread: home.recent.unreadable, done, lastCronRun: home.lastCronRun });
+  // Money in that the bank names and the person has not: a client's payment is a sale, so it is asked on Decide.
+  const read = home.money?.read ?? null;
+  const payers: PayerAsk[] = read
+    ? read.toName.map((p) => ({
+      key: p.key, name: p.name, total: readMoney(read)(p.total), count: p.count, last: p.last,
+      looksLike: home.money?.suggest[p.key]?.title ?? null,
+    }))
+    : [];
+  const cur = lab.current;
   const decideInput: Omit<DecideInput, 'opened'> = {
     noOffer,
     callPending: move.now.kind === 'call',
     callHandsOver: home.callMove?.artifact?.kind === 'plan',
+    call: home.decision ? { headline: home.decision.headline, record: callRecord(home.decisionLog, home.decision.id) } : null,
     now: move.now,
     asks,
     step: step.step,
+    bet: cur ? { belief: cur.bet.belief, line: `day ${cur.day} of ${cur.bet.days}, ${resultLine(cur)}` } : null,
     voices,
     pivotLeft: !!home.pivotLeft,
     checkpoint: { due: lab.checkpoint.due, ended: lab.checkpoint.ended.length },
     cannotSearch: !searching,
     // As the Path drew it: nothing to do and no call picked — the brief has not run.
     noCall: !home.decision && move.now.kind === 'rest',
+    payers,
+    broke,
+    today: home.recent.today,
+    timezone: home.profile.timezone,
   };
   const decide = decideCards({ ...decideInput, opened: {} });
 
@@ -403,15 +420,15 @@ export function derive(home: HomeData) {
   const week = focusWeek(home.recent.focus, home.recent.today);
 
   const status: Record<Tab2, string | null> = {
-    // The deck has no header: the card is the screen, and its own top line counts what is left.
+    // The deck says its own line — how many are left in the pile as it stands on this phone (SwipeTab.tsx deckLine).
     swipe: null,
-    // The verdict and the workflow on trial are the first two cards, and what
-    // waits on you is on Decide's badge: "Not proven · day 2 of 14 on who buys ·
-    // 3 waiting on you" said the screen under it again, over two lines.
-    proof: null,
-    // The balance is the first thing on the tab; a header saying it again is noise.
-    money: null,
-    // So is runway: "1.7 months of runway" sat directly over the Runway tile.
+    // When the nightly run last ran and what of it failed: the pulse of what
+    // runs without you. Not the verdict or the bet — those are the first two
+    // cards, and "Not proven · day 2 of 14 on who buys" said them again.
+    proof: systemLine({ now, lastCronRun: home.lastCronRun, stale: done.stale, broke: done.broke.length, failing: home.watchSources.filter((s) => !!s.last_error).length }),
+    // How long the money lasts, which the tab does not say: it shows the balance and what is safe today.
+    money: moneyLine({ runwayMonths: home.metrics.runway_months, toName: read?.toName.length ?? 0 }),
+    // Runway is the first tile on You; "1.7 months of runway" sat directly over it.
     you: null,
   };
 

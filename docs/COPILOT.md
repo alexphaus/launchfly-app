@@ -323,19 +323,29 @@ opened wins — the same reasoning that kept `/lifeos` beside `/copilot`.
 
 | Tab | The question | What is on it | Pure module |
 | --- | --- | --- | --- |
-| Decide (`swipe`) | what waits on me — do it, or put it off | one deck, one card to the foot of the screen, the buttons and nav frosted over it. **Decisions first** (`decide.ts`): writing the offer when there is none; today's call, answered on its own buttons; what needs you (a project that stopped to ask, an introduction, a post you opened — did they answer?, work that failed a check, what Claude proposed, opened drafts to confirm, a plan to approve); the posts the running bet found; the bet's next step; the plan's step or a Move; a checkpoint due; what a pivot left behind; what has to be set up; picking today's call when none was. **Then the people worth a message**, as Swipe dealt them (`deck.ts`). Right does it, left puts it off; a post's left is not a fit, with Undo. Its own top line carries the name, the way to everyone already written to, the mic and You, the count, and anything that broke (`Notices`) · see **Decide, System, Money** and **Swipe** below | `decide.ts`, `deck.ts`, `today.ts`, `plan.ts`, `engine.ts`, `voices.ts` |
+| Decide (`swipe`) | what waits on me — do it, or put it off | under the same header as every tab ("6 to go · 4 need you"), chips that choose what the pile deals — All, Clients, People, Projects, Bets — and the way to everyone already written to; one card as wide as the cards on the other tabs, with an edge all round, the next card's foot under it; one bar under the card, four places on every card (Undo, the left answer, the right answer, Later). **Every decision before every lead** (`decide.ts`): writing the offer when there is none; today's call, answered on its own buttons (or picking one, where none was); what is lost by waiting (a project that stopped to ask — answered on the card —, an introduction, a post you opened: did they answer?, work that failed a check — right starts it again —, a plan to approve); what the bet turns on (a checkpoint due, the bet's next step, the plan's step or a Move); what waits on nothing (opened drafts to confirm, **money in from a payer you have not named**, what Claude proposed); what a pivot left, **what broke**, what has to be set up. **Then the posts the bet found, then the people worth a message**, as Swipe dealt them (`deck.ts`). Every card says **why it is here**, and the pile can be **walked through by voice** (`walk.ts`) · see **Decide, the second pass** below | `decide.ts`, `walk.ts`, `deck.ts`, `today.ts`, `plan.ts`, `engine.ts`, `voices.ts` |
 | System (`proof`) | what runs, and what it has proven | **the engine**, one dark card: what you sell, the count that proves it drawn big ("0/3 paid at your $29", proven at 3 at your price), the five parts in a row with their states — the track lit through every part that works and stopping at the first that does not, the weakest flagged — and the crew working them, a face each · **the part opened** (the one the workflow on trial tests, else the weakest), with a notch pointing at its part: with the bet on it, **the workflow on trial** — the play as its name, the claim it tests, its count against the line and the date it is judged by, and each step with who runs it, how often and what the rows show it has produced, the one the count stopped at marked **Stuck here** (`betplan.ts stuckStep`), the people found one tap away on Decide; otherwise the rule behind the state, who works it and what would move it · a checkpoint when due · **What you've tried**: every bet that ended, with what it counted and how it ended (`engine.ts triedWhen`) · with none running, the person's own kept tests, then the next bet, ideas and book plays for the part opened · conversations, assets and the page, projects, the history, a line each | `engine.ts`, `crew.ts`, `proof.ts`, `business.ts`, `lab.ts`, `betplan.ts`, `assets.ts`, `history.ts`, `ideas.ts`, `livepage.ts` |
 | Money | where did it go | the balance, shown in the book's currency or another · the month's list, each day's header carrying what it cost, or the calendar (spent or balance per day) · what is pending · + to log a move, which steps aside while the list is read downward (it sat over the amounts) | `money/book.ts` |
-| You (the avatar) | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals, one list · **Something changed?**, the typed note the plan and tomorrow's call are redrawn from (it was at the foot of the Path) · Records, what it reads instead of asking (a pill only where one waits on you) · Settings (the business), the nightly run ("Run again" starts tonight's pass now, and the row reports each step) and Account, three groups · the header names the screen; no tab has a line under it — on System, Money and You it repeated the first card | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
+| You (the avatar) | how is it going | money, runway, deep work, replies · your money as your bank shows it, with the payers still to name · the week read back · goals, one list · **Something changed?**, the typed note the plan and tomorrow's call are redrawn from (it was at the foot of the Path) · Records, what it reads instead of asking (a pill only where one waits on you) · Settings (the business), the nightly run ("Run again" starts tonight's pass now, and the row reports each step; Decide's "See the nightly run" scrolls to it) and Account, three groups · the header names the screen and has no line under it: runway, the one line it could say, is its first tile | `review.ts`, `focus.ts`, `nightly.ts`, `money/ledger.ts`, `sensors.ts` |
 
 `derive.ts` computes all of it once per `HomeData`, from `generatedAt` rather
 than the clock, so the header's status line and the tab under it cannot disagree
 (the old header said 61 over a card saying 51) and the server render and the
-hydrating client agree across an hour boundary. No tab has a status line now: on
-Engine ("Not proven · day 2 of 14 on who buys · 3 waiting on you") and You ("1.7
-months of runway") it said the first card again, over two lines, and the Path's
-went with it. Decide's badge and its pile read one list (`d.decide`), so the
-count on the nav and the cards under it cannot disagree either.
+hydrating client agree across an hour boundary. Each tab's line under its name
+says what only that tab can, and never its first card again — Engine's "Not
+proven · day 2 of 14 on who buys · 3 waiting on you" said its first two cards,
+over two lines, and went. **Decide**: what is left in the pile as it stands on
+this phone (`decide.ts deckLine`: "6 to go · 4 need you · 2 sent"), with what is
+running ("looking for more") after it, since the deck covers the banner.
+**System**: when the nightly run last ran, and what of it failed (`today.ts
+systemLine`: "Last run 16h ago · 4 sources failing", "Nothing ran overnight ·
+last run 3d ago") — the pulse of what runs without you, and where a failure is
+said now that Decide has no banner. **Money**: how long the money lasts and the
+payers the bank names that you have not (`today.ts moneyLine`: "3.4 months of
+runway · 2 payers to name") — the tab shows the balance and what is safe today,
+not runway. **You**: none. Decide's badge and its pile read one list
+(`d.decide`), so the count on the nav and the cards under it cannot disagree
+either.
 
 **Decide, System, Money** (October 2026; `decide.ts`, `SwipeTab.tsx`,
 `ProofTab.tsx`, `CopilotApp2.tsx`). The day's work had drifted over three
@@ -350,8 +360,9 @@ done. So:
 
 - **Path is gone, and nothing it did is lost.** The call, the move and every ask
   are Decide's cards. What broke — a nightly run that never ran, a failed check,
-  a failing source, a read that failed — is said over Decide's pile (`Notices`),
-  where a quiet deck would otherwise hide it (invariant 13). The typed note is on
+  a failing source, a read that failed — was said over Decide's pile, where a
+  quiet deck would otherwise hide it (invariant 13); since the second pass it is
+  a card of its own and System's line (below). The typed note is on
   You. The plan is still drawn when what the person said is due (`usePlanDraw` in
   the shell, as opening Path did): the call is picked from it and Claude reads it
   over the connector (`get_plan`). What went is the drawing of it — the evidence
@@ -367,6 +378,8 @@ done. So:
   today's call. Sends are not a card — the drafts are the businesses on the pile.
   A decision that arrives mid-session is dealt next; a post opened in this sitting
   comes back as "did they answer?" at the back, not the moment its tab closes.
+  (The second pass, below, put every decision ahead of the posts and kept the
+  session's pile on the phone.)
 - **Right does it, and a swipe never grades a call.** The call is answered on its
   own buttons — I did it, Not doing it, Wrong call — because the answer grades it
   and a gesture that cheap would grade it wrong; its right swipe only hands work
@@ -391,6 +404,84 @@ done. So:
   and five rows reading "Called off" said nothing about that.
 - **You is a screen, not a tab**: the avatar in every header's corner opens it,
   blue while it is open, and the nav takes you back.
+
+**Decide, the second pass** (20 October 2026; `decide.ts`, `walk.ts`,
+`SwipeTab.tsx`, `CopilotApp2.tsx`). Its owner's verdict after a day with it:
+the header did not match the other tabs and was half again as big, a yellow
+banner of failures took a third of the screen over every card, the card ran
+into the nav under a frost with no foot, the buttons changed from card to card,
+decision cards were mostly blank, and it felt repetitive — "I switch tabs and it
+shows again cards I swiped left". What the code showed under each:
+
+- **Repetitive was a bug.** The pile's order lived in the component, so a trip to
+  another tab dealt it again from the top, and "later" only moved a card within
+  that order — every card put off came straight back. Now the session (a day on
+  this phone, `sessionStorage`) keeps what was answered, what was put off and the
+  card on top. Later is the end of the pile and stays there until the rest is done
+  and the person asks for them again ("Go through them again", per chip). A post
+  opened is put off with the rest, not asked about the moment its tab closes. A
+  business is one person: the draft a refresh turns it into behind the card on
+  screen is never dealt as a second card (`opp:<id>` beside the key).
+- **The order put strangers first.** The bet's eight posts were dealt before the
+  bet's own step and its checkpoint. Now every card that waits on the person
+  comes before every lead, in four bands — what is lost by waiting, what the bet
+  turns on, what waits on nothing, what is wrong with the set-up — and the posts
+  and the businesses follow. Picking today's call, when none was, sits where the
+  call would be: it weighs the rest.
+- **One header, and a line under every tab's name** (above). Decide's own 26px
+  header, its "6 to go" and its banner are gone.
+- **What broke is a card, not a banner** (`today.ts brokeLines`): one card —
+  "Something broke", or "3 things broke" — keyed on what broke, so a new failure
+  is a new card even on a day one was put off, opening where the first is fixed
+  (the sources, the nightly run on You, or reading the account again); and
+  System's line says it too. Still said, never silent (invariant 13).
+- **The card has an edge**: as wide as the cards on System and Money (20px
+  either side), a border all round, its foot above the buttons with the next
+  card's edge under it — the frosted foot that ran into the nav is gone.
+- **One bar, four places, on every card**: Undo, the left answer, the right
+  answer, Later. The right answer's place never moves — it was third of three on
+  a decision and fourth of five on a business, and the thumb missed it on every
+  change of kind. Later sits apart only where left is for good (not for me, not a
+  fit); where left already is later its place is kept empty. Looking a business
+  up is a fact on the card now, not a fifth button. A fix's right answer is
+  "Try again", which it is — the card said "one tap tries it again" over a button
+  that only opened the project.
+- **Chips** over the pile — All, Clients, People, Projects, Bets, each with its
+  count — for an hour on only the clients, or a low day on only the people. Every
+  card is under exactly one (`decide.ts` `focus`, `leadFocus`), so a chip never
+  hides a card from All. The chip is kept for the session; System's "waiting in
+  Decide" on a bet's plan opens Decide on People.
+- **Cards say more.** A glyph for each kind; a project's question answered on its
+  card; the payer and the amount; everything that broke; a post's own picture
+  where the search had one (`exa.ts` keeps an https `image`, carried onto
+  `Voice.image`; posts found before have none, and nothing is fetched to make
+  one). And on every card, **Why this?**
+- **Why this?** (`DecideCard.why`, `leadWhy`): the rule that dealt the card and
+  the rows behind it — "It stopped 2 days ago to ask you this. Nothing on it moves
+  until you answer, so it is near the top"; the bet a post is behind, in its own
+  count; a payer that reads like a business in the pile, offered and never linked
+  unasked; the call's record over the last calls answered ("Of the last 5 calls
+  you answered, 2 were done and 0 moved the number they named" — answered only,
+  never the inferred "ignored", invariant 5, and nothing under three). Waits are
+  counted in the person's own days (`dayIn`). The speaker beside it reads it
+  aloud, and "why this one?" said into the header's mic on Decide does too.
+- **The pile, walked through by voice** (`walk.ts`; the headphones in Decide's
+  header, or "walk me through them" into the mic). The card on top is read aloud
+  — what it is, the line that says it, what can be said back — and the answer
+  said is the swipe: yes, no, later, why, read it, again, stop. Today's call takes
+  "I did it", "not doing it" and "wrong call", on its own card only: a swipe
+  cannot say "I did it", but a spoken one is deliberate. A post opened takes how
+  it ended ("they offered an intro"), or "no answer yet", which is later. Nothing
+  opens outside the app on a voice's say-so — a page, WhatsApp or the clipboard
+  wait for a tap, and the walk says so (`spokenRight`); a business is sent by
+  voice only from the person's own number, and only after its message was read
+  out. What an answer came to — "Logged.", or why it did not go — is said before
+  the next card: somebody walking is not looking at a toast. A word that is none
+  of the answers is asked again, never guessed at.
+- **Money closes into Decide.** A payer the bank names and the person has not is
+  a card ("Who paid you ₱5,000?", the first three, biggest first), because a
+  client's payment counts as a sale on System and nobody opened the Bank sheet to
+  say so.
 
 **The Path is a plan, not a log.** *(Path was dropped in October 2026 — see
 **Decide, System, Money** above. This and the paragraphs on the plan below are kept
@@ -4027,8 +4118,10 @@ counted down (`due.ts`), the will-it-work verdicts and the record's signals (`ou
 the experiment's parse, novelty, life and ledger (`experiment.ts`), and a call that
 follows a redrawn plan only while it is unanswered (`replacesCall`) — and, for
 Decide, the order its decisions are dealt in, which of them need the person, that
-no swipe answers a call, the step a workflow is stuck on (`stuckStep`) and how a
-bet that ended is said (`triedWhen`).
+no swipe answers a call, why each card is there, the chip each is under, the
+step a workflow is stuck on (`stuckStep`) and how a bet that ended is said
+(`triedWhen`) — and, for the walk through it by voice (`walk.ts`), what is read,
+what each answer said back means, and which cards wait for a tap.
 
 Two of them read files rather than modules, and both exist because the same bug
 shipped twice. `OUTCOME_KINDS` is diffed against the `kind` CHECK in

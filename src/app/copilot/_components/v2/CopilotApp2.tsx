@@ -40,6 +40,12 @@
 // the sheets and every action are shared — useCopilot — and only the arrangement
 // is new. Both can be installed and lived with; the one that gets opened wins.
 //
+// One header on every tab, the same size and the same place: the tab's name, and
+// under it one line that only that tab can say — what is left in Decide's pile,
+// when the nightly run last ran on System, how long the money lasts on Money.
+// Decide drew its own header at first, half again as big, with a banner of
+// failures under it that took a third of the screen whatever was on top.
+//
 // The header's corner is the mic (VoiceLog.tsx): say what happened from any
 // tab and the sheet for it opens filled in — a move in the book, as it always
 // did, or a conversation, a sale, a meeting, a change to the offer, a note for
@@ -51,18 +57,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MatchStage } from '@/lib/copilot/matches';
 import { nightlyInFlight, nightlyView } from '@/lib/copilot/nightly';
 import { askedOutright, clearlyMoney, readByRules } from '@/lib/copilot/tell';
+import { deckIntent } from '@/lib/copilot/walk';
 import type { HomeData } from '@/lib/copilot/types';
 import Sheet from '../Sheet';
 import SheetContent from '../SheetContent';
 import type { Actions, Tab2 } from '../shared';
 import { sheetKey, useCopilot } from '../useCopilot';
 import { useDerived, type Derived } from './derive';
-import { IconMoney, IconSwipe, IconSystem, IconYou } from './icons2';
+import { IconHeadphones, IconMoney, IconSwipe, IconSystem, IconYou } from './icons2';
 import ProofTab from './ProofTab';
 import MoneyTab, { BookFab, BookSheet, MoneyTabGuard, useBook } from './MoneyTab';
 import YouTab from './YouTab';
-import SwipeTab from './SwipeTab';
-import { useVoice, VoiceButton, VoiceLive } from './VoiceLog';
+import SwipeTab, { type DeckHandle } from './SwipeTab';
+import { canListen, useVoice, VoiceButton, VoiceLive } from './VoiceLog';
+import { canSpeak } from './Speak';
 import { openReading } from './TellSheets';
 
 /** The nav. You is not on it: the avatar in the header opens it. */
@@ -150,12 +158,22 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
   // of waiting is a second of reading the words back.
   const [sorting, setSorting] = useState<string | null>(null);
   const tells = useRef(0);
+  // Decide's pile, for what the mic asks of it there: why the card on top is there, or to be walked through.
+  const deck = useRef<DeckHandle | null>(null);
+  const [deckLine, setDeckLine] = useState<string | null>(null);
+  const [walking, setWalking] = useState(false);
+  // The walk needs a voice and an ear: where the browser has neither, there is no button promising one (invariant 7).
+  const [canWalk, setCanWalk] = useState(false);
+  useEffect(() => { setCanWalk(canSpeak() && canListen()); }, []);
   const tell = async (heard: string) => {
     // Something said after a sort began is the one that counts: the older one's answer is dropped.
     const n = ++tells.current;
     setSorting(null);
     const today = home.recent.today;
     const categories = book.book?.categories;
+    // On Decide, "why this?" is about the card on top, and "walk me through" is the pile read aloud (walk.ts).
+    const intent = tab === 'swipe' ? deckIntent(heard) : null;
+    if (intent && deck.current) return intent === 'why' ? deck.current.why() : deck.current.walk();
     // A question the Ask sheet can count is answered there at once, counted and
     // read aloud: it waits on no sort, and "can I spend 500 today?" carries an
     // amount and is still not logged.
@@ -185,8 +203,13 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
   });
   const d = useDerived(home);
   usePlanDraw(home, d, actions);
-  const status = d.status[tab];
-  const nightly = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? nightlyView(home.nightly.run, new Date()) : null;
+  const nightlyRun = home.nightly?.run && nightlyInFlight(home.nightly.run, new Date()) ? nightlyView(home.nightly.run, new Date()) : null;
+  // Decide's line is the pile's own, from the deck; what is running is said in it, since the deck covers the banner.
+  const busy = nightlyRun?.state === 'running' ? 'nightly run going' : finding ? 'looking for more' : briefing ? 'picking today’s call' : null;
+  const status = tab === 'swipe'
+    ? [deckLine, busy].filter(Boolean).join(' · ') || null
+    : d.status[tab];
+  const nightly = nightlyRun;
   // Where the week's review sends someone about their matches: the new ones to
   // the deck, everyone already written to into the outreach sheet, on the stage
   // that was asked for — "send the drafts" lands on To send.
@@ -194,9 +217,17 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
     if (s === 'new') setTab('swipe');
     else actions.openSheet({ kind: 'outreach', stage: s });
   };
-  // The header's corner, on every tab: the mic, then You. Decide draws it in its own top line.
+  // The header's corner, on every tab: the mic, then You. On Decide, the walk through the pile comes first.
   const corner = (
     <>
+      {tab === 'swipe' && canWalk && (
+        <button
+          className={`cp2-walk-btn${walking ? ' on' : ''}`} onClick={() => deck.current?.walk()} aria-pressed={walking}
+          aria-label={walking ? 'Stop reading the pile aloud' : 'Read the pile aloud and answer by voice'}
+        >
+          <IconHeadphones />
+        </button>
+      )}
       <VoiceButton voice={voice} onType={() => logMove()} label="Say what happened, or ask" />
       <MeButton home={home} on={tab === 'you'} onOpen={() => setTab('you')} />
     </>
@@ -209,23 +240,22 @@ export default function CopilotApp2({ initial }: { initial: HomeData }) {
 
   return (
     <div className={`cp-frame cp2-frame${tab === 'swipe' ? ' cp2-swiping' : ''}${tab === 'money' ? ' cp2-booking' : ''}`}>
-      {/* No header on Decide: the card is the screen, as a deck of cards has to be to be read at a glance. Its top line carries the corner. */}
-      {tab !== 'swipe' && <header className="cp-header">
+      <header className="cp-header">
         <div className="cp2-header-text">
           <h1>{LABEL[tab]}</h1>
           {/* Tab-aware, and nothing when there is nothing true to say. While the mic is open, what it hears. */}
           {live ?? (status && <p>{status}</p>)}
         </div>
         <div className="cp-header-right">{corner}</div>
-      </header>}
+      </header>
 
       <main className="cp-content" ref={mainRef}>
         {/* The nightly pass runs for minutes after its tap has returned, so it is
             said on every tab, not only on the row that started it. */}
-        {nightly?.state === 'running'
+        {tab !== 'swipe' && (nightly?.state === 'running'
           ? <div className="cp-banner"><span className="dot" />Nightly run · {nightly.stepN ? `${nightly.stepN} of ${nightly.of} · ` : ''}{nightly.doing}</div>
-          : (briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>}
-        {tab === 'swipe' && <SwipeTab home={home} d={d} actions={actions} finding={finding} briefing={briefing} say={say} refresh={refresh} corner={corner} live={live} />}
+          : (briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s call'}</div>)}
+        {tab === 'swipe' && <SwipeTab home={home} d={d} actions={actions} finding={finding} briefing={briefing} say={say} refresh={refresh} onLine={setDeckLine} handle={deck} onWalk={setWalking} />}
         {tab === 'proof' && <ProofTab home={home} d={d} actions={actions} briefing={briefing} />}
         {tab === 'money' && <MoneyTabGuard><MoneyTab book={book} actions={actions} say={say} arrival={arrival} clearArrival={clearArrival} /></MoneyTabGuard>}
         {tab === 'you' && <YouTab home={home} d={d} actions={actions} openMatches={openMatches} briefing={briefing} />}

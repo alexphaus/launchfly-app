@@ -8416,8 +8416,8 @@ async function businessChainSuite() {
     threadV2({ id: 'd', status: 'active' }),
   ];
   assert.equal(waitingOnYou(threads), 3);
-  // No line under Proof's name: everything it said is the first two cards, and what waits on you is the Path's badge.
-  assert.match(readFileSync('src/app/copilot/_components/v2/derive.ts', 'utf8'), /\n    proof: null,\n/);
+  // The line under System's name is when the nightly run last ran and what of it failed — never the verdict or the bet, which are its first two cards.
+  assert.match(readFileSync('src/app/copilot/_components/v2/derive.ts', 'utf8'), /\n    proof: systemLine\(\{ now, lastCronRun: home\.lastCronRun, stale: done\.stale/);
 
   /* 15. The rows behind it: per kind of business, per channel, and every win's amount, from the funnel's own rows. */
   const dz = diagnoseBz({
@@ -11243,7 +11243,9 @@ async function voicesSuite() {
   /* 12. The cards: each post its own card on Decide, the opener fixed words, nothing sent from the app. */
   const deck = src('src/app/copilot/_components/v2/SwipeTab.tsx');
   // Opened from the person's own browser, the reply theirs (invariant 4): a link opened and words copied, never a send.
-  assert.match(deck, /openLink\(v\.url\);\s*openedNow\.current\.add\(v\.id\);\s*opened\.mark\(v\.id\);/);
+  assert.match(deck, /openLink\(v\.url\);\s*opened\.mark\(v\.id\);/);
+  // "Did they answer?" is put off with the rest, not asked the moment their tab is closed.
+  assert.match(deck, /setLater\(\(l\) => \[\.\.\.l\.filter\(\(k\) => k !== `d:a:\$\{v\.id\}`\), `d:a:\$\{v\.id\}`\]\);/);
   assert.match(deck, /navigator\.clipboard\.writeText\(VOICE_OPENER\)/);
   assert.match(deck, /href=\{v\.url\} target="_blank" rel="noopener noreferrer nofollow"/);
   assert.match(deck, /actions\.openSheet\(\{ kind: 'talk', voice: c\.voice!\.id \}\)/);
@@ -11660,7 +11662,7 @@ async function engineSuite() {
   assert.ok(!/\bProof\b|\bEngine\b/.test(src('src/app/copilot/_components/v2/CopilotApp2.tsx').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/ProofTab|Proof'/g, '')), 'no label of an old name left in the shell’s code');
   assert.ok(!existsSync('src/app/copilot/_components/v2/PathTab.tsx') && !existsSync('src/app/copilot/_components/v2/PathPlan.tsx'), 'Path is gone, not hidden');
   const css = src('src/app/copilot/copilot.css');
-  for (const c of ['cp2-er-hero', 'cp2-er-parts', 'cp2-er-station', 'cp2-dk-face', 'cp2-dk-ended', 'cp2-dk-head', 'cp2-me-btn', 'cp2-sy-tried', 'cp2-bplan-flag']) assert.ok(css.includes(`.cp2-${c.replace(/^cp2-/, '')}`), `${c} is styled`);
+  for (const c of ['cp2-er-hero', 'cp2-er-parts', 'cp2-er-station', 'cp2-dk-face', 'cp2-dk-ended', 'cp2-dk-why', 'cp2-dkf-chip', 'cp2-dk-walk', 'cp2-walk-btn', 'cp2-me-btn', 'cp2-sy-tried', 'cp2-bplan-flag']) assert.ok(css.includes(`.cp2-${c.replace(/^cp2-/, '')}`), `${c} is styled`);
 
   console.log('copilot-core: engine checks passed');
 }
@@ -13021,7 +13023,10 @@ ideasReadAgainSuite().catch((e) => { console.error(e); process.exit(1); });
 // stranger's post counted as something that needs you, and a workflow called
 // stuck while the crew is still working it.
 
-import { decideCards as dcCards, decideCount as dcCount, type DecideInput as DcInput } from '../../src/lib/copilot/decide';
+import {
+  CALL_RECORD_MIN as DC_RECORD_MIN, MAX_PAYER_CARDS as DC_MAX_PAYERS, callRecord as dcRecord, decideCards as dcCards, decideCount as dcCount, deckLine as dcLine,
+  leadFocus as dcLeadFocus, leadWhy as dcLeadWhy, type DecideInput as DcInput,
+} from '../../src/lib/copilot/decide';
 import { stuckStep as dcStuck, type StepView as DcStepView } from '../../src/lib/copilot/betplan';
 import { triedWhen as dcTried } from '../../src/lib/copilot/engine';
 import type { AskRow as DcAsk } from '../../src/lib/copilot/today';
@@ -13031,7 +13036,7 @@ import { readFileSync as readDecideFile } from 'node:fs';
 
 async function decideSuite() {
   const src = (f: string) => readDecideFile(f, 'utf8');
-  const ask = (kind: DcAsk['kind'], n = 1): DcAsk => ({ key: `${kind[0]}:${n}`, kind, title: `${kind} ${n}`, detail: `${kind} detail`, id: `c${n}` });
+  const ask = (kind: DcAsk['kind'], n = 1, over: Partial<DcAsk> = {}): DcAsk => ({ key: `${kind[0]}:${n}`, kind, title: `${kind} ${n}`, detail: `${kind} detail`, id: `c${n}`, ...over });
   const voice = (n: number): DcVoice => ({ id: `v_0000000${n}`, url: `https://www.indiehackers.com/post/${n}`, where: 'Indie Hackers', title: `Post ${n}`, said: `I am stuck ${n}`, author: `a${n}`, posted: '2026-10-15' });
   const step = (over: Partial<DcStep> = {}): DcStep => ({
     kind: 'find', part: 'reach', eyebrow: 'Your move · day 4 of 21', title: 'Find more people who said it', why: '0 of 3 commitments · 18 days left.', hint: null,
@@ -13039,7 +13044,7 @@ async function decideSuite() {
   });
   const base: DcInput = {
     noOffer: false, callPending: false, callHandsOver: false, now: null, asks: [], step: null, voices: [], opened: {},
-    pivotLeft: false, checkpoint: { due: false, ended: 0 }, cannotSearch: false, noCall: false,
+    pivotLeft: false, checkpoint: { due: false, ended: 0 }, cannotSearch: false, noCall: false, today: '2026-10-20', timezone: 'Asia/Manila',
   };
   const kinds = (i: Partial<DcInput>) => dcCards({ ...base, ...i }).map((c) => c.kind);
   const keys = (i: Partial<DcInput>) => dcCards({ ...base, ...i }).map((c) => c.key);
@@ -13050,19 +13055,36 @@ async function decideSuite() {
   assert.deepEqual(kinds({ noOffer: true, asks: [ask('proposal')] }), ['offer', 'ask'], 'a proposal from a chat still waits, after the offer');
 
   /* 2. The call: first after the offer, and a swipe never says "I did it" — only work the app offers to do is handed over by one. */
-  const call = dcCards({ ...base, callPending: true })[0];
-  assert.deepEqual([call.kind, call.right, call.needs], ['call', null, true]);
+  const call = dcCards({ ...base, callPending: true, call: { headline: 'Send the 12 waiting drafts', record: null } })[0];
+  assert.deepEqual([call.kind, call.right, call.needs, call.title], ['call', null, true, 'Send the 12 waiting drafts']);
   assert.equal(dcCards({ ...base, callPending: true, callHandsOver: true })[0].right, 'Hand it over');
+  assert.ok(call.why.some((w) => /a swipe never says you did it/.test(w)), 'the card says why its swipe does not answer it');
+  // Picking today's call sits where the call would be: it weighs everything else on the pile.
+  assert.deepEqual(kinds({ noCall: true, asks: [ask('question')], step: step() }), ['brief', 'ask', 'bet']);
   const deck = src('src/app/copilot/_components/v2/SwipeTab.tsx');
   assert.ok(deck.indexOf('await actions.handOverMove(move.id);') < deck.indexOf("await actions.answerCall('did');"), 'acted on only once the work actually went');
-  assert.equal((deck.match(/answerCall\(/g) ?? []).length, 1, 'the deck answers a call in one place: after a hand-over');
+  // Two places answer a call, and neither is a swipe: after a hand-over went, and the call's own words said aloud on the walk.
+  assert.equal((deck.match(/answerCall\(/g) ?? []).length, 2);
+  assert.match(deck, /case 'call': \{\n\s+const ok = await actions\.answerCall\(a\.answer as CallAnswer\);/);
 
-  /* 3. Warm first: blocked work, introductions, posts opened and not answered, then fixes, proposals, confirms, approvals. Sends are the leads themselves. */
+  /* 3. Most important first: every decision before every lead; what goes cold before what only goes stale. */
   const asks = [ask('approve'), ask('send'), ask('confirm'), ask('proposal'), ask('fix'), ask('intro'), ask('question')];
   const v1 = voice(1);
   const v2 = voice(2);
-  const order = dcCards({ ...base, asks, voices: [v1, v2], opened: { [v2.id]: '2026-10-17T03:00:00Z' } });
-  assert.deepEqual(order.map((c) => (c.ask ? c.ask.kind : c.kind)), ['question', 'intro', 'answered', 'fix', 'proposal', 'confirm', 'approve', 'voice']);
+  const planStep = { kind: 'step' as const, key: 'rm:s1', item: 's1', title: 'Open Wise, verify it receives PHP', why: 'Toward: Savings safe in Wise.', size: 'S · you have 150 min', cta: 'Mark it done' };
+  const payer = { key: 'juan', name: 'JUAN DELA CRUZ', total: '₱5,000', count: 2, last: '2026-10-12', looksLike: null };
+  const broke = [{ key: 'stale', title: 'Nothing ran overnight', detail: 'The nightly job has never run.', fix: 'nightly' as const }];
+  const order = dcCards({
+    ...base, asks, voices: [v1, v2], opened: { [v2.id]: '2026-10-17T03:00:00Z' }, step: step(), now: planStep,
+    checkpoint: { due: true, ended: 2 }, payers: [payer], broke, pivotLeft: true,
+  });
+  assert.deepEqual(order.map((c) => (c.ask ? c.ask.kind : c.kind)), [
+    'question', 'intro', 'answered', 'fix', 'approve',
+    'checkpoint', 'bet', 'move',
+    'confirm', 'payer', 'proposal',
+    'pivot', 'broke', 'voice',
+  ]);
+  assert.ok(order.findIndex((c) => c.kind === 'voice') > order.findIndex((c) => c.kind === 'bet'), 'the bet’s posts never ahead of the bet’s own step: the owner’s first deck dealt eight strangers before it');
   assert.ok(!order.some((c) => c.ask?.kind === 'send'), 'a card saying "drafts ready" over the drafts is the drafts twice');
   assert.equal(order.find((c) => c.kind === 'answered')!.openedAt, '2026-10-17T03:00:00Z');
 
@@ -13071,9 +13093,9 @@ async function decideSuite() {
   assert.deepEqual([fresh.left, fresh.needs, fresh.right], ['not_fit', false, 'Open their post']);
   const asked = order.find((c) => c.kind === 'answered')!;
   assert.deepEqual([asked.left, asked.needs, asked.right], ['later', true, 'They answered']);
-  assert.equal(dcCount(order), 7, 'six asks and one post waiting on an answer; the fresh post is a lead');
+  assert.equal(dcCount(order), order.length - 1, 'everything but the fresh post waits on you');
   assert.notEqual(keys({ voices: [v1] })[0], keys({ voices: [v1], opened: { [v1.id]: '2026-10-17T03:00:00Z' } })[0], 'opened, it is a new card, not one already answered');
-  assert.ok(keys({ asks, voices: [v1], callPending: true, pivotLeft: true }).every((k) => k.startsWith('d:')), 'never a key a lead uses');
+  assert.ok(keys({ asks, voices: [v1], callPending: true, pivotLeft: true, payers: [payer], broke }).every((k) => k.startsWith('d:')), 'never a key a lead uses');
 
   /* 5. The bet's step: a card of its own, except where the posts or the offer already are. */
   assert.deepEqual(kinds({ step: step() }), ['bet']);
@@ -13082,14 +13104,13 @@ async function decideSuite() {
   assert.notEqual(keys({ step: step() })[0], keys({ step: step({ kind: 'count', title: 'Log your next conversation' }) })[0], 'a step that changed is a new card');
 
   /* 6. The plan's step or a Move, only while no call waits: the call already weighed them. */
-  const planStep = { kind: 'step' as const, key: 'rm:s1', item: 's1', title: 'Open Wise, verify it receives PHP', why: 'Toward: Savings safe in Wise.', size: 'S · you have 150 min', cta: 'Mark it done' };
   assert.deepEqual(kinds({ now: planStep }), ['move']);
   assert.deepEqual([dcCards({ ...base, now: planStep })[0].right, dcCards({ ...base, now: planStep })[0].eyebrow], ['Done', 'Your plan']);
   assert.deepEqual(kinds({ now: planStep, callPending: true }), ['call']);
   for (const k of ['send', 'find', 'rest', 'offer', 'question'] as const) assert.deepEqual(kinds({ now: { ...planStep, kind: k } }), [], `${k}: a card of its own elsewhere, or none`);
 
-  /* 7. A checkpoint, what a pivot left, and what has to be set up: last, and nothing to set up before there is an offer. */
-  assert.deepEqual(kinds({ pivotLeft: true, cannotSearch: true, noCall: true, asks: [ask('fix')], checkpoint: { due: true, ended: 4 } }), ['ask', 'checkpoint', 'pivot', 'setup', 'brief']);
+  /* 7. A checkpoint before the bet's step; what a pivot left, what broke and what to set up after the rest. */
+  assert.deepEqual(kinds({ pivotLeft: true, cannotSearch: true, asks: [ask('fix')], checkpoint: { due: true, ended: 4 } }), ['ask', 'checkpoint', 'pivot', 'setup']);
   const due = dcCards({ ...base, checkpoint: { due: true, ended: 4 } })[0];
   assert.deepEqual([due.title, due.right, due.needs], ['Pivot or persevere?', 'Answer it', true]);
   assert.match(due.detail!, /^4 bets ended since you last decided\./);
@@ -13114,16 +13135,221 @@ async function decideSuite() {
   assert.equal(dcTried(ended('failed', '2026-10-01', '2026-10-29')), 'Ran to 29 Oct short of its line');
   assert.equal(dcTried(ended('stopped', '2026-10-01', null)), 'Called off', 'no end day kept: nothing invented');
 
-  /* 10. Wired: the badge and the deck read one list, the plan is still drawn, and the typed note moved to You. */
+  /* 10. Why this? Every card says, from its rows: how long it waited in the person's days, the bet it is behind, what it reads like. */
+  assert.ok(order.every((c) => c.why.length > 0 && c.why.every((w) => w.trim().length > 0)), 'never a card without its reason');
+  const q = dcCards({ ...base, asks: [ask('question', 1, { since: '2026-10-18T02:00:00Z' })] })[0];
+  assert.match(q.why[0], /^It stopped 2 days ago to ask you this\./, 'counted in the person’s own days');
+  const asOf = dcCards({ ...base, asks: [ask('approve', 1, { since: '2026-10-19T17:00:00Z' })] })[0];
+  assert.match(asOf.why[0], /^Written today/, 'written at 01:00 in Manila on the 20th is today there, though it was the 19th in UTC');
+  const withBet = dcCards({ ...base, voices: [v1], bet: { belief: 'Solo founders want a weekly review', line: 'day 4 of 14, 0 of 10 conversations' } })[0];
+  assert.deepEqual(withBet.why, ['Found by your bet’s search, posted 5 days ago: somebody describing the problem your bet is about, in their own words.', 'Your bet: day 4 of 14, 0 of 10 conversations.']);
+  const p1 = dcCards({ ...base, payers: [{ ...payer, looksLike: 'Rapid Pest' }] })[0];
+  assert.deepEqual([p1.title, p1.detail, p1.right, p1.focus], ['Who paid you ₱5,000?', 'JUAN DELA CRUZ · 2 payments, the last on 12 Oct', 'Name them', 'clients']);
+  assert.match(p1.why[1], /reads like Rapid Pest.*Nothing is linked until you say so/, 'offered, never linked unasked');
+  assert.equal(dcCards({ ...base, payers: Array.from({ length: 7 }, (_, n) => ({ ...payer, key: `p${n}` })) }).length, DC_MAX_PAYERS, 'past the first few it is the Bank sheet’s list, not the pile');
+
+  /* 11. The call's record: answered calls only — "ignored" is the app's inference, not an answer — and only past three. */
+  const dec = (id: string, response: 'did' | 'rejected' | 'wrong' | 'ignored' | 'pending', after: number | null = null) => ({ id, response, verify: { metric: 'sent' as const, baseline: 0, after, verifiedAt: null } });
+  assert.equal(dcRecord([dec('a', 'did', 3), dec('b', 'rejected')], null), null, `under ${DC_RECORD_MIN} answered, nothing is said`);
+  assert.deepEqual(dcRecord([dec('a', 'did', 3), dec('b', 'did', 0), dec('c', 'wrong'), dec('d', 'ignored'), dec('t', 'pending')], 't'), { answered: 3, did: 2, moved: 1 });
+  const rec = dcCards({ ...base, callPending: true, call: { headline: 'x', record: { answered: 5, did: 2, moved: 0 } } })[0];
+  assert.equal(rec.why[2], 'Of the last 5 calls you answered, 2 were done and 0 moved the number they named.');
+
+  /* 12. What broke is one card, keyed on what broke, opening where the first one is fixed. */
+  const b2 = dcCards({ ...base, broke: [...broke, { key: 'sources', title: '4 of 12 sources failed', detail: 'r/SaaS +3', fix: 'sources' }] })[0];
+  assert.deepEqual([b2.eyebrow, b2.title, b2.right, b2.focus, b2.key], ['2 things broke', 'Nothing ran overnight', 'See the nightly run', 'projects', 'd:broke:stale+sources']);
+  assert.equal(b2.why[1], '4 of 12 sources failed: r/SaaS +3');
+
+  /* 13. The chips: every card under exactly one, so a chip never hides a card from All. */
+  assert.deepEqual(order.map((c) => c.focus), ['projects', 'people', 'people', 'projects', 'projects', 'bets', 'bets', 'bets', 'clients', 'clients', 'people', 'bets', 'projects', 'people']);
+  assert.equal(dcCards({ ...base, asks: [ask('proposal', 1, { about: 'test' })] })[0].focus, 'bets', 'a test Claude proposed is about the bets');
+  assert.equal(dcLeadFocus({ kind: 'business', group: 'clients' }), 'clients');
+  assert.equal(dcLeadFocus({ kind: 'find', group: 'work' }), 'clients', 'paid work is somebody to sell to');
+  assert.equal(dcLeadFocus({ kind: 'find', group: 'people' }), 'people');
+
+  /* 14. Why a business is where it is: said yes to, a follow-up, posted last night — nothing the card does not carry. */
+  const lead = { kind: 'draft' as const, title: 'Rapid Pest', fresh: false, followUp: false, createdAt: '2026-10-17T05:00:00Z', source: null };
+  assert.deepEqual(dcLeadWhy(lead, '2026-10-20', 'Asia/Manila'), ['You said yes to Rapid Pest 3 days ago. The message is written and waits on you to send it.']);
+  assert.match(dcLeadWhy({ ...lead, followUp: true }, '2026-10-20')[0], /^A follow-up/);
+  assert.deepEqual(dcLeadWhy({ ...lead, kind: 'find', fresh: true, createdAt: '2026-10-19T14:00:00Z', source: 'reddit.com' }, '2026-10-20', 'Asia/Manila'), ['Found yesterday on reddit.com: a post like this is answered first by whoever answers first.']);
+  assert.deepEqual(dcLeadWhy({ ...lead, kind: 'business', fresh: false }, '2026-10-20'), [], 'an old business has the matcher’s reasons and nothing made up');
+
+  /* 15. The subheader counts the pile as it stands. */
+  assert.equal(dcLine({ left: 6, needs: 4, sent: 0, later: 0 }), '6 to go · 4 need you');
+  assert.equal(dcLine({ left: 3, needs: 1, sent: 2, later: 1 }), '3 to go · 1 needs you · 2 sent');
+  assert.equal(dcLine({ left: 0, needs: 0, sent: 5, later: 2 }), 'All done · 2 put off for later');
+  assert.equal(dcLine({ left: 0, needs: 0, sent: 0, later: 0 }), 'All done for now');
+
+  /* 16. Wired: the badge and the deck read one list, put-offs are kept for the day, and the banner is gone from over the pile. */
   const derive = src('src/app/copilot/_components/v2/derive.ts');
   assert.match(derive, /const decide = decideCards\(\{ \.\.\.decideInput, opened: \{\} \}\);/);
   assert.match(deck, /decideCards\(\{ \.\.\.d\.decideInput, opened: opened\.map \}\)/, 'the same input, with the posts this device opened');
   assert.match(src('src/app/copilot/_components/v2/YouTab.tsx'), /await actions\.addNote\(note\.trim\(\), true\);/, 'a note can still be typed, not only said');
-  assert.match(deck, /<Notices home=\{home\} d=\{d\} actions=\{actions\} \/>/, 'what broke is said over the pile (invariant 13)');
+  // Later is kept for the day on the phone, beside what was answered: a trip to another tab never deals it again.
+  assert.match(deck, /const laterKey = `cp2\.swipe\.later\.\$\{pid\}`;/);
+  assert.match(deck, /setLaterState\(readSession\(laterKey, today\)\);/);
+  assert.ok(!/function Notices\(/.test(deck) && !/cp2-dk-notes/.test(deck), 'what broke is a card now, not a banner over every card');
+  assert.match(derive, /const broke = brokeLines\(\{ now, unread: home\.recent\.unreadable, done, lastCronRun: home\.lastCronRun \}\);/, 'and still said (invariant 13)');
+  // One person is one card: a business turned into a draft behind the card on screen is not dealt twice.
+  assert.match(deck, /if \(opps\.has\(it\.card\.oppId\) \|\| gone\.has\(`opp:\$\{it\.card\.oppId\}`\)\) return;/);
   // Nothing drafts from a blank offer: with none, the businesses are not dealt at all.
   assert.match(deck, /const leads = useMemo\(\(\) => \(d\.noOffer \? \[\] : deckCards\(/);
+  // The big answers never move: four places on every card, Later's kept empty where left already is later.
+  assert.equal((deck.match(/className="cp2-swp-bar"/g) ?? []).length, 1, 'one bar, for every kind of card');
+  assert.match(deck, /className=\{`cp2-swp-act sm\$\{leftForGood \? '' : ' hide'\}`\}/);
 
   console.log('copilot-core: decide checks passed');
 }
 
 decideSuite().catch((e) => { console.error(e); process.exit(1); });
+
+// ─── Decide, walked through by voice (lib/copilot/walk.ts) ──────────────────
+// The pile read aloud and answered aloud. The checks are the ways a voice could
+// mislead: a call graded by a word that was not an answer to it, a "stop" taken
+// as a no, a post's ending logged off a sentence that said nothing of one, a
+// page or an app opened on a voice's say-so, and a card read with words it does
+// not carry.
+
+import {
+  WALK_HELP as WLK_HELP, decisionWords as wlkWords, deckIntent as wlkIntent, heardWords as wlkHeard, leadWords as wlkLead, spokenRight as wlkRight,
+  walkAnswer as wlkAnswer, walkPrompt as wlkPrompt, whyWords as wlkWhy,
+} from '../../src/lib/copilot/walk';
+import { decideCards as wlkCards, type DecideInput as WlkInput } from '../../src/lib/copilot/decide';
+
+async function walkSuite() {
+  /* 1. What the mic on Decide hears as about the pile: a short "why", or asking to be walked through. Anything longer is the Ask sheet's. */
+  assert.equal(wlkIntent('Why this one?'), 'why');
+  assert.equal(wlkIntent('why is this here'), 'why');
+  assert.equal(wlkIntent('Walk me through them'), 'walk');
+  assert.equal(wlkIntent('read the cards to me'), 'walk');
+  assert.equal(wlkIntent('why did my sales drop so much this month do you think'), null, 'a real question goes to the Ask sheet');
+  assert.equal(wlkIntent('why did sales drop'), null, 'however short');
+  assert.equal(wlkIntent('how come'), 'why');
+  assert.equal(wlkIntent('Why is that one on top?'), 'why');
+  assert.equal(wlkIntent('coffee 130'), null);
+  assert.equal(wlkHeard('  Not a FIT!!  '), 'not a fit');
+
+  /* 2. Stopping and asking come first: "stop" is never a no, "why" never a yes. */
+  assert.deepEqual(wlkAnswer('stop', 'lead'), { do: 'stop' });
+  assert.deepEqual(wlkAnswer("that's enough", 'ask'), { do: 'stop' });
+  assert.deepEqual(wlkAnswer('why?', 'voice'), { do: 'why' });
+  assert.deepEqual(wlkAnswer('what does it say', 'lead'), { do: 'read' }, 'starts with "what" and is still a read');
+  assert.deepEqual(wlkAnswer('say that again', 'lead'), { do: 'again' });
+  assert.deepEqual(wlkAnswer('help', 'ask'), { do: 'help' });
+
+  /* 3. The deck's own answers. "No" is the left swipe; "later" is the end of the pile; "yes" the right swipe. */
+  assert.deepEqual(wlkAnswer('not a fit', 'voice'), { do: 'no' });
+  assert.deepEqual(wlkAnswer('nope', 'lead'), { do: 'no' });
+  assert.deepEqual(wlkAnswer('skip', 'lead'), { do: 'no' });
+  assert.deepEqual(wlkAnswer('later', 'ask'), { do: 'later' });
+  assert.deepEqual(wlkAnswer('next', 'lead'), { do: 'later' });
+  assert.deepEqual(wlkAnswer('yes', 'ask'), { do: 'yes' });
+  assert.deepEqual(wlkAnswer('send it', 'lead'), { do: 'yes' });
+  assert.deepEqual(wlkAnswer('banana', 'lead'), { do: 'unknown' }, 'asked again, never guessed at');
+
+  /* 4. Today's call is graded by what is said to it, on its own card only: deliberate words, never a stray yes. */
+  assert.deepEqual(wlkAnswer('I did it', 'call'), { do: 'call', answer: 'did' });
+  assert.deepEqual(wlkAnswer('not doing it', 'call'), { do: 'call', answer: 'rejected' });
+  assert.deepEqual(wlkAnswer('wrong call', 'call'), { do: 'call', answer: 'wrong' }, '"wrong call" has "call" in it and is still wrong');
+  assert.deepEqual(wlkAnswer('I did it', 'ask'), { do: 'unknown' }, 'only the call takes "I did it"');
+  assert.deepEqual(wlkAnswer('yes', 'call'), { do: 'yes' }, 'a yes on the call is the hand-over, never "I did it"');
+
+  /* 5. A post already opened: how it ended, said in so many words — or no answer yet, which is later. */
+  assert.deepEqual(wlkAnswer('they offered an intro', 'answered'), { do: 'ended', commitment: 'intro' });
+  assert.deepEqual(wlkAnswer('they paid for a call', 'answered'), { do: 'ended', commitment: 'money' }, 'money first: a paid call was money');
+  assert.deepEqual(wlkAnswer('booked another call next week', 'answered'), { do: 'ended', commitment: 'time' });
+  assert.deepEqual(wlkAnswer('nothing came of it', 'answered'), { do: 'ended', commitment: 'none' });
+  assert.deepEqual(wlkAnswer('no answer yet', 'answered'), { do: 'later' }, 'not "nothing": nobody answered');
+  assert.deepEqual(wlkAnswer('they paid', 'voice'), { do: 'unknown' }, 'only an opened post takes an ending');
+
+  /* 6. A spoken yes never opens a page, an app or the clipboard: those cards wait for a tap. */
+  const base: WlkInput = {
+    noOffer: false, callPending: false, callHandsOver: false, now: null, asks: [], step: null, voices: [], opened: {},
+    pivotLeft: false, checkpoint: { due: false, ended: 0 }, cannotSearch: false, noCall: false, today: '2026-10-20',
+  };
+  const v = { id: 'v_00000001', url: 'https://www.reddit.com/r/x/1', where: 'r/x', title: 'I keep losing invoices', said: 'Every month I lose one.', author: null, posted: '2026-10-19' };
+  const post = wlkCards({ ...base, voices: [v] })[0];
+  assert.equal(wlkRight(post), 'tap');
+  assert.equal(wlkRight(wlkCards({ ...base, asks: [{ key: 'f:1', kind: 'fix', title: 'x', detail: 'y', id: 'c1' }] })[0]), 'run', 'starting a project again opens nothing');
+  assert.equal(wlkRight(wlkCards({ ...base, asks: [{ key: 'q:1', kind: 'question', title: 'x', detail: 'y', id: 'c1' }] })[0]), 'sheet');
+  assert.equal(wlkRight(wlkCards({ ...base, callPending: true })[0]), 'none', 'the call answers on its own words, not on a yes');
+  assert.equal(wlkRight(wlkCards({ ...base, step: { kind: 'count', part: 'reach', eyebrow: 'e', title: 'Copy your page', why: null, hint: null, primary: { label: 'Copy the link', go: { to: 'copylink' } }, claude: null, payoff: null } })[0]), 'tap');
+
+  /* 7. What is read: the card's own words and what can be said back — nothing it does not carry. */
+  assert.equal(wlkWords(post), 'Someone said it on r/x: I keep losing invoices. They wrote: Every month I lose one. Say not a fit, later, or why. Opening their post takes a tap.');
+  const q = wlkCards({ ...base, asks: [{ key: 'q:1', kind: 'question', title: 'Which supplier do you use?', detail: 'Compare three suppliers. Then pick one.', id: 'c1' }] })[0];
+  assert.equal(wlkWords(q), 'A project asks you. Which supplier do you use? Compare three suppliers. Say yes to answer it, later, or why.');
+  assert.equal(wlkPrompt(wlkCards({ ...base, callPending: true, callHandsOver: true })[0]), 'Say I did it, not doing it, or wrong call. Yes hands it over. Or later.');
+  assert.equal(wlkLead({ title: 'Rapid Pest', sub: 'Pest control · Manila', why: ['Found last night'] }, false), 'Rapid Pest, Pest control · Manila. Found last night. Say read it, skip, or later.');
+  assert.match(wlkLead({ title: 'A', sub: null, why: [] }, true), /Say read it, send, skip, or later\.$/, 'send is offered only from the person’s own number');
+  assert.equal(wlkWhy(['One.', 'Two']), 'One. Two.');
+  assert.ok(WLK_HELP.includes('stop'));
+
+  /* 8. Wired: nothing sent unheard, and a page or an app is never opened from a voice. */
+  const deck = readFileSync('src/app/copilot/_components/v2/SwipeTab.tsx', 'utf8');
+  const yes = deck.slice(deck.indexOf("case 'yes': {"), deck.indexOf('const walkStart'));
+  assert.ok(yes.indexOf('if (!heardMsg.current.has(it.key))') < yes.indexOf('goRightLead(it.card)'), 'the message is read before a spoken send');
+  assert.ok(yes.indexOf('if (!ownedFor(it.card))') < yes.indexOf('goRightLead(it.card)'), 'only the person’s own number sends by voice; their apps need a tap');
+  assert.match(yes, /if \(r === 'tap'\) \{/);
+  // Each sentence and each listen belongs to one walk: a stopped walk's late answer does nothing.
+  assert.match(deck, /if \(gen !== walkGen\.current\) return;/);
+  // On Decide, the shell's mic asks the deck first.
+  assert.match(readFileSync('src/app/copilot/_components/v2/CopilotApp2.tsx', 'utf8'), /const intent = tab === 'swipe' \? deckIntent\(heard\) : null;/);
+  // No button promising a walk where the browser has no voice or no ear (invariant 7).
+  assert.match(readFileSync('src/app/copilot/_components/v2/CopilotApp2.tsx', 'utf8'), /\{tab === 'swipe' && canWalk && \(/);
+  assert.match(readFileSync('src/app/copilot/_components/v2/CopilotApp2.tsx', 'utf8'), /setCanWalk\(canSpeak\(\) && canListen\(\)\);/);
+
+  console.log('copilot-core: walk checks passed');
+}
+
+walkSuite().catch((e) => { console.error(e); process.exit(1); });
+
+// ─── The subheaders, what broke, and a post's picture ───────────────────────
+// Every tab has one line under its name that only it can say. System's is the
+// pulse of what runs without you, and says a failure as one; Money's is how long
+// the money lasts. What broke is one list, read the same by Decide's card and
+// System's line. A picture from the web is shown on the person's phone, so only
+// an https address is ever kept.
+
+import { brokeLines as sbhBroke, moneyLine as sbhMoney, systemLine as sbhSystem } from '../../src/lib/copilot/today';
+import { exaHits as sbhExaHits } from '../../src/lib/copilot/watch/exa';
+import { voiceImage as sbhImage, voicesFromEvents as sbhFromEvents, voicesFromHits as sbhFromHits } from '../../src/lib/copilot/voices';
+
+async function subheadSuite() {
+  const now = new Date('2026-10-20T08:00:00Z');
+  /* 1. System: when the nightly run last ran, and what of it failed. */
+  assert.equal(sbhSystem({ now, lastCronRun: '2026-10-19T21:00:00Z', stale: false, broke: 0, failing: 0 }), 'Last run 11h ago');
+  assert.equal(sbhSystem({ now, lastCronRun: '2026-10-19T21:00:00Z', stale: false, broke: 1, failing: 4 }), 'Last run 11h ago · 1 check failed · 4 sources failing');
+  assert.equal(sbhSystem({ now, lastCronRun: '2026-10-16T21:00:00Z', stale: true, broke: 0, failing: 0 }), 'Nothing ran overnight · last run 3d ago');
+  assert.equal(sbhSystem({ now, lastCronRun: null, stale: true, broke: 0, failing: 0 }), 'The nightly run has never run');
+
+  /* 2. Money: how long the money lasts, which the tab does not say, and who the bank names that you have not. */
+  assert.equal(sbhMoney({ runwayMonths: 3.4, toName: 0 }), '3.4 months of runway');
+  assert.equal(sbhMoney({ runwayMonths: 1, toName: 2 }), '1 month of runway · 2 payers to name');
+  assert.match(sbhMoney({ runwayMonths: null, toName: 0 }), /^No runway yet/);
+
+  /* 3. What broke, most serious first, each with where it is fixed. A warning row is never a tick. */
+  const done = { stale: true, broke: ['nightly_brief: 500'], rows: [{ key: 'sources', label: '8 of 12 sources read', detail: 'r/indiebiz, r/SaaS +2 failed — open Sources to see why', tone: 'warn' as const, target: 'sources' as const }, { key: 'm', label: 'x', detail: 'y', tone: 'done' as const, target: 'matches' as const }] };
+  const b = sbhBroke({ now, unread: ['bets'], done, lastCronRun: null });
+  assert.deepEqual(b.map((x) => [x.key, x.fix]), [['unread', 'reload'], ['stale', 'nightly'], ['checks', 'nightly'], ['sources', 'sources']]);
+  assert.equal(b[1].detail, 'The nightly job has never run, so nothing is found while you are away.');
+  assert.deepEqual(sbhBroke({ now, unread: [], done: { stale: false, broke: [], rows: [] }, lastCronRun: '2026-10-19T21:00:00Z' }), [], 'a good night says nothing');
+
+  /* 4. A post's picture: https only, from the search to the card, and read back the same from its row. */
+  const hits = sbhExaHits({ results: [
+    { url: 'https://www.reddit.com/r/x/comments/1', title: 'Losing invoices', highlights: ['I lose one a month.'], image: 'https://preview.redd.it/a.png' },
+    { url: 'https://www.reddit.com/r/x/comments/2', title: 'Two', highlights: ['Same here.'], image: 'http://insecure.example/a.png' },
+    { url: 'https://www.reddit.com/r/x/comments/3', title: 'Three', highlights: ['And me.'], image: 'javascript:alert(1)' },
+  ] });
+  assert.deepEqual(hits.map((h) => h.image ?? null), ['https://preview.redd.it/a.png', null, null]);
+  const found = sbhFromHits(hits, new Set());
+  assert.deepEqual(found.map((v) => v.image), ['https://preview.redd.it/a.png', null, null]);
+  const back = sbhFromEvents([{ id: 1, event_type: 'lab_voices', created_at: '2026-10-20T00:00:00Z', payload: { bet: 'b1', voices: found, queries: ['q one here'], from: 'offer' } }]);
+  assert.equal(back.searches[0]?.voices[0]?.image, 'https://preview.redd.it/a.png');
+  assert.equal(sbhImage('https://x.example/a b.png'), null, 'no address with a space in it');
+  assert.equal(sbhImage(`https://x.example/${'a'.repeat(600)}`), null);
+
+  console.log('copilot-core: subhead checks passed');
+}
+
+subheadSuite().catch((e) => { console.error(e); process.exit(1); });

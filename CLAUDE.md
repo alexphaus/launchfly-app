@@ -10,7 +10,8 @@ Two products share this repository and almost nothing else.
 `/copilot2` has three tabs — **Decide**, **System**, **Money** — and You behind the
 avatar in the header (October 2026; Path was dropped). Decide is the deck that was
 Swipe, now dealing every decision as a card ahead of the businesses
-(`lib/copilot/decide.ts`); its key and file are still `swipe` / `SwipeTab.tsx`.
+(`lib/copilot/decide.ts`), each card saying why it is there, the pile walkable by
+voice (`lib/copilot/walk.ts`); its key and file are still `swipe` / `SwipeTab.tsx`.
 System is the tab that was Engine, which was Proof; its key, files, routes and the
 connector's `get_proof` are still `proof`. Every old name (`path`, `engine`,
 `proof`, `swipe`, …) still opens the tab that took its job. Code and docs that say
@@ -33,7 +34,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 96 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 98 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -287,6 +288,22 @@ did it" moves nothing and looks broken — start it on the card's title. A post
 already opened is read from `localStorage` (`cp2.voices.opened:<pid>`) after
 mount: set it in an init script to see "did they answer?". Answer the API with
 errors and a post set aside must come back, said — the failure path is the test.
+The pile is kept for the day in `sessionStorage` — `cp2.swipe.gone.<pid>`,
+`cp2.swipe.later.<pid>`, `cp2.swipe.top.<pid>` and the chip, `cp2.deck.focus.<pid>`
+— so a test that loads twice in one context starts where the last left off: use
+a new context for a fresh pile. With the API failing, "Not a fit" on a post deals
+it again by design, so walking the pile in a test means Later (the bar's fourth
+place), not the left answer.
+
+**Testing the walk through Decide:** the stand-in `SpeechRecognition` (above,
+under the mic) answers each `start()` with the next phrase from a queue the test
+fills — `window.__heard.push('why', 'later', 'yes')` — and a stand-in
+`speechSynthesis` records each `speak` and calls `onend` at once. Define
+`speechSynthesis` with `Object.defineProperty`: Chromium's own is a getter, and a
+plain assignment is ignored. A spoken yes that opens a sheet makes the walk wait
+for Listen, so refill the queue before tapping it. Run it against the failing
+API too: what an answer came to is spoken before the next card, and that line is
+the check.
 
 **Testing the mic:** headless Chromium has no microphone, and its own
 `webkitSpeechRecognition` fails. Put a stand-in `SpeechRecognition` on the page
